@@ -9,8 +9,12 @@ import synapse_daemon
 
 def test_version_string_present() -> None:
     assert isinstance(synapse_daemon.__version__, str)
-    # PEP 440 pre-release like "0.1.0a1" or release like "0.1.0"
-    assert re.match(r"^\d+\.\d+\.\d+([abrc]\d+|\.dev\d+|\.post\d+)?$", synapse_daemon.__version__)
+    # PEP 440: release segment is N(.N)*, with optional pre/post/dev tags.
+    # Synapse uses 4-component versions like "0.1.0.5" for design-contract bumps.
+    assert re.match(
+        r"^\d+(\.\d+)+([abrc]\d+|\.dev\d+|\.post\d+)?$",
+        synapse_daemon.__version__,
+    )
 
 
 def test_entrypoint_importable() -> None:

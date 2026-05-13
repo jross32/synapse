@@ -6,11 +6,20 @@
 
 ## Current version
 
-`0.1.0-alpha.1`
+`0.1.0.5`
 
 ## Current milestone
 
-**A — Repo scaffolding** 🟡 in progress
+**Pre-B contract pass** — locking design contracts before the daemon code begins.
+
+| Version | Phase | Status |
+|---|---|---|
+| `0.1.0-alpha.1` | Milestone A — scaffolding | ✅ done |
+| `0.1.0.5` | Design contracts round 1 (docs) | 🟡 in progress |
+| `0.1.1` | Implement contract scaffolding | ⚪ next |
+| `0.1.1.5` | Design contracts round 2 (docs) | ⚪ pending |
+| `0.1.2` | Implement round 2 scaffolding | ⚪ pending |
+| `0.1.3` | Milestone B — daemon skeleton | ⚪ pending |
 
 ## What's done
 
@@ -52,12 +61,26 @@ pytest daemon/tests    # should pass 1 smoke test
 - **Detached spawn** for managed processes (so they outlive Synapse UI).
 - **Two version files** must stay in sync: `package.json` and `pyproject.toml`. `scripts/version-bump.ps1` handles both.
 
-## Cross-cutting requirements (read every session — full spec in AGENTS.md)
+## Design contracts (16 total — full spec in AGENTS.md)
 
-1. **Everything is editable from the UI.** Projects, apps, tools, system settings — all reachable from a per-entity edit panel. No "edit the JSON file" UX. DB is the source of truth; manifests are first-run defaults.
-2. **Live status feedback on every action.** State machine: `idle → launching → launched → stopped`, plus `error: <reason>`. WebSocket-driven, no polling. Spinners during transitions. Errors inline on the tile, not in modals. State history strip per entity.
+Every milestone must honour all 16. Quick list:
 
-Every Pydantic model for a managed entity carries: `name`, `status`, `last_error`, `updated_at`, `last_transition_at`. Every mutating REST endpoint returns the new state object.
+1. Everything editable from the UI
+2. Live status feedback on every action
+3. Log capture per managed process
+4. Single error envelope (`{code, message, details, retryable}`)
+5. WebSocket reconnect protocol (event IDs + ring buffer)
+6. Daemon orphan reconciliation on startup
+7. Versioned API (`/api/v1/...`, `v1.entity.event`)
+8. Single schema source of truth (Pydantic → TS)
+9. DB migrations from day 1
+10. Naming conventions (kebab/snake/camel/noun.verb)
+11. Audit log
+12. Confirm-before-destructive
+13. Empty states everywhere
+14. Theming via CSS tokens
+15. No telemetry by default
+16. Refuse Administrator unless `--allow-admin`
 
 ---
 
