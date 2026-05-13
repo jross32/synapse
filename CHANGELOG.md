@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.2.5] — 2026-05-13
+
+### Docs sync — README + commit rule hardening
+
+#### Added
+- `AGENTS.md` "Commit rules" section now requires:
+  - **Rule #4** — every commit syncs `README.md` whenever version, milestone, test count, roadmap status, tech stack, advertised features, or getting-started commands change.
+  - **Rule #5** — affected `docs/` files sync alongside the change that touched them (`api-changes.md` for new endpoints/events, `security.md` for security-relevant code, ADRs for contract-touching decisions).
+  - New "Docs-sync pre-flight" mental check: re-read the first 30 lines of `README.md` and `PROGRESS.md` before every commit.
+
+#### Changed
+- `README.md` fully rewritten to reflect current state:
+  - Version line now `v0.1.2.5` (was stale at `v0.1.0-alpha.1`).
+  - Status reflects "pre-Milestone-B contract pass complete · 85 tests passing".
+  - New "Design contracts (28)" section linking to AGENTS.md and listing both rounds inline.
+  - "Live status feedback" and "Editable from the UI" added to features bullets.
+  - Tech stack table updated (watchdog + cryptography deps added in v0.1.2 are now visible).
+  - "Getting started" now mentions running typecheck + pytest as a sanity check.
+  - Roadmap table inserts the two contract-pass rows (`v0.1.0.5/0.1.1` + `v0.1.1.5/0.1.2`) between Milestone A and Milestone B with done status.
+- `PROGRESS.md`: current version → `0.1.2.5`, current milestone wording updated.
+- All three version files: `0.1.2` → `0.1.2.5`.
+
+#### Notes
+- No code changes; toolchain green unchanged (typecheck ✅, pytest 85/1 ✅).
+- Rule #4 (README sync) and Rule #5 (docs sync) are now load-bearing — any future commit that violates them is a regression.
+
 ## [0.1.2] — 2026-05-13
 
 ### Contract scaffolding — Round 2 (code)

@@ -47,14 +47,29 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
 
 ## Commit rules (non-negotiable)
 
-1. **Every commit bumps a version** via `scripts/version-bump.ps1` (updates `package.json` and `pyproject.toml` together). Even tiny commits — patch bump or alpha increment.
-2. **Every commit appends a `CHANGELOG.md` entry** under the in-progress version header.
-3. **Every commit updates `PROGRESS.md`** as the last edit before staging. State current milestone, what's done, what's next, any broken state.
-4. **Commit author:** `jross32 <justinwross32@gmail.com>`. Don't change git config.
-5. **Commit to the current branch.** Never switch branches without being asked.
-6. **Commit message format:**
+1. **Every commit bumps a version** via `scripts/version-bump.ps1` (updates `package.json`, `pyproject.toml`, and `daemon/synapse_daemon/__init__.py` together).
+   - Docs-only commits use `-Kind design` (`X.Y.Z` → `X.Y.Z.5`).
+   - Code commits use `-Kind patch | minor | major`.
+2. **Every commit appends a `CHANGELOG.md` entry** under the in-progress version header. Group by Added / Changed / Fixed / Notes.
+3. **Every commit updates `PROGRESS.md`** as the last edit before staging. State current version, current milestone, what's done, what's next, any broken state.
+4. **Every commit syncs `README.md`** when any of these change:
+   - Current version, milestone, or test count.
+   - The roadmap status of any milestone.
+   - Tech-stack table (deps added/removed/version-bumped).
+   - Top-level features advertised in the feature list.
+   - Getting-started commands.
+
+   If unsure whether README needs an edit, open it and check — staleness is much worse than an unnecessary edit.
+5. **Every commit syncs the affected docs in `docs/`**:
+   - New REST endpoint or WS event → `docs/api-changes.md`.
+   - Security-related change → `docs/security.md`.
+   - New CLI command → README's CLI section + this file's CLI table.
+   - Architectural decision that touches a contract → new `docs/adr/NNNN-*.md`.
+6. **Commit author:** `jross32 <justinwross32@gmail.com>`. Don't change git config.
+7. **Commit to the current branch.** Never switch branches without being asked.
+8. **Commit message format:**
    ```
-   vX.Y.Z[-alpha.N]: short subject
+   vX.Y.Z[.5]: short subject
 
    Changed:
    - path/to/file: what changed
@@ -66,8 +81,14 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
    Notes (if any):
    - ...
    ```
-7. **Run `npm run typecheck && pytest` before committing.** CI will catch you if you skip.
-8. **Never force-push.** Never `reset --hard`. Never bypass hooks (`--no-verify`).
+9. **Run `npm run typecheck && pytest` before committing.** CI will catch you if you skip.
+10. **Never force-push.** Never `reset --hard`. Never bypass hooks (`--no-verify`).
+
+### Docs-sync pre-flight (run mentally before every commit)
+
+> Open `README.md` and `PROGRESS.md`. Does the **first 30 lines** of each still accurately describe the repo after my change? If no, edit them now.
+
+If a commit ever ships with a stale README header, that's a regression — open a follow-up commit immediately.
 
 ---
 

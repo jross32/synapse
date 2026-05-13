@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.2`
+`0.1.2.5`
 
 ## Current milestone
 
-**Pre-B contract pass — COMPLETE.** All 28 design contracts are now both documented (AGENTS.md) and scaffolded in real Python + TypeScript code. Next: Milestone B starts wiring them into a running daemon.
+**Pre-B contract pass — COMPLETE.** All 28 design contracts are now both documented (AGENTS.md) and scaffolded in real Python + TypeScript code. `v0.1.2.5` synced README + hardened commit rules so docs can't drift again. Next: Milestone B starts wiring the scaffolds into a running daemon.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -19,6 +19,7 @@
 | `0.1.1` | Round 1 contract scaffolding (code) | ✅ done |
 | `0.1.1.5` | Design contracts round 2 (docs) | ✅ done |
 | `0.1.2` | Round 2 contract scaffolding (code) | ✅ done |
+| `0.1.2.5` | README + docs sync; commit-rule hardening | ✅ done |
 | `0.1.3+` | Milestone B — daemon skeleton | ⚪ next |
 
 ## What's done
