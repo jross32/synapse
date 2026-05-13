@@ -6,42 +6,50 @@
 
 ## Current version
 
-`0.1.0.5`
+`0.1.1`
 
 ## Current milestone
 
-**Pre-B contract pass** — locking design contracts before the daemon code begins.
+**Pre-B contract pass** — design contracts locked + scaffolded before the daemon code begins.
 
 | Version | Phase | Status |
 |---|---|---|
 | `0.1.0-alpha.1` | Milestone A — scaffolding | ✅ done |
-| `0.1.0.5` | Design contracts round 1 (docs) | 🟡 in progress |
-| `0.1.1` | Implement contract scaffolding | ⚪ next |
-| `0.1.1.5` | Design contracts round 2 (docs) | ⚪ pending |
-| `0.1.2` | Implement round 2 scaffolding | ⚪ pending |
-| `0.1.3` | Milestone B — daemon skeleton | ⚪ pending |
+| `0.1.0.5` | Design contracts round 1 (docs) | ✅ done |
+| `0.1.1` | Round 1 contract scaffolding (code) | ✅ done |
+| `0.1.1.5` | Design contracts round 2 (docs) | ⚪ next |
+| `0.1.2` | Round 2 contract scaffolding (code) | ⚪ pending |
+| `0.1.3+` | Milestone B — daemon skeleton | ⚪ pending |
 
 ## What's done
 
-- [x] Folder structure created at `C:\Users\justi\synapse\`
-- [x] Root config files written (`package.json`, `pyproject.toml`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.ts`, `postcss.config.js`)
-- [x] Docs written (`README.md`, `LICENSE`, `CHANGELOG.md`, `PROGRESS.md`, `AGENTS.md`)
-- [x] `.gitignore` configured
-- [x] GitHub Actions CI workflow (`.github/workflows/ci.yml`)
-- [x] Dev + version-bump scripts under `scripts/`
-- [x] Placeholder Electron main, renderer entry, daemon entry so toolchain runs green
-- [x] First plugin manifest: `tools/cloudtap/manifest.json`
+### v0.1.0-alpha.1 — Milestone A scaffolding
+- Folder structure, all config files, CI workflow, docs, placeholder code, first plugin manifest
+
+### v0.1.0.5 — Round 1 contracts (docs)
+- All 16 design contracts written into `AGENTS.md`
+
+### v0.1.1 — Round 1 contracts (scaffolding)
+- Daemon: `api_versions.py`, `errors.py`, `models.py` (`BaseEntity` + status enums), `migrations/001_initial.sql`, `audit.py`, `process_log.py`, `security.py`
+- Renderer: `error-types.ts`, `api-client.ts`, `ws-client.ts` (with reconnect + replay), `theme-tokens.css`, `generated-types.ts`
+- Tests: 6 new test files covering Contracts #2, #3, #4, #7, #8, #9, #10, #11, #16
+- Docs: `api-changes.md`, `security.md`, `adr/README.md`
+- `version-bump.ps1` now supports `-Kind design` + updates `__init__.py`
 
 ## What's next (immediate)
 
-1. **Verify toolchain green:** `npm install`, `pip install -e ./daemon`, `npm run typecheck`, `pytest`. All four must succeed.
-2. **Git init + first commit** as `jross32 <justinwross32@gmail.com>` on `main`.
-3. **Create GitHub repo** `jross32/synapse` (public) and push.
-4. **Move to Milestone B — Daemon skeleton.** Flesh out `daemon/synapse_daemon/app.py` with FastAPI, `/health`, `/ws` echo, SQLite init.
+1. **Draft Round 2 design contracts** — present to user for approval.
+2. **v0.1.1.5:** lock approved Round 2 entries into `AGENTS.md`.
+3. **v0.1.2:** scaffold Round 2 contracts into code.
+4. **Milestone B onwards:** wire all the scaffolding into a running FastAPI daemon.
 
 ## Known issues / broken state
 
-None right now — Milestone A is intentionally just configs + placeholders. Nothing is wired to run yet.
+None — toolchain is green:
+- `npm install` ✅
+- `pip install -e ".[dev]"` ✅
+- `npm run typecheck` ✅
+- `pytest` (all suites) ✅
 
 ## How to verify the current state
 

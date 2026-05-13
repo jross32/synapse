@@ -10,6 +10,52 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-05-13
+
+### Contract scaffolding — Round 1 (code)
+
+Operationalises the 16 design contracts locked in `v0.1.0.5`. Every contract now has a real code shape backing it; runtime wiring follows in Milestone B onwards.
+
+#### Added — daemon
+- `daemon/synapse_daemon/api_versions.py` (Contract #7): `API_VERSION`, `API_PREFIX`, `WS_EVENT_PREFIX`, `event_name()` helper.
+- `daemon/synapse_daemon/errors.py` (Contract #4): `ErrorEnvelope` Pydantic model + `SynapseError` exception + helper constructors (`not_found`, `conflict`, `invalid`).
+- `daemon/synapse_daemon/models.py` (Contracts #2, #8): `BaseEntity` with the universal live-status fields, `EntityStatus`, `AuditSource`, `ErrorRef`, `StateTransition`, `HealthResponse`, plus `model_registry()` so `gen-types.ps1` knows what to export.
+- `daemon/synapse_daemon/migrations/__init__.py` + `001_initial.sql` (Contracts #9, #11): schema_migrations, audit_log, projects, tools, managed_processes, confirm_preferences, settings tables.
+- `daemon/synapse_daemon/audit.py` (Contract #11): `AuditRecord` Pydantic + `audit(db, record)` writer.
+- `daemon/synapse_daemon/process_log.py` (Contract #3): rotation constants (10 MB × 5), per-entity log dir layout, `new_log_path`, `latest_log`, `list_logs`.
+- `daemon/synapse_daemon/security.py` (Contract #16): `is_admin`, `assert_not_admin(allow_admin=False)`.
+
+#### Added — renderer
+- `renderer/lib/error-types.ts` (Contract #4): `ErrorEnvelope` TS interface + `isErrorEnvelope` guard + `formatError`.
+- `renderer/lib/api-client.ts` (Contract #7): `apiFetch<T>()` wrapper that prepends `/api/v1`, throws `SynapseApiError` carrying an `ErrorEnvelope`.
+- `renderer/lib/ws-client.ts` (Contract #5): `SynapseWsClient` class with backoff (1, 2, 4, 8, 16, 30 s cap), event-id cursor, `{type: "resume", since}` handshake, conn-state events.
+- `renderer/lib/theme-tokens.css` (Contract #14): full CSS-variable palette + dark/light/prefers-reduced-motion.
+- `renderer/lib/generated-types.ts` (Contract #8): hand-written TS mirroring the Pydantic models; CI will compare to generator output once active.
+- `renderer/styles.css` now imports theme tokens; body uses `var(--synapse-bg-nucleus)` etc.
+
+#### Added — scripts + docs
+- `scripts/gen-types.ps1` (Contract #8): placeholder generator entry point; activates in Milestone B.
+- `scripts/version-bump.ps1`: now supports `-Kind design` (appends `.5`) and updates `daemon/synapse_daemon/__init__.py` too.
+- `docs/api-changes.md` (Contract #7): versioning rules + pending v1 endpoint table.
+- `docs/security.md` (Contracts #15, #16): threat model, no-telemetry posture, LAN exposure caveats, secrets stance.
+- `docs/adr/README.md`: ADR folder + template for any future contract amendments.
+
+#### Added — tests
+- `daemon/tests/test_errors.py` (Contract #4): envelope validation, helper constructors, status codes.
+- `daemon/tests/test_models.py` (Contracts #2, #7, #10): status enum coverage, audit source values, kebab-case pattern, API version constants, registry completeness, validate-on-assignment.
+- `daemon/tests/test_migrations.py` (Contract #9): file naming, monotonic ordering, required tables present.
+- `daemon/tests/test_process_log.py` (Contract #3): rotation constants, log dir creation, timestamp format, list+latest ordering.
+- `daemon/tests/test_audit.py` (Contract #11): inserts one row per record, serialises details as JSON.
+- `daemon/tests/test_security.py` (Contract #16): refuses on elevation, allows with flag.
+
+#### Changed
+- All three version files: `0.1.0.5` → `0.1.1`.
+- `daemon/synapse_daemon/__init__.py`: bumped `__version__` to `0.1.1`.
+
+#### Notes
+- `npm run typecheck` ✅ · `pytest` (full suite) ✅.
+- Next step in the user's review cycle: pause to draft Round 2 design contracts.
+
 ## [0.1.0.5] — 2026-05-13
 
 ### Design contracts — Round 1 (docs only)

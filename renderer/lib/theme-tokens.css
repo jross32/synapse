@@ -1,0 +1,98 @@
+/* Synapse theme tokens (Contract #14).
+ *
+ * Components MUST consume these — no hardcoded colour, spacing, or font
+ * values anywhere in renderer/components or renderer/pages.
+ *
+ * Dark is default (no root class). Light = `<html class="light">`.
+ * Future themes drop in by adding a new class block below.
+ */
+
+:root {
+  /* Background scale */
+  --synapse-bg-nucleus: #0b1020;
+  --synapse-bg-surface: #111a33;
+  --synapse-bg-elevated: #1a2547;
+  --synapse-bg-overlay: rgba(11, 16, 32, 0.85);
+
+  /* Foreground / text */
+  --synapse-text-primary: #f1f5f9;
+  --synapse-text-secondary: #94a3b8;
+  --synapse-text-muted: #64748b;
+  --synapse-text-inverse: #0b1020;
+
+  /* Accents */
+  --synapse-accent: #7c3aed;
+  --synapse-accent-glow: #22d3ee;
+  --synapse-success: #34d399;
+  --synapse-warning: #fbbf24;
+  --synapse-danger: #f87171;
+
+  /* Status badges (Contract #2) */
+  --synapse-status-idle: #64748b;
+  --synapse-status-launching: #fbbf24;
+  --synapse-status-launched: #34d399;
+  --synapse-status-stopping: #f59e0b;
+  --synapse-status-stopped: #475569;
+  --synapse-status-error: #f87171;
+
+  /* Borders / dividers */
+  --synapse-border-subtle: rgba(148, 163, 184, 0.12);
+  --synapse-border-strong: rgba(148, 163, 184, 0.32);
+
+  /* Spacing scale (rem) — 4 px base */
+  --synapse-space-1: 0.25rem;
+  --synapse-space-2: 0.5rem;
+  --synapse-space-3: 0.75rem;
+  --synapse-space-4: 1rem;
+  --synapse-space-6: 1.5rem;
+  --synapse-space-8: 2rem;
+  --synapse-space-12: 3rem;
+  --synapse-space-16: 4rem;
+
+  /* Radii */
+  --synapse-radius-sm: 0.375rem;
+  --synapse-radius-md: 0.625rem;
+  --synapse-radius-lg: 1rem;
+  --synapse-radius-pill: 9999px;
+
+  /* Type ramp */
+  --synapse-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --synapse-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --synapse-text-xs: 0.75rem;
+  --synapse-text-sm: 0.875rem;
+  --synapse-text-base: 1rem;
+  --synapse-text-lg: 1.125rem;
+  --synapse-text-xl: 1.5rem;
+  --synapse-text-2xl: 2rem;
+
+  /* Motion */
+  --synapse-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --synapse-duration-fast: 120ms;
+  --synapse-duration-base: 200ms;
+  --synapse-duration-slow: 400ms;
+}
+
+/* Light theme — toggled via `class="light"` on <html>. */
+:where(html.light) {
+  --synapse-bg-nucleus: #f8fafc;
+  --synapse-bg-surface: #ffffff;
+  --synapse-bg-elevated: #f1f5f9;
+  --synapse-bg-overlay: rgba(248, 250, 252, 0.85);
+
+  --synapse-text-primary: #0b1020;
+  --synapse-text-secondary: #475569;
+  --synapse-text-muted: #94a3b8;
+  --synapse-text-inverse: #f8fafc;
+
+  --synapse-border-subtle: rgba(15, 23, 42, 0.08);
+  --synapse-border-strong: rgba(15, 23, 42, 0.16);
+}
+
+/* Reduced motion (Contract #13 polish): kill non-essential animation. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --synapse-duration-fast: 0ms;
+    --synapse-duration-base: 0ms;
+    --synapse-duration-slow: 0ms;
+  }
+}

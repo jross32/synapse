@@ -1,23 +1,33 @@
 # Synapse — version bump helper
 #
-# Keeps package.json (Node/Electron) and pyproject.toml (Python daemon) in lock-step.
-# Appends a placeholder entry to CHANGELOG.md under [Unreleased].
+# Keeps package.json (Node/Electron) and pyproject.toml (Python daemon) in
+# lock-step. Appends a placeholder entry to CHANGELOG.md under [Unreleased].
+#
+# Synapse uses two kinds of version bumps:
+#
+#   • Code bump   — implements features. patch / minor / major.
+#                   Examples: 0.1.0 → 0.1.1, 0.1.1 → 0.2.0
+#
+#   • Design bump — locks new design contracts into AGENTS.md (docs only).
+#                   Appends ".5" to the current code version.
+#                   Examples: 0.1.0 → 0.1.0.5, 0.1.1 → 0.1.1.5
+#                   Implementation that operationalises the contract is the
+#                   NEXT code bump (0.1.0.5 → 0.1.1).
 #
 # Usage:
-#   .\scripts\version-bump.ps1 -Kind patch          # 0.1.0 -> 0.1.1
-#   .\scripts\version-bump.ps1 -Kind minor          # 0.1.0 -> 0.2.0
-#   .\scripts\version-bump.ps1 -Kind major          # 0.1.0 -> 1.0.0
-#   .\scripts\version-bump.ps1 -Kind alpha          # 0.1.0-alpha.N -> 0.1.0-alpha.(N+1)
-#   .\scripts\version-bump.ps1 -Set 0.1.0           # explicit pin (both files)
+#   .\scripts\version-bump.ps1 -Kind design          # X.Y.Z       → X.Y.Z.5
+#   .\scripts\version-bump.ps1 -Kind patch           # X.Y.Z[.5]   → X.Y.(Z+1)
+#   .\scripts\version-bump.ps1 -Kind minor           # X.Y.*       → X.(Y+1).0
+#   .\scripts\version-bump.ps1 -Kind major           # X.*         → (X+1).0.0
+#   .\scripts\version-bump.ps1 -Kind alpha           # X.Y.Z-alpha.N → +.1
+#   .\scripts\version-bump.ps1 -Set 0.1.0            # explicit pin
 #
-# Notes:
-#   - package.json uses npm semver style:    0.1.0-alpha.1
-#   - pyproject.toml uses PEP 440 style:     0.1.0a1
-#   The script converts between them.
+# Both files end up with identical literal strings (both PEP 440 and npm
+# tolerate 4-component versions for non-published packages).
 
 param(
-  [ValidateSet('patch','minor','major','alpha')]
-  [string]$Kind = 'alpha',
+  [ValidateSet('patch','minor','major','alpha','design')]
+  [string]$Kind = 'design',
   [string]$Set
 )
 
@@ -27,57 +37,58 @@ $packageJsonPath = Join-Path $root 'package.json'
 $pyprojectPath   = Join-Path $root 'pyproject.toml'
 $changelogPath   = Join-Path $root 'CHANGELOG.md'
 
-function Convert-NpmToPep440([string]$v) {
-  # 0.1.0-alpha.3 -> 0.1.0a3
-  return ($v -replace '-alpha\.', 'a' -replace '-beta\.', 'b' -replace '-rc\.', 'rc')
-}
-
-function Convert-Pep440ToNpm([string]$v) {
-  # 0.1.0a3 -> 0.1.0-alpha.3
-  if ($v -match '^(\d+\.\d+\.\d+)a(\d+)$')  { return "$($matches[1])-alpha.$($matches[2])" }
-  if ($v -match '^(\d+\.\d+\.\d+)b(\d+)$')  { return "$($matches[1])-beta.$($matches[2])"  }
-  if ($v -match '^(\d+\.\d+\.\d+)rc(\d+)$') { return "$($matches[1])-rc.$($matches[2])"    }
-  return $v
+function Get-CoreVersion([string]$v) {
+  # Strip any '-alpha.N' or '.5' design tail to get X.Y.Z
+  $core = ($v -split '-')[0]
+  if ($core -match '^(\d+\.\d+\.\d+)\.\d+$') { return $matches[1] }
+  return $core
 }
 
 $pkg = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
-$currentNpm = [string]$pkg.version
+$currentVersion = [string]$pkg.version
+$coreVersion = Get-CoreVersion $currentVersion
 
 if ($Set) {
-  $newNpm = $Set
+  $newVersion = $Set
+} elseif ($Kind -eq 'design') {
+  # Append .5 to core version (drop any existing tail).
+  $newVersion = "$coreVersion.5"
 } elseif ($Kind -eq 'alpha') {
-  if ($currentNpm -match '^(\d+\.\d+\.\d+)-alpha\.(\d+)$') {
-    $newNpm = "$($matches[1])-alpha.$([int]$matches[2] + 1)"
+  if ($currentVersion -match '^(\d+\.\d+\.\d+)-alpha\.(\d+)$') {
+    $newVersion = "$($matches[1])-alpha.$([int]$matches[2] + 1)"
   } else {
-    $newNpm = "$currentNpm-alpha.1"
+    $newVersion = "$coreVersion-alpha.1"
   }
 } else {
-  $coreOnly = ($currentNpm -split '-')[0]
-  $parts = $coreOnly.Split('.') | ForEach-Object { [int]$_ }
+  $parts = $coreVersion.Split('.') | ForEach-Object { [int]$_ }
   switch ($Kind) {
     'patch' { $parts[2]++ }
     'minor' { $parts[1]++; $parts[2] = 0 }
     'major' { $parts[0]++; $parts[1] = 0; $parts[2] = 0 }
   }
-  $newNpm = "$($parts[0]).$($parts[1]).$($parts[2])"
+  $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
 }
 
-$newPep = Convert-NpmToPep440 $newNpm
-
 # Update package.json
-$pkg.version = $newNpm
+$pkg.version = $newVersion
 ($pkg | ConvertTo-Json -Depth 50) | Set-Content -Path $packageJsonPath -Encoding UTF8
 
 # Update pyproject.toml (only the [project] version line)
 $pyContent = Get-Content $pyprojectPath -Raw
-$pyContent = [regex]::Replace($pyContent, '(?m)^version = ".*"$', "version = `"$newPep`"")
+$pyContent = [regex]::Replace($pyContent, '(?m)^version = ".*"$', "version = `"$newVersion`"")
 Set-Content -Path $pyprojectPath -Value $pyContent -Encoding UTF8
+
+# Update __version__ in the package __init__.py (Contract #8: single source of truth).
+$initPath = Join-Path $root 'daemon\synapse_daemon\__init__.py'
+$initContent = Get-Content $initPath -Raw
+$initContent = [regex]::Replace($initContent, '(?m)^__version__ = ".*"$', "__version__ = `"$newVersion`"")
+Set-Content -Path $initPath -Value $initContent -Encoding UTF8
 
 # Append CHANGELOG stub
 $changelog = Get-Content $changelogPath -Raw
 $entry = @"
 
-## [$newNpm] — $(Get-Date -Format 'yyyy-MM-dd')
+## [$newVersion] — $(Get-Date -Format 'yyyy-MM-dd')
 
 ### Added
 - _Describe additions here_
@@ -89,8 +100,9 @@ $entry = @"
 $changelog = $changelog -replace '## \[Unreleased\]', "## [Unreleased]`r`n$entry"
 Set-Content -Path $changelogPath -Value $changelog -Encoding UTF8
 
-Write-Host "Synapse bumped: $currentNpm  →  $newNpm  (PEP 440: $newPep)"
+Write-Host "Synapse bumped: $currentVersion  →  $newVersion  (kind: $Kind)"
 Write-Host "Updated:"
 Write-Host "  - package.json"
 Write-Host "  - pyproject.toml"
+Write-Host "  - daemon/synapse_daemon/__init__.py"
 Write-Host "  - CHANGELOG.md (stub entry under [Unreleased])"
