@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.5.5] -- 2026-05-13
+
+### Hotfix -- ASCII-only PowerShell scripts (run-blocker)
+
+`.\scripts\dev.ps1` failed to parse on Windows PowerShell 5.1 with `"The string is missing the terminator: '."` and `Missing closing '}'`. Root cause: the scripts contained multi-byte Unicode glyphs (`→`, `═`, `—`, `•`, `·`); PS 5.1 reads `.ps1` files as Windows-1252 unless they begin with a UTF-8 BOM, and the Write tool used to author them does not emit one. The mangled bytes broke string + brace tokenisation.
+
+#### Fixed
+- `scripts/dev.ps1`: rewritten in pure ASCII -- arrows `→` → `->`, box `═` → `=`, em-dashes `—` → `--`, bullets `•` → `*`. Added a header note explaining the constraint.
+- `scripts/version-bump.ps1`: same substitutions; header note updated.
+- `scripts/gen-types.ps1`: same substitutions; header note updated.
+- `daemon/synapse_daemon/__main__.py`: the ready-line log string used `·` separators that rendered as `�` on Windows consoles (cp1252). Replaced with `|`.
+
+#### Added
+- `AGENTS.md` "Forbidden" section gains an explicit rule against non-ASCII characters in `.ps1` files, including the canonical substitution table. Daemon log strings written to console must also stay ASCII (Windows console = cp1252 by default).
+
+#### Verified
+- All three `.ps1` files parse cleanly via `[System.Management.Automation.Language.Parser]::ParseFile(...)` against `powershell -NoProfile`.
+- `grep -P '[^\x00-\x7F]' scripts/*.ps1` returns no matches.
+- 149 tests still pass; typecheck still clean.
+
+#### Notes
+- This is a half-step (`.5`) bump because the change is small and not a feature; Milestone E continues to be earmarked for `0.1.6`.
+
 ## [0.1.5] — 2026-05-13
 
 ### Milestone D — Project registry + launcher (click → launch)

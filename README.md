@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.5` — **Milestone D complete: click → launch.** Synapse's window now shows your projects as tiles. Click **Launch** on the seeded `wbscrper` tile and `npm start` runs in `C:\Users\justi\wbscrper`. State badges (`idle → launching → running → stopping → stopped → error`) update live over WebSocket. Edit / delete are wired with confirm-before-destructive. **149 tests passing.** Next: Milestone E (live process monitor with CPU/RAM heartbeat). Run `.\scripts\dev.ps1` to use it. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
+> **Status:** `v0.1.5.5` — **Milestone D + ASCII hotfix.** Synapse's window now shows your projects as tiles. Click **Launch** on the seeded `wbscrper` tile and `npm start` runs in `C:\Users\justi\wbscrper`. State badges (`idle → launching → running → stopping → stopped → error`) update live over WebSocket. Edit / delete are wired with confirm-before-destructive. **149 tests passing.** Next: Milestone E (live process monitor with CPU/RAM heartbeat). Run `.\scripts\dev.ps1` to use it. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
 
 ## What it is
 

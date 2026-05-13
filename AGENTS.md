@@ -412,6 +412,15 @@ Project (launchable app) manifests live in the daemon's SQLite DB and are seeded
 - Don't introduce a third runtime (no Go, no Rust, no Bun) without an ADR in `docs/`.
 - Don't add a tool by editing UI source — write a manifest.
 - Don't change `commitAuthor` in git config.
+- **Don't put non-ASCII characters in PowerShell `.ps1` files.** Windows PowerShell 5.1 reads `.ps1` files as Windows-1252 unless they start with a UTF-8 BOM, and several authoring tools used in this project do not emit a BOM. Multi-byte characters get split into garbled bytes that break the parser with errors like *"String is missing the terminator"* — exactly the failure mode that bit `v0.1.5`. Allowed substitutions:
+  - `→` / `←` → `->` / `<-`
+  - `—` (em-dash) → `--`
+  - `•` (bullet) → `*` or `-`
+  - `═` (box drawing) → `=`
+  - `…` → `...`
+  - `·` → `|` or `-`
+
+  CI should `grep -P '[^\x00-\x7F]' scripts/*.ps1` and fail if any matches appear. Daemon Python files may use UTF-8 freely (Python 3 reads source as UTF-8 by default) **except** in strings that are written to stdout or to a console log — those should also stay ASCII, since Windows console encoding defaults to cp1252 and renders multi-byte UTF-8 as `�`.
 
 ---
 

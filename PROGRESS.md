@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.5`
+`0.1.5.5`
 
 ## Current milestone
 
-**Milestone D — Project registry + launcher — COMPLETE.** Synapse's window shows project tiles. Click **Launch** on the seeded wbscrper tile → `npm start` runs at `C:\Users\justi\wbscrper`. Live `idle → launching → running → stopping → stopped` badges over WebSocket. Edit dialog + confirm-before-destructive delete. 149 tests pass. Next: Milestone E (CPU/RAM heartbeat + auto-detect crashes).
+**Milestone D shipped + ASCII hotfix.** `.\scripts\dev.ps1` had non-ASCII glyphs that PS 5.1 mis-decoded; rewritten in pure ASCII and AGENTS.md now bans the pattern. 149 tests still pass. Next: Milestone E (CPU/RAM heartbeat + auto-detect crashes).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -23,6 +23,7 @@
 | `0.1.3` | Milestone B — daemon skeleton (FastAPI + WS + migrations + reconciler) | ✅ done |
 | `0.1.4` | Milestone C — Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done |
 | `0.1.5` | Milestone D — Project registry + launcher (CRUD + tiles + click-to-launch) | ✅ done |
+| `0.1.5.5` | Hotfix: ASCII-only `.ps1` scripts + daemon log strings (PS 5.1 cp1252 parse fix) | ✅ done |
 | `0.1.6+` | Milestone E — Live process monitor (heartbeat + auto crash detection) | ⚪ next |
 
 ## What's done

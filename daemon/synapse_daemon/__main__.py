@@ -109,7 +109,7 @@ def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
         await boot_publish_daemon_started(bus, schema)
 
         log.info(
-            "Synapse daemon %s ready · schema=%d · contracts 1-28 · port=%d",
+            "Synapse daemon %s ready | schema=%d | contracts 1-28 | port=%d",
             __version__,
             schema,
             app.state.bound_port,
