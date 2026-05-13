@@ -1,0 +1,33 @@
+{
+  "id": "cloudtap",
+  "name": "Cloudtap",
+  "category": "tools",
+  "icon": "cloud",
+  "description": "One-tap Cloudflare tunnel — enter a local port, get a public URL.",
+  "ui": "synapse-card",
+  "fields": [
+    {
+      "key": "port",
+      "type": "number",
+      "label": "Local port",
+      "min": 1,
+      "max": 65535,
+      "required": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "tunnel",
+      "label": "Launch tunnel",
+      "handler": "synapse_daemon.tools.cloudtap:tunnel"
+    },
+    {
+      "id": "stop",
+      "label": "Stop",
+      "handler": "synapse_daemon.tools.cloudtap:stop"
+    }
+  ],
+  "version": "0.1.0",
+  "shippedIn": "0.1.0",
+  "milestone": "G"
+}
