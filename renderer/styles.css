@@ -17,3 +17,9 @@ body {
   color: var(--synapse-text-primary);
   font-family: var(--synapse-font-sans);
 }
+
+/* Shared keyframes used by status badges (Contract #2). */
+@keyframes synapse-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}

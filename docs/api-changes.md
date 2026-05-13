@@ -25,18 +25,28 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-05-13 | `v1.process.reconciled` | additive | Emitted once per non-trivial orphan reconciliation outcome. Payload: `{process_id, entity_type, entity_id, pid, outcome}` where outcome ∈ `pid-recycled | daemon-restart`. Re-attached rows are silent. |
 | 2026-05-13 | `v1.daemon.reconciliation_complete` | additive | Summary event after reconciliation, only emitted if any rows were inspected. Payload: `ReconciliationReport`. |
 
+### Shipped in v0.1.5 (Milestone D)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-05-13 | `GET /api/v1/projects` | additive | `{projects: Project[]}` — live registry, excludes soft-deleted rows. Secrets in `env` are redacted to `"(set)"` (Contract #25). |
+| 2026-05-13 | `GET /api/v1/projects/{id}` | additive | Single `Project`; 404 with `{code:"project.not_found"}` on miss. |
+| 2026-05-13 | `POST /api/v1/projects` | additive | Body: full `Project`. 201 on success; 409 `{code:"project.conflict"}` on duplicate id. Validates kebab-case id (Contract #10). |
+| 2026-05-13 | `PATCH /api/v1/projects/{id}` | additive | Body: `ProjectUpdate` (any subset of editable fields). 200 with updated record; 422 `{code:"project.invalid"}` if body is empty. |
+| 2026-05-13 | `DELETE /api/v1/projects/{id}` | additive | Soft-delete. 204 on success; 409 `{code:"project.conflict"}` if project is currently running. |
+| 2026-05-13 | `POST /api/v1/projects/{id}/launch` | additive | Body: `{source: "desktop"|"mobile"|"tray"|"cli"|"auto"}` (defaults `"desktop"`). Spawns the project's `launch_cmd` detached (Windows: `CREATE_NEW_PROCESS_GROUP \| DETACHED_PROCESS`), captures stdout/stderr to `data/logs/<id>/<ts>.log`, emits `v1.project.launching` then `v1.project.launched`. |
+| 2026-05-13 | `POST /api/v1/projects/{id}/stop` | additive | Sends `terminate()`, falls back to `kill()` after 5 s grace; updates `managed_processes.stopped_at` + `stop_reason='user'`; emits `v1.project.stopping` then `v1.project.stopped`. |
+| 2026-05-13 | `v1.project.launching` | additive | Payload: `{id, source}`. |
+| 2026-05-13 | `v1.project.launched` | additive | Payload: `{id, pid, log_path}`. |
+| 2026-05-13 | `v1.project.stopping` | additive | Payload: `{id, source}`. |
+| 2026-05-13 | `v1.project.stopped` | additive | Payload: `{id, reason}`. |
+| 2026-05-13 | `v1.project.errored` | additive | Payload: `{id, error: ErrorRef}`. |
+
 ### Pending (later milestones)
 
 | Endpoint or event | Milestone | Notes |
 |---|---|---|
-| `GET /api/v1/projects` | D | List managed projects |
-| `POST /api/v1/projects` | D | Create project |
-| `PATCH /api/v1/projects/{id}` | D | Edit project (Contract #1) |
-| `DELETE /api/v1/projects/{id}` | D | Soft-delete project |
-| `POST /api/v1/projects/{id}/launch` | D | Spawn process |
-| `POST /api/v1/projects/{id}/stop` | D | Terminate process |
-| `GET /api/v1/projects/{id}/logs` | D | Latest log file content |
-| `v1.project.launched` / `v1.project.stopped` / `v1.project.errored` | D | Project lifecycle events |
+| `GET /api/v1/projects/{id}/logs` | E | Latest log file content + tail-mode |
 | `v1.process.heartbeat` | E | Periodic CPU/RAM snapshot per process |
 | `GET /api/v1/search?q=...` | F | Universal search (Contract #21) |
 | `POST /api/v1/snapshot` / `POST /api/v1/restore` | later | Disaster recovery (Contract #28) |

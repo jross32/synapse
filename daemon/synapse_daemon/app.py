@@ -29,6 +29,8 @@ from .api_versions import API_PREFIX, event_name
 from .errors import ErrorEnvelope, SynapseError
 from .models import HealthResponse
 from .orphan_reconciler import ReconcileOutcome, reconcile, summarise
+from .process_manager import ProcessManager
+from .routes_projects import build_projects_router
 from .storage import Storage
 from .time_utils import to_iso, utc_now
 from .ws import EventBus, WsHub
@@ -46,10 +48,21 @@ _ALLOWED_ORIGINS = [
 ]
 
 
-def build_app(storage: Storage, bus: EventBus) -> FastAPI:
-    """Construct the FastAPI app bound to a Storage + EventBus."""
+def build_app(
+    storage: Storage,
+    bus: EventBus,
+    *,
+    process_manager: ProcessManager | None = None,
+) -> FastAPI:
+    """Construct the FastAPI app bound to a Storage + EventBus.
+
+    ``process_manager`` is created on demand if not supplied (so tests that
+    only care about ``/health`` don't have to wire one up themselves).
+    """
 
     started_at = utc_now()
+    if process_manager is None:
+        process_manager = ProcessManager(storage, bus)
 
     app = FastAPI(
         title="Synapse daemon",
@@ -95,9 +108,13 @@ def build_app(storage: Storage, bus: EventBus) -> FastAPI:
     async def ws_endpoint(websocket: WebSocket) -> None:
         await hub.handle(websocket)
 
+    # Mount the projects router under /api/v1.
+    app.include_router(build_projects_router(storage, process_manager), prefix=API_PREFIX)
+
     # Stash state on the app for tests + later wiring.
     app.state.storage = storage
     app.state.bus = bus
+    app.state.process_manager = process_manager
     app.state.started_at = started_at
 
     return app

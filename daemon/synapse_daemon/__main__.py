@@ -30,7 +30,9 @@ from fastapi import FastAPI
 from . import __version__
 from .app import boot_publish_daemon_started, boot_publish_reconciliation, build_app
 from .orphan_reconciler import reconcile
+from .process_manager import ProcessManager
 from .security import assert_not_admin
+from .seed import seed_default_projects
 from .storage import Storage
 from .ws import EventBus
 
@@ -94,7 +96,7 @@ def _configure_logging(level: str) -> None:
     )
 
 
-def _build_lifespan(storage: Storage, bus: EventBus):
+def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
     """Lifespan that publishes reconciliation + daemon.started on startup."""
 
     @asynccontextmanager
@@ -114,6 +116,7 @@ def _build_lifespan(storage: Storage, bus: EventBus):
         )
         yield
         log.info("Synapse daemon shutting down.")
+        pm.shutdown()
 
     return lifespan
 
@@ -132,10 +135,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if applied:
         log.info("Applied %d migration(s): %s", len(applied), applied)
 
+    seeded = seed_default_projects(storage)
+    if seeded:
+        log.info("Seeded default project(s): %s", seeded)
+
     bus = EventBus()
-    app = build_app(storage, bus)
+    pm = ProcessManager(storage, bus)
+    app = build_app(storage, bus, process_manager=pm)
     app.state.bound_port = args.port
-    app.router.lifespan_context = _build_lifespan(storage, bus)
+    app.router.lifespan_context = _build_lifespan(storage, bus, pm)
 
     try:
         uvicorn.run(
@@ -147,6 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             lifespan="on",
         )
     finally:
+        pm.shutdown()
         storage.close()
 
     return 0

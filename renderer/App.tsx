@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { apiFetch, setDaemonBase } from './lib/api-client';
 import type { HealthResponse } from './lib/generated-types';
 import { formatLocal, formatUptime } from './lib/format-time';
-import { type ConnState, SynapseWsClient, type SynapseEvent } from './lib/ws-client';
+import { AppsPage } from './pages/Apps';
+import { type ConnState, SynapseWsClient } from './lib/ws-client';
 
 interface SynapseBridge {
   version: () => string;
@@ -32,18 +33,16 @@ const STATE_TOKEN: Record<ConnState, string> = {
   closed: 'var(--synapse-status-error)',
 };
 
-// Milestone C — proof of life. A real Nucleus + Synapses layout lands in F.
+// Milestone D — daemon status header + Apps page below.
+// The full nucleus + synapses sidebar/layout arrives in Milestone F.
 export default function App(): JSX.Element {
   const bridge = useMemo(() => getBridge(), []);
-  const uiVersion = bridge?.version() ?? '0.1.4';
+  const uiVersion = bridge?.version() ?? '0.1.5';
   const platform = bridge?.platform() ?? 'browser';
 
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [connState, setConnState] = useState<ConnState>('idle');
-  const [lastEventId, setLastEventId] = useState<number>(0);
-  const [recentEvents, setRecentEvents] = useState<SynapseEvent[]>([]);
-  const wsRef = useRef<SynapseWsClient | null>(null);
 
   useEffect(() => {
     if (bridge) {
@@ -60,18 +59,11 @@ export default function App(): JSX.Element {
       });
 
     const ws = new SynapseWsClient();
-    wsRef.current = ws;
     const unsubState = ws.onState((s) => setConnState(s));
-    const unsubEvent = ws.onEvent((evt) => {
-      setLastEventId(evt.id);
-      setRecentEvents((prev) => [evt, ...prev].slice(0, 5));
-    });
     ws.start();
-
     return () => {
       cancelled = true;
       unsubState();
-      unsubEvent();
       ws.stop();
     };
   }, [bridge]);
@@ -98,18 +90,18 @@ export default function App(): JSX.Element {
             by The WhatIf Company · UI v{uiVersion} · {platform}
           </p>
         </div>
-        <StatusBadge label={STATE_LABEL[connState]} color={STATE_TOKEN[connState]} />
+        <StatusBadgePill label={STATE_LABEL[connState]} color={STATE_TOKEN[connState]} />
       </header>
 
       <section style={cardStyle}>
         <h2 style={cardTitle}>Daemon</h2>
         {health ? (
           <dl style={dlStyle}>
-            <Row label="Version" value={health.version} />
-            <Row label="Schema migration" value={String(health.contracts.length) + ' contracts honoured'} />
-            <Row label="Started" value={formatLocal(health.started_at, 'long')} />
-            <Row label="Uptime" value={formatUptime(health.started_at)} />
-            <Row label="Base URL" value={bridge?.daemonBase() ?? '—'} />
+            <Row label='Version' value={health.version} />
+            <Row label='Contracts' value={`${health.contracts.length} honoured (#1–#${Math.max(...health.contracts)})`} />
+            <Row label='Started' value={formatLocal(health.started_at, 'long')} />
+            <Row label='Uptime' value={formatUptime(health.started_at)} />
+            <Row label='Base URL' value={bridge?.daemonBase() ?? '—'} />
           </dl>
         ) : healthError ? (
           <p style={{ color: 'var(--synapse-status-error)' }}>
@@ -120,36 +112,10 @@ export default function App(): JSX.Element {
         )}
       </section>
 
-      <section style={cardStyle}>
-        <h2 style={cardTitle}>WebSocket</h2>
-        <dl style={dlStyle}>
-          <Row label="State" value={STATE_LABEL[connState]} />
-          <Row label="Last event ID" value={String(lastEventId)} />
-        </dl>
-        {recentEvents.length > 0 && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 'var(--synapse-space-4) 0 0' }}>
-            {recentEvents.map((evt) => (
-              <li
-                key={evt.id}
-                style={{
-                  padding: 'var(--synapse-space-2) 0',
-                  borderTop: '1px solid var(--synapse-border-subtle)',
-                  fontFamily: 'var(--synapse-font-mono)',
-                  fontSize: 'var(--synapse-text-xs)',
-                  color: 'var(--synapse-text-secondary)',
-                }}
-              >
-                <span style={{ color: 'var(--synapse-accent-glow)' }}>#{evt.id}</span>{' '}
-                <span style={{ color: 'var(--synapse-text-primary)' }}>{evt.name}</span>{' '}
-                <span>{formatLocal(evt.timestamp_utc, 'time')}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <AppsPage />
 
       <footer style={{ marginTop: 'auto', color: 'var(--synapse-text-muted)', fontSize: 'var(--synapse-text-xs)' }}>
-        Milestone C scaffold · Nucleus + Synapses layout arrives in Milestone F.
+        Milestone D scaffold · Sidebar + Nucleus + Synapses layout arrives in Milestone F.
       </footer>
     </main>
   );
@@ -188,7 +154,7 @@ function Row({ label, value }: { label: string; value: string }): JSX.Element {
   );
 }
 
-function StatusBadge({ label, color }: { label: string; color: string }): JSX.Element {
+function StatusBadgePill({ label, color }: { label: string; color: string }): JSX.Element {
   return (
     <span
       style={{

@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.4` — **Milestone C complete: Synapse opens.** Electron app spawns the Python daemon as a child process, waits for `/api/v1/health`, opens a window with live conn-state badge + the `v1.daemon.started` event visible, and hides to a system tray on close. **117 tests passing.** Next: Milestone D (project launcher). Run `.\scripts\dev.ps1` to see it. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
+> **Status:** `v0.1.5` — **Milestone D complete: click → launch.** Synapse's window now shows your projects as tiles. Click **Launch** on the seeded `wbscrper` tile and `npm start` runs in `C:\Users\justi\wbscrper`. State badges (`idle → launching → running → stopping → stopped → error`) update live over WebSocket. Edit / delete are wired with confirm-before-destructive. **149 tests passing.** Next: Milestone E (live process monitor with CPU/RAM heartbeat). Run `.\scripts\dev.ps1` to use it. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 117 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 149 tests pass (1 platform-conditional skip)
 
 # Full dev mode — daemon + Vite + Electron window
 .\scripts\dev.ps1
@@ -105,8 +105,8 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | ⌁ | Commit-rule hardening + README sync | ✅ done (`v0.1.2.5`) |
 | B | Daemon skeleton (FastAPI on `:7878`, `/health`, WS echo, SQLite + migration runner) | ✅ done (`v0.1.3`) |
 | C | Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done (`v0.1.4`) |
-| D | Project registry + launcher (full CRUD UI) | 🟡 next |
-| E | Live process monitor (psutil heartbeat + state badges) | ⚪ pending |
+| D | Project registry + launcher (full CRUD UI) | ✅ done (`v0.1.5`) |
+| E | Live process monitor (psutil heartbeat + state badges) | 🟡 next |
 | F | Nucleus + Synapses UI (sidebar, cards, slideshow, theming) | ⚪ pending |
 | G | Cloudtap tool (port → tunnel URL) | ⚪ pending |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ⚪ pending |

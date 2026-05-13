@@ -10,6 +10,51 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-05-13
+
+### Milestone D — Project registry + launcher (click → launch)
+
+You can now click a tile in the Synapse window and the corresponding app actually launches. State updates live over WebSocket; click again to stop. The seeded `wbscrper` project means there's something to click on first run.
+
+#### Added — daemon
+- `daemon/synapse_daemon/projects.py` (Contracts #1, #2, #10): `Project` + `ProjectUpdate` Pydantic models with kebab-case id validation (single-letter ids and full hyphenated ids allowed; underscore + caps rejected). Full CRUD against the `projects` table: `list_projects`, `get`, `get_or_none`, `create`, `update`, `soft_delete`. State writers `set_status` + `set_health` that guarantee strictly monotonic `last_transition_at` / `updated_at` even on coarse Windows microsecond clocks. `model_dump_for_client` redacts secret env values to `"(set)"` (Contract #25).
+- `daemon/synapse_daemon/process_manager.py` (Contracts #2, #3, #6, #11): `ProcessManager` class — `launch(project_id, source)` transitions `idle → launching → launched`, spawns subprocess detached (Windows: `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`; POSIX: `start_new_session=True`) with stdout+stderr teed to a per-spawn log file under `data/logs/<id>/`, inserts a `managed_processes` row, emits `v1.project.launching` + `v1.project.launched` on the WS bus. `stop(project_id, source)` sends `terminate`, falls back to `kill` after 5 s, marks the row stopped with reason `user`, emits `v1.project.stopping` + `v1.project.stopped`. Spawn failures land in `EntityStatus.ERROR` with a `project.spawn_failed` `ErrorRef` and a `v1.project.errored` event. Audit log entries written for `launch.attempt`, `launch`, `stop.attempt`, `stop` (Contract #11). `shutdown()` closes log handles but does NOT kill children — Contract #6 wants them to survive daemon restart.
+- `daemon/synapse_daemon/seed.py`: idempotent first-run insert of the `wbscrper` project at `C:\Users\justi\wbscrper` with `npm start` + an HTTP health probe on `/api/status`. Skips if the row already exists; preserves user edits across re-seeds.
+- `daemon/synapse_daemon/routes_projects.py` (Contract #7): `build_projects_router(storage, pm)` factory exposing `GET /projects`, `GET /projects/{id}`, `POST /projects` (201), `PATCH /projects/{id}`, `DELETE /projects/{id}` (204), `POST /projects/{id}/launch`, `POST /projects/{id}/stop`. Every write path also writes the audit log (Contract #11).
+- `app.build_app()` gained an optional `process_manager` parameter, mounts the projects router under `/api/v1`, and stashes the PM on `app.state.process_manager` for handlers + lifespan.
+- `__main__.py` lifespan now calls `seed_default_projects(storage)` before the bus starts publishing, instantiates a `ProcessManager`, hands it to `build_app`, and tears it down on shutdown.
+
+#### Added — renderer
+- `renderer/lib/projects-client.ts`: typed wrappers for every project endpoint (`listProjects`, `getProject`, `createProject`, `patchProject`, `deleteProject`, `launchProject`, `stopProject`). All throw `SynapseApiError` carrying the daemon's `ErrorEnvelope`.
+- `renderer/lib/generated-types.ts`: extended with `Project`, `ProjectUpdate`, `ProjectListResponse` types mirroring the Pydantic models.
+- `renderer/components/StatusBadge.tsx`: reusable status pill with token-based colour + an animated pulse during transitions (`launching`, `stopping`). Uses `--synapse-status-*` tokens exclusively (Contract #14); marked `aria-live='polite'` for screen readers (Contract #23).
+- `renderer/components/ProjectTile.tsx`: per-project tile — name, path, live `StatusBadge`, description, `cmd`/`port`/`updated` metadata grid, error banner if the project is in `error` state, **Launch**/**Stop** button that swaps based on current status, **Edit** and **Delete** affordances. Delete is disabled while the project is running (UI mirror of the daemon's 409 guard).
+- `renderer/components/ProjectEditDialog.tsx`: modal edit form for name / path / launch_cmd / description / expected_port — Esc to close, click-outside to dismiss when not busy, focus trapped on first field. POSTs the diff via `patchProject` (Contract #1).
+- `renderer/pages/Apps.tsx`: tile grid (`auto-fill, minmax(320px, 1fr)`), subscribes to `v1.project.*` events and refreshes on any change, ships an empty-state (Contract #13) and an inline `ConfirmDialog` for delete (Contract #12).
+- `renderer/styles.css`: shared `@keyframes synapse-pulse` used by `StatusBadge`.
+- `renderer/App.tsx`: keeps the daemon-status header from v0.1.4, now embeds `<AppsPage />` below it. Sidebar layout still arrives in Milestone F.
+
+#### Added — tests (32 new, total 149)
+- `daemon/tests/test_projects.py` (13): id validation, create/get/list/update/delete, conflict on duplicate, not-found 404, empty-update 422, refuses delete-while-running, strict monotonic transitions even on coarse clocks, error storage + clearing, health writer, secret redaction in client view.
+- `daemon/tests/test_process_manager.py` (7): real subprocess `python -c "time.sleep(60)"` end-to-end — status transitions, log file created, managed_processes row + status_of mapping, audit rows for attempt + success, WS events emitted in order; double-launch guard; missing-project guard; stop terminates + finalises; stop-when-not-running guard; empty cmd raises; spawn failure path emits `v1.project.errored` with `project.spawn_failed`.
+- `daemon/tests/test_seed.py` (3): seeds wbscrper on first run, idempotent on second run, preserves user renames across re-seeds.
+- `daemon/tests/test_routes_projects.py` (9): list empty, list seeded, get 404, patch rename, patch empty 422, launch → stop round-trip with real subprocess, POST 201, POST duplicate 409, DELETE 204.
+
+#### Changed
+- `daemon/synapse_daemon/projects.set_status` + `update`: now guarantee strictly monotonic `last_transition_at` / `updated_at` (max(now, prev + 1µs)) so callers can rely on ordering even when Windows hands out the same wall-clock microsecond twice.
+- Three version files: `0.1.4` → `0.1.5`.
+
+#### Docs (per Rule #4 + #5)
+- `README.md`: status line → "Milestone D complete: click → launch · 149 tests"; tests-pass number bumped; roadmap row D ✅, row E 🟡 next.
+- `docs/api-changes.md`: 11 new endpoint/event rows under a v0.1.5 (Milestone D) heading; pending table trimmed to what actually remains.
+- `PROGRESS.md`: version → 0.1.5, phase table marks D done, what's-done lists every new module + test + UI piece, what's-next breaks Milestone E into concrete sub-tasks.
+- `CHANGELOG.md`: full 0.1.5 entry (this one).
+
+#### Notes
+- 149 tests passing · 1 platform-conditional skip ✅ · `npm run typecheck` ✅ · `npm run build:electron` clean.
+- Full smoke-test path: `.\scripts\dev.ps1` → daemon boots → seeds wbscrper → Electron window opens with the wbscrper tile visible → click **Launch** → tile flashes "launching…" then "running" → `npm start` is now running in `C:\Users\justi\wbscrper` → click **Stop** → tile returns to "stopped".
+- Crash auto-detection (Popen.poll() watcher + auto-restart per Contract #18) lands with Milestone E together with `v1.process.heartbeat`.
+
 ## [0.1.4] — 2026-05-13
 
 ### Milestone C — Electron skeleton (Synapse opens)

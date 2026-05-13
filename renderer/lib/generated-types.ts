@@ -139,6 +139,50 @@ export interface RestoreReport {
   warnings: string[];
 }
 
+// ── Projects (Milestone D) ───────────────────────────────────────────────
+
+export interface Project {
+  id: string;
+  name: string;
+  path: string;
+  launch_cmd: string;
+  env: EnvVar[];
+  icon: string | null;
+  thumbnail: string | null;
+  description: string | null;
+  category: string | null;
+  health: HealthProbe;
+  restart: RestartPolicy;
+  resource_caps: ResourceCaps;
+  expected_port: number | null;
+  status: EntityStatus;
+  last_error: ErrorRef | null;
+  current_health: HealthState;
+  last_health_at: string | null;
+  created_at: string;
+  updated_at: string;
+  last_transition_at: string;
+}
+
+export interface ProjectUpdate {
+  name?: string;
+  path?: string;
+  launch_cmd?: string;
+  icon?: string;
+  thumbnail?: string;
+  description?: string;
+  category?: string;
+  health?: HealthProbe;
+  restart?: RestartPolicy;
+  resource_caps?: ResourceCaps;
+  expected_port?: number;
+  env?: EnvVar[];
+}
+
+export interface ProjectListResponse {
+  projects: Project[];
+}
+
 // Re-export ErrorEnvelope for ergonomics. (It's defined in error-types.ts
 // because it's referenced before the generator runs.)
 export type { ErrorEnvelope };

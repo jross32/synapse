@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.4`
+`0.1.5`
 
 ## Current milestone
 
-**Milestone C — Electron skeleton — COMPLETE.** `.\scripts\dev.ps1` boots daemon → Vite → Electron window. Window shows live conn-state badge + the `v1.daemon.started` event. Closing the window hides to tray. 117 tests pass. Next: Milestone D wires real projects.
+**Milestone D — Project registry + launcher — COMPLETE.** Synapse's window shows project tiles. Click **Launch** on the seeded wbscrper tile → `npm start` runs at `C:\Users\justi\wbscrper`. Live `idle → launching → running → stopping → stopped` badges over WebSocket. Edit dialog + confirm-before-destructive delete. 149 tests pass. Next: Milestone E (CPU/RAM heartbeat + auto-detect crashes).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -22,7 +22,8 @@
 | `0.1.2.5` | README + docs sync; commit-rule hardening | ✅ done |
 | `0.1.3` | Milestone B — daemon skeleton (FastAPI + WS + migrations + reconciler) | ✅ done |
 | `0.1.4` | Milestone C — Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done |
-| `0.1.5+` | Milestone D — Project registry + launcher | ⚪ next |
+| `0.1.5` | Milestone D — Project registry + launcher (CRUD + tiles + click-to-launch) | ✅ done |
+| `0.1.6+` | Milestone E — Live process monitor (heartbeat + auto crash detection) | ⚪ next |
 
 ## What's done
 
@@ -69,15 +70,27 @@
 - Compiles cleanly (`npm run build:electron` → `dist-electron/main.js` + `preload.js`)
 - All 117 daemon tests still pass
 
+### v0.1.5 — Milestone D (Project registry + launcher)
+- daemon `projects.py` (Project + ProjectUpdate Pydantic, kebab-case validator, full CRUD with monotonic timestamps, secret redaction)
+- daemon `process_manager.py` (detached spawn, log capture, terminate→kill, audit + WS events for every transition)
+- daemon `seed.py` (idempotent first-run wbscrper insert, preserves user edits)
+- daemon `routes_projects.py` (GET/POST/PATCH/DELETE /api/v1/projects + launch/stop)
+- daemon `app.py` mounts the projects router; `__main__.py` calls seed before lifespan + instantiates the PM
+- renderer `projects-client.ts` (typed wrappers per endpoint); `generated-types.ts` gains Project + ProjectUpdate
+- renderer components: `StatusBadge` (pulse animation during transitions, aria-live), `ProjectTile` (live status + cmd/port metadata + Launch/Stop/Edit/Delete + error banner), `ProjectEditDialog` (modal form, focus trap, Esc to close)
+- renderer page `Apps.tsx` (tile grid, WS-driven refresh, empty state, confirm-before-destructive delete)
+- renderer `styles.css` keyframes for badge pulse
+- 32 new tests across `test_projects.py`, `test_process_manager.py`, `test_seed.py`, `test_routes_projects.py` — total 149 passing
+- **Smoke path:** `.\scripts\dev.ps1` → daemon seeds wbscrper → window shows wbscrper tile → click Launch → npm start runs → click Stop → tile returns to stopped
+
 ## What's next (immediate)
 
-**Milestone D — Project registry + launcher.** Wire the missing pieces:
-- `daemon/synapse_daemon/projects.py` — Project Pydantic + CRUD against the `projects` table
-- `daemon/synapse_daemon/process_manager.py` — detached child-process spawn that respects `restart_policy` (Contract #18), captures stdout/stderr to per-process log files (Contract #3), emits `v1.project.launched` / `v1.project.stopped` / `v1.project.errored` events
-- `daemon/synapse_daemon/seed.py` — first-run insert of the wbscrper project so there's something to click
-- `GET/POST/PATCH/DELETE /api/v1/projects` + `POST /api/v1/projects/{id}/launch` + `/stop` + `GET /logs`
-- Renderer: `Apps.tsx` page with `ProjectTile` components, edit dialog (Contract #1), confirm-before-destructive (Contract #12), empty state (Contract #13), live state badge (Contract #2)
-- End-to-end: click wbscrper tile → `npm start` runs in `C:\Users\justi\wbscrper` → tile turns green
+**Milestone E — Live process monitor with CPU/RAM heartbeat.** The pieces:
+- Background watcher task per spawned child: detects unexpected exits, transitions to `error` state, optionally restarts per `restart_policy` (Contract #18)
+- Periodic heartbeat broadcaster (`v1.process.heartbeat`, ~2 s cadence) carrying `ResourceSnapshot` per managed PID (CPU% + RSS MB) — psutil already a dep
+- `GET /api/v1/projects/{id}/logs` endpoint + a live-tail WS sub-protocol so the UI can render rolling output (Contract #3)
+- Renderer: a Processes page (or section) with a table — entity, PID, started, uptime, CPU%, RAM MB, kill button
+- Health-probe loop (Contract #17): HTTP / TCP / command checks at the project's declared interval, updates `current_health`, emits `v1.project.health_changed`
 
 ## Known issues / broken state
 
