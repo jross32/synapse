@@ -6,19 +6,19 @@
 
 ## Current version
 
-`0.1.1`
+`0.1.1.5`
 
 ## Current milestone
 
-**Pre-B contract pass** — design contracts locked + scaffolded before the daemon code begins.
+**Pre-B contract pass** — Round 2 of 2 contract rounds.
 
 | Version | Phase | Status |
 |---|---|---|
 | `0.1.0-alpha.1` | Milestone A — scaffolding | ✅ done |
 | `0.1.0.5` | Design contracts round 1 (docs) | ✅ done |
 | `0.1.1` | Round 1 contract scaffolding (code) | ✅ done |
-| `0.1.1.5` | Design contracts round 2 (docs) | ⚪ next |
-| `0.1.2` | Round 2 contract scaffolding (code) | ⚪ pending |
+| `0.1.1.5` | Design contracts round 2 (docs) | 🟡 in progress |
+| `0.1.2` | Round 2 contract scaffolding (code) | ⚪ next |
 | `0.1.3+` | Milestone B — daemon skeleton | ⚪ pending |
 
 ## What's done
@@ -69,10 +69,11 @@ pytest daemon/tests    # should pass 1 smoke test
 - **Detached spawn** for managed processes (so they outlive Synapse UI).
 - **Two version files** must stay in sync: `package.json` and `pyproject.toml`. `scripts/version-bump.ps1` handles both.
 
-## Design contracts (16 total — full spec in AGENTS.md)
+## Design contracts (28 total — full spec in AGENTS.md)
 
-Every milestone must honour all 16. Quick list:
+Every milestone must honour all 28. Quick list:
 
+**Round 1 (locked v0.1.0.5, scaffolded v0.1.1):**
 1. Everything editable from the UI
 2. Live status feedback on every action
 3. Log capture per managed process
@@ -89,6 +90,20 @@ Every milestone must honour all 16. Quick list:
 14. Theming via CSS tokens
 15. No telemetry by default
 16. Refuse Administrator unless `--allow-admin`
+
+**Round 2 (locked v0.1.1.5, scaffolded v0.1.2):**
+17. Health-check protocol per project (separate `health` field, `http | tcp | command | none` probe)
+18. Restart policy per project (`never | on-failure | always`)
+19. Resource observability (CPU% + RSS MB per process on heartbeat)
+20. Project dependencies (`requires`, topological launch, cycle detection)
+21. Universal search / `Ctrl+K` command palette
+22. Native system notifications (with per-event opt-out)
+23. Accessibility minimums (WCAG AA, focus rings, ARIA, keyboard nav)
+24. Timestamps UTC in DB, local in UI (shared `formatLocal()` helper)
+25. Secrets management (DPAPI-encrypted, never logged, never round-tripped)
+26. Hot manifest reload (`watchdog` watcher + `v1.manifest.reloaded`)
+27. CLI surface (`synapse list | start | stop | logs | snapshot | restore | doctor`)
+28. Snapshot / restore (JSON dump; secrets excluded)
 
 ---
 

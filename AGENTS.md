@@ -73,7 +73,10 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
 
 ## Design Contracts (load-bearing — applies to every milestone)
 
-These 16 contracts are baked into the architecture from v0.1. **Every milestone must honour them.** If a feature can't satisfy a contract, write an ADR in `docs/adr/` before merging — never silently violate.
+These 28 contracts are baked into the architecture from v0.1. **Every milestone must honour them.** If a feature can't satisfy a contract, write an ADR in `docs/adr/` before merging — never silently violate.
+
+Round 1 (#1–#16) locked in `v0.1.0.5`, scaffolded in `v0.1.1`.
+Round 2 (#17–#28) locked in `v0.1.1.5`, scaffolded in `v0.1.2`.
 
 ### 1. Everything must be editable from the UI
 
@@ -186,6 +189,166 @@ No analytics, no error reporting service, no "phone home." If telemetry is ever 
 ### 16. Refuse Administrator
 
 Daemon refuses to start as Administrator (Windows: elevated token) unless `--allow-admin` is passed. Documented in `docs/security.md`. Prevents an entire class of "managed process inherits elevation" bugs.
+
+### 17. Health-check protocol per project
+
+Every project manifest declares one health probe:
+
+```python
+class HealthProbe(BaseModel):
+    kind: Literal["none", "http", "tcp", "command"]
+    target: str | None = None       # URL, port, or shell command
+    interval_seconds: int = 15
+    timeout_seconds: int = 5
+    expect_status: int | None = 200  # HTTP only
+```
+
+Daemon polls the probe on the declared interval and surfaces a **separate** `health` field alongside `status`. The state-machine is independent:
+
+```
+health:  unknown  →  healthy  →  degraded  →  unhealthy
+```
+
+UI shows a second pill on every tile. A process can be `status=launched` AND `health=unhealthy` (alive but hung) — Synapse must not lie that it's working.
+
+### 18. Restart policy per project
+
+Manifest field controls automatic recovery:
+
+```python
+class RestartPolicy(BaseModel):
+    mode: Literal["never", "on-failure", "always"] = "never"
+    max_retries: int = 3
+    initial_backoff_seconds: int = 2
+    max_backoff_seconds: int = 60
+```
+
+Daemon's process manager consults this on every child exit. Audit log records every restart attempt with attempt-number + delay. UI shows "restarting (attempt 2/3)" as a transitional status. Default `never` — autonomous restarts are opt-in.
+
+### 19. Resource observability per process
+
+`v1.process.heartbeat` events carry `cpu_percent` (0–100, system-normalised) and `rss_mb` per managed PID, broadcast on the daemon's heartbeat cadence. Tiles render mini-gauges. Manifests can declare soft caps:
+
+```python
+max_rss_mb: int | None
+max_cpu_percent: int | None
+```
+
+Exceeding a cap raises an `over-budget` warning (not a stop) until the user decides.
+
+### 20. Project dependencies
+
+Manifest field `requires: [other-project-id]` declares hard prerequisites. Launching A:
+
+1. Topologically resolves the dependency graph.
+2. If any required project is `stopped`, daemon shows a confirm: "Launching A will also launch: B, C. Proceed?".
+3. Spawns dependencies first, awaits each `health=healthy` (or `launched` if `health=none`), then spawns A.
+4. Cycle detection: if a cycle is detected, launch is refused with `project.dependency_cycle`.
+
+Stopping a project asks whether to also stop its now-orphaned dependencies.
+
+### 21. Universal search / Ctrl+K command palette
+
+A single keyboard-accessible palette indexes every project, tool, action, and setting:
+
+- Keybind: `Ctrl+K` (Windows/Linux), `Cmd+K` (Mac). Reserved permanently.
+- Daemon exposes `GET /api/v1/search?q=<query>` returning typed hits (`project | tool | action | setting`).
+- Each entity must declare a `search_tokens` field on its model (auto-populated from `id`, `name`, `category`, `tags`) so the index never misses obvious matches.
+- Mobile UI surfaces the same palette via a top-bar icon.
+
+### 22. Native system notifications
+
+Daemon emits a structured `v1.notification` event whenever:
+
+- A managed process crashes or its `health` flips to `unhealthy`.
+- A tunnel goes live or dies.
+- A scheduled launch fires or fails.
+- A user-flagged error occurs.
+
+Electron renders these as Windows toast notifications. **Per-event opt-out** stored in the `notification_preferences` table — never globally muted by default. Mobile users opt in to Web Push separately (v0.2+).
+
+### 23. Accessibility minimums
+
+- **Contrast:** WCAG AA — already covered by `theme-tokens.css` ratios.
+- **Focus:** every interactive element has a visible focus ring using `--synapse-accent`. No `outline: none` without a replacement.
+- **ARIA:** every icon-only button has `aria-label`; every status badge has `aria-live="polite"`; every modal traps focus and restores on close.
+- **Keyboard:** every action reachable via keyboard. Standard shortcuts: `Tab` (next), `Shift+Tab` (prev), `Enter` (activate), `Esc` (close), `Ctrl+K` (palette, #21).
+- **Reduced motion:** already respected via `@media (prefers-reduced-motion: reduce)` in tokens.
+
+Codified here so AI sessions can't silently regress. Add `eslint-plugin-jsx-a11y` in Milestone C.
+
+### 24. Timestamps UTC in DB, local in UI
+
+**Storage layer:** every timestamp column is timezone-aware UTC. Pydantic models use `datetime` with `tzinfo=timezone.utc`. SQLite stores ISO 8601 strings (`2026-05-13T14:22:05.123456+00:00`).
+
+**Transport layer:** REST + WS always send UTC ISO 8601.
+
+**Render layer:** UI is the only place that converts to the user's local timezone, via `Intl.DateTimeFormat`. Components must call a shared `formatLocal(ts, kind)` helper — never call `new Date(ts).toLocaleString()` directly. One rule, no exceptions.
+
+### 25. Secrets management
+
+Project manifests can declare env vars as secret:
+
+```python
+class EnvVar(BaseModel):
+    key: str
+    value: str | None = None      # plaintext OR "(set)" placeholder on read
+    secret: bool = False
+```
+
+Storage rules:
+
+- Secret values stored in `project_secrets` table, encrypted with Windows DPAPI scoped to the daemon's user account. Plaintext never written to disk in any other location (logs included).
+- After the initial save, `GET /api/v1/projects/{id}` returns `value: "(set)"` for secrets — never plaintext.
+- Audit log entries that record an env-var change record only `key` + `redacted_value: true`. The value never enters the audit log.
+- Spawning a child injects the decrypted value into the child's environment only — never logged, never broadcast.
+
+### 26. Hot manifest reload
+
+A file watcher (Python `watchdog`) monitors `tools/` and every registered project's manifest path. On change:
+
+1. Daemon reloads the manifest, validates against the Pydantic schema.
+2. If valid: updates the DB record, emits `v1.manifest.reloaded` with the entity id.
+3. If invalid: keeps the old version, emits `v1.manifest.error` with an `ErrorEnvelope`.
+
+UI shows a small "manifests reloaded" banner with a "view changes" link. No daemon restart required to add/edit a tool.
+
+### 27. CLI surface
+
+The `synapse` command (installed alongside the daemon, same Python entry point) is a thin client over the daemon's REST API. Commands map 1-to-1 with endpoints:
+
+| Command | Endpoint |
+|---|---|
+| `synapse list` | `GET /api/v1/projects` |
+| `synapse status [id]` | `GET /api/v1/projects/{id}` or aggregate |
+| `synapse start <id>` | `POST /api/v1/projects/{id}/launch` |
+| `synapse stop <id>` | `POST /api/v1/projects/{id}/stop` |
+| `synapse logs <id> [-f]` | `GET /api/v1/projects/{id}/logs` (stream if `-f`) |
+| `synapse snapshot` | `POST /api/v1/snapshot` |
+| `synapse restore <path>` | `POST /api/v1/restore` |
+| `synapse doctor` | local diagnostics, no daemon needed |
+
+The CLI never talks directly to the DB — always via the daemon, so single source of truth is preserved.
+
+### 28. Snapshot / restore
+
+`POST /api/v1/snapshot` returns a single JSON file containing:
+
+```json
+{
+  "synapse_version": "0.1.0",
+  "schema_version": 7,
+  "exported_at": "2026-05-13T...",
+  "projects": [...],
+  "tools": [...],
+  "settings": {...},
+  "audit_log_tail": [...]
+}
+```
+
+`POST /api/v1/restore` accepts the same shape and either creates fresh entities or merges by id (user chooses). **Secrets are NOT included** in snapshots — restoring on a new machine surfaces a list of secrets the user must re-enter.
+
+Snapshots are the disaster-recovery story and the cross-machine portability story rolled into one. Stable schema today makes this trivial; sprawling schema later makes it weeks of work.
 
 ---
 

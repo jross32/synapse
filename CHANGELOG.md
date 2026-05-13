@@ -10,6 +10,39 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.1.5] — 2026-05-13
+
+### Design contracts — Round 2 (docs only)
+
+Locked the following 12 contracts into `AGENTS.md`, taking the total to 28. Code scaffolding lands in `v0.1.2`.
+
+#### Added — operational lifecycle
+- **#17** Health-check protocol per project (`http | tcp | command | none` probe, separate `health` field alongside `status` so we don't lie when a process is hung).
+- **#18** Restart policy per project (`never | on-failure | always`, max-retries, exponential backoff). Default `never`.
+- **#19** Resource observability per process (CPU% + RSS MB on heartbeat, optional soft caps with warning).
+- **#20** Project dependencies (`requires: [id]` in manifest, topological launch with confirm, cycle detection).
+
+#### Added — UX primitives
+- **#21** Universal search / `Ctrl+K` command palette. Reserves keybind + `GET /api/v1/search` + `search_tokens` model field.
+- **#22** Native system notifications (Electron toast for crash/health-flip/tunnel-live/scheduled-launch, per-event opt-out table).
+- **#23** Accessibility minimums (WCAG AA contrast, visible focus rings, ARIA labels on icon-only buttons, full keyboard nav, `prefers-reduced-motion` already done).
+- **#24** Timestamps UTC in DB, local in UI (single shared `formatLocal()` helper; no ad-hoc `.toLocaleString()`).
+
+#### Added — data + control
+- **#25** Secrets management (`secret: true` env vars, DPAPI-encrypted at rest, never logged, never round-tripped in plaintext after save).
+- **#26** Hot manifest reload (`watchdog` file watcher on `tools/` + project manifest paths; `v1.manifest.reloaded` / `v1.manifest.error` events).
+- **#27** CLI surface (`synapse list | status | start | stop | logs | snapshot | restore | doctor` mapped 1-to-1 with REST).
+- **#28** Snapshot / restore (single JSON dump containing projects + tools + settings + audit tail; secrets excluded, surfaced as re-enter list on restore).
+
+#### Changed
+- `AGENTS.md` header: 16 → 28 contracts, references Round 1 (`v0.1.0.5` → `v0.1.1`) and Round 2 (`v0.1.1.5` → `v0.1.2`) cycle.
+- All three version files: `0.1.1` → `0.1.1.5`.
+
+#### Notes
+- `HealthResponse.contracts` model field still reports 1–16; bumps to 1–28 in `v0.1.2` when round-2 models exist.
+- `npm run typecheck` ✅ · `pytest` 31/31 ✅ (no runtime changes).
+- Round 2 implementation (v0.1.2) follows immediately.
+
 ## [0.1.1] — 2026-05-13
 
 ### Contract scaffolding — Round 1 (code)
