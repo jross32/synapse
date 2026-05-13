@@ -51,6 +51,94 @@ export interface HealthResponse {
   contracts: number[];
 }
 
+// ── Round 2 contract models (#17–#28) ────────────────────────────────────
+
+export type HealthState = 'unknown' | 'healthy' | 'degraded' | 'unhealthy';
+
+export interface HealthProbe {
+  kind: 'none' | 'http' | 'tcp' | 'command';
+  target: string | null;
+  interval_seconds: number;
+  timeout_seconds: number;
+  expect_status: number | null;
+  consecutive_failures_to_unhealthy: number;
+}
+
+export interface HealthSnapshot {
+  project_id: string;
+  state: HealthState;
+  last_probed_at: string | null;
+  last_state_change_at: string;
+  consecutive_failures: number;
+  last_error: string | null;
+}
+
+export type RestartMode = 'never' | 'on-failure' | 'always';
+
+export interface RestartPolicy {
+  mode: RestartMode;
+  max_retries: number;
+  initial_backoff_seconds: number;
+  max_backoff_seconds: number;
+}
+
+export interface ResourceSnapshot {
+  entity_type: string;
+  entity_id: string;
+  pid: number;
+  cpu_percent: number;
+  rss_mb: number;
+  sampled_at: string;
+}
+
+export interface ResourceCaps {
+  max_rss_mb: number | null;
+  max_cpu_percent: number | null;
+}
+
+export type NotificationLevel = 'info' | 'success' | 'warning' | 'error';
+
+export interface Notification {
+  event_kind: string;
+  level: NotificationLevel;
+  title: string;
+  body: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  timestamp_utc: string;
+  action_url: string | null;
+}
+
+export interface EnvVar {
+  key: string;
+  value: string | null;   // "(set)" placeholder for secrets after first save (Contract #25)
+  secret: boolean;
+  description: string | null;
+}
+
+export interface SnapshotPayload {
+  synapse_version: string;
+  format_version: number;
+  schema_migration: number;
+  exported_at: string;
+  projects: Record<string, unknown>[];
+  tools: Record<string, unknown>[];
+  settings: Record<string, unknown>;
+  audit_log_tail: Record<string, unknown>[];
+  /** Project+key pairs whose secret values were not exported. */
+  secret_keys: { project_id: string; key: string }[];
+}
+
+export interface RestoreReport {
+  projects_created: number;
+  projects_updated: number;
+  tools_created: number;
+  tools_updated: number;
+  settings_changed: number;
+  secrets_needing_reentry: { project_id: string; key: string }[];
+  warnings: string[];
+}
+
 // Re-export ErrorEnvelope for ergonomics. (It's defined in error-types.ts
 // because it's referenced before the generator runs.)
 export type { ErrorEnvelope };

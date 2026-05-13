@@ -72,15 +72,16 @@ def test_api_version_constants() -> None:
 
 
 def test_health_response_default_contracts_list() -> None:
-    h = HealthResponse(ok=True, version="0.1.1", started_at=__import__("datetime").datetime.now())
-    # Contract #1–#16 honoured by the daemon as of v0.1.1.
-    assert h.contracts == list(range(1, 17))
+    h = HealthResponse(ok=True, version="0.1.2", started_at=__import__("datetime").datetime.now())
+    # Contracts #1–#28 honoured by the daemon as of v0.1.2 (Round 2 scaffolded).
+    assert h.contracts == list(range(1, 29))
 
 
 def test_model_registry_exposes_all_shared_models() -> None:
     # Contract #8 — gen-types.ps1 reads this list.
     reg = model_registry()
     for key in (
+        # Round 1
         "ErrorEnvelope",
         "EntityStatus",
         "AuditSource",
@@ -88,6 +89,18 @@ def test_model_registry_exposes_all_shared_models() -> None:
         "BaseEntity",
         "StateTransition",
         "HealthResponse",
+        # Round 2
+        "HealthState",
+        "HealthProbe",
+        "HealthSnapshot",
+        "RestartPolicy",
+        "ResourceSnapshot",
+        "ResourceCaps",
+        "Notification",
+        "NotificationLevel",
+        "EnvVar",
+        "SnapshotPayload",
+        "RestoreReport",
     ):
         assert key in reg, f"model_registry missing {key}"
 

@@ -12,6 +12,32 @@ def test_first_migration_exists() -> None:
     assert migrations[0].slug == "initial"
 
 
+def test_round2_migration_present() -> None:
+    """v0.1.2 ships migration 002 for Round 2 contract tables."""
+
+    migrations = list_migrations()
+    by_number = {m.number: m for m in migrations}
+    assert 2 in by_number, "Migration 002 (Round 2 schema) is missing"
+    assert by_number[2].slug == "round2_schema"
+
+
+def test_round2_migration_defines_new_tables() -> None:
+    """Contracts #20, #21, #22, #25 add tables."""
+
+    from importlib import resources
+
+    sql = resources.files("synapse_daemon.migrations").joinpath("002_round2_schema.sql").read_text(
+        encoding="utf-8"
+    )
+    for required_table in (
+        "project_dependencies",
+        "search_index",
+        "notification_preferences",
+        "project_secrets",
+    ):
+        assert required_table in sql, f"002_round2_schema.sql is missing table: {required_table}"
+
+
 def test_all_migrations_match_pattern() -> None:
     # Contract #9 file naming: NNN_slug.sql.
     for m in list_migrations():

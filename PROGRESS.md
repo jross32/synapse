@@ -6,20 +6,20 @@
 
 ## Current version
 
-`0.1.1.5`
+`0.1.2`
 
 ## Current milestone
 
-**Pre-B contract pass** — Round 2 of 2 contract rounds.
+**Pre-B contract pass — COMPLETE.** All 28 design contracts are now both documented (AGENTS.md) and scaffolded in real Python + TypeScript code. Next: Milestone B starts wiring them into a running daemon.
 
 | Version | Phase | Status |
 |---|---|---|
 | `0.1.0-alpha.1` | Milestone A — scaffolding | ✅ done |
 | `0.1.0.5` | Design contracts round 1 (docs) | ✅ done |
 | `0.1.1` | Round 1 contract scaffolding (code) | ✅ done |
-| `0.1.1.5` | Design contracts round 2 (docs) | 🟡 in progress |
-| `0.1.2` | Round 2 contract scaffolding (code) | ⚪ next |
-| `0.1.3+` | Milestone B — daemon skeleton | ⚪ pending |
+| `0.1.1.5` | Design contracts round 2 (docs) | ✅ done |
+| `0.1.2` | Round 2 contract scaffolding (code) | ✅ done |
+| `0.1.3+` | Milestone B — daemon skeleton | ⚪ next |
 
 ## What's done
 
@@ -36,12 +36,20 @@
 - Docs: `api-changes.md`, `security.md`, `adr/README.md`
 - `version-bump.ps1` now supports `-Kind design` + updates `__init__.py`
 
+### v0.1.1.5 — Round 2 contracts (docs)
+- AGENTS.md expanded from 16 → 28 contracts (#17 health, #18 restart, #19 resources, #20 deps, #21 search, #22 notifications, #23 a11y, #24 utc/local, #25 secrets, #26 hot reload, #27 CLI, #28 snapshot)
+
+### v0.1.2 — Round 2 contracts (scaffolding)
+- Daemon modules: `time_utils.py`, `health.py`, `restart_policy.py`, `resources.py`, `dependencies.py`, `search.py`, `notifications.py`, `secrets.py` (DPAPI + Fernet), `manifest_watcher.py` (watchdog), `cli.py`, `snapshot.py`
+- Migration `002_round2_schema.sql`: project_dependencies, search_index, notification_preferences, project_secrets + extended projects columns
+- Renderer: `format-time.ts`, `search-client.ts`, full Round 2 types in `generated-types.ts`
+- 10 new test files; HealthResponse now reports contracts 1–28
+- pyproject: added `watchdog` + `cryptography` deps, registered `synapse` console script
+- **85 tests passing, 1 platform-conditional skip**
+
 ## What's next (immediate)
 
-1. **Draft Round 2 design contracts** — present to user for approval.
-2. **v0.1.1.5:** lock approved Round 2 entries into `AGENTS.md`.
-3. **v0.1.2:** scaffold Round 2 contracts into code.
-4. **Milestone B onwards:** wire all the scaffolding into a running FastAPI daemon.
+**Milestone B — Daemon skeleton.** Wire `app.py` (FastAPI), `storage.py` (SQLite + migration runner), `ws.py` (WebSocket hub with replay buffer), `/api/v1/health`. All the contract scaffolds become live behaviour from here on.
 
 ## Known issues / broken state
 

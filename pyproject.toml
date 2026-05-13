@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse-daemon"
-version = "0.1.1.5"
+version = "0.1.2"
 description = "Synapse execution layer — FastAPI daemon that owns all managed processes. By The WhatIf Company."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,6 +29,8 @@ dependencies = [
   "psutil>=6.0.0,<7.0.0",
   "pydantic>=2.9.0,<3.0.0",
   "websockets>=13.0,<14.0",
+  "watchdog>=4.0.0,<7.0.0",
+  "cryptography>=43.0.0,<46.0.0",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +46,7 @@ build = [
 
 [project.scripts]
 synapsed = "synapse_daemon.__main__:main"
+synapse  = "synapse_daemon.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/jross32/synapse"

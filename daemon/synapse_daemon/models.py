@@ -101,8 +101,8 @@ class HealthResponse(BaseModel):
     version: str
     started_at: datetime
     contracts: list[int] = Field(
-        default_factory=lambda: list(range(1, 17)),
-        description="Design contracts honoured by this daemon build (Contracts #1–#16).",
+        default_factory=lambda: list(range(1, 29)),
+        description="Design contracts honoured by this daemon build (Contracts #1–#28).",
     )
 
 
@@ -125,8 +125,15 @@ def model_registry() -> dict[str, type[BaseModel]]:
     """
 
     from . import errors as _errors
+    from . import health as _health
+    from . import notifications as _notif
+    from . import resources as _res
+    from . import restart_policy as _restart
+    from . import secrets as _secrets
+    from . import snapshot as _snap
 
     return {
+        # Round 1
         "ErrorEnvelope": _errors.ErrorEnvelope,
         "EntityStatus": EntityStatus,  # type: ignore[dict-item]
         "AuditSource": AuditSource,  # type: ignore[dict-item]
@@ -134,4 +141,16 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "BaseEntity": BaseEntity,
         "StateTransition": StateTransition,
         "HealthResponse": HealthResponse,
+        # Round 2
+        "HealthState": _health.HealthState,  # type: ignore[dict-item]
+        "HealthProbe": _health.HealthProbe,
+        "HealthSnapshot": _health.HealthSnapshot,
+        "RestartPolicy": _restart.RestartPolicy,
+        "ResourceSnapshot": _res.ResourceSnapshot,
+        "ResourceCaps": _res.ResourceCaps,
+        "Notification": _notif.Notification,
+        "NotificationLevel": _notif.NotificationLevel,  # type: ignore[dict-item]
+        "EnvVar": _secrets.EnvVar,
+        "SnapshotPayload": _snap.SnapshotPayload,
+        "RestoreReport": _snap.RestoreReport,
     }
