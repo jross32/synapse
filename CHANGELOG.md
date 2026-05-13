@@ -10,6 +10,44 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-05-13
+
+### Milestone C — Electron skeleton (Synapse opens)
+
+`.\scripts\dev.ps1` now launches the full stack: daemon → Vite → Electron window, all wired together. Closing the window hides to a system tray; right-click → **Quit Synapse** is the only thing that actually exits.
+
+#### Added
+- `scripts/gen-icon.py` — pure-stdlib PNG generator (no Pillow dep) that draws the Synapse mark — nucleus dot + accent ring + six cyan sparks — at 32 × 32 (tray) and 256 × 256 (installer / About). Run once with `python scripts/gen-icon.py`; both PNGs are checked in so dev machines don't need to regenerate.
+- `electron/icons/synapse.png` (936 B) and `electron/icons/synapse-256.png` (16 KB) — generated placeholder marks. Designer-drawn final lands in Milestone J without touching consumer code.
+
+#### Changed — Electron main process
+- `electron/main.ts` rewritten end-to-end (Contract #2 hide-to-tray, Contract #6 daemon child, Contract #16 admin refusal):
+  · Single-instance lock — second launch focuses the existing window.
+  · Spawns `python -m synapse_daemon --port 7878 --data-dir data` on `app.whenReady`, polls `/api/v1/health` for up to 15 s before opening the window so the renderer never sees a connect-failure flash.
+  · Tray icon with **Show Synapse** / **Open daemon health page** / **Quit Synapse**. Single-click + double-click both show the window.
+  · `mainWindow.on('close', ...)` prevents default and hides to tray unless `isQuitting` is set. Only the tray's Quit item flips that flag.
+  · External links open in the user's browser via `shell.openExternal`, never inside an Electron BrowserWindow.
+  · `app.on('will-quit')` kills the daemon child cleanly. Daemon stdout/stderr is prefixed with `[daemon]` in the Electron console.
+
+#### Changed — preload bridge
+- `electron/preload.ts` exposes a typed `window.synapse.*` surface: `version()`, `daemonBase()`, `daemonWsBase()`, `platform()`. Raw Node APIs stay off the renderer's window.
+
+#### Changed — renderer
+- `renderer/App.tsx` rewritten as the Milestone C proof of life:
+  · Calls `setDaemonBase(window.synapse.daemonBase())` so `api-client.ts` aims at the right host even in packaged mode.
+  · Fetches `GET /api/v1/health` and renders version / uptime / start time / contracts-honoured count.
+  · Starts a `SynapseWsClient`, displays the colour-coded conn-state badge (idle / connecting / connected / reconnecting / closed) using `--synapse-status-*` tokens.
+  · Renders the last 5 received WS events with id + name + local time (Contract #24 — `formatLocal` shared helper).
+  · All colour, spacing, type, and radius values come from `theme-tokens.css` (Contract #14 — no hardcoded values).
+
+#### Notes
+- `npm run typecheck` ✅ · `npm run build:electron` produces `dist-electron/main.js` + `preload.js` cleanly.
+- `pytest` 117 passing · 1 platform-conditional skip — daemon code untouched in this commit.
+- Smoke-test path: run `.\scripts\dev.ps1` — you should see daemon boot logs, a Synapse window showing "connected" + the `v1.daemon.started` event, and a tray icon. Close the window → hides to tray. Right-click → Quit Synapse → both Electron and the daemon child exit cleanly.
+
+#### Next
+- Milestone D wires real projects (CRUD endpoints + Apps page with tiles + launch button). First tile = `wbscrper`.
+
 ## [0.1.3] — 2026-05-13
 
 ### Milestone B — Daemon skeleton (the daemon is alive)

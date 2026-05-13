@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.3` — **Milestone B complete: daemon is alive.** FastAPI daemon serves `GET /api/v1/health` and `WS /api/v1/ws` (with the full replay + ping/pong protocol) on `localhost:7878`. SQLite migrations apply on startup; orphan reconciliation runs before clients connect. **117 tests passing.** Next: Milestone C (Electron skeleton). See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
+> **Status:** `v0.1.4` — **Milestone C complete: Synapse opens.** Electron app spawns the Python daemon as a child process, waits for `/api/v1/health`, opens a window with live conn-state badge + the `v1.daemon.started` event visible, and hides to a system tray on close. **117 tests passing.** Next: Milestone D (project launcher). Run `.\scripts\dev.ps1` to see it. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
 
 ## What it is
 
@@ -61,21 +61,24 @@ Every milestone honours all 28 contracts. Full spec lives in [`AGENTS.md`](./AGE
 # One-time setup
 npm install
 pip install -e ".[dev]"
+python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
-npm run typecheck         # TypeScript checks pass
-python -m pytest -q       # 117 tests pass (1 platform-conditional skip)
+npm run typecheck                    # TypeScript checks pass
+python -m pytest -q                  # 117 tests pass (1 platform-conditional skip)
 
-# Start just the daemon (foreground, see boot logs)
-.\scripts\dev.ps1 -DaemonOnly
+# Full dev mode — daemon + Vite + Electron window
+.\scripts\dev.ps1
 
-# Or smoke-test it directly:
-python -m synapse_daemon --port 7878 --data-dir data
-# then in another shell:
-curl http://localhost:7878/api/v1/health
+# Variations
+.\scripts\dev.ps1 -DaemonOnly        # just the daemon (foreground, see boot logs)
+.\scripts\dev.ps1 -AppOnly           # just Vite + Electron (assumes daemon is up)
+.\scripts\dev.ps1 -BindLan           # daemon listens on 0.0.0.0 so phones can reach it
 ```
 
-Full Vite + Electron orchestration arrives with Milestone C. After Milestone J ships, end users will install a single `.exe` instead of running scripts.
+After running `.\scripts\dev.ps1` you should see: daemon log lines in the console, a Synapse window with the `v1.daemon.started` event visible, and a tray icon. Close the window — it hides to tray. Right-click the tray icon → **Quit Synapse** to actually exit.
+
+After Milestone J ships, end users will install a single `.exe` instead of running scripts.
 
 ## Repo layout
 
@@ -101,8 +104,8 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | ⌁ | Round 2 design contracts (#17–#28) | ✅ done (`v0.1.1.5` docs · `v0.1.2` code) |
 | ⌁ | Commit-rule hardening + README sync | ✅ done (`v0.1.2.5`) |
 | B | Daemon skeleton (FastAPI on `:7878`, `/health`, WS echo, SQLite + migration runner) | ✅ done (`v0.1.3`) |
-| C | Electron skeleton (window, tray, daemon spawn, WS connect) | 🟡 next |
-| D | Project registry + launcher (full CRUD UI) | ⚪ pending |
+| C | Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done (`v0.1.4`) |
+| D | Project registry + launcher (full CRUD UI) | 🟡 next |
 | E | Live process monitor (psutil heartbeat + state badges) | ⚪ pending |
 | F | Nucleus + Synapses UI (sidebar, cards, slideshow, theming) | ⚪ pending |
 | G | Cloudtap tool (port → tunnel URL) | ⚪ pending |

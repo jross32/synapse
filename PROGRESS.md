@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.3`
+`0.1.4`
 
 ## Current milestone
 
-**Milestone B — daemon skeleton — COMPLETE.** The daemon boots on `localhost:7878`, applies migrations, runs orphan reconciliation, serves `GET /api/v1/health` + `WS /api/v1/ws`. 117 tests pass. Next: Milestone C wires Electron to it.
+**Milestone C — Electron skeleton — COMPLETE.** `.\scripts\dev.ps1` boots daemon → Vite → Electron window. Window shows live conn-state badge + the `v1.daemon.started` event. Closing the window hides to tray. 117 tests pass. Next: Milestone D wires real projects.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -21,7 +21,8 @@
 | `0.1.2` | Round 2 contract scaffolding (code) | ✅ done |
 | `0.1.2.5` | README + docs sync; commit-rule hardening | ✅ done |
 | `0.1.3` | Milestone B — daemon skeleton (FastAPI + WS + migrations + reconciler) | ✅ done |
-| `0.1.4+` | Milestone C — Electron skeleton (window, tray, daemon spawn) | ⚪ next |
+| `0.1.4` | Milestone C — Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done |
+| `0.1.5+` | Milestone D — Project registry + launcher | ⚪ next |
 
 ## What's done
 
@@ -60,9 +61,23 @@
 - 32 new tests across `test_storage.py`, `test_ws.py`, `test_orphan_reconciler.py`, `test_app.py` — total 117 passing
 - **Smoke-tested:** real boot, `curl /api/v1/health` returns contract shape, WS replay handshake delivers `v1.daemon.started`, ping/pong works
 
+### v0.1.4 — Milestone C (Electron skeleton)
+- `scripts/gen-icon.py` (pure-stdlib PNG generator, no Pillow) → checked-in `synapse.png` (32×32) + `synapse-256.png` (256×256)
+- `electron/main.ts` rewritten — single-instance lock, spawns daemon child, polls `/api/v1/health` for up to 15 s, opens window only when daemon is ready, tray with Show / health-page / Quit, hide-to-tray on window close, kills daemon on `will-quit`
+- `electron/preload.ts` exposes typed `window.synapse.*` (version, daemonBase, daemonWsBase, platform)
+- `renderer/App.tsx` rewritten — calls `setDaemonBase`, fetches `/api/v1/health`, renders daemon + WS cards with conn-state badge using `--synapse-status-*` tokens, shows last 5 events via `formatLocal()` (Contract #24)
+- Compiles cleanly (`npm run build:electron` → `dist-electron/main.js` + `preload.js`)
+- All 117 daemon tests still pass
+
 ## What's next (immediate)
 
-**Milestone C — Electron skeleton.** Build `electron/main.ts` to spawn the daemon as a child process on app launch, open a `BrowserWindow` loading Vite (dev) or `dist/index.html` (packaged), wire system tray with Show / Quit, prevent-default the window-close so it hides to tray. The renderer connects via `ws-client.ts` (already scaffolded in v0.1.1) and shows the conn state + daemon version pulled from `/api/v1/health`.
+**Milestone D — Project registry + launcher.** Wire the missing pieces:
+- `daemon/synapse_daemon/projects.py` — Project Pydantic + CRUD against the `projects` table
+- `daemon/synapse_daemon/process_manager.py` — detached child-process spawn that respects `restart_policy` (Contract #18), captures stdout/stderr to per-process log files (Contract #3), emits `v1.project.launched` / `v1.project.stopped` / `v1.project.errored` events
+- `daemon/synapse_daemon/seed.py` — first-run insert of the wbscrper project so there's something to click
+- `GET/POST/PATCH/DELETE /api/v1/projects` + `POST /api/v1/projects/{id}/launch` + `/stop` + `GET /logs`
+- Renderer: `Apps.tsx` page with `ProjectTile` components, edit dialog (Contract #1), confirm-before-destructive (Contract #12), empty state (Contract #13), live state badge (Contract #2)
+- End-to-end: click wbscrper tile → `npm start` runs in `C:\Users\justi\wbscrper` → tile turns green
 
 ## Known issues / broken state
 
