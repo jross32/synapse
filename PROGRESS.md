@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.2.5`
+`0.1.3`
 
 ## Current milestone
 
-**Pre-B contract pass — COMPLETE.** All 28 design contracts are now both documented (AGENTS.md) and scaffolded in real Python + TypeScript code. `v0.1.2.5` synced README + hardened commit rules so docs can't drift again. Next: Milestone B starts wiring the scaffolds into a running daemon.
+**Milestone B — daemon skeleton — COMPLETE.** The daemon boots on `localhost:7878`, applies migrations, runs orphan reconciliation, serves `GET /api/v1/health` + `WS /api/v1/ws`. 117 tests pass. Next: Milestone C wires Electron to it.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -20,7 +20,8 @@
 | `0.1.1.5` | Design contracts round 2 (docs) | ✅ done |
 | `0.1.2` | Round 2 contract scaffolding (code) | ✅ done |
 | `0.1.2.5` | README + docs sync; commit-rule hardening | ✅ done |
-| `0.1.3+` | Milestone B — daemon skeleton | ⚪ next |
+| `0.1.3` | Milestone B — daemon skeleton (FastAPI + WS + migrations + reconciler) | ✅ done |
+| `0.1.4+` | Milestone C — Electron skeleton (window, tray, daemon spawn) | ⚪ next |
 
 ## What's done
 
@@ -48,9 +49,20 @@
 - pyproject: added `watchdog` + `cryptography` deps, registered `synapse` console script
 - **85 tests passing, 1 platform-conditional skip**
 
+### v0.1.3 — Milestone B (daemon skeleton)
+- `storage.py` (single SQLite connection, WAL + FK, autocommit, `transaction()` ctx mgr, `migrate()`)
+- `migrations/_runner.py` (atomic per-migration apply, `BEGIN IMMEDIATE` + `COMMIT`, idempotent)
+- `ws.py` (`EventBus` with monotonic IDs + 1 000-event ring buffer + async-locked subscribe/publish; `WsHub` with resume + ping + replay-window-exceeded protocol)
+- `orphan_reconciler.py` (`reconcile()` classifies managed processes into `re-attached` / `pid-recycled` / `daemon-restart` via psutil)
+- `app.py` (FastAPI factory, CORS, error envelope handler, `/api/v1/health`, `WS /api/v1/ws`, lifespan that runs reconciler + publishes boot events)
+- `__main__.py` rewritten (argparse, refuse-admin, migrate, build app, uvicorn boot)
+- `scripts/dev.ps1` actually orchestrates daemon + Vite + Electron with health polling
+- 32 new tests across `test_storage.py`, `test_ws.py`, `test_orphan_reconciler.py`, `test_app.py` — total 117 passing
+- **Smoke-tested:** real boot, `curl /api/v1/health` returns contract shape, WS replay handshake delivers `v1.daemon.started`, ping/pong works
+
 ## What's next (immediate)
 
-**Milestone B — Daemon skeleton.** Wire `app.py` (FastAPI), `storage.py` (SQLite + migration runner), `ws.py` (WebSocket hub with replay buffer), `/api/v1/health`. All the contract scaffolds become live behaviour from here on.
+**Milestone C — Electron skeleton.** Build `electron/main.ts` to spawn the daemon as a child process on app launch, open a `BrowserWindow` loading Vite (dev) or `dist/index.html` (packaged), wire system tray with Show / Quit, prevent-default the window-close so it hides to tray. The renderer connects via `ws-client.ts` (already scaffolded in v0.1.1) and shows the conn state + daemon version pulled from `/api/v1/health`.
 
 ## Known issues / broken state
 

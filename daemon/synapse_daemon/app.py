@@ -1,0 +1,155 @@
+"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
+
+For Milestone B this app exposes:
+
+  • ``GET  /api/v1/health``  — daemon liveness, version, applied schema,
+                                contracts honoured (Contract #7).
+  • ``WS   /api/v1/ws``     — the event bus hub (Contract #5).
+
+The factory pattern (``build_app(storage, bus)``) lets tests instantiate the
+app against a temp directory without going through ``__main__``.
+
+Every uncaught :class:`SynapseError` from a handler is rendered as an
+:class:`ErrorEnvelope` JSON response (Contract #4). CORS is opened just wide
+enough for the Electron renderer's Vite dev server and the loopback origin
+(Contract #15 — no third-party calls).
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+from fastapi import FastAPI, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from . import __version__
+from .api_versions import API_PREFIX, event_name
+from .errors import ErrorEnvelope, SynapseError
+from .models import HealthResponse
+from .orphan_reconciler import ReconcileOutcome, reconcile, summarise
+from .storage import Storage
+from .time_utils import to_iso, utc_now
+from .ws import EventBus, WsHub
+
+log = logging.getLogger(__name__)
+
+
+# CORS origins permitted to talk to the daemon. The packaged Electron build
+# loads from a ``file://`` origin which JSON serialises as ``null`` — so we
+# allow ``null`` explicitly. The Vite dev server is 5173.
+_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "null",
+]
+
+
+def build_app(storage: Storage, bus: EventBus) -> FastAPI:
+    """Construct the FastAPI app bound to a Storage + EventBus."""
+
+    started_at = utc_now()
+
+    app = FastAPI(
+        title="Synapse daemon",
+        version=__version__,
+        docs_url=None,         # /docs deferred until Milestone H mobile UI
+        redoc_url=None,
+        openapi_url=None,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_ALLOWED_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Accept"],
+    )
+
+    # ── exception handler ───────────────────────────────────────────────
+
+    @app.exception_handler(SynapseError)
+    async def synapse_error_handler(request: Request, exc: SynapseError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content=exc.envelope.model_dump())
+
+    @app.exception_handler(Exception)
+    async def fallback_handler(request: Request, exc: Exception) -> JSONResponse:
+        log.exception("Unhandled error on %s %s", request.method, request.url.path)
+        envelope = ErrorEnvelope(
+            code="server.internal",
+            message="An unexpected error occurred. See daemon logs for details.",
+            retryable=False,
+        )
+        return JSONResponse(status_code=500, content=envelope.model_dump())
+
+    # ── routes ──────────────────────────────────────────────────────────
+
+    @app.get(f"{API_PREFIX}/health")
+    async def health() -> HealthResponse:
+        return HealthResponse(ok=True, version=__version__, started_at=started_at)
+
+    hub = WsHub(bus)
+
+    @app.websocket(f"{API_PREFIX}/ws")
+    async def ws_endpoint(websocket: WebSocket) -> None:
+        await hub.handle(websocket)
+
+    # Stash state on the app for tests + later wiring.
+    app.state.storage = storage
+    app.state.bus = bus
+    app.state.started_at = started_at
+
+    return app
+
+
+async def boot_publish_daemon_started(bus: EventBus, schema_migration: int) -> None:
+    """Announce the daemon's arrival on the event bus.
+
+    Called by ``__main__`` after migrations and reconciliation finish, so the
+    very first event subscribers see is a clean state checkpoint.
+    """
+
+    await bus.publish(
+        event_name("daemon", "started"),
+        {
+            "version": __version__,
+            "schema_migration": schema_migration,
+            "started_at": to_iso(utc_now()),
+            "contracts": list(range(1, 29)),
+        },
+    )
+
+
+async def boot_publish_reconciliation(
+    bus: EventBus,
+    outcomes: list,
+) -> None:
+    """Emit one event per non-trivial reconcile outcome.
+
+    Re-attached rows are quiet — the consumer was already tracking them in a
+    previous life. We only broadcast the rows whose state actually changed.
+    """
+
+    report = summarise(outcomes)
+    if report.inspected == 0:
+        return
+
+    for row in outcomes:
+        if row.outcome == ReconcileOutcome.RE_ATTACHED:
+            continue
+        await bus.publish(
+            event_name("process", "reconciled"),
+            {
+                "process_id": row.process_id,
+                "entity_type": row.entity_type,
+                "entity_id": row.entity_id,
+                "pid": row.pid,
+                "outcome": row.outcome.value,
+            },
+        )
+
+    await bus.publish(
+        event_name("daemon", "reconciliation_complete"),
+        report.model_dump(),
+    )

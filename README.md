@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.2.5` — **pre-Milestone-B contract pass complete.** All 28 design contracts are documented + scaffolded in real Python/TypeScript code. **85 tests passing.** Next: Milestone B starts wiring the scaffolds into a running FastAPI daemon. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
+> **Status:** `v0.1.3` — **Milestone B complete: daemon is alive.** FastAPI daemon serves `GET /api/v1/health` and `WS /api/v1/ws` (with the full replay + ping/pong protocol) on `localhost:7878`. SQLite migrations apply on startup; orphan reconciliation runs before clients connect. **117 tests passing.** Next: Milestone C (Electron skeleton). See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
 
 ## What it is
 
@@ -63,14 +63,19 @@ npm install
 pip install -e ".[dev]"
 
 # Verify toolchain
-npm run typecheck      # TypeScript checks pass
-python -m pytest -q    # 85 tests pass
+npm run typecheck         # TypeScript checks pass
+python -m pytest -q       # 117 tests pass (1 platform-conditional skip)
 
-# Dev mode (full daemon + Electron orchestration arrives in Milestone B/C)
-.\scripts\dev.ps1
+# Start just the daemon (foreground, see boot logs)
+.\scripts\dev.ps1 -DaemonOnly
+
+# Or smoke-test it directly:
+python -m synapse_daemon --port 7878 --data-dir data
+# then in another shell:
+curl http://localhost:7878/api/v1/health
 ```
 
-After Milestone J ships, end users will install a single `.exe` instead.
+Full Vite + Electron orchestration arrives with Milestone C. After Milestone J ships, end users will install a single `.exe` instead of running scripts.
 
 ## Repo layout
 
@@ -94,8 +99,9 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | A | Repo scaffolding | ✅ done (`v0.1.0-alpha.1`) |
 | ⌁ | Round 1 design contracts (#1–#16) | ✅ done (`v0.1.0.5` docs · `v0.1.1` code) |
 | ⌁ | Round 2 design contracts (#17–#28) | ✅ done (`v0.1.1.5` docs · `v0.1.2` code) |
-| B | Daemon skeleton (FastAPI on `:7878`, `/health`, WS echo, SQLite + migration runner) | 🟡 next |
-| C | Electron skeleton (window, tray, daemon spawn, WS connect) | ⚪ pending |
+| ⌁ | Commit-rule hardening + README sync | ✅ done (`v0.1.2.5`) |
+| B | Daemon skeleton (FastAPI on `:7878`, `/health`, WS echo, SQLite + migration runner) | ✅ done (`v0.1.3`) |
+| C | Electron skeleton (window, tray, daemon spawn, WS connect) | 🟡 next |
 | D | Project registry + launcher (full CRUD UI) | ⚪ pending |
 | E | Live process monitor (psutil heartbeat + state badges) | ⚪ pending |
 | F | Nucleus + Synapses UI (sidebar, cards, slideshow, theming) | ⚪ pending |
