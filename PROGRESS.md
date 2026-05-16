@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.6`
+`0.1.7`
 
 ## Current milestone
 
-**Milestone D shipped + clickable launcher + Electron inspector.** `synapse.cmd` launches everything with no PowerShell; `install-shortcut.cmd` puts an icon on the Desktop. `scripts/inspect-electron.js` attaches to the live Electron window over CDP for real visual verification — and immediately caught a CSP bug that browser-only tests missed. 149 tests pass. Next: Milestone E (CPU/RAM heartbeat + auto-detect crashes).
+**Milestone E shipped — live process monitor.** The daemon watches every launched process: crash detection, ~2s CPU/RAM heartbeat, auto-restart per policy, log tails. The UI has a live process table, per-tile CPU/RAM, and "+ Add Project". 158 tests pass. Next: Milestone F (Nucleus + Synapses sidebar UI + tools/agents plugin system).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -25,7 +25,8 @@
 | `0.1.5` | Milestone D — Project registry + launcher (CRUD + tiles + click-to-launch) | ✅ done |
 | `0.1.5.5` | Hotfix: ASCII-only `.ps1` scripts + daemon log strings (PS 5.1 cp1252 parse fix) | ✅ done |
 | `0.1.6` | Clickable `synapse.cmd` launcher + desktop shortcut + Electron CDP inspector + CSP/orphan fixes | ✅ done |
-| `0.1.7+` | Milestone E — Live process monitor (heartbeat + auto crash detection) | ⚪ next |
+| `0.1.7` | Milestone E — Live process monitor (watcher + heartbeat + auto-restart + logs + "+ Add Project") | ✅ done |
+| `0.1.8+` | Milestone F — Nucleus + Synapses UI (sidebar, cards, slideshow) + tools/agents plugin system | ⚪ next |
 
 ## What's done
 
@@ -93,16 +94,23 @@
 - `gen-icon.py` now emits multi-res `synapse.ico` + `renderer/public/favicon.ico`
 - AGENTS.md Rule #6: E2E pass required on every code version bump
 - Fixes: CSP/preload host mismatch (Electron "Failed to fetch"), orphan process tree on Stop, React shorthand-style warning, favicon 404, Base URL fallback
-- E2E verified in both a browser (Playwright MCP) and the real Electron window (CDP inspector)
+
+### v0.1.7 — Milestone E (live process monitor)
+- daemon: background watcher (crash detection), ~2s heartbeat broadcaster (CPU% + RSS, tree-summed), auto-restart per `RestartPolicy`, `GET /projects/{id}/logs`
+- renderer: `ProcessMonitor` live table, `ProjectFormDialog` (create + edit), "+ Add Project" button, per-tile CPU/RAM
+- fixes: `DETACHED_PROCESS` killed all log capture (now `CREATE_NO_WINDOW`); `update()` corrupted nested Pydantic models (now re-validates)
+- 11 new daemon tests — 158 total passing
+- E2E verified browser + Electron; registered 3 of the user's real apps (local DB only)
 
 ## What's next (immediate)
 
-**Milestone E — Live process monitor with CPU/RAM heartbeat.** The pieces:
-- Background watcher task per spawned child: detects unexpected exits, transitions to `error` state, optionally restarts per `restart_policy` (Contract #18)
-- Periodic heartbeat broadcaster (`v1.process.heartbeat`, ~2 s cadence) carrying `ResourceSnapshot` per managed PID (CPU% + RSS MB) — psutil already a dep
-- `GET /api/v1/projects/{id}/logs` endpoint + a live-tail WS sub-protocol so the UI can render rolling output (Contract #3)
-- Renderer: a Processes page (or section) with a table — entity, PID, started, uptime, CPU%, RAM MB, kill button
-- Health-probe loop (Contract #17): HTTP / TCP / command checks at the project's declared interval, updates `current_health`, emits `v1.project.health_changed`
+**Milestone F — Nucleus + Synapses UI.** The full layout the design promised:
+- Left icon-rail sidebar (Home / Apps / Tools / Processes / Settings) — Contract frontend conventions
+- "Nucleus" centre workspace + peripheral "Synapse" tool cards
+- Featured slideshow on Home (Microsoft-Store-style), recents
+- Tools/agents/workflows plugin system — manifest-driven cards (the Cloudtap manifest already exists); user can add tools + AI agents + workflows
+- Theme polish, real shadcn-style components, responsive breakpoints
+- This is where the "command center that can do anything" surface comes together
 
 ## Known issues / broken state
 

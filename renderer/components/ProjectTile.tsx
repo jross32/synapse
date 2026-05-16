@@ -7,18 +7,20 @@
 import { useState } from 'react';
 
 import { launchProject, stopProject } from '../lib/projects-client';
-import type { Project } from '../lib/generated-types';
+import type { Project, ResourceSnapshot } from '../lib/generated-types';
 import { formatLocal, formatUptime } from '../lib/format-time';
 import { StatusBadge } from './StatusBadge';
 
 export interface ProjectTileProps {
   project: Project;
+  /** Latest heartbeat snapshot for this project, if running (Contract #19). */
+  resources?: ResourceSnapshot;
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
   onActionError?: (project: Project, error: Error) => void;
 }
 
-export function ProjectTile({ project, onEdit, onDelete, onActionError }: ProjectTileProps): JSX.Element {
+export function ProjectTile({ project, resources, onEdit, onDelete, onActionError }: ProjectTileProps): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   const isRunning = project.status === 'launched' || project.status === 'stopping';
@@ -108,6 +110,14 @@ export function ProjectTile({ project, onEdit, onDelete, onActionError }: Projec
             ? `running ${formatUptime(project.last_transition_at)}`
             : formatLocal(project.last_transition_at, 'short')}
         </dd>
+        {project.status === 'launched' && resources && (
+          <>
+            <dt style={dtStyle}>cpu / ram</dt>
+            <dd style={ddStyle}>
+              {resources.cpu_percent.toFixed(1)}% · {resources.rss_mb.toFixed(0)} MB
+            </dd>
+          </>
+        )}
       </dl>
 
       {project.last_error && (

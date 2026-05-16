@@ -102,4 +102,11 @@ def build_projects_router(
             projects_module.get(storage.conn, project_id)
         )
 
+    @router.get("/{project_id}/logs", response_model=None)
+    async def get_logs(project_id: str, lines: int = 200) -> dict:
+        # Confirm the project exists first (404 with a proper envelope).
+        projects_module.get(storage.conn, project_id)
+        capped = max(1, min(lines, 2000))
+        return pm.tail_log(project_id, max_lines=capped)
+
     return router

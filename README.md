@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.6` — **Click-to-launch + clickable launcher + Electron inspection.** Double-click `synapse.cmd` (or run `install-shortcut.cmd` once for a Desktop icon) — no PowerShell needed. The build now ships a generic Electron CDP inspector (`scripts/inspect-electron.js`) so the real app window can be screenshotted + driven during verification. **149 tests passing.** Next: Milestone E (live process monitor). See [`PROGRESS.md`](./PROGRESS.md). Synapse's window now shows your projects as tiles. Click **Launch** on the seeded `wbscrper` tile and `npm start` runs in `C:\Users\justi\wbscrper`. State badges (`idle → launching → running → stopping → stopped → error`) update live over WebSocket. Edit / delete are wired with confirm-before-destructive. **149 tests passing.** Next: Milestone E (live process monitor with CPU/RAM heartbeat). Run `.\scripts\dev.ps1` to use it. See [`PROGRESS.md`](./PROGRESS.md) for the live build state.
+> **Status:** `v0.1.7` — **Milestone E complete: live process monitor.** Synapse watches every launched process — auto-detects crashes, broadcasts live CPU% + RAM on a ~2s heartbeat, optionally auto-restarts per policy, and serves log tails. The window shows a live process table + per-tile CPU/RAM, and **"+ Add Project"** registers any app on your machine (stored locally — never pushed to GitHub). Double-click `synapse.cmd` to launch — no PowerShell needed. **158 tests passing.** Next: Milestone F (Nucleus + Synapses UI). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 149 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 158 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
@@ -121,8 +121,8 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | C | Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done (`v0.1.4`) |
 | D | Project registry + launcher (full CRUD UI) | ✅ done (`v0.1.5`) |
 | ⌁ | Clickable launcher + Electron CDP inspector | ✅ done (`v0.1.6`) |
-| E | Live process monitor (psutil heartbeat + state badges) | 🟡 next |
-| F | Nucleus + Synapses UI (sidebar, cards, slideshow, theming) | ⚪ pending |
+| E | Live process monitor (psutil heartbeat + crash detect + auto-restart) | ✅ done (`v0.1.7`) |
+| F | Nucleus + Synapses UI (sidebar, cards, slideshow, theming) | 🟡 next |
 | G | Cloudtap tool (port → tunnel URL) | ⚪ pending |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ⚪ pending |
 | I | Auto-start + tray polish (login items, detached daemon, full tray menu) | ⚪ pending |

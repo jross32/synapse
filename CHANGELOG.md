@@ -10,6 +10,83 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.7] -- 2026-05-16
+
+### Milestone E -- Live process monitor
+
+Synapse now actively watches everything it launches: it detects crashes,
+streams CPU% + RAM, can auto-restart per policy, and serves log tails. The
+window gained a live process table, per-tile CPU/RAM, and "+ Add Project".
+
+#### Added -- daemon
+- `ProcessManager` background **watcher** (Contract #18): each spawned child
+  gets an `asyncio` task awaiting its exit. Expected exits (via `stop()`) stay
+  quiet; unexpected exits transition the project to `error` (non-zero code) or
+  `stopped` (clean exit 0), write the audit log, and emit `v1.project.errored`
+  / `v1.project.stopped`.
+- **Heartbeat broadcaster** (Contract #19): a single `asyncio` loop samples
+  CPU% + RSS for every live child every ~2s and broadcasts
+  `v1.process.heartbeat`. CPU/RAM are summed across the whole process tree
+  (the `cmd.exe -> npm -> node` chain), using a persistent `psutil.Process`
+  cache so `cpu_percent()` deltas are meaningful. Soft caps from
+  `resource_caps` surface as `over_budget` warnings.
+- **Auto-restart** (Contract #18): on an unexpected crash, if the project's
+  `RestartPolicy` allows, the daemon schedules a backed-off restart
+  (`v1.project.restart_scheduled`) and gives up at `max_retries`
+  (`v1.project.restart_exhausted`).
+- `GET /api/v1/projects/{id}/logs?lines=N` -- tail of the project's most
+  recent per-spawn log file (Contract #3).
+- `ProcessManager.start_monitoring()` / `tail_log()` / `is_running()`.
+- 11 new daemon tests (`test_process_monitor.py`) -- crash classification,
+  expected-stop quiet path, auto-restart + exhaustion, heartbeat sampling +
+  broadcast, log tail.
+
+#### Added -- renderer
+- `components/ProcessMonitor.tsx` -- "Live Processes" table: project, status,
+  PID, uptime, an inline CPU gauge, RAM, and a Stop button. Empty-state when
+  nothing runs (Contract #13).
+- `components/ProjectFormDialog.tsx` -- one dialog, two modes. **create** is
+  the new **"+ Add Project"** flow (collects a kebab-case id + name + path +
+  launch command); **edit** replaces the old `ProjectEditDialog`. Explicit
+  copy reassures the user that projects stay local and never reach GitHub.
+- `ProjectTile` -- shows live `cpu / ram` while a project runs.
+- `Apps.tsx` -- one WS subscription now feeds both the tiles and the process
+  table; "+ Add Project" button in the header and the empty state.
+- `projects-client.ts` -- `createProject` takes a `ProjectCreateInput`;
+  `getProjectLogs()` added.
+
+#### Fixed
+- **Process logs were always empty** (Contract #3 broken): spawning with the
+  Windows `DETACHED_PROCESS` flag silently dropped the inherited stdout/stderr
+  handles, so every `data/logs/<id>/*.log` file was 0 bytes. Earlier tests
+  only asserted the log file *existed*. `_spawn` now uses `CREATE_NO_WINDOW`
+  instead -- a hidden console that still honours redirected handles. The
+  process still outlives the daemon (Contract #6 holds). Caught by the new
+  log-content test.
+- **`projects.update()` corrupted nested models**: `model_copy(update=...)`
+  does not coerce, so PATCHing `health` / `restart` / `resource_caps` / `env`
+  left a raw `dict` in place and the next `.model_dump()` crashed with
+  `AttributeError`. `update()` now re-validates the merged payload through
+  `Project.model_validate()`. Caught by the auto-restart test.
+- `_terminate_tree` is now run via `asyncio.to_thread` so the 5s grace wait
+  doesn't block the event loop during Stop.
+
+#### Changed
+- FastAPI lifespan calls `ProcessManager.start_monitoring()` after boot.
+- Version files + UI fallback: `0.1.6` -> `0.1.7`.
+
+#### Verified (Rule #6 E2E)
+- Browser (Playwright MCP): launch wbscrper -> tile shows `running` + live
+  `cpu / ram`, "Live Processes" table populates (PID, uptime, 207 MB RAM),
+  Stop -> table empties, no orphan on port 12345, "+ Add Project" dialog
+  opens. 0 console errors throughout.
+- Electron (`inspect-electron.js` @ CDP 9222): real window screenshotted with
+  4 project tiles in a 3-column grid, "connected", 0 console errors.
+- Registered 3 of the user's real apps (APA UI, Pool Hall, Ticket Vault) via
+  the API into the local DB to populate the command center for testing --
+  these live only in the gitignored `data/synapse.sqlite`, never committed.
+- `npm run typecheck` clean; `pytest` 158 passed, 1 platform-conditional skip.
+
 ## [0.1.6] -- 2026-05-15
 
 ### Clickable launcher + Electron inspection + E2E-caught fixes

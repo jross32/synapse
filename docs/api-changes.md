@@ -42,11 +42,20 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-05-13 | `v1.project.stopped` | additive | Payload: `{id, reason}`. |
 | 2026-05-13 | `v1.project.errored` | additive | Payload: `{id, error: ErrorRef}`. |
 
+### Shipped in v0.1.7 (Milestone E)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-05-15 | `GET /api/v1/projects/{id}/logs?lines=N` | additive | Returns `{project_id, log_path, lines[], total_lines}` — the tail of the project's most recent per-spawn log file (Contract #3). `lines` capped 1–2000. |
+| 2026-05-15 | `v1.process.heartbeat` | additive | Broadcast every ~2s while any project runs. Payload: `{processes: ResourceSnapshot[], over_budget: [{id, breached[]}]}`. Each snapshot sums CPU% + RSS MB across the project's whole process tree. |
+| 2026-05-15 | `v1.project.errored` (crash path) | additive | Now also emitted when the watcher detects an unexpected non-zero exit. Payload gains `exit_code` + `error`. |
+| 2026-05-15 | `v1.project.stopped` (clean-exit path) | additive | Emitted when a process exits 0 on its own (not via Stop). Payload `reason: "exited"`. |
+| 2026-05-15 | `v1.project.restart_scheduled` | additive | Contract #18 — emitted when an auto-restart is queued. Payload `{id, attempt, delay_seconds, max_retries}`. |
+| 2026-05-15 | `v1.project.restart_exhausted` | additive | Emitted when a crashing project hits `max_retries`. Payload `{id, attempts, max_retries}`. |
+
 ### Pending (later milestones)
 
 | Endpoint or event | Milestone | Notes |
 |---|---|---|
-| `GET /api/v1/projects/{id}/logs` | E | Latest log file content + tail-mode |
-| `v1.process.heartbeat` | E | Periodic CPU/RAM snapshot per process |
 | `GET /api/v1/search?q=...` | F | Universal search (Contract #21) |
 | `POST /api/v1/snapshot` / `POST /api/v1/restore` | later | Disaster recovery (Contract #28) |

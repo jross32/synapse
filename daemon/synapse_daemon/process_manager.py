@@ -1,30 +1,33 @@
-"""ProcessManager — spawns + tracks managed child processes (Contracts #2, #3, #6).
+"""ProcessManager — spawns, monitors + recovers managed child processes.
 
-Responsibilities:
+Contracts: #2 (live status), #3 (log capture), #6 (orphan-safe), #11 (audit),
+#18 (restart policy), #19 (resource heartbeat).
 
-  • ``launch(project_id, source)`` — transition the project to LAUNCHING,
-    spawn its ``launch_cmd`` detached with stdout/stderr teed to a per-spawn
-    log file (Contract #3), record a ``managed_processes`` row, transition
-    to LAUNCHED on success or ERROR on spawn failure.
-  • ``stop(project_id, source)`` — find the live row for the project, send
-    SIGTERM (Windows: terminate), update the row + project status.
-  • ``status_of(project_id)`` — cheap in-memory lookup of the current PID.
+Lifecycle of a managed project:
 
-Every state transition writes the audit log (Contract #11) and emits a
-WebSocket event (Contract #5) so the UI tile updates without polling.
+    launch()  -> LAUNCHING -> LAUNCHED   (spawn detached, log file, audit, WS)
+              -> watcher task awaits the process
+    stop()    -> STOPPING  -> STOPPED    (terminate the whole tree)
+    crash     -> ERROR / STOPPED         (watcher detects an unexpected exit;
+                                          auto-restarts if the restart policy
+                                          allows — Contract #18)
 
-The auto-detection of crashes (poll Popen.poll() / wait_for_exit) is added
-in Milestone E together with the heartbeat broadcaster. Milestone D ships
-launch + stop + audit + WS events; clean-exit tracking is a Round-2 follow-up.
+While a project runs, a single heartbeat loop samples CPU% + RSS for every
+live child and broadcasts ``v1.process.heartbeat`` (Contract #19).
+
+``start_monitoring()`` / ``shutdown()`` bracket the background tasks; the
+FastAPI lifespan owns that pairing.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 import shlex
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO
 
@@ -35,36 +38,84 @@ from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .errors import SynapseError, conflict, invalid
 from .models import AuditSource, EntityStatus, ErrorRef
-from .process_log import new_log_path
+from .process_log import latest_log, new_log_path
+from .resources import ResourceSnapshot, over_budget
+from .restart_policy import next_backoff_seconds, should_restart
 from .storage import Storage
 from .time_utils import to_iso, utc_now
 from .ws import EventBus
 
 log = logging.getLogger(__name__)
 
+# Contract #19 — heartbeat cadence. ~2 s keeps the UI gauges live without
+# hammering psutil.
+HEARTBEAT_INTERVAL_SECONDS = 2.0
+
 
 @dataclass
 class _LiveChild:
-    """In-memory record of a child this process is currently tracking."""
+    """In-memory record of a child this manager is currently tracking."""
 
     project_id: str
     process: subprocess.Popen
     log_file: IO[bytes]
     log_path: Path
     managed_process_row_id: int
+    attempt: int = 0                       # 0 = user launch; >0 = auto-restart
+    expected_stop: bool = False            # set by stop() so the watcher stays quiet
+    watcher_task: asyncio.Task | None = None
+    # Persistent psutil handles so cpu_percent() deltas are meaningful across
+    # heartbeats. Keyed by pid; refreshed each sample as the tree changes.
+    psutil_cache: dict[int, psutil.Process] = field(default_factory=dict)
 
 
 class ProcessManager:
-    """Owns the spawn / stop / state-transition flow for managed projects."""
+    """Owns the spawn / monitor / stop / recover flow for managed projects."""
 
     def __init__(self, storage: Storage, bus: EventBus) -> None:
         self._storage = storage
         self._bus = bus
         self._live: dict[str, _LiveChild] = {}
+        self._heartbeat_task: asyncio.Task | None = None
+        self._restart_tasks: set[asyncio.Task] = set()
+
+    # ── background lifecycle ────────────────────────────────────────────
+
+    def start_monitoring(self) -> None:
+        """Start the heartbeat loop. Call once from the FastAPI lifespan."""
+
+        if self._heartbeat_task is None or self._heartbeat_task.done():
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+            log.info("ProcessManager heartbeat loop started (%.1fs).", HEARTBEAT_INTERVAL_SECONDS)
+
+    def shutdown(self) -> None:
+        """Cancel background tasks + close log handles on daemon exit.
+
+        Managed children are NOT killed — Contract #6 wants them to survive a
+        daemon restart; the orphan reconciler re-attaches them next boot.
+        """
+
+        if self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
+        for task in list(self._restart_tasks):
+            task.cancel()
+        self._restart_tasks.clear()
+        for project_id in list(self._live.keys()):
+            live = self._live.get(project_id)
+            if live and live.watcher_task is not None:
+                live.watcher_task.cancel()
+            self._cleanup(project_id)
 
     # ── public API ──────────────────────────────────────────────────────
 
-    async def launch(self, project_id: str, *, source: AuditSource = AuditSource.AUTO) -> None:
+    async def launch(
+        self,
+        project_id: str,
+        *,
+        source: AuditSource = AuditSource.AUTO,
+        _restart_attempt: int = 0,
+    ) -> None:
         """Spawn the project's launch_cmd. Idempotent: already-running raises."""
 
         if project_id in self._live:
@@ -75,7 +126,7 @@ class ProcessManager:
         if not project.launch_cmd.strip():
             raise invalid("project", f"Project '{project_id}' has no launch_cmd.")
 
-        # Transition: idle/stopped → launching.
+        # Transition: idle/stopped/error -> launching.
         with self._storage.transaction() as conn:
             projects_module.set_status(conn, project_id, status=EntityStatus.LAUNCHING)
             audit(
@@ -83,14 +134,15 @@ class ProcessManager:
                 AuditRecord(
                     entity_type="project",
                     entity_id=project_id,
-                    action="launch.attempt",
+                    action="launch.attempt" if _restart_attempt == 0 else "restart.attempt",
                     source=source,
                     result="success",
+                    details={"attempt": _restart_attempt} if _restart_attempt else None,
                 ),
             )
         await self._bus.publish(
             event_name("project", "launching"),
-            {"id": project_id, "source": source.value},
+            {"id": project_id, "source": source.value, "attempt": _restart_attempt},
         )
 
         # Resolve log file + spawn.
@@ -135,17 +187,20 @@ class ProcessManager:
                 ),
             )
 
-        self._live[project_id] = _LiveChild(
+        child = _LiveChild(
             project_id=project_id,
             process=proc,
             log_file=log_file,
             log_path=log_path,
             managed_process_row_id=row_id,
+            attempt=_restart_attempt,
         )
+        self._live[project_id] = child
+        child.watcher_task = asyncio.create_task(self._watch(project_id, proc))
 
         await self._bus.publish(
             event_name("project", "launched"),
-            {"id": project_id, "pid": proc.pid, "log_path": str(log_path)},
+            {"id": project_id, "pid": proc.pid, "log_path": str(log_path), "attempt": _restart_attempt},
         )
 
     async def stop(self, project_id: str, *, source: AuditSource = AuditSource.AUTO) -> None:
@@ -155,9 +210,11 @@ class ProcessManager:
             row_id = self._find_active_row(project_id)
             if row_id is None:
                 raise conflict("project", f"Project '{project_id}' is not running.")
-            # Mark stopped without trying to kill (we have no Popen handle).
             await self._finalise_stop(project_id, row_id, reason="user", source=source)
             return
+
+        # Tell the watcher this exit is intentional BEFORE we kill anything.
+        live.expected_stop = True
 
         with self._storage.transaction() as conn:
             projects_module.set_status(conn, project_id, status=EntityStatus.STOPPING)
@@ -176,12 +233,8 @@ class ProcessManager:
             {"id": project_id, "source": source.value},
         )
 
-        # On Windows we spawn with ``shell=True`` so the immediate child is
-        # ``cmd.exe``; terminating cmd.exe leaves npm + node grandchildren
-        # behind. Walk the process tree via psutil and terminate every
-        # descendant (then escalate to kill after a grace period).
         try:
-            self._terminate_tree(live.process.pid, grace_seconds=5.0)
+            await asyncio.to_thread(self._terminate_tree, live.process.pid, 5.0)
         except Exception as exc:
             log.exception("Error stopping project '%s'", project_id)
             await self._fail(
@@ -202,15 +255,216 @@ class ProcessManager:
         live = self._live.get(project_id)
         return live.process.pid if live else None
 
-    def shutdown(self) -> None:
-        """Best-effort cleanup of file handles on daemon exit.
+    def is_running(self, project_id: str) -> bool:
+        return project_id in self._live
 
-        We do NOT kill running children here — Contract #6 wants them to
-        survive daemon restart. The orphan reconciler picks them up next boot.
+    def tail_log(self, project_id: str, max_lines: int = 200) -> dict:
+        """Return the most recent log file for a project (Contract #3).
+
+        Reads the newest ``data/logs/<id>/*.log`` file. Returns a dict with
+        the path, the last ``max_lines`` lines, and total line count.
         """
 
-        for project_id in list(self._live.keys()):
-            self._cleanup(project_id)
+        path = latest_log(self._storage.data_dir, project_id)
+        if path is None:
+            return {"project_id": project_id, "log_path": None, "lines": [], "total_lines": 0}
+
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise invalid("project", f"Could not read log for '{project_id}': {exc}")
+
+        all_lines = text.splitlines()
+        return {
+            "project_id": project_id,
+            "log_path": str(path),
+            "lines": all_lines[-max_lines:],
+            "total_lines": len(all_lines),
+        }
+
+    # ── watcher (Contract #18 crash detection + auto-restart) ────────────
+
+    async def _watch(self, project_id: str, proc: subprocess.Popen) -> None:
+        """Await a child's exit; classify it as expected vs unexpected."""
+
+        try:
+            exit_code = await asyncio.to_thread(proc.wait)
+        except asyncio.CancelledError:
+            return
+
+        current = self._live.get(project_id)
+        if current is None or current.process is not proc:
+            return  # superseded by a newer launch, or already cleaned up
+        if current.expected_stop:
+            return  # stop() owns the state transition
+
+        await self._handle_unexpected_exit(project_id, exit_code, current)
+
+    async def _handle_unexpected_exit(
+        self,
+        project_id: str,
+        exit_code: int,
+        live: _LiveChild,
+    ) -> None:
+        """A managed process exited on its own — record it, maybe restart."""
+
+        attempt = live.attempt
+        row_id = live.managed_process_row_id
+        crashed = exit_code != 0
+        reason = "crashed" if crashed else "exited"
+
+        self._cleanup(project_id)
+
+        with self._storage.transaction() as conn:
+            conn.execute(
+                "UPDATE managed_processes "
+                "SET stopped_at = ?, stop_reason = ?, status = 'stopped' WHERE id = ?",
+                (to_iso(utc_now()), reason, row_id),
+            )
+            if crashed:
+                err = ErrorRef(
+                    code="project.crashed",
+                    message=f"Process exited unexpectedly with code {exit_code}.",
+                )
+                projects_module.set_status(
+                    conn, project_id, status=EntityStatus.ERROR, error=err
+                )
+            else:
+                projects_module.set_status(conn, project_id, status=EntityStatus.STOPPED)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="project",
+                    entity_id=project_id,
+                    action="exit",
+                    source=AuditSource.AUTO,
+                    result="error" if crashed else "success",
+                    error_code="project.crashed" if crashed else None,
+                    details={"exit_code": exit_code, "reason": reason},
+                ),
+            )
+
+        event = "errored" if crashed else "stopped"
+        payload: dict = {"id": project_id, "reason": reason, "exit_code": exit_code}
+        if crashed:
+            payload["error"] = {"code": "project.crashed", "message": f"exit code {exit_code}"}
+        await self._bus.publish(event_name("project", event), payload)
+
+        # Contract #18 — auto-restart if the policy allows.
+        project = projects_module.get(self._storage.conn, project_id)
+        policy = project.restart
+        if should_restart(policy, exit_code, attempt):
+            delay = next_backoff_seconds(policy, attempt)
+            log.info(
+                "Auto-restarting '%s' in %ds (attempt %d/%d).",
+                project_id, delay, attempt + 1, policy.max_retries,
+            )
+            await self._bus.publish(
+                event_name("project", "restart_scheduled"),
+                {"id": project_id, "attempt": attempt + 1, "delay_seconds": delay,
+                 "max_retries": policy.max_retries},
+            )
+            task = asyncio.create_task(self._delayed_restart(project_id, delay, attempt + 1))
+            self._restart_tasks.add(task)
+            task.add_done_callback(self._restart_tasks.discard)
+        elif crashed and policy.mode != "never" and attempt >= policy.max_retries:
+            await self._bus.publish(
+                event_name("project", "restart_exhausted"),
+                {"id": project_id, "attempts": attempt, "max_retries": policy.max_retries},
+            )
+
+    async def _delayed_restart(self, project_id: str, delay: int, attempt: int) -> None:
+        try:
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            return
+        if project_id in self._live:
+            return  # someone launched it manually in the meantime
+        try:
+            await self.launch(project_id, source=AuditSource.AUTO, _restart_attempt=attempt)
+        except SynapseError as exc:
+            log.warning("Auto-restart of '%s' failed: %s", project_id, exc.envelope.message)
+
+    # ── heartbeat (Contract #19) ─────────────────────────────────────────
+
+    async def _heartbeat_loop(self) -> None:
+        """Sample CPU% + RSS for every live child and broadcast it."""
+
+        while True:
+            try:
+                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+                snapshots = []
+                budget_warnings = []
+                for project_id, live in list(self._live.items()):
+                    snap = self._sample(project_id, live)
+                    if snap is None:
+                        continue
+                    snapshots.append(snap)
+                    breaches = self._check_budget(project_id, snap)
+                    if breaches:
+                        budget_warnings.append({"id": project_id, "breached": breaches})
+                if snapshots:
+                    await self._bus.publish(
+                        event_name("process", "heartbeat"),
+                        {
+                            "processes": [s.model_dump(mode="json") for s in snapshots],
+                            "over_budget": budget_warnings,
+                        },
+                    )
+            except asyncio.CancelledError:
+                break
+            except Exception:  # pragma: no cover — defensive; loop must not die
+                log.exception("Heartbeat loop iteration failed.")
+
+    def _sample(self, project_id: str, live: _LiveChild) -> ResourceSnapshot | None:
+        """Sum CPU% + RSS across a managed process and all its descendants."""
+
+        root_pid = live.process.pid
+        try:
+            root = live.psutil_cache.get(root_pid)
+            if root is None:
+                root = psutil.Process(root_pid)
+                live.psutil_cache[root_pid] = root
+            tree = [root, *root.children(recursive=True)]
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+
+        cpu_total = 0.0
+        rss_total = 0
+        seen: set[int] = set()
+        for proc in tree:
+            pid = proc.pid
+            seen.add(pid)
+            cached = live.psutil_cache.get(pid)
+            if cached is None:
+                cached = proc
+                live.psutil_cache[pid] = cached
+            try:
+                # interval=None: non-blocking, delta since the last call on
+                # this same object. First call per pid returns 0.0.
+                cpu_total += cached.cpu_percent(interval=None)
+                rss_total += cached.memory_info().rss
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        # Drop cache entries for processes that have exited.
+        for stale in [p for p in live.psutil_cache if p not in seen]:
+            live.psutil_cache.pop(stale, None)
+
+        return ResourceSnapshot(
+            entity_type="project",
+            entity_id=project_id,
+            pid=root_pid,
+            cpu_percent=round(cpu_total, 1),
+            rss_mb=round(rss_total / (1024 * 1024), 1),
+        )
+
+    def _check_budget(self, project_id: str, snap: ResourceSnapshot) -> list[str]:
+        try:
+            project = projects_module.get(self._storage.conn, project_id)
+        except SynapseError:
+            return []
+        return over_budget(project.resource_caps, snap)
 
     # ── internals ───────────────────────────────────────────────────────
 
@@ -229,12 +483,21 @@ class ProcessManager:
         # batch wrappers (npm, yarn, etc.) is shell=True. The launch_cmd
         # comes from operator-controlled data in our DB, not user input from
         # a request, so command injection is not a meaningful threat here.
+        #
+        # Flags: CREATE_NEW_PROCESS_GROUP isolates the child's process group;
+        # CREATE_NO_WINDOW hides the console so no cmd windows flash.
+        # We deliberately do NOT use DETACHED_PROCESS -- with shell=True it
+        # breaks stdout/stderr redirection (cmd.exe drops the inherited
+        # handles when it has no console at all), which silently emptied
+        # every process log file. CREATE_NO_WINDOW gives a hidden console
+        # so the redirected handles are honoured. The child still outlives
+        # the daemon (no Job Object binds it) -- Contract #6 holds.
         if is_windows:
             args: list[str] | str = cmd
             shell = True
             creationflags = (
                 subprocess.CREATE_NEW_PROCESS_GROUP
-                | getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NO_WINDOW", 0)
             )
             kwargs: dict = {"creationflags": creationflags}
         else:
@@ -261,14 +524,13 @@ class ProcessManager:
         if not env_vars:
             return None  # inherit parent env unchanged
 
-        import os
         merged = dict(os.environ)
         for var in env_vars:
             if var.value is None:
                 continue
             # Secrets — decrypt before passing to the child.
             # (Decryption against the SecretStore wires up in Milestone J;
-            # for v0.1.5 plain values pass through.)
+            # for now plain values pass through.)
             merged[var.key] = var.value
         return merged
 
@@ -362,10 +624,10 @@ class ProcessManager:
             )
         await self._bus.publish(
             event_name("project", "errored"),
-            {"id": project_id, "error": err.model_dump()},
+            {"id": project_id, "error": err.model_dump(mode="json")},
         )
 
-    def _terminate_tree(self, root_pid: int, *, grace_seconds: float = 5.0) -> None:
+    def _terminate_tree(self, root_pid: int, grace_seconds: float = 5.0) -> None:
         """Terminate a process and every descendant.
 
         Windows ``shell=True`` spawns put ``cmd.exe`` at the root with the

@@ -230,9 +230,14 @@ def update(conn: sqlite3.Connection, project_id: str, patch: ProjectUpdate) -> P
     if not updates:
         raise invalid("project", "Empty update — no fields to change.")
 
-    next_project = current.model_copy(update=updates)
+    # Re-validate through Project() rather than model_copy(update=...):
+    # model_copy does NOT coerce, so a patched nested field (health, restart,
+    # resource_caps, env) would be left as a raw dict and later .model_dump()
+    # calls on it would crash. Full re-validation turns the dicts back into
+    # their proper Pydantic models.
     next_updated_at = max(utc_now(), current.updated_at + timedelta(microseconds=1))
-    next_project = next_project.model_copy(update={"updated_at": next_updated_at})
+    merged = {**current.model_dump(), **updates, "updated_at": next_updated_at}
+    next_project = Project.model_validate(merged)
 
     conn.execute(
         """

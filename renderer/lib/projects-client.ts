@@ -21,8 +21,35 @@ export async function getProject(id: string): Promise<Project> {
   return apiFetch<Project>(`/projects/${encodeURIComponent(id)}`, { method: 'GET' });
 }
 
-export async function createProject(project: Project): Promise<Project> {
-  return apiFetch<Project>('/projects', { method: 'POST', body: project });
+/** The fields a user supplies when creating a project; the daemon fills the rest. */
+export interface ProjectCreateInput {
+  id: string;
+  name: string;
+  path: string;
+  launch_cmd: string;
+  description?: string | null;
+  category?: string | null;
+  icon?: string | null;
+  expected_port?: number | null;
+}
+
+export async function createProject(input: ProjectCreateInput): Promise<Project> {
+  return apiFetch<Project>('/projects', { method: 'POST', body: input });
+}
+
+/** Fetch the tail of a project's most recent log file (Contract #3). */
+export interface ProjectLogs {
+  project_id: string;
+  log_path: string | null;
+  lines: string[];
+  total_lines: number;
+}
+
+export async function getProjectLogs(id: string, lines = 200): Promise<ProjectLogs> {
+  const params = new URLSearchParams({ lines: String(lines) });
+  return apiFetch<ProjectLogs>(`/projects/${encodeURIComponent(id)}/logs?${params}`, {
+    method: 'GET',
+  });
 }
 
 export async function patchProject(id: string, patch: ProjectUpdate): Promise<Project> {

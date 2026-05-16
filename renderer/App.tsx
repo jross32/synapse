@@ -37,7 +37,7 @@ const STATE_TOKEN: Record<ConnState, string> = {
 // The full nucleus + synapses sidebar/layout arrives in Milestone F.
 export default function App(): JSX.Element {
   const bridge = useMemo(() => getBridge(), []);
-  const uiVersion = bridge?.version() ?? '0.1.6';
+  const uiVersion = bridge?.version() ?? '0.1.7';
   const platform = bridge?.platform() ?? 'browser';
 
   const [health, setHealth] = useState<HealthResponse | null>(null);

@@ -1,29 +1,38 @@
-// Apps page (Milestone D) — lists managed projects as tiles.
+// Apps page (Milestones D + E) -- project tiles + live process monitor.
 //
-// Subscribes to v1.project.* WS events so tile state stays current without
-// polling. Empty state (Contract #13) renders a friendly CTA if no projects
-// have been registered yet. Delete is a confirm-before-destructive
-// interaction (Contract #12).
+// Owns a single WS subscription for the whole page: v1.project.* events
+// trigger a refresh, v1.process.heartbeat feeds the live CPU/RAM map shared
+// by the tiles and the ProcessMonitor table.
+//
+// Empty state (#13), confirm-before-destructive delete (#12), and the
+// "+ Add Project" create flow (#1 -- everything editable from the UI) all
+// live here.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { deleteProject, listProjects } from '../lib/projects-client';
-import type { Project } from '../lib/generated-types';
+import type { Project, ResourceSnapshot } from '../lib/generated-types';
 import { SynapseWsClient } from '../lib/ws-client';
-import { ProjectEditDialog } from '../components/ProjectEditDialog';
+import { ProcessMonitor } from '../components/ProcessMonitor';
+import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFormDialog';
 import { ProjectTile } from '../components/ProjectTile';
+
+interface FormState {
+  mode: ProjectFormMode;
+  project?: Project;
+}
 
 export function AppsPage(): JSX.Element {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [resourcesById, setResourcesById] = useState<Record<string, ResourceSnapshot>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Project | null>(null);
+  const [form, setForm] = useState<FormState | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const wsRef = useRef<SynapseWsClient | null>(null);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     try {
       const next = await listProjects();
       setProjects(next);
@@ -41,12 +50,20 @@ export function AppsPage(): JSX.Element {
     const ws = new SynapseWsClient();
     wsRef.current = ws;
     const unsub = ws.onEvent((event) => {
-      if (!event.name.startsWith('v1.project.')) return;
-      // Optimistic update for the affected project. Fall back to a refresh
-      // for safety — the daemon's state is authoritative.
-      const id = (event.payload as { id?: string }).id;
-      if (!id) return;
-      void refresh();
+      if (event.name === 'v1.process.heartbeat') {
+        // Heartbeat payload carries a snapshot per running process.
+        const procs = (event.payload as { processes?: ResourceSnapshot[] }).processes ?? [];
+        setResourcesById((prev) => {
+          const next = { ...prev };
+          for (const snap of procs) next[snap.entity_id] = snap;
+          return next;
+        });
+        return;
+      }
+      if (event.name.startsWith('v1.project.')) {
+        // Daemon state is authoritative -- refetch on any project event.
+        void refresh();
+      }
     });
     ws.start();
 
@@ -56,9 +73,10 @@ export function AppsPage(): JSX.Element {
     };
   }, [refresh]);
 
-  const sorted = useMemo(() => {
-    return [...projects].sort((a, b) => a.name.localeCompare(b.name));
-  }, [projects]);
+  const sorted = useMemo(
+    () => [...projects].sort((a, b) => a.name.localeCompare(b.name)),
+    [projects]
+  );
 
   async function handleConfirmDelete(target: Project): Promise<void> {
     try {
@@ -72,59 +90,92 @@ export function AppsPage(): JSX.Element {
   }
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--synapse-space-6)' }}>
-      <header style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 'var(--synapse-text-xl)', letterSpacing: '-0.01em' }}>
-            Apps
-          </h2>
-          <p style={{ margin: 'var(--synapse-space-1) 0 0', color: 'var(--synapse-text-secondary)', fontSize: 'var(--synapse-text-sm)' }}>
-            Launchable projects under Synapse's management. Click a tile to start it.
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--synapse-space-8)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--synapse-space-6)' }}>
+        <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--synapse-space-4)' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 'var(--synapse-text-xl)', letterSpacing: '-0.01em' }}>
+              Apps
+            </h2>
+            <p style={{ margin: 'var(--synapse-space-1) 0 0', color: 'var(--synapse-text-secondary)', fontSize: 'var(--synapse-text-sm)' }}>
+              Launchable projects under Synapse's management. Click a tile to start it.
+            </p>
+          </div>
+          <button
+            type='button'
+            onClick={() => setForm({ mode: 'create' })}
+            style={{
+              minHeight: '40px',
+              padding: '0 var(--synapse-space-5)',
+              borderRadius: 'var(--synapse-radius-md)',
+              backgroundColor: 'var(--synapse-accent)',
+              color: 'var(--synapse-text-primary)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'transparent',
+              fontSize: 'var(--synapse-text-sm)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            + Add Project
+          </button>
+        </header>
+
+        {loadError && (
+          <p role='alert' style={{ color: 'var(--synapse-status-error)' }}>
+            Could not load projects: {loadError}
           </p>
-        </div>
-      </header>
+        )}
 
-      {loadError && (
-        <p role='alert' style={{ color: 'var(--synapse-status-error)' }}>
-          Could not load projects: {loadError}
-        </p>
-      )}
+        {loading && projects.length === 0 ? (
+          <p style={{ color: 'var(--synapse-text-secondary)' }}>Loading projects…</p>
+        ) : projects.length === 0 ? (
+          <EmptyState onAdd={() => setForm({ mode: 'create' })} />
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: 'var(--synapse-space-6)',
+            }}
+          >
+            {sorted.map((p) => (
+              <ProjectTile
+                key={p.id}
+                project={p}
+                resources={resourcesById[p.id]}
+                onEdit={(project) => setForm({ mode: 'edit', project })}
+                onDelete={(project) => {
+                  setDeleteError(null);
+                  setDeleting(project);
+                }}
+                onActionError={(_proj, err) => setLoadError(err.message)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
-      {loading && projects.length === 0 ? (
-        <p style={{ color: 'var(--synapse-text-secondary)' }}>Loading projects…</p>
-      ) : projects.length === 0 ? (
-        <EmptyState onRetry={() => void refresh()} />
-      ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: 'var(--synapse-space-6)',
+      <ProcessMonitor
+        projects={projects}
+        resourcesById={resourcesById}
+        onActionError={(_p, err) => setLoadError(err.message)}
+      />
+
+      {form && (
+        <ProjectFormDialog
+          mode={form.mode}
+          project={form.project}
+          onSaved={(saved) => {
+            setProjects((prev) => {
+              const exists = prev.some((p) => p.id === saved.id);
+              return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved];
+            });
+            setForm(null);
           }}
-        >
-          {sorted.map((p) => (
-            <ProjectTile
-              key={p.id}
-              project={p}
-              onEdit={(project) => setEditing(project)}
-              onDelete={(project) => {
-                setDeleteError(null);
-                setDeleting(project);
-              }}
-              onActionError={(_proj, err) => setLoadError(err.message)}
-            />
-          ))}
-        </div>
-      )}
-
-      {editing && (
-        <ProjectEditDialog
-          project={editing}
-          onSaved={(updated) => {
-            setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-            setEditing(null);
-          }}
-          onClose={() => setEditing(null)}
+          onClose={() => setForm(null)}
         />
       )}
 
@@ -138,7 +189,7 @@ export function AppsPage(): JSX.Element {
                 <code>{deleting.path}</code> stays untouched.
               </p>
               <p style={{ color: 'var(--synapse-text-muted)', fontSize: 'var(--synapse-text-xs)' }}>
-                You can recreate the entry later via "+ Add" (coming in Milestone F).
+                You can re-add it any time with "+ Add Project".
               </p>
             </>
           }
@@ -156,13 +207,15 @@ export function AppsPage(): JSX.Element {
   );
 }
 
-function EmptyState({ onRetry }: { onRetry: () => void }): JSX.Element {
-  // Contract #13 — no blank pages.
+function EmptyState({ onAdd }: { onAdd: () => void }): JSX.Element {
+  // Contract #13 -- no blank pages.
   return (
     <div
       style={{
         backgroundColor: 'var(--synapse-bg-surface)',
-        border: '1px dashed var(--synapse-border-strong)',
+        borderWidth: '1px',
+        borderStyle: 'dashed',
+        borderColor: 'var(--synapse-border-strong)',
         borderRadius: 'var(--synapse-radius-lg)',
         padding: 'var(--synapse-space-12)',
         textAlign: 'center',
@@ -170,24 +223,26 @@ function EmptyState({ onRetry }: { onRetry: () => void }): JSX.Element {
     >
       <h3 style={{ margin: 0, fontSize: 'var(--synapse-text-lg)' }}>No projects yet</h3>
       <p style={{ margin: 'var(--synapse-space-2) 0 var(--synapse-space-4)', color: 'var(--synapse-text-secondary)' }}>
-        Synapse seeds <code>wbscrper</code> on first run. If you don't see it, the daemon may not have started
-        yet — try the daemon health link in the tray menu.
+        Add any app on your machine — Synapse will launch it, monitor it, and keep its logs.
       </p>
       <button
         type='button'
-        onClick={onRetry}
+        onClick={onAdd}
         style={{
-          minHeight: '36px',
-          padding: '0 var(--synapse-space-4)',
+          minHeight: '40px',
+          padding: '0 var(--synapse-space-5)',
           borderRadius: 'var(--synapse-radius-md)',
-          fontSize: 'var(--synapse-text-sm)',
-          backgroundColor: 'transparent',
-          border: '1px solid var(--synapse-border-strong)',
+          backgroundColor: 'var(--synapse-accent)',
           color: 'var(--synapse-text-primary)',
+          borderWidth: '1px',
+          borderStyle: 'solid',
+          borderColor: 'transparent',
+          fontSize: 'var(--synapse-text-sm)',
+          fontWeight: 600,
           cursor: 'pointer',
         }}
       >
-        Refresh
+        + Add your first project
       </button>
     </div>
   );
@@ -204,8 +259,7 @@ interface ConfirmDialogProps {
 }
 
 function ConfirmDialog({ title, body, confirmLabel, danger, error, onConfirm, onCancel }: ConfirmDialogProps): JSX.Element {
-  // Contract #12 — confirm before destructive (with structured detail of
-  // what will happen, not a generic "are you sure?").
+  // Contract #12 -- confirm before destructive, with structured detail.
   return (
     <div
       role='dialog'
@@ -229,7 +283,9 @@ function ConfirmDialog({ title, body, confirmLabel, danger, error, onConfirm, on
         style={{
           width: 'min(480px, 100%)',
           backgroundColor: 'var(--synapse-bg-surface)',
-          border: '1px solid var(--synapse-border-subtle)',
+          borderWidth: '1px',
+          borderStyle: 'solid',
+          borderColor: 'var(--synapse-border-subtle)',
           borderRadius: 'var(--synapse-radius-lg)',
           padding: 'var(--synapse-space-8)',
           display: 'flex',
@@ -255,7 +311,9 @@ function ConfirmDialog({ title, body, confirmLabel, danger, error, onConfirm, on
               padding: '0 var(--synapse-space-4)',
               borderRadius: 'var(--synapse-radius-md)',
               backgroundColor: 'transparent',
-              border: '1px solid var(--synapse-border-strong)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'var(--synapse-border-strong)',
               color: 'var(--synapse-text-primary)',
               fontSize: 'var(--synapse-text-sm)',
               cursor: 'pointer',

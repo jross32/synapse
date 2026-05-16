@@ -108,6 +108,9 @@ def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
         await boot_publish_reconciliation(bus, outcomes)
         await boot_publish_daemon_started(bus, schema)
 
+        # Start the resource heartbeat loop (Contract #19).
+        pm.start_monitoring()
+
         log.info(
             "Synapse daemon %s ready | schema=%d | contracts 1-28 | port=%d",
             __version__,
