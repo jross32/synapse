@@ -10,6 +10,38 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.6] -- 2026-05-15
+
+### Clickable launcher + Electron inspection + E2E-caught fixes
+
+This bump makes Synapse runnable without PowerShell and gives the verification process eyes on the *actual* Electron window. Running the new Electron inspector immediately caught a real bug the browser-only test couldn't see.
+
+#### Added
+- `synapse.cmd` -- pure-`cmd` launcher (double-click in Explorer or run from `cmd`). Boots daemon + Vite + Electron, polls health, tails logs to `data/*-runtime.log`, cleans up ports on exit. No PowerShell.
+- `install-shortcut.cmd` -- one-shot Desktop shortcut creator via `cscript` + a temp VBS (no PowerShell). Points the `.lnk` at `synapse.cmd` with the generated `.ico`.
+- `scripts/inspect-electron.js` -- generic Electron renderer inspector. Connects to a running Electron app over the Chrome DevTools Protocol (`chromium.connectOverCDP`) and supports `screenshot` / `console` / `snapshot` / `html` / `click` / `eval` / `title`. App-agnostic -- rebuilt from the capability that lived in the app-specific `nexus-mcp-server`, now generic for any Electron app.
+- `electron/main.ts` -- `--inspect-renderer` flag (or `SYNAPSE_INSPECT=1`) enables a CDP port (default 9222) so the inspector can attach. OFF by default -- a CDP port lets any local process drive the app.
+- `playwright` added as a devDependency (drives `inspect-electron.js`; future E2E test infra).
+- `scripts/gen-icon.py` -- now also emits a multi-resolution `electron/icons/synapse.ico` (16-256 px) and a `renderer/public/favicon.ico`.
+- `AGENTS.md` -- new Rule #6: every code version bump must close with a real E2E pass (daemon boot -> renderer load via Playwright -> click-through -> teardown). Documents the Electron-inspection option.
+
+#### Fixed
+- **Daemon unreachable in the packaged/Electron renderer** (caught by `inspect-electron.js`): the preload bridge returned `http://127.0.0.1:7878` but `index.html`'s CSP `connect-src` only whitelisted `localhost:7878`, so every REST fetch + the WebSocket were silently CSP-blocked ("Failed to fetch", badge stuck on "connecting..."). The browser-only Playwright test passed because, without the Electron bridge, it fell back to the `localhost` default. Fix: preload `DAEMON_BASE` now uses `localhost`; CSP also whitelists the `127.0.0.1` variants as defence-in-depth.
+- **Orphaned child processes on Stop**: Windows `shell=True` spawns put `cmd.exe` at the root with `npm`/`node` as grandchildren; terminating only the root left `node.exe` holding the port. `ProcessManager._terminate_tree()` now walks the full process tree via `psutil` (collected before terminating, since children get reparented) and escalates terminate -> kill.
+- **React shorthand-style warning** in `ProjectTile`/`ProjectEditDialog`/`Apps`: mixing the `border` shorthand with a later `borderColor` override tripped React's "Removing borderColor border" warning on re-render. Switched to discrete `borderWidth`/`borderStyle`/`borderColor`.
+- **Favicon 404** in the renderer console -- `renderer/public/favicon.ico` now generated + linked from `index.html`.
+- **Base URL showed "--"** in the daemon card when no Electron bridge was present -- now falls back to the api-client default.
+
+#### Changed
+- `renderer/App.tsx` UI-version fallback bumped to `0.1.6`.
+- `index.html` CSP also allows `data:` images (for future inline icons).
+- Three version files: `0.1.5.5` -> `0.1.6`.
+
+#### Verified (E2E, per Rule #6)
+- Browser E2E (Playwright MCP @ `localhost:5173`): page mounts with 0 console errors, daemon card + Apps tile render, `Launch` -> `running` -> `Stop` -> `stopped` round-trip with live badge updates.
+- **Electron E2E** (`inspect-electron.js` @ CDP 9222): real Synapse window screenshotted -- "connected" badge, daemon card populated (v0.1.5.5, 28 contracts, uptime, `http://localhost:7878`), Web Scraper tile rendering. This run is what caught + confirmed the CSP fix.
+- `npm run typecheck` clean; `pytest` 149 passed, 1 platform-conditional skip.
+
 ## [0.1.5.5] -- 2026-05-13
 
 ### Hotfix -- ASCII-only PowerShell scripts (run-blocker)

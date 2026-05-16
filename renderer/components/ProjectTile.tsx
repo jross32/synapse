@@ -179,6 +179,9 @@ const ddStyle: React.CSSProperties = {
 type ButtonVariant = 'primary' | 'danger' | 'ghost';
 
 function buttonStyle(variant: ButtonVariant): React.CSSProperties {
+  // Use separate border-* properties (no `border` shorthand). Mixing the
+  // shorthand with overrides like `borderColor` later triggers React's
+  // "Removing borderColor border" warning during re-renders.
   const base: React.CSSProperties = {
     minHeight: '36px',
     padding: '0 var(--synapse-space-4)',
@@ -186,7 +189,9 @@ function buttonStyle(variant: ButtonVariant): React.CSSProperties {
     fontSize: 'var(--synapse-text-sm)',
     fontFamily: 'var(--synapse-font-sans)',
     cursor: 'pointer',
-    border: '1px solid transparent',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
     transition: 'background-color var(--synapse-duration-fast) var(--synapse-ease-smooth)',
   };
   if (variant === 'primary') {

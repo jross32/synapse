@@ -176,18 +176,12 @@ class ProcessManager:
             {"id": project_id, "source": source.value},
         )
 
-        # Send terminate, fall back to kill after grace period.
+        # On Windows we spawn with ``shell=True`` so the immediate child is
+        # ``cmd.exe``; terminating cmd.exe leaves npm + node grandchildren
+        # behind. Walk the process tree via psutil and terminate every
+        # descendant (then escalate to kill after a grace period).
         try:
-            proc = live.process
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                log.warning("Project '%s' did not exit on terminate; killing.", project_id)
-                proc.kill()
-                proc.wait(timeout=2)
-        except psutil.NoSuchProcess:
-            pass
+            self._terminate_tree(live.process.pid, grace_seconds=5.0)
         except Exception as exc:
             log.exception("Error stopping project '%s'", project_id)
             await self._fail(
@@ -370,6 +364,46 @@ class ProcessManager:
             event_name("project", "errored"),
             {"id": project_id, "error": err.model_dump()},
         )
+
+    def _terminate_tree(self, root_pid: int, *, grace_seconds: float = 5.0) -> None:
+        """Terminate a process and every descendant.
+
+        Windows ``shell=True`` spawns put ``cmd.exe`` at the root with the
+        real workload (npm -> node, python -> child, etc.) as grandchildren.
+        Killing only the root orphans them — that's the bug where wbscrper's
+        ``node.exe`` kept holding port 12345 after Stop. We collect the whole
+        tree *before* terminating anything (children get reparented once the
+        root dies), then escalate terminate -> kill.
+        """
+
+        try:
+            root = psutil.Process(root_pid)
+        except psutil.NoSuchProcess:
+            return
+
+        procs = [root]
+        try:
+            procs.extend(root.children(recursive=True))
+        except psutil.NoSuchProcess:
+            pass
+
+        for proc in procs:
+            try:
+                proc.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        _gone, alive = psutil.wait_procs(procs, timeout=grace_seconds)
+        if alive:
+            log.warning(
+                "%d process(es) survived terminate; escalating to kill.", len(alive)
+            )
+        for proc in alive:
+            try:
+                proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        psutil.wait_procs(alive, timeout=2.0)
 
     def _cleanup(self, project_id: str) -> None:
         live = self._live.pop(project_id, None)

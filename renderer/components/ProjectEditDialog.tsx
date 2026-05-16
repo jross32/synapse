@@ -176,7 +176,9 @@ function btn(variant: 'primary' | 'ghost'): React.CSSProperties {
     fontSize: 'var(--synapse-text-sm)',
     fontFamily: 'var(--synapse-font-sans)',
     cursor: 'pointer',
-    border: '1px solid transparent',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
   };
   if (variant === 'primary') {
     return { ...base, backgroundColor: 'var(--synapse-accent)', color: 'var(--synapse-text-primary)' };

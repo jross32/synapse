@@ -272,7 +272,9 @@ function ConfirmDialog({ title, body, confirmLabel, danger, error, onConfirm, on
               borderRadius: 'var(--synapse-radius-md)',
               backgroundColor: danger ? 'var(--synapse-status-error)' : 'var(--synapse-accent)',
               color: 'var(--synapse-text-primary)',
-              border: '1px solid transparent',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'transparent',
               fontSize: 'var(--synapse-text-sm)',
               cursor: 'pointer',
             }}

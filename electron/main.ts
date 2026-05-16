@@ -22,6 +22,20 @@ const daemonUrl = `http://${daemonHost}:${daemonPort}`;
 
 const ALLOW_ADMIN = process.argv.includes('--allow-admin');
 
+// Renderer inspection (Contract: E2E verification, AGENTS.md Rule #6).
+// When --inspect-renderer is passed (or SYNAPSE_INSPECT=1), Electron exposes
+// a Chrome DevTools Protocol endpoint so scripts/inspect-electron.js (or any
+// CDP client) can attach to the real window: screenshot it, read its console,
+// click elements. OFF by default — a CDP port lets any local process drive
+// the app, so it's an opt-in dev/CI affordance only.
+const INSPECT_RENDERER =
+  process.argv.includes('--inspect-renderer') || process.env.SYNAPSE_INSPECT === '1';
+const INSPECT_PORT = process.env.SYNAPSE_INSPECT_PORT || '9222';
+if (INSPECT_RENDERER) {
+  app.commandLine.appendSwitch('remote-debugging-port', INSPECT_PORT);
+  app.commandLine.appendSwitch('remote-allow-origins', 'http://localhost:' + INSPECT_PORT);
+}
+
 // ── single-instance lock ──────────────────────────────────────────────────
 // Synapse hides to tray on close, so we must guard against a second copy
 // being launched by the Windows shell.
@@ -229,11 +243,17 @@ app.whenReady().then(async () => {
     console.log('[synapse] daemon ready');
   } catch (err) {
     console.error('[synapse] daemon failed to start:', err);
-    tray?.setToolTip('Synapse · daemon failed to start');
+    tray?.setToolTip('Synapse | daemon failed to start');
     // Still open the window so the user can see the error state.
   }
 
   createWindow();
+
+  if (INSPECT_RENDERER) {
+    console.log(
+      `[synapse] renderer inspection enabled — CDP on http://localhost:${INSPECT_PORT}`
+    );
+  }
 });
 
 app.on('window-all-closed', () => {

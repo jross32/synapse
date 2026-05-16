@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.5.5`
+`0.1.6`
 
 ## Current milestone
 
-**Milestone D shipped + ASCII hotfix.** `.\scripts\dev.ps1` had non-ASCII glyphs that PS 5.1 mis-decoded; rewritten in pure ASCII and AGENTS.md now bans the pattern. 149 tests still pass. Next: Milestone E (CPU/RAM heartbeat + auto-detect crashes).
+**Milestone D shipped + clickable launcher + Electron inspector.** `synapse.cmd` launches everything with no PowerShell; `install-shortcut.cmd` puts an icon on the Desktop. `scripts/inspect-electron.js` attaches to the live Electron window over CDP for real visual verification — and immediately caught a CSP bug that browser-only tests missed. 149 tests pass. Next: Milestone E (CPU/RAM heartbeat + auto-detect crashes).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -24,7 +24,8 @@
 | `0.1.4` | Milestone C — Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done |
 | `0.1.5` | Milestone D — Project registry + launcher (CRUD + tiles + click-to-launch) | ✅ done |
 | `0.1.5.5` | Hotfix: ASCII-only `.ps1` scripts + daemon log strings (PS 5.1 cp1252 parse fix) | ✅ done |
-| `0.1.6+` | Milestone E — Live process monitor (heartbeat + auto crash detection) | ⚪ next |
+| `0.1.6` | Clickable `synapse.cmd` launcher + desktop shortcut + Electron CDP inspector + CSP/orphan fixes | ✅ done |
+| `0.1.7+` | Milestone E — Live process monitor (heartbeat + auto crash detection) | ⚪ next |
 
 ## What's done
 
@@ -83,6 +84,16 @@
 - renderer `styles.css` keyframes for badge pulse
 - 32 new tests across `test_projects.py`, `test_process_manager.py`, `test_seed.py`, `test_routes_projects.py` — total 149 passing
 - **Smoke path:** `.\scripts\dev.ps1` → daemon seeds wbscrper → window shows wbscrper tile → click Launch → npm start runs → click Stop → tile returns to stopped
+
+### v0.1.6 — Clickable launcher + Electron inspection
+- `synapse.cmd` (cmd-only launcher, no PowerShell) + `install-shortcut.cmd` (Desktop `.lnk` via cscript)
+- `scripts/inspect-electron.js` — generic Electron CDP inspector (screenshot/console/snapshot/html/click/eval/title)
+- `electron/main.ts` `--inspect-renderer` flag exposes a CDP port
+- `playwright` devDependency added
+- `gen-icon.py` now emits multi-res `synapse.ico` + `renderer/public/favicon.ico`
+- AGENTS.md Rule #6: E2E pass required on every code version bump
+- Fixes: CSP/preload host mismatch (Electron "Failed to fetch"), orphan process tree on Stop, React shorthand-style warning, favicon 404, Base URL fallback
+- E2E verified in both a browser (Playwright MCP) and the real Electron window (CDP inspector)
 
 ## What's next (immediate)
 

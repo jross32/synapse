@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { apiFetch, setDaemonBase } from './lib/api-client';
+import { apiFetch, daemonBase, setDaemonBase } from './lib/api-client';
 import type { HealthResponse } from './lib/generated-types';
 import { formatLocal, formatUptime } from './lib/format-time';
 import { AppsPage } from './pages/Apps';
@@ -37,7 +37,7 @@ const STATE_TOKEN: Record<ConnState, string> = {
 // The full nucleus + synapses sidebar/layout arrives in Milestone F.
 export default function App(): JSX.Element {
   const bridge = useMemo(() => getBridge(), []);
-  const uiVersion = bridge?.version() ?? '0.1.5';
+  const uiVersion = bridge?.version() ?? '0.1.6';
   const platform = bridge?.platform() ?? 'browser';
 
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -101,7 +101,7 @@ export default function App(): JSX.Element {
             <Row label='Contracts' value={`${health.contracts.length} honoured (#1–#${Math.max(...health.contracts)})`} />
             <Row label='Started' value={formatLocal(health.started_at, 'long')} />
             <Row label='Uptime' value={formatUptime(health.started_at)} />
-            <Row label='Base URL' value={bridge?.daemonBase() ?? '—'} />
+            <Row label='Base URL' value={bridge?.daemonBase() ?? daemonBase()} />
           </dl>
         ) : healthError ? (
           <p style={{ color: 'var(--synapse-status-error)' }}>

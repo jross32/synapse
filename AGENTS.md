@@ -90,6 +90,23 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
 
 If a commit ever ships with a stale README header, that's a regression — open a follow-up commit immediately.
 
+### E2E verification on every version bump (Rule #6)
+
+**Every** version bump that adds or changes user-visible behaviour must close with a real end-to-end pass before the commit lands. Typecheck + pytest alone aren't enough — they don't catch broken renderer wiring, broken CORS, missing preload bridge fields, or daemon contracts that fail when a real HTTP client / WS client / browser talks to them.
+
+Minimum E2E for any version that touches the daemon, renderer, or Electron lifecycle:
+
+1. **Daemon boot.** Launch `python -m synapse_daemon --port 7878 --data-dir data`. `curl http://127.0.0.1:7878/api/v1/health` must return `{ok:true, version:<current>, contracts:[1..28]}`. The first `v1.daemon.started` event must be on the WS replay buffer.
+2. **Renderer load.** Start Vite (`npx vite`). Use the Playwright MCP tools (`mcp__playwright__browser_navigate`, `mcp__playwright__browser_snapshot`, `mcp__playwright__browser_take_screenshot`) to load `http://localhost:5173`, assert the page mounts (no console errors), and capture a screenshot. The daemon-card and the Apps section must both render.
+3. **Click-through.** For any feature touched in this bump, drive the interaction with `mcp__playwright__browser_click` / `browser_fill_form` and snapshot the resulting state. State badges should reflect the daemon's REST + WS responses without a manual refresh.
+4. **Tear down.** Kill the daemon (and any process it spawned during the test) and Vite. Confirm `netstat -ano | findstr :7878` returns empty.
+
+If Playwright cannot reach the renderer in step 2 — or the screenshot in step 3 shows a state badge that disagrees with `GET /api/v1/health` or the WS feed — **the bump is not done.** Open a follow-up fix before pushing.
+
+For pure-docs bumps (`X.Y.Z.5` design rounds, READMEs, ADRs) E2E is optional but still encouraged. For code bumps it's mandatory.
+
+Steps 1–4 are repeatable from the developer's machine as well: that's what `synapse.cmd` (Electron) + `python -m synapse_daemon` (loose daemon) + Vite let you do without any PowerShell or external tooling.
+
 ---
 
 ## Design Contracts (load-bearing — applies to every milestone)

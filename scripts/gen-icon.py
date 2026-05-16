@@ -27,6 +27,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ICON_DIR = REPO_ROOT / "electron" / "icons"
+RENDERER_PUBLIC = REPO_ROOT / "renderer" / "public"
 
 # Brand palette — kept in sync with renderer/lib/theme-tokens.css.
 BG_TOP = (15, 23, 50)        # #0F1732 — deep nucleus blue
@@ -41,30 +42,66 @@ def _png_chunk(tag: bytes, data: bytes) -> bytes:
     return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
 
 
-def _write_png(path: Path, pixels: list[list[tuple[int, int, int, int]]]) -> None:
+def _png_bytes(pixels: list[list[tuple[int, int, int, int]]]) -> bytes:
+    """Build a PNG file payload from the given RGBA pixel matrix."""
+
     height = len(pixels)
     width = len(pixels[0])
 
-    # PNG signature.
     out = b"\x89PNG\r\n\x1a\n"
+    out += _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
 
-    # IHDR — 8-bit RGBA.
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-    out += _png_chunk(b"IHDR", ihdr)
-
-    # IDAT — each scanline is preceded by a filter byte (0 = none).
     raw = bytearray()
     for row in pixels:
         raw.append(0)
         for r, g, b, a in row:
             raw.extend((r, g, b, a))
     out += _png_chunk(b"IDAT", zlib.compress(bytes(raw), 9))
-
-    # IEND.
     out += _png_chunk(b"IEND", b"")
+    return out
 
+
+def _write_png(path: Path, pixels: list[list[tuple[int, int, int, int]]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(out)
+    path.write_bytes(_png_bytes(pixels))
+
+
+def _write_ico(path: Path, sizes: list[int]) -> None:
+    """Pack one PNG per size into a single multi-resolution ``.ico``.
+
+    Windows shortcuts + the NSIS installer want a real ICO. Modern Windows
+    (Vista+) reads PNG-encoded entries inside ICO containers, so we don't
+    need to bother with BMP+AND-mask format.
+    """
+
+    entries: list[bytes] = []
+    payload = b""
+    header_size = 6 + 16 * len(sizes)
+    offset = header_size
+
+    for size in sorted(set(sizes), reverse=True):
+        png = _png_bytes(render(size))
+        # ICO width/height fields are bytes; 0 means 256.
+        w = 0 if size >= 256 else size
+        h = 0 if size >= 256 else size
+        entries.append(
+            struct.pack(
+                "<BBBBHHII",
+                w, h,
+                0,        # colour palette size (0 for true colour)
+                0,        # reserved
+                1,        # colour planes
+                32,       # bits per pixel
+                len(png), # bytes of image data
+                offset,
+            )
+        )
+        payload += png
+        offset += len(png)
+
+    header = struct.pack("<HHH", 0, 1, len(sizes))  # reserved=0, type=1 icon, count
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(header + b"".join(entries) + payload)
 
 
 def _mix(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> tuple[int, int, int]:
@@ -177,11 +214,23 @@ def _spark_alpha(dx: float, dy: float, ring_radius: float, ring_thickness: float
 
 
 def main() -> int:
-    sizes = [(32, "synapse.png"), (256, "synapse-256.png")]
-    for size, filename in sizes:
+    pngs = [(32, "synapse.png"), (256, "synapse-256.png")]
+    for size, filename in pngs:
         path = ICON_DIR / filename
         _write_png(path, render(size))
         print(f"wrote {path.relative_to(REPO_ROOT)}  ({size}x{size})")
+
+    ico_path = ICON_DIR / "synapse.ico"
+    _write_ico(ico_path, [16, 32, 48, 64, 128, 256])
+    print(f"wrote {ico_path.relative_to(REPO_ROOT)}  (multi-res ICO)")
+
+    # Vite serves renderer/public/* at the site root, so dropping the same
+    # ICO there gives the renderer a favicon without runtime copy logic.
+    favicon = RENDERER_PUBLIC / "favicon.ico"
+    favicon.parent.mkdir(parents=True, exist_ok=True)
+    favicon.write_bytes(ico_path.read_bytes())
+    print(f"wrote {favicon.relative_to(REPO_ROOT)}  (favicon for Vite)")
+
     return 0
 
 

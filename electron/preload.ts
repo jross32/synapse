@@ -5,7 +5,10 @@
 
 import { contextBridge } from 'electron';
 
-const DAEMON_BASE = 'http://127.0.0.1:7878';
+// Must match the host whitelisted in renderer/index.html's CSP connect-src.
+// Use "localhost" (not 127.0.0.1) so the REST + WS origins line up with the
+// CSP; a mismatch here silently CSP-blocks every fetch with "Failed to fetch".
+const DAEMON_BASE = 'http://localhost:7878';
 
 contextBridge.exposeInMainWorld('synapse', {
   /** UI version string baked into the Electron bundle. */

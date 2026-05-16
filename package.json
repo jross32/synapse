@@ -1,7 +1,7 @@
 {
   "name": "synapse",
   "productName": "Synapse",
-  "version": "0.1.5.5",
+  "version": "0.1.6",
   "description": "Synapse — a modular developer command center. By The WhatIf Company.",
   "author": {
     "name": "The WhatIf Company",
@@ -33,6 +33,7 @@
     "autoprefixer": "^10.4.20",
     "electron": "^31.7.0",
     "electron-builder": "^25.1.7",
+    "playwright": "^1.60.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.3",
