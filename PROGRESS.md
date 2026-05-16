@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.7`
+`0.1.8`
 
 ## Current milestone
 
-**Milestone E shipped — live process monitor.** The daemon watches every launched process: crash detection, ~2s CPU/RAM heartbeat, auto-restart per policy, log tails. The UI has a live process table, per-tile CPU/RAM, and "+ Add Project". 158 tests pass. Next: Milestone F (Nucleus + Synapses sidebar UI + tools/agents plugin system).
+**Milestone F in progress — the real UI.** v0.1.8 shipped the app shell: icon-rail sidebar + 5 pages (Home/Apps/Tools/Processes/Settings) on shadcn/ui + Tailwind, a shared daemon context (one WS), log viewer, tile quick-actions. 158 tests pass. Next: v0.1.8.5 (project auto-discovery + groups/pinning) → v0.1.9 (plugin system + tools) → v0.1.10 (Home slideshow + polish).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -26,7 +26,10 @@
 | `0.1.5.5` | Hotfix: ASCII-only `.ps1` scripts + daemon log strings (PS 5.1 cp1252 parse fix) | ✅ done |
 | `0.1.6` | Clickable `synapse.cmd` launcher + desktop shortcut + Electron CDP inspector + CSP/orphan fixes | ✅ done |
 | `0.1.7` | Milestone E — Live process monitor (watcher + heartbeat + auto-restart + logs + "+ Add Project") | ✅ done |
-| `0.1.8+` | Milestone F — Nucleus + Synapses UI (sidebar, cards, slideshow) + tools/agents plugin system | ⚪ next |
+| `0.1.8` | Milestone F (shell) — shadcn/ui sidebar + 5 pages + daemon context + log viewer | ✅ done |
+| `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ⚪ next |
+| `0.1.9` | Milestone F — plugin system + Cloudtap / Open-in-VSCode / Terminal tools | ⚪ pending |
+| `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ pending |
 
 ## What's done
 
@@ -99,18 +102,25 @@
 - daemon: background watcher (crash detection), ~2s heartbeat broadcaster (CPU% + RSS, tree-summed), auto-restart per `RestartPolicy`, `GET /projects/{id}/logs`
 - renderer: `ProcessMonitor` live table, `ProjectFormDialog` (create + edit), "+ Add Project" button, per-tile CPU/RAM
 - fixes: `DETACHED_PROCESS` killed all log capture (now `CREATE_NO_WINDOW`); `update()` corrupted nested Pydantic models (now re-validates)
-- 11 new daemon tests — 158 total passing
-- E2E verified browser + Electron; registered 3 of the user's real apps (local DB only)
+
+### v0.1.8 — Milestone F (shell)
+- shadcn/ui + Tailwind wired (`components.json`, `cn()`, HSL colour vars, `tailwindcss-animate`)
+- hand-vendored UI kit in `renderer/components/ui/` (button, card, badge, input, separator, modal)
+- `Sidebar` icon rail + `nav.ts` + `DaemonProvider` context (one shared WS)
+- 5 pages: Home (HUD), Apps, Tools (placeholder), Processes, Settings
+- `LogViewer` (Contract #3) + tile quick-actions (Open folder / Open in browser via new `synapse:open-external` IPC)
+- every renderer component rebuilt on shadcn/Tailwind
+- 158 tests still passing; E2E verified browser + Electron
 
 ## What's next (immediate)
 
-**Milestone F — Nucleus + Synapses UI.** The full layout the design promised:
-- Left icon-rail sidebar (Home / Apps / Tools / Processes / Settings) — Contract frontend conventions
-- "Nucleus" centre workspace + peripheral "Synapse" tool cards
-- Featured slideshow on Home (Microsoft-Store-style), recents
-- Tools/agents/workflows plugin system — manifest-driven cards (the Cloudtap manifest already exists); user can add tools + AI agents + workflows
-- Theme polish, real shadcn-style components, responsive breakpoints
-- This is where the "command center that can do anything" surface comes together
+**v0.1.8.5 — Project auto-discovery + groups/pinning.** The standout quality-of-life feature:
+- `daemon/synapse_daemon/discovery.py` — a multi-stack project detector: reads a folder, identifies the stack (Node / Python / Rust / Go / .NET / Java / Ruby / PHP / Docker / static / Makefile), picks the right launch command, returns confidence + alternative candidates
+- `scan_directory(root)` — walk a workspace root, skip junk (node_modules, venv, hidden, system dirs), return importable `DetectedProject`s
+- `migration 003` — `tags`, `pinned`, `discovered` columns on `projects`
+- REST: `GET /api/v1/discovery/scan?root=...`, `POST /api/v1/discovery/import`
+- UI: a "Scan for projects" flow on the Apps page + groups/pinning
+- Then v0.1.9 (plugin system) and v0.1.10 (Home slideshow)
 
 ## Known issues / broken state
 

@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.7` — **Milestone E complete: live process monitor.** Synapse watches every launched process — auto-detects crashes, broadcasts live CPU% + RAM on a ~2s heartbeat, optionally auto-restarts per policy, and serves log tails. The window shows a live process table + per-tile CPU/RAM, and **"+ Add Project"** registers any app on your machine (stored locally — never pushed to GitHub). Double-click `synapse.cmd` to launch — no PowerShell needed. **158 tests passing.** Next: Milestone F (Nucleus + Synapses UI). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.8` — **Milestone F shell: the real UI.** Synapse now has a proper app shell — left icon-rail sidebar with five destinations (Home / Apps / Tools / Processes / Settings), built on shadcn/ui + Tailwind. Home shows an at-a-glance HUD; Apps has project tiles with quick-actions + a log viewer; Processes is a full live monitor. Double-click `synapse.cmd` to launch — no PowerShell needed. **158 tests passing.** Next: v0.1.8.5 (project auto-discovery) → v0.1.9 (plugin system). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -122,7 +122,7 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | D | Project registry + launcher (full CRUD UI) | ✅ done (`v0.1.5`) |
 | ⌁ | Clickable launcher + Electron CDP inspector | ✅ done (`v0.1.6`) |
 | E | Live process monitor (psutil heartbeat + crash detect + auto-restart) | ✅ done (`v0.1.7`) |
-| F | Nucleus + Synapses UI (sidebar, cards, slideshow, theming) | 🟡 next |
+| F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | 🟡 in progress (`v0.1.8` shell done) |
 | G | Cloudtap tool (port → tunnel URL) | ⚪ pending |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ⚪ pending |
 | I | Auto-start + tray polish (login items, detached daemon, full tray menu) | ⚪ pending |

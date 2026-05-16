@@ -9,11 +9,10 @@
 //      tray, only "Quit Synapse" actually exits.
 //   4. Refuse to run elevated unless --allow-admin is passed (Contract #16).
 
-import { app, BrowserWindow, Menu, Tray, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron';
 import { ChildProcess, spawn } from 'node:child_process';
 import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const isDev = !app.isPackaged;
 const daemonHost = '127.0.0.1';
@@ -224,6 +223,27 @@ function showWindow(): void {
   mainWindow.show();
   mainWindow.focus();
 }
+
+// ── IPC: open a path or URL from the renderer ─────────────────────────────
+// The renderer's tile quick-actions call window.synapse.openExternal(target).
+// A URL opens in the default browser; anything else is treated as a path and
+// opened in the OS file manager.
+ipcMain.handle('synapse:open-external', async (_event, target: unknown) => {
+  if (typeof target !== 'string' || target.length === 0) {
+    return { ok: false, error: 'No target provided.' };
+  }
+  try {
+    if (/^[a-z]+:\/\//i.test(target)) {
+      await shell.openExternal(target);
+    } else {
+      const err = await shell.openPath(target);
+      if (err) return { ok: false, error: err };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
 
 // ── app lifecycle ─────────────────────────────────────────────────────────
 app.on('second-instance', () => {

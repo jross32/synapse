@@ -4,18 +4,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Synapse base — finalised in Milestone F. */
-html,
-body,
-#root {
-  height: 100%;
-}
+/* shadcn/ui colour system -- HSL channel values consumed by tailwind.config.ts.
+ * Synapse is a dark-first app; :root IS the dark theme. A light theme can be
+ * layered later under `html.light` (Contract #14). Values are derived from the
+ * Synapse brand palette in theme-tokens.css. */
+@layer base {
+  :root {
+    --background: 225 48% 8%;          /* nucleus deep blue */
+    --foreground: 210 40% 96%;
+    --card: 225 40% 12%;               /* surface */
+    --card-foreground: 210 40% 96%;
+    --popover: 226 40% 16%;            /* elevated */
+    --popover-foreground: 210 40% 96%;
+    --primary: 263 83% 58%;            /* synapse accent purple */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 226 38% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 226 34% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 226 40% 22%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 222 47% 11%;
+    --border: 226 28% 24%;
+    --input: 226 28% 24%;
+    --ring: 263 83% 58%;
+    --radius: 0.625rem;
 
-body {
-  margin: 0;
-  background-color: var(--synapse-bg-nucleus);
-  color: var(--synapse-text-primary);
-  font-family: var(--synapse-font-sans);
+    /* Synapse status palette (Contract #2) -- HSL channels for the tailwind
+     * `status-*` colours. */
+    --status-idle: 215 16% 47%;
+    --status-launching: 38 92% 60%;
+    --status-launched: 152 60% 52%;
+    --status-stopping: 33 95% 55%;
+    --status-stopped: 215 14% 40%;
+    --status-error: 0 91% 71%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
 /* Shared keyframes used by status badges (Contract #2). */

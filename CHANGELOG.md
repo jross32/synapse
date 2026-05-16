@@ -10,6 +10,67 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.8] -- 2026-05-16
+
+### Milestone F (shell) -- the real Synapse UI
+
+The flat single-page renderer is replaced by a proper app shell: a left
+icon-rail sidebar with five destinations, built on shadcn/ui + Tailwind.
+
+#### Added -- UI foundation
+- shadcn/ui + Tailwind wired up properly: `components.json`, `cn()` helper
+  (`renderer/lib/utils.ts`), the shadcn HSL colour-variable system in
+  `styles.css`, and a Tailwind config mapping it (plus a Synapse `status-*`
+  palette + `tailwindcss-animate`).
+- Hand-vendored shadcn components in `renderer/components/ui/`: `button`,
+  `card`, `badge`, `input`, `separator`, plus a lightweight `modal`. (The
+  shadcn registry was unreachable from this environment; the components are
+  the standard new-york source, which is shadcn's intended "code in your
+  repo" model anyway.)
+- Deps: `class-variance-authority`, `clsx`, `tailwind-merge`,
+  `tailwindcss-animate`, `lucide-react` (icons), `@radix-ui/react-slot`,
+  `sonner`.
+
+#### Added -- shell + pages
+- `renderer/components/Sidebar.tsx` -- fixed icon rail (brand mark, five
+  nav buttons, a live connection indicator).
+- `renderer/lib/nav.ts` -- the `PageId` model + nav metadata.
+- `renderer/lib/daemon-context.tsx` -- `DaemonProvider` / `useDaemon()`:
+  ONE shared `SynapseWsClient` + one source of truth for health, projects,
+  live resource snapshots, and recent events. Replaces the 2-3 per-page
+  WebSocket connections.
+- Five pages under `renderer/pages/`: **Home** (heartbeat HUD with
+  running/idle/errored/total stat cards + recent-activity feed + quick
+  jumps), **Apps** (project tiles, refactored to context), **Tools**
+  (shell + "arrives in v0.1.9" state), **Processes** (full-page live
+  monitor), **Settings** (daemon diagnostics + About + GitHub link).
+- `renderer/App.tsx` -- the shell: `DaemonProvider` > `Sidebar` + active
+  page; "routing" is an `activePage` enum (no URL router needed in Electron).
+
+#### Added -- polish items (Milestone F batch 1)
+- **Log viewer** (`components/LogViewer.tsx`) -- a "Logs" button on every
+  tile opens a modal that polls `GET /api/v1/projects/{id}/logs` (Contract #3).
+- **Tile quick-actions** -- "Open folder" (OS file manager) and "Open in
+  browser" (when a port is set) on each tile, via a new
+  `synapse:open-external` IPC handler in the Electron main + a typed
+  `openExternal()` bridge that degrades gracefully in a plain browser.
+
+#### Changed
+- Every renderer component rebuilt on shadcn/Tailwind: `StatusBadge`,
+  `ProjectTile`, `ProcessMonitor`, `ProjectFormDialog`, `ConfirmDialog`
+  (extracted from Apps), `PageHeader` (new shared header).
+- `electron/preload.ts` exposes `openExternal`; `electron/main.ts` handles
+  the IPC and drops the unused `fileURLToPath` import.
+- Version files: `0.1.7` -> `0.1.8`.
+
+#### Verified (Rule #6 E2E)
+- Browser (Playwright MCP): all five pages render, 0 console errors;
+  launched Web Scraper from Apps -> Processes table shows it live (PID,
+  208 MB) -> Stop. shadcn styling applies correctly.
+- Electron (`inspect-electron.js` @ CDP 9222): real window screenshotted --
+  sidebar rail + Home HUD, 0 console errors.
+- `npm run typecheck` clean; `pytest` 158 passed, 1 platform-conditional skip.
+
 ## [0.1.7] -- 2026-05-16
 
 ### Milestone E -- Live process monitor

@@ -1,46 +1,46 @@
-// One project tile (Milestone D).
+// One project tile (Milestones D/E/F) -- shadcn Card surface.
 //
-// Shows name + path + live status badge + a Launch/Stop button + an Edit
-// affordance. Status comes from props so the parent page can update it
-// instantly from WS events without the tile fetching.
+// Shows name + path + live status, the cmd/port/uptime metadata, a live
+// cpu/ram line while running, and the Launch/Stop + Edit/Delete actions.
+// A "more actions" row exposes quick OS actions (open folder / browser).
 
 import { useState } from 'react';
+import { FolderOpen, Globe } from 'lucide-react';
 
-import { launchProject, stopProject } from '../lib/projects-client';
-import type { Project, ResourceSnapshot } from '../lib/generated-types';
-import { formatLocal, formatUptime } from '../lib/format-time';
+import { launchProject, stopProject } from '@shared/projects-client';
+import type { Project, ResourceSnapshot } from '@shared/generated-types';
+import { formatLocal, formatUptime } from '@shared/format-time';
+import { openExternal } from '@shared/electron-bridge';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
 import { StatusBadge } from './StatusBadge';
 
 export interface ProjectTileProps {
   project: Project;
-  /** Latest heartbeat snapshot for this project, if running (Contract #19). */
   resources?: ResourceSnapshot;
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onViewLogs: (project: Project) => void;
   onActionError?: (project: Project, error: Error) => void;
 }
 
-export function ProjectTile({ project, resources, onEdit, onDelete, onActionError }: ProjectTileProps): JSX.Element {
+export function ProjectTile({
+  project,
+  resources,
+  onEdit,
+  onDelete,
+  onViewLogs,
+  onActionError,
+}: ProjectTileProps): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   const isRunning = project.status === 'launched' || project.status === 'stopping';
   const isTransitioning = project.status === 'launching' || project.status === 'stopping';
 
-  async function handleLaunch(): Promise<void> {
+  async function run(action: () => Promise<unknown>): Promise<void> {
     setBusy(true);
     try {
-      await launchProject(project.id, 'desktop');
-    } catch (err) {
-      onActionError?.(project, err as Error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleStop(): Promise<void> {
-    setBusy(true);
-    try {
-      await stopProject(project.id, 'desktop');
+      await action();
     } catch (err) {
       onActionError?.(project, err as Error);
     } finally {
@@ -49,72 +49,39 @@ export function ProjectTile({ project, resources, onEdit, onDelete, onActionErro
   }
 
   return (
-    <article
-      style={{
-        backgroundColor: 'var(--synapse-bg-surface)',
-        border: '1px solid var(--synapse-border-subtle)',
-        borderRadius: 'var(--synapse-radius-lg)',
-        padding: 'var(--synapse-space-6)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--synapse-space-4)',
-        minHeight: '180px',
-      }}
-    >
-      <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--synapse-space-3)' }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 'var(--synapse-text-lg)', letterSpacing: '-0.01em' }}>
-            {project.name}
-          </h3>
-          <p
-            style={{
-              margin: 'var(--synapse-space-1) 0 0',
-              color: 'var(--synapse-text-secondary)',
-              fontSize: 'var(--synapse-text-xs)',
-              fontFamily: 'var(--synapse-font-mono)',
-              wordBreak: 'break-all',
-            }}
-          >
-            {project.path}
-          </p>
+    <Card className='flex min-h-[200px] flex-col gap-4 p-6'>
+      <header className='flex items-start justify-between gap-3'>
+        <div className='min-w-0'>
+          <h3 className='truncate text-lg font-semibold tracking-tight'>{project.name}</h3>
+          <p className='mt-1 break-all font-mono text-xs text-muted-foreground'>{project.path}</p>
         </div>
         <StatusBadge status={project.status} />
       </header>
 
       {project.description && (
-        <p style={{ margin: 0, color: 'var(--synapse-text-secondary)', fontSize: 'var(--synapse-text-sm)' }}>
-          {project.description}
-        </p>
+        <p className='text-sm text-muted-foreground'>{project.description}</p>
       )}
 
-      <dl
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr',
-          gap: 'var(--synapse-space-1) var(--synapse-space-3)',
-          margin: 0,
-          fontSize: 'var(--synapse-text-xs)',
-        }}
-      >
-        <dt style={dtStyle}>cmd</dt>
-        <dd style={ddStyle}>{project.launch_cmd}</dd>
+      <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs'>
+        <dt className='font-mono text-muted-foreground'>cmd</dt>
+        <dd className='break-all font-mono text-secondary-foreground'>{project.launch_cmd}</dd>
         {project.expected_port !== null && (
           <>
-            <dt style={dtStyle}>port</dt>
-            <dd style={ddStyle}>{project.expected_port}</dd>
+            <dt className='font-mono text-muted-foreground'>port</dt>
+            <dd className='font-mono text-secondary-foreground'>{project.expected_port}</dd>
           </>
         )}
-        <dt style={dtStyle}>updated</dt>
-        <dd style={ddStyle}>
+        <dt className='font-mono text-muted-foreground'>updated</dt>
+        <dd className='font-mono text-secondary-foreground'>
           {project.status === 'launched'
             ? `running ${formatUptime(project.last_transition_at)}`
             : formatLocal(project.last_transition_at, 'short')}
         </dd>
         {project.status === 'launched' && resources && (
           <>
-            <dt style={dtStyle}>cpu / ram</dt>
-            <dd style={ddStyle}>
-              {resources.cpu_percent.toFixed(1)}% · {resources.rss_mb.toFixed(0)} MB
+            <dt className='font-mono text-muted-foreground'>cpu / ram</dt>
+            <dd className='font-mono text-secondary-foreground'>
+              {resources.cpu_percent.toFixed(1)}% &middot; {resources.rss_mb.toFixed(0)} MB
             </dd>
           </>
         )}
@@ -123,106 +90,60 @@ export function ProjectTile({ project, resources, onEdit, onDelete, onActionErro
       {project.last_error && (
         <p
           role='alert'
-          style={{
-            margin: 0,
-            padding: 'var(--synapse-space-2) var(--synapse-space-3)',
-            borderRadius: 'var(--synapse-radius-sm)',
-            backgroundColor: 'rgba(248, 113, 113, 0.08)',
-            border: '1px solid var(--synapse-status-error)',
-            color: 'var(--synapse-status-error)',
-            fontSize: 'var(--synapse-text-xs)',
-            fontFamily: 'var(--synapse-font-mono)',
-          }}
+          className='rounded-sm border border-destructive bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive'
         >
           [{project.last_error.code}] {project.last_error.message}
         </p>
       )}
 
-      <footer style={{ display: 'flex', gap: 'var(--synapse-space-2)', marginTop: 'auto', flexWrap: 'wrap' }}>
-        {isRunning ? (
-          <button
-            type='button'
-            disabled={busy || isTransitioning}
-            onClick={handleStop}
-            style={buttonStyle('danger')}
+      <div className='mt-auto flex flex-col gap-2'>
+        <div className='flex flex-wrap gap-2'>
+          {isRunning ? (
+            <Button variant='destructive' size='sm' disabled={busy || isTransitioning} onClick={() => run(() => stopProject(project.id))}>
+              {project.status === 'stopping' ? 'Stopping…' : 'Stop'}
+            </Button>
+          ) : (
+            <Button size='sm' disabled={busy || isTransitioning} onClick={() => run(() => launchProject(project.id))}>
+              {project.status === 'launching' ? 'Launching…' : 'Launch'}
+            </Button>
+          )}
+          <Button variant='outline' size='sm' onClick={() => onEdit(project)}>
+            Edit
+          </Button>
+          <Button variant='outline' size='sm' onClick={() => onViewLogs(project)}>
+            Logs
+          </Button>
+          <Button
+            variant='ghost'
+            size='sm'
+            disabled={isRunning || isTransitioning}
+            title={isRunning ? 'Stop the project before deleting.' : 'Delete'}
+            onClick={() => onDelete(project)}
           >
-            {project.status === 'stopping' ? 'stopping…' : 'Stop'}
-          </button>
-        ) : (
-          <button
-            type='button'
-            disabled={busy || isTransitioning}
-            onClick={handleLaunch}
-            style={buttonStyle('primary')}
+            Delete
+          </Button>
+        </div>
+        <div className='flex flex-wrap gap-1'>
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-7 px-2 text-xs text-muted-foreground'
+            onClick={() => void openExternal(project.path)}
           >
-            {project.status === 'launching' ? 'launching…' : 'Launch'}
-          </button>
-        )}
-        <button type='button' onClick={() => onEdit(project)} style={buttonStyle('ghost')}>
-          Edit
-        </button>
-        <button
-          type='button'
-          onClick={() => onDelete(project)}
-          disabled={isRunning || isTransitioning}
-          style={buttonStyle('ghost')}
-          title={isRunning ? 'Stop the project before deleting.' : 'Delete'}
-        >
-          Delete
-        </button>
-      </footer>
-    </article>
+            <FolderOpen className='h-3.5 w-3.5' /> Open folder
+          </Button>
+          {project.expected_port !== null && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              onClick={() => void openExternal(`http://localhost:${project.expected_port}`)}
+            >
+              <Globe className='h-3.5 w-3.5' /> Open in browser
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
   );
-}
-
-const dtStyle: React.CSSProperties = {
-  color: 'var(--synapse-text-muted)',
-  fontFamily: 'var(--synapse-font-mono)',
-};
-const ddStyle: React.CSSProperties = {
-  margin: 0,
-  color: 'var(--synapse-text-secondary)',
-  fontFamily: 'var(--synapse-font-mono)',
-  wordBreak: 'break-all',
-};
-
-type ButtonVariant = 'primary' | 'danger' | 'ghost';
-
-function buttonStyle(variant: ButtonVariant): React.CSSProperties {
-  // Use separate border-* properties (no `border` shorthand). Mixing the
-  // shorthand with overrides like `borderColor` later triggers React's
-  // "Removing borderColor border" warning during re-renders.
-  const base: React.CSSProperties = {
-    minHeight: '36px',
-    padding: '0 var(--synapse-space-4)',
-    borderRadius: 'var(--synapse-radius-md)',
-    fontSize: 'var(--synapse-text-sm)',
-    fontFamily: 'var(--synapse-font-sans)',
-    cursor: 'pointer',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-    transition: 'background-color var(--synapse-duration-fast) var(--synapse-ease-smooth)',
-  };
-  if (variant === 'primary') {
-    return {
-      ...base,
-      backgroundColor: 'var(--synapse-accent)',
-      color: 'var(--synapse-text-primary)',
-    };
-  }
-  if (variant === 'danger') {
-    return {
-      ...base,
-      backgroundColor: 'transparent',
-      borderColor: 'var(--synapse-status-error)',
-      color: 'var(--synapse-status-error)',
-    };
-  }
-  return {
-    ...base,
-    backgroundColor: 'transparent',
-    borderColor: 'var(--synapse-border-strong)',
-    color: 'var(--synapse-text-primary)',
-  };
 }
