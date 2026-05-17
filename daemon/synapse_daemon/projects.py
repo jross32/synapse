@@ -53,6 +53,12 @@ class Project(BaseModel):
     resource_caps: ResourceCaps = Field(default_factory=ResourceCaps)
     expected_port: int | None = None
 
+    # Organisation (migration 003) — groups, pinning, tags, discovery origin.
+    group: str | None = Field(default=None, description="Optional single group name.")
+    tags: list[str] = Field(default_factory=list)
+    pinned: bool = False
+    discovered: bool = Field(default=False, description="True if imported via auto-discovery.")
+
     # Live-status (Contract #2) — always returned, written by process_manager.
     status: EntityStatus = EntityStatus.IDLE
     last_error: ErrorRef | None = None
@@ -88,6 +94,9 @@ class ProjectUpdate(BaseModel):
     resource_caps: ResourceCaps | None = None
     expected_port: int | None = None
     env: list[EnvVar] | None = None
+    group: str | None = None
+    tags: list[str] | None = None
+    pinned: bool | None = None
 
 
 # ── row helpers ──────────────────────────────────────────────────────────
@@ -112,6 +121,10 @@ def _row_to_project(row: sqlite3.Row) -> Project:
             max_rss_mb=row["max_rss_mb"], max_cpu_percent=row["max_cpu_percent"]
         ),
         expected_port=row["expected_port"],
+        group=row["group_name"],
+        tags=_loads_tags(row["tags_json"]),
+        pinned=bool(row["pinned"]),
+        discovered=bool(row["discovered"]),
         status=EntityStatus(row["status"]),
         last_error=_error_ref(row["last_error_code"], row["last_error_msg"]),
         current_health=HealthState(row["current_health"]),
@@ -120,6 +133,16 @@ def _row_to_project(row: sqlite3.Row) -> Project:
         updated_at=from_iso(row["updated_at"]),
         last_transition_at=from_iso(row["last_transition_at"]),
     )
+
+
+def _loads_tags(payload: str | None) -> list[str]:
+    if not payload:
+        return []
+    try:
+        raw = json.loads(payload)
+        return [str(t) for t in raw] if isinstance(raw, list) else []
+    except json.JSONDecodeError:
+        return []
 
 
 def _loads_envvars(payload: str | None) -> list[EnvVar]:
@@ -198,8 +221,9 @@ def create(conn: sqlite3.Connection, project: Project) -> Project:
             category, health_url, expected_port, status, last_error_code,
             last_error_msg, created_at, updated_at, last_transition_at,
             health_probe_json, restart_policy_json, max_rss_mb, max_cpu_percent,
-            current_health, last_health_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            current_health, last_health_at,
+            discovered, pinned, group_name, tags_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             project.id, project.name, project.path, project.launch_cmd,
@@ -215,6 +239,10 @@ def create(conn: sqlite3.Connection, project: Project) -> Project:
             project.resource_caps.max_rss_mb, project.resource_caps.max_cpu_percent,
             project.current_health.value,
             to_iso(project.last_health_at) if project.last_health_at else None,
+            1 if project.discovered else 0,
+            1 if project.pinned else 0,
+            project.group,
+            json.dumps(project.tags),
         ),
     )
     return project
@@ -246,7 +274,8 @@ def update(conn: sqlite3.Connection, project_id: str, patch: ProjectUpdate) -> P
           thumbnail = ?, description = ?, category = ?, expected_port = ?,
           updated_at = ?,
           health_probe_json = ?, restart_policy_json = ?,
-          max_rss_mb = ?, max_cpu_percent = ?
+          max_rss_mb = ?, max_cpu_percent = ?,
+          group_name = ?, tags_json = ?, pinned = ?
         WHERE id = ?
         """,
         (
@@ -259,6 +288,9 @@ def update(conn: sqlite3.Connection, project_id: str, patch: ProjectUpdate) -> P
             json.dumps(next_project.restart.model_dump()),
             next_project.resource_caps.max_rss_mb,
             next_project.resource_caps.max_cpu_percent,
+            next_project.group,
+            json.dumps(next_project.tags),
+            1 if next_project.pinned else 0,
             project_id,
         ),
     )

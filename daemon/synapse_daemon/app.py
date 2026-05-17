@@ -30,6 +30,7 @@ from .errors import ErrorEnvelope, SynapseError
 from .models import HealthResponse
 from .orphan_reconciler import ReconcileOutcome, reconcile, summarise
 from .process_manager import ProcessManager
+from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .storage import Storage
 from .time_utils import to_iso, utc_now
@@ -108,8 +109,9 @@ def build_app(
     async def ws_endpoint(websocket: WebSocket) -> None:
         await hub.handle(websocket)
 
-    # Mount the projects router under /api/v1.
+    # Mount the REST routers under /api/v1.
     app.include_router(build_projects_router(storage, process_manager), prefix=API_PREFIX)
+    app.include_router(build_discovery_router(storage), prefix=API_PREFIX)
 
     # Stash state on the app for tests + later wiring.
     app.state.storage = storage

@@ -10,6 +10,65 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.8.5] -- 2026-05-17
+
+### Project auto-discovery + groups + pinning
+
+Point Synapse at a folder; it fingerprints every project inside and bulk-imports
+your picks -- no more adding each project by hand.
+
+#### Added -- daemon
+- `synapse_daemon/discovery.py` -- a marker-file-driven multi-stack project
+  detector. `detect_project()` recognises Node (+ framework: vite / next /
+  react-scripts / angular / nuxt / astro / svelte / nest / express),
+  Python (Django / FastAPI / Flask / entry-point / `python -m`), Rust, Go,
+  .NET, Java (Maven / Gradle), Ruby (+ Rails), Deno, PHP, Docker Compose,
+  Makefile, static sites, and bare git repos. Each result carries a stack,
+  a suggested launch command, alternative `candidates`, a guessed port, and
+  an honest `confidence`. `scan_directory()` walks a workspace root, skipping
+  `node_modules` / `venv` / build output / hidden + system folders.
+- `migration 003_discovery_groups.sql` -- adds `discovered`, `pinned`,
+  `group_name`, and `tags_json` columns to `projects` (+ indexes).
+- `synapse_daemon/routes_discovery.py` -- `GET /api/v1/discovery/scan` and
+  `POST /api/v1/discovery/import` (bulk-create as `discovered=True`, with
+  automatic id-collision suffixing).
+- `Project` / `ProjectUpdate` gain `group`, `tags`, `pinned`, `discovered`;
+  CRUD round-trips them.
+
+#### Added -- renderer
+- `components/DiscoveryDialog.tsx` -- the "Scan for projects" flow: enter a
+  folder + depth, scan, review every detected project (stack badge,
+  confidence, editable launch command, "already added" markers), bulk-import.
+- `lib/discovery-client.ts` -- typed `scanForProjects()` + `importProjects()`.
+- `ProjectTile` -- a pin toggle (pinned tiles float to the top) and group +
+  tag badges.
+- `ProjectFormDialog` -- a "Group" field; the Apps page sorts pinned-first.
+
+#### Fixed
+- **Stale "running" project status after a hard daemon kill** (Contract #6):
+  if the daemon was killed mid-run, `reconcile()` marked the dead
+  `managed_processes` row stopped but the *project* row stayed `launched`.
+  New `reconcile_project_statuses()` sweep runs at boot after `reconcile()`
+  and resets any project stuck in `launching`/`launched`/`stopping` with no
+  live process back to `stopped`.
+
+#### Tests
+- `test_discovery.py` (20) -- per-stack detection, the loose-`.py`-files
+  guard, scanning, skip-dirs, root-not-a-project, confidence sort.
+- `test_routes_discovery.py` (5) -- scan, already-registered flagging, bad
+  root, import, id-collision suffixing.
+- `test_orphan_reconciler.py` -- 2 new tests for the stale-status sweep.
+- `test_migrations.py` -- migration 003 presence. **183 tests passing.**
+
+#### Verified (Rule #6 E2E)
+- Browser (Playwright MCP): scanned `C:\Users\justi` -> 28 projects found,
+  24 importable; imported 17 -> all land as `discovered`. Pinned "Web Scraper"
+  -> it jumps to the top of the grid. 0 console errors throughout.
+- Electron (`inspect-electron.js`): real window screenshotted -- Home shows
+  "21 projects registered", 0 errored (the stale-status sweep cleaned a
+  previously-stuck project), 0 console errors.
+- `npm run typecheck` clean; `pytest` 183 passed, 1 platform-conditional skip.
+
 ## [0.1.8.1] -- 2026-05-17
 
 ### Hotfix -- synapse.cmd hung waiting for Vite

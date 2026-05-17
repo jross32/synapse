@@ -155,6 +155,10 @@ export interface Project {
   restart: RestartPolicy;
   resource_caps: ResourceCaps;
   expected_port: number | null;
+  group: string | null;
+  tags: string[];
+  pinned: boolean;
+  discovered: boolean;
   status: EntityStatus;
   last_error: ErrorRef | null;
   current_health: HealthState;
@@ -162,6 +166,41 @@ export interface Project {
   created_at: string;
   updated_at: string;
   last_transition_at: string;
+}
+
+// ── Auto-discovery (v0.1.8.5) ────────────────────────────────────────────
+
+export interface LaunchCandidate {
+  label: string;
+  command: string;
+  note: string | null;
+}
+
+export interface DetectedProject {
+  path: string;
+  suggested_id: string;
+  name: string;
+  stack: string;
+  framework: string | null;
+  suggested_launch_cmd: string | null;
+  suggested_port: number | null;
+  confidence: number;
+  candidates: LaunchCandidate[];
+  icon: string | null;
+  description: string | null;
+  markers: string[];
+  already_registered: boolean;
+}
+
+export interface DiscoveryScanResponse {
+  root: string;
+  count: number;
+  projects: DetectedProject[];
+}
+
+export interface ImportReport {
+  imported: string[];
+  skipped: { id: string; reason: string }[];
 }
 
 export interface ProjectUpdate {
@@ -177,6 +216,9 @@ export interface ProjectUpdate {
   resource_caps?: ResourceCaps;
   expected_port?: number;
   env?: EnvVar[];
+  group?: string | null;
+  tags?: string[];
+  pinned?: boolean;
 }
 
 export interface ProjectListResponse {

@@ -11,8 +11,11 @@ from synapse_daemon.orphan_reconciler import (
     ReconcileOutcome,
     ReconciledRow,
     reconcile,
+    reconcile_project_statuses,
     summarise,
 )
+from synapse_daemon.projects import Project, create, get, set_status
+from synapse_daemon.models import EntityStatus
 from synapse_daemon.storage import Storage
 
 
@@ -128,6 +131,40 @@ def test_alive_but_different_cmdline_marks_pid_recycled(tmp_path: Path) -> None:
             "SELECT stop_reason FROM managed_processes WHERE id = ?", (pk,)
         ).fetchone()
         assert row["stop_reason"] == "pid-recycled"
+    finally:
+        s.close()
+
+
+def test_reconcile_project_statuses_resets_stale_running(tmp_path: Path) -> None:
+    s = _open(tmp_path)
+    try:
+        # A project marked 'launched' but with no live managed_processes row --
+        # the daemon was killed before stop() could finalise it.
+        with s.transaction() as conn:
+            create(conn, Project(id="ghost", name="Ghost", path="C:/x", launch_cmd="x"))
+            set_status(conn, "ghost", status=EntityStatus.LAUNCHED)
+
+        reset = reconcile_project_statuses(s.conn)
+        assert "ghost" in reset
+        assert get(s.conn, "ghost").status == EntityStatus.STOPPED
+    finally:
+        s.close()
+
+
+def test_reconcile_project_statuses_leaves_idle_and_live_alone(tmp_path: Path) -> None:
+    s = _open(tmp_path)
+    try:
+        with s.transaction() as conn:
+            create(conn, Project(id="resting", name="Resting", path="C:/x", launch_cmd="x"))
+            # 'live' is launched AND has an open managed_processes row.
+            create(conn, Project(id="live", name="Live", path="C:/y", launch_cmd="y"))
+            set_status(conn, "live", status=EntityStatus.LAUNCHED)
+        _seed_managed_process(s, entity_id="live", pid=os.getpid(), cmdline="x")
+
+        reset = reconcile_project_statuses(s.conn)
+        assert reset == []                                  # nothing stale
+        assert get(s.conn, "resting").status == EntityStatus.IDLE
+        assert get(s.conn, "live").status == EntityStatus.LAUNCHED
     finally:
         s.close()
 

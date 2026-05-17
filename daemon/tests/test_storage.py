@@ -80,7 +80,10 @@ def test_migrate_idempotent_on_second_run(tmp_path: Path) -> None:
         second = s.migrate()
         assert len(first) >= 2
         assert second == []  # nothing left to apply
-        assert s.applied_migration_numbers() == {1, 2}
+        # Every shipped migration is applied (robust to new migrations).
+        from synapse_daemon.migrations import list_migrations
+        expected = {m.number for m in list_migrations()}
+        assert s.applied_migration_numbers() == expected
     finally:
         s.close()
 
@@ -88,9 +91,10 @@ def test_migrate_idempotent_on_second_run(tmp_path: Path) -> None:
 def test_schema_migration_reports_highest_number(tmp_path: Path) -> None:
     s = _open(tmp_path)
     try:
+        from synapse_daemon.migrations import list_migrations
         assert s.schema_migration() == 0  # no migrations yet
         s.migrate()
-        assert s.schema_migration() == 2
+        assert s.schema_migration() == max(m.number for m in list_migrations())
     finally:
         s.close()
 

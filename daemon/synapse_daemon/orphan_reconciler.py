@@ -115,6 +115,44 @@ def reconcile(conn: sqlite3.Connection, now_iso: str | None = None) -> list[Reco
     return outcomes
 
 
+def reconcile_project_statuses(conn: sqlite3.Connection, now_iso: str | None = None) -> list[str]:
+    """Reset projects stuck in a running state with no live process.
+
+    ``reconcile()`` fixes the ``managed_processes`` rows, but a project row can
+    still read ``launched`` -- e.g. the daemon was killed before ``stop()``
+    ran ``_finalise_stop``. This sweep catches that: any project in
+    ``launching`` / ``launched`` / ``stopping`` with no open ``managed_processes``
+    row is forced back to ``stopped``. Returns the project IDs it reset.
+
+    Run once at boot, AFTER ``reconcile()``.
+    """
+
+    timestamp = now_iso or datetime.now(timezone.utc).isoformat()
+    rows = conn.execute(
+        "SELECT id FROM projects "
+        "WHERE deleted_at IS NULL "
+        "  AND status IN ('launching', 'launched', 'stopping') "
+        "  AND id NOT IN ("
+        "    SELECT entity_id FROM managed_processes "
+        "    WHERE stopped_at IS NULL AND entity_type = 'project'"
+        "  )"
+    ).fetchall()
+
+    reset_ids: list[str] = []
+    for row in rows:
+        conn.execute(
+            "UPDATE projects "
+            "SET status = 'stopped', last_transition_at = ?, updated_at = ? "
+            "WHERE id = ?",
+            (timestamp, timestamp, row["id"]),
+        )
+        reset_ids.append(row["id"])
+
+    if reset_ids:
+        log.info("Reset %d stale project status(es) to stopped: %s", len(reset_ids), reset_ids)
+    return reset_ids
+
+
 def summarise(outcomes: list[ReconciledRow]) -> ReconciliationReport:
     """Roll up reconciler outcomes for the daemon's startup log."""
 

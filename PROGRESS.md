@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.8.1`
+`0.1.8.5`
 
 ## Current milestone
 
-**Milestone F in progress — the real UI.** v0.1.8 shipped the app shell: icon-rail sidebar + 5 pages (Home/Apps/Tools/Processes/Settings) on shadcn/ui + Tailwind, a shared daemon context (one WS), log viewer, tile quick-actions. 158 tests pass. Next: v0.1.8.5 (project auto-discovery + groups/pinning) → v0.1.9 (plugin system + tools) → v0.1.10 (Home slideshow + polish).
+**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) done. Scan a folder → multi-stack detector finds + bulk-imports projects; tiles support pinning + groups. 183 tests pass. Next: v0.1.9 (plugin system + Cloudtap/VSCode/Terminal tools) → v0.1.10 (Home slideshow + polish).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -28,8 +28,8 @@
 | `0.1.7` | Milestone E — Live process monitor (watcher + heartbeat + auto-restart + logs + "+ Add Project") | ✅ done |
 | `0.1.8` | Milestone F (shell) — shadcn/ui sidebar + 5 pages + daemon context + log viewer | ✅ done |
 | `0.1.8.1` | Hotfix: Vite IPv4 bind so synapse.cmd's health poll matches | ✅ done |
-| `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ⚪ next |
-| `0.1.9` | Milestone F — plugin system + Cloudtap / Open-in-VSCode / Terminal tools | ⚪ pending |
+| `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ✅ done |
+| `0.1.9` | Milestone F — plugin system + Cloudtap / Open-in-VSCode / Terminal tools | ⚪ next |
 | `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ pending |
 
 ## What's done

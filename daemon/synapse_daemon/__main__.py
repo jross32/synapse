@@ -29,7 +29,7 @@ from fastapi import FastAPI
 
 from . import __version__
 from .app import boot_publish_daemon_started, boot_publish_reconciliation, build_app
-from .orphan_reconciler import reconcile
+from .orphan_reconciler import reconcile, reconcile_project_statuses
 from .process_manager import ProcessManager
 from .security import assert_not_admin
 from .seed import seed_default_projects
@@ -103,8 +103,10 @@ def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
     async def lifespan(app: FastAPI):
         schema = storage.schema_migration()
 
-        # Reconcile orphan processes synchronously, then publish events on the bus.
+        # Reconcile orphan processes, then sweep any project left stuck in a
+        # running state with no live process (Contract #6).
         outcomes = await asyncio.to_thread(reconcile, storage.conn)
+        await asyncio.to_thread(reconcile_project_statuses, storage.conn)
         await boot_publish_reconciliation(bus, outcomes)
         await boot_publish_daemon_started(bus, schema)
 

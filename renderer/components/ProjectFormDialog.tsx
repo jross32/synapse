@@ -37,6 +37,7 @@ export function ProjectFormDialog({
   const [path, setPath] = useState(project?.path ?? '');
   const [launchCmd, setLaunchCmd] = useState(project?.launch_cmd ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
+  const [group, setGroup] = useState(project?.group ?? '');
   const [expectedPort, setExpectedPort] = useState<string>(
     project?.expected_port == null ? '' : String(project.expected_port)
   );
@@ -68,6 +69,7 @@ export function ProjectFormDialog({
           launch_cmd: launchCmd.trim(),
           description: description.trim() || null,
           expected_port: expectedPort === '' ? null : Number(expectedPort),
+          group: group.trim() || null,
         })
       );
     } catch (err) {
@@ -84,6 +86,7 @@ export function ProjectFormDialog({
     if (path.trim() && path !== project.path) patch.path = path.trim();
     if (launchCmd.trim() && launchCmd !== project.launch_cmd) patch.launch_cmd = launchCmd.trim();
     if (description !== (project.description ?? '')) patch.description = description.trim() || undefined;
+    if (group !== (project.group ?? '')) patch.group = group.trim() || null;
     const parsedPort = expectedPort === '' ? undefined : Number(expectedPort);
     if (parsedPort !== project.expected_port && (parsedPort === undefined || !Number.isNaN(parsedPort))) {
       patch.expected_port = parsedPort;
@@ -137,6 +140,9 @@ export function ProjectFormDialog({
         </Field>
         <Field label='Description (optional)'>
           <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <Field label='Group (optional)'>
+          <Input value={group} onChange={(e) => setGroup(e.target.value)} placeholder='e.g. AI, Scraping, Games' />
         </Field>
         <Field label='Expected port (optional)'>
           <Input

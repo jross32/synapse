@@ -4,7 +4,7 @@
 // resource snapshots, refresh. No own WebSocket.
 
 import { useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { FolderSearch, Plus } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project } from '@shared/generated-types';
@@ -12,6 +12,7 @@ import { useDaemon } from '@shared/daemon-context';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DiscoveryDialog } from '../components/DiscoveryDialog';
 import { LogViewer } from '../components/LogViewer';
 import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFormDialog';
 import { ProjectTile } from '../components/ProjectTile';
@@ -31,9 +32,15 @@ export function AppsPage(): JSX.Element {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [logsFor, setLogsFor] = useState<Project | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
 
+  // Pinned projects float to the top, then alphabetical.
   const sorted = useMemo(
-    () => [...projects].sort((a, b) => a.name.localeCompare(b.name)),
+    () =>
+      [...projects].sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      }),
     [projects]
   );
 
@@ -54,9 +61,14 @@ export function AppsPage(): JSX.Element {
         title='Apps'
         subtitle="Launchable projects under Synapse's management. Click a tile to start it."
         action={
-          <Button onClick={() => setForm({ mode: 'create' })}>
-            <Plus className='h-4 w-4' /> Add Project
-          </Button>
+          <div className='flex gap-2'>
+            <Button variant='outline' onClick={() => setDiscoveryOpen(true)}>
+              <FolderSearch className='h-4 w-4' /> Scan for projects
+            </Button>
+            <Button onClick={() => setForm({ mode: 'create' })}>
+              <Plus className='h-4 w-4' /> Add Project
+            </Button>
+          </div>
         }
       />
 
@@ -71,11 +83,16 @@ export function AppsPage(): JSX.Element {
           <h3 className='text-lg font-semibold'>No projects yet</h3>
           <p className='mx-auto mt-2 max-w-md text-sm text-muted-foreground'>
             Add any app on your machine — Synapse will launch it, monitor it, and keep its
-            logs. Or use auto-discovery to scan a folder.
+            logs. Or scan a folder and let auto-discovery find them all.
           </p>
-          <Button className='mt-4' onClick={() => setForm({ mode: 'create' })}>
-            <Plus className='h-4 w-4' /> Add your first project
-          </Button>
+          <div className='mt-4 flex justify-center gap-2'>
+            <Button variant='outline' onClick={() => setDiscoveryOpen(true)}>
+              <FolderSearch className='h-4 w-4' /> Scan a folder
+            </Button>
+            <Button onClick={() => setForm({ mode: 'create' })}>
+              <Plus className='h-4 w-4' /> Add your first project
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className='grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6'>
@@ -90,6 +107,7 @@ export function AppsPage(): JSX.Element {
                 setDeleting(project);
               }}
               onViewLogs={(project) => setLogsFor(project)}
+              onChanged={(updated) => upsertProjectLocal(updated)}
               onActionError={(_p, err) => setActionError(err.message)}
             />
           ))}
@@ -137,6 +155,15 @@ export function AppsPage(): JSX.Element {
       />
 
       <LogViewer open={logsFor !== null} project={logsFor} onClose={() => setLogsFor(null)} />
+
+      <DiscoveryDialog
+        open={discoveryOpen}
+        onClose={() => setDiscoveryOpen(false)}
+        onImported={() => {
+          setDiscoveryOpen(false);
+          void refreshProjects();
+        }}
+      />
     </div>
   );
 }

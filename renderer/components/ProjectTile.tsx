@@ -5,12 +5,14 @@
 // A "more actions" row exposes quick OS actions (open folder / browser).
 
 import { useState } from 'react';
-import { FolderOpen, Globe } from 'lucide-react';
+import { FolderOpen, Globe, Pin } from 'lucide-react';
 
-import { launchProject, stopProject } from '@shared/projects-client';
+import { launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import { openExternal } from '@shared/electron-bridge';
+import { cn } from '@shared/utils';
+import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { StatusBadge } from './StatusBadge';
@@ -21,6 +23,7 @@ export interface ProjectTileProps {
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
   onViewLogs: (project: Project) => void;
+  onChanged?: (project: Project) => void;
   onActionError?: (project: Project, error: Error) => void;
 }
 
@@ -30,6 +33,7 @@ export function ProjectTile({
   onEdit,
   onDelete,
   onViewLogs,
+  onChanged,
   onActionError,
 }: ProjectTileProps): JSX.Element {
   const [busy, setBusy] = useState(false);
@@ -48,6 +52,15 @@ export function ProjectTile({
     }
   }
 
+  async function togglePinned(): Promise<void> {
+    try {
+      const updated = await patchProject(project.id, { pinned: !project.pinned });
+      onChanged?.(updated);
+    } catch (err) {
+      onActionError?.(project, err as Error);
+    }
+  }
+
   return (
     <Card className='flex min-h-[200px] flex-col gap-4 p-6'>
       <header className='flex items-start justify-between gap-3'>
@@ -55,8 +68,33 @@ export function ProjectTile({
           <h3 className='truncate text-lg font-semibold tracking-tight'>{project.name}</h3>
           <p className='mt-1 break-all font-mono text-xs text-muted-foreground'>{project.path}</p>
         </div>
-        <StatusBadge status={project.status} />
+        <div className='flex items-center gap-1.5'>
+          <button
+            type='button'
+            onClick={togglePinned}
+            title={project.pinned ? 'Unpin' : 'Pin to top'}
+            aria-pressed={project.pinned}
+            className={cn(
+              'rounded-md p-1 transition-colors hover:bg-accent',
+              project.pinned ? 'text-primary' : 'text-muted-foreground'
+            )}
+          >
+            <Pin className={cn('h-4 w-4', project.pinned && 'fill-current')} />
+          </button>
+          <StatusBadge status={project.status} />
+        </div>
       </header>
+
+      {(project.group || project.tags.length > 0) && (
+        <div className='flex flex-wrap items-center gap-1.5'>
+          {project.group && <Badge variant='secondary'>{project.group}</Badge>}
+          {project.tags.map((t) => (
+            <Badge key={t} variant='outline'>
+              {t}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {project.description && (
         <p className='text-sm text-muted-foreground'>{project.description}</p>

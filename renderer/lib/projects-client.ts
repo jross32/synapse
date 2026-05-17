@@ -31,6 +31,7 @@ export interface ProjectCreateInput {
   category?: string | null;
   icon?: string | null;
   expected_port?: number | null;
+  group?: string | null;
 }
 
 export async function createProject(input: ProjectCreateInput): Promise<Project> {

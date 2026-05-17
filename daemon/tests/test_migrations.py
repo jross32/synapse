@@ -21,6 +21,14 @@ def test_round2_migration_present() -> None:
     assert by_number[2].slug == "round2_schema"
 
 
+def test_migration_003_present() -> None:
+    """v0.1.8.5 ships migration 003 for discovery + groups + pinning."""
+
+    by_number = {m.number: m for m in list_migrations()}
+    assert 3 in by_number, "Migration 003 (discovery / groups) is missing"
+    assert by_number[3].slug == "discovery_groups"
+
+
 def test_round2_migration_defines_new_tables() -> None:
     """Contracts #20, #21, #22, #25 add tables."""
 
