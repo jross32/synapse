@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse-daemon"
-version = "0.1.8"
+version = "0.1.8.1"
 description = "Synapse execution layer — FastAPI daemon that owns all managed processes. By The WhatIf Company."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [
   { name = "The WhatIf Company", email = "justinwross32@gmail.com" }
 ]
@@ -17,7 +17,7 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
+  "License :: Other/Proprietary License",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Operating System :: Microsoft :: Windows",

@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.8.1] -- 2026-05-17
+
+### Hotfix -- synapse.cmd hung waiting for Vite
+
+`synapse.cmd` failed at "[3/4] Starting Vite" with "Vite did not respond
+within 30s". Root cause: Vite 5 binds the dev server to `localhost`, which
+Windows resolves to `[::1]` (IPv6) first -- but the launcher's health poll
+hit `http://127.0.0.1:5173` (IPv4), so it never matched.
+
+#### Fixed
+- `vite.config.ts`: `server.host` pinned to `127.0.0.1` so the dev server
+  binds IPv4 loopback explicitly. Electron's `loadURL('http://localhost:5173')`
+  still works (Chromium falls back from `::1` to `127.0.0.1`).
+- `synapse.cmd`: the Vite wait loop now polls both `127.0.0.1` and `localhost`
+  and allows 60s (the first run after a dependency change re-optimizes deps).
+
+#### Verified
+- `npx vite` now listens on `127.0.0.1:5173` (confirmed via `netstat`);
+  `curl http://127.0.0.1:5173` returns 200.
+
 ## [0.1.8] -- 2026-05-16
 
 ### Milestone F (shell) -- the real Synapse UI

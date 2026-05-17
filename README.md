@@ -131,7 +131,7 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+All rights reserved — see [`LICENSE`](./LICENSE).
 
 ---
 

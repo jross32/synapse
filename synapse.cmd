@@ -65,14 +65,19 @@ if errorlevel 1 (
 echo [3/4] Starting Vite dev server on http://127.0.0.1:5173 ...
 start "Synapse Vite" /B cmd /c "npx vite > "%VITE_LOG%" 2>&1"
 
+REM Poll BOTH 127.0.0.1 and localhost -- vite.config.ts pins the dev server to
+REM 127.0.0.1, but checking both keeps this robust. The first run after a
+REM dependency change re-optimizes deps, so allow up to 60s.
 set tries=0
 :wait_vite
 timeout /t 1 /nobreak >nul
 curl --silent --max-time 1 http://127.0.0.1:5173 >nul 2>nul
 if not errorlevel 1 goto vite_ready
+curl --silent --max-time 1 http://localhost:5173 >nul 2>nul
+if not errorlevel 1 goto vite_ready
 set /a tries+=1
-if !tries! GEQ 30 (
-  echo [ERROR] Vite did not respond within 30s.
+if !tries! GEQ 60 (
+  echo [ERROR] Vite did not respond within 60s.
   echo         Tail of "%VITE_LOG%":
   echo --------------------------------------------------------------
   more +0 "%VITE_LOG%" 2>nul

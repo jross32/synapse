@@ -20,6 +20,11 @@ export default defineConfig({
     sourcemap: true,
   },
   server: {
+    // Pin to IPv4 loopback. Vite 5 otherwise binds "localhost" which Windows
+    // resolves to [::1] (IPv6) first -- synapse.cmd's health poll hits
+    // 127.0.0.1 and never matches. Electron's loadURL('http://localhost:5173')
+    // still works (it falls back from ::1 to 127.0.0.1).
+    host: '127.0.0.1',
     port: 5173,
     strictPort: true,
   },
