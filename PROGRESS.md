@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.8.5`
+`0.1.8.6`
 
 ## Current milestone
 
-**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) done. Scan a folder → multi-stack detector finds + bulk-imports projects; tiles support pinning + groups. 183 tests pass. Next: v0.1.9 (plugin system + Cloudtap/VSCode/Terminal tools) → v0.1.10 (Home slideshow + polish).
+**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) done; v0.1.8.6 is a UI/UX-audit hardening pass. Scan a folder → multi-stack detector finds + bulk-imports projects; tiles support pinning + groups. 183 tests pass. Next: v0.1.9 (plugin system + Cloudtap/VSCode/Terminal tools) → v0.1.10 (Home slideshow + polish).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -29,6 +29,7 @@
 | `0.1.8` | Milestone F (shell) — shadcn/ui sidebar + 5 pages + daemon context + log viewer | ✅ done |
 | `0.1.8.1` | Hotfix: Vite IPv4 bind so synapse.cmd's health poll matches | ✅ done |
 | `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ✅ done |
+| `0.1.8.6` | UI/UX audit fixes — WS replay-envelope bug, responsive overflow, version/path polish | ✅ done |
 | `0.1.9` | Milestone F — plugin system + Cloudtap / Open-in-VSCode / Terminal tools | ⚪ next |
 | `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ pending |
 
@@ -113,15 +114,28 @@
 - every renderer component rebuilt on shadcn/Tailwind
 - 158 tests still passing; E2E verified browser + Electron
 
+### v0.1.8.5 — Project auto-discovery + groups/pinning
+- `daemon/synapse_daemon/discovery.py` — multi-stack project detector (Node / Python / Rust / Go / .NET / Java / Ruby / PHP / Docker / static / Makefile / git), confidence + alternative candidates
+- `scan_directory(root)` — walks a workspace root, skips junk (node_modules, venv, hidden, system dirs)
+- `migration 003_discovery_groups.sql` — `discovered`, `pinned`, `group_name`, `tags_json` columns on `projects`
+- REST: `GET /api/v1/discovery/scan`, `POST /api/v1/discovery/import`
+- UI: `DiscoveryDialog` "Scan for projects" flow on Apps; tile pinning + groups
+- 183 tests passing
+
+### v0.1.8.6 — UI/UX audit fixes
+- Full audit: Playwright browser walk + Electron CDP inspector + os-bridge native capture, every page × every viewport
+- **Fixed** WS replay-envelope bug — `ws-client.ts` `parse()` dropped the daemon's `{type:"replay",events:[...]}` frame, so events before connect / during reconnect never reached the UI (Recent activity stayed empty). Now unwraps the envelope.
+- **Fixed** responsive overflow below ~700px — `Apps.tsx` tile grid `minmax(320px,1fr)` → `minmax(min(100%,320px),1fr)`
+- Polish: responsive shell padding, `break-words` paths, daemon-derived UI version, human-readable connection label
+- 183 tests passing; typecheck green
+
 ## What's next (immediate)
 
-**v0.1.8.5 — Project auto-discovery + groups/pinning.** The standout quality-of-life feature:
-- `daemon/synapse_daemon/discovery.py` — a multi-stack project detector: reads a folder, identifies the stack (Node / Python / Rust / Go / .NET / Java / Ruby / PHP / Docker / static / Makefile), picks the right launch command, returns confidence + alternative candidates
-- `scan_directory(root)` — walk a workspace root, skip junk (node_modules, venv, hidden, system dirs), return importable `DetectedProject`s
-- `migration 003` — `tags`, `pinned`, `discovered` columns on `projects`
-- REST: `GET /api/v1/discovery/scan?root=...`, `POST /api/v1/discovery/import`
-- UI: a "Scan for projects" flow on the Apps page + groups/pinning
-- Then v0.1.9 (plugin system) and v0.1.10 (Home slideshow)
+**v0.1.9 — plugin system + first tools.** Milestone F continues:
+- Tool plugin contract: a tool = a folder + `manifest.json`, no UI surgery (per AGENTS.md)
+- First built-in tools: Cloudtap (port → Cloudflare tunnel URL), Open-in-VSCode, Terminal runner
+- Tools page renders registered tool cards from manifests
+- Then v0.1.10 (Home slideshow + Nucleus polish + snapshot/restore)
 
 ## Known issues / broken state
 

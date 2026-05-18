@@ -29,7 +29,7 @@ function Shell(): JSX.Element {
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
       <Sidebar active={page} onNavigate={setPage} />
       <main className='flex-1 overflow-y-auto'>
-        <div className='mx-auto max-w-[1400px] p-8'>
+        <div className='mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8'>
           {page === 'home' && <HomePage onNavigate={setPage} />}
           {page === 'apps' && <AppsPage />}
           {page === 'tools' && <ToolsPage />}

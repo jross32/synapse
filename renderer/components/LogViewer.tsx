@@ -62,7 +62,7 @@ export function LogViewer({ open, project, onClose }: LogViewerProps): JSX.Eleme
       </div>
 
       {logs?.log_path && (
-        <p className='break-all font-mono text-xs text-muted-foreground'>{logs.log_path}</p>
+        <p className='break-words font-mono text-xs text-muted-foreground'>{logs.log_path}</p>
       )}
       {error && (
         <p role='alert' className='text-sm text-destructive'>

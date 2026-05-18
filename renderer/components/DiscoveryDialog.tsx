@@ -248,7 +248,7 @@ function DiscoveryRow({
             </span>
             {disabled && <Badge variant='secondary'>already added</Badge>}
           </div>
-          <p className='mt-0.5 break-all font-mono text-xs text-muted-foreground'>{d.path}</p>
+          <p className='mt-0.5 break-words font-mono text-xs text-muted-foreground'>{d.path}</p>
           {!disabled && (
             <Input
               className='mt-2 h-8 font-mono text-xs'

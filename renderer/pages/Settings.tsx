@@ -12,6 +12,15 @@ import { PageHeader } from '../components/PageHeader';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
 
+// Human-readable labels for the raw WebSocket connection state.
+const CONN_LABEL: Record<string, string> = {
+  idle: 'Idle',
+  connecting: 'Connecting…',
+  open: 'Connected',
+  reconnecting: 'Reconnecting…',
+  closed: 'Disconnected',
+};
+
 export function SettingsPage(): JSX.Element {
   const { health, healthError, connState, uiVersion, platform, daemonBaseUrl } = useDaemon();
 
@@ -23,7 +32,10 @@ export function SettingsPage(): JSX.Element {
         <h2 className='text-lg font-semibold'>Daemon</h2>
         {health ? (
           <Row label='Status'>
-            <StatusBadge status={connState === 'open' ? 'launched' : 'error'} label={connState} />
+            <StatusBadge
+              status={connState === 'open' ? 'launched' : 'error'}
+              label={CONN_LABEL[connState] ?? connState}
+            />
           </Row>
         ) : (
           <p className='text-sm text-destructive'>{healthError ?? 'Reaching daemon…'}</p>

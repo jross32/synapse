@@ -57,7 +57,6 @@ const RECENT_EVENTS_CAP = 30;
 
 export function DaemonProvider({ children }: { children: ReactNode }): JSX.Element {
   const bridge = useMemo(() => getBridge(), []);
-  const uiVersion = bridge?.version() ?? '0.1.8';
   const platform = bridge?.platform() ?? 'browser';
 
   const [connState, setConnState] = useState<ConnState>('idle');
@@ -129,6 +128,10 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
       ws.stop();
     };
   }, [bridge, refreshHealth, refreshProjects]);
+
+  // Prefer the Electron bundle version, fall back to whatever the live daemon
+  // reports, and only then a neutral placeholder -- never a stale literal.
+  const uiVersion = bridge?.version() ?? health?.version ?? 'dev';
 
   const value: DaemonContextValue = {
     connState,

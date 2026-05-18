@@ -10,6 +10,37 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.8.6] -- 2026-05-18
+
+### UI/UX audit fixes
+
+A full UI/UX audit (Playwright browser walk + Electron CDP inspector + os-bridge
+native capture across every page and viewport) surfaced two real bugs and a
+handful of polish items. All fixed here.
+
+#### Fixed
+- **WebSocket replay events were silently discarded.** `ws-client.ts` `parse()`
+  only accepted top-level `{id,name,timestamp_utc}` frames, so the
+  `{type:"replay",events:[...]}` envelope the daemon sends once after every
+  (re)connect was dropped. Every event that occurred before the renderer
+  connected -- or during any reconnect gap -- never reached the UI, leaving
+  Home's "Recent activity" permanently empty. `parse()` now unwraps the replay
+  envelope and yields every buffered event; the message handler iterates.
+- **Horizontal overflow below ~700px.** `Apps.tsx` tile grid used a fixed
+  `minmax(320px,1fr)` floor that could not shrink; now
+  `minmax(min(100%,320px),1fr)` so tiles collapse cleanly on narrow viewports.
+- Stale UI version: `daemon-context.tsx` hardcoded a `'0.1.8'` fallback. It now
+  prefers the Electron bundle version, then the live daemon's reported version,
+  then a neutral `'dev'` -- never a stale literal.
+
+#### Changed
+- App shell padding is now responsive (`p-4 sm:p-6 lg:p-8`) instead of a flat
+  `p-8` that crowded small screens.
+- Project / log / discovery paths and launch commands wrap with `break-words`
+  instead of `break-all`, so paths no longer shatter mid-segment.
+- Settings shows a human-readable connection label (Connected / Connecting… /
+  Reconnecting… / Disconnected) instead of the raw `connState` word.
+
 ## [0.1.8.5] -- 2026-05-17
 
 ### Project auto-discovery + groups + pinning

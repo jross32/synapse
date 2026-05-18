@@ -95,7 +95,7 @@ export function AppsPage(): JSX.Element {
           </div>
         </Card>
       ) : (
-        <div className='grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6'>
+        <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6'>
           {sorted.map((p) => (
             <ProjectTile
               key={p.id}

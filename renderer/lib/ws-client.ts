@@ -90,10 +90,11 @@ export class SynapseWsClient {
     });
 
     sock.addEventListener('message', (msg) => {
-      const event = this.parse(msg.data);
-      if (!event) return;
-      this.lastEventId = Math.max(this.lastEventId, event.id);
-      for (const h of this.eventHandlers) h(event);
+      const events = this.parse(msg.data);
+      for (const event of events) {
+        this.lastEventId = Math.max(this.lastEventId, event.id);
+        for (const h of this.eventHandlers) h(event);
+      }
     });
 
     sock.addEventListener('close', () => {
@@ -120,20 +121,48 @@ export class SynapseWsClient {
     for (const h of this.stateHandlers) h(next);
   }
 
-  private parse(raw: unknown): SynapseEvent | null {
-    if (typeof raw !== 'string') return null;
+  /**
+   * Parse one wire frame into zero or more events.
+   *
+   * The daemon sends three shapes (see daemon/ws.py wire protocol):
+   *   • a live event:        {id, name, payload, timestamp_utc}
+   *   • a replay envelope:   {type:"replay", events:[<event>, ...]}
+   *   • control frames:      {type:"pong"} / {type:"error", ...}
+   *
+   * The replay envelope is emitted once after every (re)connect and carries
+   * every event the client missed — dropping it leaves "Recent activity"
+   * permanently empty. Control frames yield no events.
+   */
+  private parse(raw: unknown): SynapseEvent[] {
+    if (typeof raw !== 'string') return [];
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(raw) as Partial<SynapseEvent>;
-      if (
-        typeof parsed.id === 'number' &&
-        typeof parsed.name === 'string' &&
-        typeof parsed.timestamp_utc === 'string'
-      ) {
-        return parsed as SynapseEvent;
-      }
+      parsed = JSON.parse(raw);
     } catch {
-      // ignore — daemon will resend on next event
+      return []; // ignore — daemon will resend on next event
     }
-    return null;
+    if (typeof parsed !== 'object' || parsed === null) return [];
+
+    const frame = parsed as Record<string, unknown>;
+
+    // Replay envelope — unwrap the events array.
+    if (frame.type === 'replay' && Array.isArray(frame.events)) {
+      return frame.events.filter(isSynapseEvent);
+    }
+
+    // Live event.
+    if (isSynapseEvent(frame)) return [frame];
+
+    return []; // pong / error / unknown control frame
   }
+}
+
+function isSynapseEvent(value: unknown): value is SynapseEvent {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === 'number' &&
+    typeof v.name === 'string' &&
+    typeof v.timestamp_utc === 'string'
+  );
 }

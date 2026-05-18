@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.8.5` — **Auto-discovery + groups/pinning.** Point Synapse at a folder and it fingerprints every project inside — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — identifies the stack, picks a launch command, and bulk-imports your picks. Tiles can be pinned (float to the top) and grouped. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). Double-click `synapse.cmd` to launch — no PowerShell needed. **183 tests passing.** Next: v0.1.9 (plugin system + tools). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.8.6` — **Auto-discovery + groups/pinning, audit-hardened.** Point Synapse at a folder and it fingerprints every project inside — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — identifies the stack, picks a launch command, and bulk-imports your picks. Tiles can be pinned (float to the top) and grouped. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). `v0.1.8.6` is a full UI/UX-audit pass: fixed a WebSocket replay-envelope bug (Recent activity stayed empty) and responsive overflow below ~700px. Double-click `synapse.cmd` to launch — no PowerShell needed. **183 tests passing.** Next: v0.1.9 (plugin system + tools). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 

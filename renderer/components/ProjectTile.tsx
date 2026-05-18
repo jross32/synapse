@@ -66,7 +66,7 @@ export function ProjectTile({
       <header className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
           <h3 className='truncate text-lg font-semibold tracking-tight'>{project.name}</h3>
-          <p className='mt-1 break-all font-mono text-xs text-muted-foreground'>{project.path}</p>
+          <p className='mt-1 break-words font-mono text-xs text-muted-foreground'>{project.path}</p>
         </div>
         <div className='flex items-center gap-1.5'>
           <button
@@ -102,7 +102,7 @@ export function ProjectTile({
 
       <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs'>
         <dt className='font-mono text-muted-foreground'>cmd</dt>
-        <dd className='break-all font-mono text-secondary-foreground'>{project.launch_cmd}</dd>
+        <dd className='break-words font-mono text-secondary-foreground'>{project.launch_cmd}</dd>
         {project.expected_port !== null && (
           <>
             <dt className='font-mono text-muted-foreground'>port</dt>
