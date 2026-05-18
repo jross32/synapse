@@ -10,6 +10,63 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.9] -- 2026-05-18
+
+### Tool plugin system + Cloudtap
+
+Milestone F's plugin surface. A tool is a folder under `tools/` with a
+`manifest.json` -- pure data. The daemon **never imports code from a tool
+folder**: actions run via *curated built-in handlers* compiled into the
+daemon (the hybrid model). "Drop a folder in, get a card" plugin ergonomics
+with zero untrusted-code execution.
+
+#### Added -- daemon
+- `synapse_daemon/models.py` -- `ToolManifest`, `ToolField`, `ToolAction`,
+  `ToolState`, `ToolFieldType`. `ToolAction.available_in` lists the statuses
+  in which an action is enabled so the UI can grey out buttons by state.
+- `synapse_daemon/tools_registry.py` -- `ToolRegistry`: scans
+  `tools/*/manifest.json`, validates each against `ToolManifest`, and binds a
+  curated handler where one exists. A manifest with no compiled-in handler is
+  still listed (`runnable=false`) -- its actions are simply inert. One bad
+  manifest never blocks the rest.
+- `synapse_daemon/tools/` -- new package. `ToolHandler` base class +
+  `cloudtap.py`, the first built-in tool: spawns `cloudflared` as a quick
+  tunnel, parses the public `*.trycloudflare.com` URL from its output, and
+  kills the tunnel on daemon shutdown (an exposed tunnel never outlives its
+  owner). One tunnel at a time; honest error states for bad port / missing
+  cloudflared / no-URL timeout / early exit / dropped tunnel.
+- `synapse_daemon/routes_tools.py` -- `GET /api/v1/tools`,
+  `GET /api/v1/tools/{id}`, `POST /api/v1/tools/{id}/actions/{action}`. Every
+  action is audited (Contract #11).
+- `__main__.py` -- `--tools-dir` flag (default `tools/`); the registry loads
+  in the lifespan and `shutdown_all()` runs on exit.
+
+#### Added -- renderer
+- `lib/generated-types.ts` -- `ToolManifest` / `ToolField` / `ToolAction` /
+  `ToolState` / `ToolEntry` types.
+- `lib/tools-client.ts` -- typed REST client (`listTools`, `getTool`,
+  `runToolAction`).
+- `components/ToolCard.tsx` -- one generic, manifest-driven card renders
+  every tool: fields from the manifest, action buttons, status badge, and a
+  `public_url` result rendered as an openable + copyable link. **No
+  tool-specific UI code.**
+- `pages/Tools.tsx` -- replaces the v0.1.8 placeholder; renders a card per
+  loaded tool, with loading / empty / error states.
+
+#### Fixed (from the v0.1.9 UI/UX audit)
+- Tool action buttons are now state-aware -- "Open tunnel" greys out while a
+  tunnel is running, "Close tunnel" greys out when none is, driven by the
+  manifest's `available_in`. Previously both were always clickable and a
+  second "Open" returned an `already_running` error.
+- The Tools page now refetches on `v1.tool.*` WebSocket events, so a tunnel
+  that drops on its own no longer leaves a stale "running" card.
+
+#### Verified
+- 206 tests pass (+23: `test_tools_registry`, `test_cloudtap`,
+  `test_routes_tools`); typecheck green.
+- E2E: opened a real Cloudflare tunnel from the UI; web-scraper MCP fetched
+  `<tunnel-url>/api/v1/health` over the public internet -> HTTP 200.
+
 ## [0.1.8.6] -- 2026-05-18
 
 ### UI/UX audit fixes

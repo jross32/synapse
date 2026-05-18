@@ -18,7 +18,7 @@ enough for the Electron renderer's Vite dev server and the loopback origin
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,12 +28,14 @@ from . import __version__
 from .api_versions import API_PREFIX, event_name
 from .errors import ErrorEnvelope, SynapseError
 from .models import HealthResponse
-from .orphan_reconciler import ReconcileOutcome, reconcile, summarise
+from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
+from .routes_tools import build_tools_router
 from .storage import Storage
 from .time_utils import to_iso, utc_now
+from .tools_registry import ToolRegistry
 from .ws import EventBus, WsHub
 
 log = logging.getLogger(__name__)
@@ -54,16 +56,22 @@ def build_app(
     bus: EventBus,
     *,
     process_manager: ProcessManager | None = None,
+    tool_registry: ToolRegistry | None = None,
 ) -> FastAPI:
     """Construct the FastAPI app bound to a Storage + EventBus.
 
-    ``process_manager`` is created on demand if not supplied (so tests that
-    only care about ``/health`` don't have to wire one up themselves).
+    ``process_manager`` and ``tool_registry`` are created on demand if not
+    supplied (so tests that only care about ``/health`` don't have to wire
+    them up themselves). A freshly-created registry is loaded immediately —
+    scanning ``tools/`` is pure file IO and safe before the lifespan starts.
     """
 
     started_at = utc_now()
     if process_manager is None:
         process_manager = ProcessManager(storage, bus)
+    if tool_registry is None:
+        tool_registry = ToolRegistry(Path("tools"), bus)
+        tool_registry.load()
 
     app = FastAPI(
         title="Synapse daemon",
@@ -112,11 +120,13 @@ def build_app(
     # Mount the REST routers under /api/v1.
     app.include_router(build_projects_router(storage, process_manager), prefix=API_PREFIX)
     app.include_router(build_discovery_router(storage), prefix=API_PREFIX)
+    app.include_router(build_tools_router(storage, tool_registry), prefix=API_PREFIX)
 
     # Stash state on the app for tests + later wiring.
     app.state.storage = storage
     app.state.bus = bus
     app.state.process_manager = process_manager
+    app.state.tool_registry = tool_registry
     app.state.started_at = started_at
 
     return app

@@ -225,6 +225,65 @@ export interface ProjectListResponse {
   projects: Project[];
 }
 
+// ── Tool plugin system (Milestone F · v0.1.9) ────────────────────────────
+
+export type ToolFieldType = 'number' | 'text' | 'path' | 'boolean';
+
+export interface ToolField {
+  key: string;
+  type: ToolFieldType;
+  label: string;
+  required: boolean;
+  placeholder: string | null;
+  min: number | null;
+  max: number | null;
+  default: unknown;
+  help: string | null;
+}
+
+export interface ToolAction {
+  id: string;
+  label: string;
+  handler: string | null;
+  primary: boolean;
+  danger: boolean;
+  /** Statuses in which this action is enabled. Empty = always enabled. */
+  available_in: EntityStatus[];
+}
+
+export interface ToolManifest {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  description: string;
+  version: string;
+  fields: ToolField[];
+  actions: ToolAction[];
+  /** True when a compiled-in handler backs this tool's actions. */
+  runnable: boolean;
+}
+
+export interface ToolState {
+  tool_id: string;
+  status: EntityStatus;
+  fields: Record<string, unknown>;
+  result: Record<string, unknown>;
+  message: string | null;
+  last_error: ErrorRef | null;
+  updated_at: string;
+}
+
+/** One tool as the daemon serves it: its manifest plus live state. */
+export interface ToolEntry {
+  manifest: ToolManifest;
+  state: ToolState;
+}
+
+export interface ToolListResponse {
+  tools: ToolEntry[];
+}
+
 // Re-export ErrorEnvelope for ergonomics. (It's defined in error-types.ts
 // because it's referenced before the generator runs.)
 export type { ErrorEnvelope };

@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.8.6` — **Auto-discovery + groups/pinning, audit-hardened.** Point Synapse at a folder and it fingerprints every project inside — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — identifies the stack, picks a launch command, and bulk-imports your picks. Tiles can be pinned (float to the top) and grouped. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). `v0.1.8.6` is a full UI/UX-audit pass: fixed a WebSocket replay-envelope bug (Recent activity stayed empty) and responsive overflow below ~700px. Double-click `synapse.cmd` to launch — no PowerShell needed. **183 tests passing.** Next: v0.1.9 (plugin system + tools). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.9` — **Plugin system + Cloudtap.** Tools are now manifest plugins: a tool is a folder under `tools/` with a `manifest.json` — drop one in, get a card, no UI surgery. The daemon never imports code from a tool folder; actions run via curated built-in handlers (the hybrid model). First built-in tool ships: **Cloudtap** — enter a local port, get a public Cloudflare tunnel URL. Auto-discovery (v0.1.8.5) still fingerprints any folder — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — and bulk-imports projects; tiles pin + group. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). Double-click `synapse.cmd` to launch — no PowerShell needed. **206 tests passing.** Next: v0.1.10 (Home slideshow + Nucleus polish). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 158 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 206 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
@@ -122,8 +122,8 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | D | Project registry + launcher (full CRUD UI) | ✅ done (`v0.1.5`) |
 | ⌁ | Clickable launcher + Electron CDP inspector | ✅ done (`v0.1.6`) |
 | E | Live process monitor (psutil heartbeat + crash detect + auto-restart) | ✅ done (`v0.1.7`) |
-| F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | 🟡 in progress (`v0.1.8` shell · `v0.1.8.5` discovery) |
-| G | Cloudtap tool (port → tunnel URL) | ⚪ pending |
+| F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | 🟡 in progress (`v0.1.8` shell · `v0.1.8.5` discovery · `v0.1.9` plugin system) |
+| G | Cloudtap tool (port → tunnel URL) | ✅ done (`v0.1.9`) |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ⚪ pending |
 | I | Auto-start + tray polish (login items, detached daemon, full tray menu) | ⚪ pending |
 | J | Packaging (PyInstaller + electron-builder + NSIS installer) | ⚪ pending |

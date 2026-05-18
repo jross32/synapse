@@ -20,9 +20,9 @@ import argparse
 import asyncio
 import logging
 import sys
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Sequence
 
 import uvicorn
 from fastapi import FastAPI
@@ -34,6 +34,7 @@ from .process_manager import ProcessManager
 from .security import assert_not_admin
 from .seed import seed_default_projects
 from .storage import Storage
+from .tools_registry import ToolRegistry
 from .ws import EventBus
 
 log = logging.getLogger("synapse")
@@ -43,6 +44,7 @@ DEFAULT_PORT = 7878
 DEFAULT_HOST = "127.0.0.1"          # loopback by default
 LAN_HOST = "0.0.0.0"                # opt-in via --bind-lan
 DEFAULT_DATA_DIR = Path("data")
+DEFAULT_TOOLS_DIR = Path("tools")   # plugin manifests live here
 
 
 def _build_argparser() -> argparse.ArgumentParser:
@@ -75,6 +77,13 @@ def _build_argparser() -> argparse.ArgumentParser:
         help="Folder for the SQLite DB, logs, and per-tool data. Created if missing.",
     )
     p.add_argument(
+        "--tools-dir",
+        type=Path,
+        default=DEFAULT_TOOLS_DIR,
+        help="Folder of tool plugin manifests (tools/<id>/manifest.json). "
+             f"Default: {DEFAULT_TOOLS_DIR}.",
+    )
+    p.add_argument(
         "--allow-admin",
         action="store_true",
         help="Permit running with Administrator/root privileges (default refuses — Contract #16).",
@@ -96,7 +105,12 @@ def _configure_logging(level: str) -> None:
     )
 
 
-def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
+def _build_lifespan(
+    storage: Storage,
+    bus: EventBus,
+    pm: ProcessManager,
+    registry: ToolRegistry,
+):
     """Lifespan that publishes reconciliation + daemon.started on startup."""
 
     @asynccontextmanager
@@ -110,6 +124,11 @@ def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
         await boot_publish_reconciliation(bus, outcomes)
         await boot_publish_daemon_started(bus, schema)
 
+        # Load tool plugin manifests (Milestone F plugin system).
+        loaded = await asyncio.to_thread(registry.load)
+        if loaded:
+            log.info("Loaded %d tool(s): %s", len(loaded), loaded)
+
         # Start the resource heartbeat loop (Contract #19).
         pm.start_monitoring()
 
@@ -121,6 +140,7 @@ def _build_lifespan(storage: Storage, bus: EventBus, pm: ProcessManager):
         )
         yield
         log.info("Synapse daemon shutting down.")
+        await registry.shutdown_all()
         pm.shutdown()
 
     return lifespan
@@ -146,9 +166,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     bus = EventBus()
     pm = ProcessManager(storage, bus)
-    app = build_app(storage, bus, process_manager=pm)
+    registry = ToolRegistry(args.tools_dir, bus)
+    app = build_app(storage, bus, process_manager=pm, tool_registry=registry)
     app.state.bound_port = args.port
-    app.router.lifespan_context = _build_lifespan(storage, bus, pm)
+    app.router.lifespan_context = _build_lifespan(storage, bus, pm, registry)
 
     try:
         uvicorn.run(

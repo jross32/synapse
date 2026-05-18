@@ -392,18 +392,44 @@ Snapshots are the disaster-recovery story and the cross-machine portability stor
 
 ## Plugin contract — adding a new tool
 
-A "Synapse" (tool card) is **one folder under `tools/`** with a `manifest.json` and a Python handler. Example:
+Implemented in **v0.1.9** as a **hybrid model**: a tool's *manifest* is pure
+data; its *behaviour* is a curated handler compiled into the daemon. The
+daemon **never imports code from a tool folder** — so dropping in a
+third-party manifest can never run untrusted Python.
+
+A "Synapse" (tool card) is **one folder under `tools/`** with just a
+`manifest.json`:
 
 ```
 tools/
-└── my-new-tool/
-    ├── manifest.json
-    └── handler.py
+└── cloudtap/
+    └── manifest.json      # id, name, icon, fields[], actions[]
 ```
 
-The UI renders it automatically. **You do not edit `renderer/pages/Tools.tsx` to add a tool.** If you find yourself wanting to, the manifest schema needs extending instead.
+The manifest is validated against `ToolManifest` (`daemon/synapse_daemon/models.py`).
+`ToolAction.available_in` lists the statuses in which an action is enabled so
+the UI greys buttons by state. The UI renders the card automatically —
+**you do not edit `renderer/pages/Tools.tsx` or `ToolCard.tsx` to add a
+tool.** If you want to, the manifest schema needs extending instead.
 
-Project (launchable app) manifests live in the daemon's SQLite DB and are seeded from `daemon/synapse_daemon/seed_projects.py`. wbscrper is the seed example.
+### Adding a *built-in* tool (one with behaviour)
+
+1. Drop the manifest folder in `tools/<id>/manifest.json`.
+2. Add a handler class in `daemon/synapse_daemon/tools/<id>.py` subclassing
+   `ToolHandler` (implement `run_action` + `state`; optionally `shutdown`).
+3. Register it in `_BUILTIN_HANDLER_FACTORIES` in `tools_registry.py` —
+   one line: `"<id>": <HandlerClass>`.
+4. Add tests in `daemon/tests/test_<id>.py` (mock any external process).
+
+A manifest whose id is **not** in `_BUILTIN_HANDLER_FACTORIES` still loads and
+displays (`runnable=false`) — its action buttons are inert. That is the safe
+default for any folder a user drops in.
+
+`tools/cloudtap/` + `synapse_daemon/tools/cloudtap.py` is the reference
+implementation.
+
+Project (launchable app) manifests live in the daemon's SQLite DB and are
+seeded from `daemon/synapse_daemon/seed.py`. wbscrper is the seed example.
 
 ---
 

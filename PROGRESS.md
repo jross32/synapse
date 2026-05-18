@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.8.6`
+`0.1.9`
 
 ## Current milestone
 
-**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) done; v0.1.8.6 is a UI/UX-audit hardening pass. Scan a folder → multi-stack detector finds + bulk-imports projects; tiles support pinning + groups. 183 tests pass. Next: v0.1.9 (plugin system + Cloudtap/VSCode/Terminal tools) → v0.1.10 (Home slideshow + polish).
+**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) done. Tools are manifest plugins now: a folder under `tools/` with a `manifest.json` → a card, no UI surgery. First built-in tool: Cloudtap (port → Cloudflare tunnel URL). 206 tests pass. Next: v0.1.10 (Home slideshow + Nucleus polish + snapshot/restore).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -30,8 +30,8 @@
 | `0.1.8.1` | Hotfix: Vite IPv4 bind so synapse.cmd's health poll matches | ✅ done |
 | `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ✅ done |
 | `0.1.8.6` | UI/UX audit fixes — WS replay-envelope bug, responsive overflow, version/path polish | ✅ done |
-| `0.1.9` | Milestone F — plugin system + Cloudtap / Open-in-VSCode / Terminal tools | ⚪ next |
-| `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ pending |
+| `0.1.9` | Milestone F — tool plugin system (manifest + curated handlers) + Cloudtap | ✅ done |
+| `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ next |
 
 ## What's done
 
@@ -129,13 +129,21 @@
 - Polish: responsive shell padding, `break-words` paths, daemon-derived UI version, human-readable connection label
 - 183 tests passing; typecheck green
 
+### v0.1.9 — Tool plugin system + Cloudtap
+- **Plugin model (hybrid):** a tool = a folder under `tools/` with a `manifest.json` (pure data). The daemon NEVER imports code from a tool folder — actions run via *curated built-in handlers* compiled into the daemon. New built-in tool = drop a manifest folder + one entry in `_BUILTIN_HANDLER_FACTORIES`.
+- Daemon: `tools_registry.py` (`ToolRegistry` — scan/validate/bind), `tools/` package (`ToolHandler` base + `cloudtap.py`), `routes_tools.py` (list / get / run-action, all audited), `Tool*` Pydantic models, `--tools-dir` flag
+- Cloudtap: spawns `cloudflared` quick tunnel, parses the `*.trycloudflare.com` URL, one tunnel at a time, killed on daemon shutdown; honest error states (bad port / not installed / no-URL timeout / early exit / dropped)
+- Renderer: `tools-client.ts`, `ToolCard.tsx` (one generic manifest-driven card — no tool-specific UI), `Tools.tsx` page; `Tool*` types
+- Audit fixes: state-aware action buttons (manifest `available_in`); Tools page refetches on `v1.tool.*` WS events
+- 206 tests passing (+23); typecheck green; E2E verified a real tunnel served traffic over the public internet
+
 ## What's next (immediate)
 
-**v0.1.9 — plugin system + first tools.** Milestone F continues:
-- Tool plugin contract: a tool = a folder + `manifest.json`, no UI surgery (per AGENTS.md)
-- First built-in tools: Cloudtap (port → Cloudflare tunnel URL), Open-in-VSCode, Terminal runner
-- Tools page renders registered tool cards from manifests
-- Then v0.1.10 (Home slideshow + Nucleus polish + snapshot/restore)
+**v0.1.10 — Home slideshow + Nucleus polish.** Milestone F finishes:
+- Microsoft-Store-style featured slideshow on Home
+- Nucleus center-pane polish; fill the top-heavy empty space on Home/Tools/Settings
+- Snapshot / restore (Contract #28) wired to the Settings page
+- Then Milestone G is already done (Cloudtap shipped in v0.1.9) → Milestone H (mobile Web UI)
 
 ## Known issues / broken state
 

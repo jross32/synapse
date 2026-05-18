@@ -11,7 +11,7 @@ hand-maintaining parallel ones.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class EntityStatus(str, Enum):
@@ -106,6 +106,87 @@ class HealthResponse(BaseModel):
     )
 
 
+# ── Tool plugin system (Milestone F · v0.1.9) ────────────────────────────────
+#
+# A tool is a folder under ``tools/`` carrying a ``manifest.json``. The manifest
+# is pure data: the daemon never imports code from a tool folder. Actions are
+# executed by *curated built-in handlers* compiled into the daemon (the hybrid
+# model — see ToolRegistry). This keeps "drop in a folder" plugin ergonomics
+# without ever running untrusted Python.
+
+
+class ToolFieldType(str, Enum):
+    """Input field kinds a tool manifest can declare."""
+
+    NUMBER = "number"
+    TEXT = "text"
+    PATH = "path"
+    BOOLEAN = "boolean"
+
+
+class ToolField(BaseModel):
+    """One input a tool collects before an action runs (Contract #1)."""
+
+    key: str
+    type: ToolFieldType = ToolFieldType.TEXT
+    label: str
+    required: bool = False
+    placeholder: str | None = None
+    min: int | None = None
+    max: int | None = None
+    default: Any = None
+    help: str | None = None
+
+
+class ToolAction(BaseModel):
+    """A button a tool card exposes.
+
+    ``handler`` is a curated reference (``"<tool-id>:<verb>"``). The daemon
+    resolves it against its compiled-in handler table — an unknown reference
+    is refused at load time, never imported.
+
+    ``available_in`` lists the tool statuses in which the action is enabled.
+    Empty (the default) means "always enabled" — the UI greys the button out
+    in every other state so a user can't, e.g., open a tunnel that is already
+    open.
+    """
+
+    id: str
+    label: str
+    handler: str | None = None
+    primary: bool = False
+    danger: bool = False
+    available_in: list[EntityStatus] = Field(default_factory=list)
+
+
+class ToolManifest(BaseModel):
+    """The parsed, validated ``tools/<id>/manifest.json`` (Contract #8)."""
+
+    id: str
+    name: str
+    category: str = "tools"
+    icon: str = "wrench"
+    description: str = ""
+    version: str = "0.1.0"
+    fields: list[ToolField] = Field(default_factory=list)
+    actions: list[ToolAction] = Field(default_factory=list)
+    # True once a compiled-in handler has been bound; a manifest with no
+    # backing handler still lists but its actions are inert.
+    runnable: bool = False
+
+
+class ToolState(BaseModel):
+    """Live state of one tool — what the card renders (Contract #2)."""
+
+    tool_id: str
+    status: EntityStatus = EntityStatus.IDLE
+    fields: dict[str, Any] = Field(default_factory=dict)
+    result: dict[str, Any] = Field(default_factory=dict)
+    message: str | None = None
+    last_error: ErrorRef | None = None
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 # Convenience export so consumers can do ``from synapse_daemon.models import *``.
 __all__ = [
     "AuditSource",
@@ -114,6 +195,11 @@ __all__ = [
     "ErrorRef",
     "HealthResponse",
     "StateTransition",
+    "ToolAction",
+    "ToolField",
+    "ToolFieldType",
+    "ToolManifest",
+    "ToolState",
 ]
 
 
@@ -153,4 +239,10 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "EnvVar": _secrets.EnvVar,
         "SnapshotPayload": _snap.SnapshotPayload,
         "RestoreReport": _snap.RestoreReport,
+        # Tool plugin system (v0.1.9)
+        "ToolFieldType": ToolFieldType,  # type: ignore[dict-item]
+        "ToolField": ToolField,
+        "ToolAction": ToolAction,
+        "ToolManifest": ToolManifest,
+        "ToolState": ToolState,
     }
