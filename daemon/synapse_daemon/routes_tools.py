@@ -27,9 +27,14 @@ from .tools_registry import ToolRegistry
 
 
 class ActionRequest(BaseModel):
-    """Body for an action POST — the field values plus the audit source."""
+    """Body for an action POST.
+
+    ``item_id`` targets one live instance for item-scoped actions (e.g. close
+    a specific Cloudtap tunnel); it is ``None`` for tool-scoped actions.
+    """
 
     fields: dict[str, Any] = Field(default_factory=dict)
+    item_id: str | None = None
     source: AuditSource = AuditSource.DESKTOP
 
 
@@ -57,7 +62,7 @@ def build_tools_router(storage: Storage, registry: ToolRegistry) -> APIRouter:
         payload: ActionRequest | None = None,
     ) -> dict:
         body = payload or ActionRequest()
-        state = await registry.run_action(tool_id, action_id, body.fields)
+        state = await registry.run_action(tool_id, action_id, body.fields, body.item_id)
 
         with storage.transaction() as conn:
             errored = state.last_error is not None
@@ -70,7 +75,11 @@ def build_tools_router(storage: Storage, registry: ToolRegistry) -> APIRouter:
                     source=body.source,
                     result="error" if errored else "success",
                     error_code=state.last_error.code if errored else None,
-                    details={"status": state.status.value},
+                    details={
+                        "status": state.status.value,
+                        "item_id": body.item_id,
+                        "items": len(state.items),
+                    },
                 ),
             )
 

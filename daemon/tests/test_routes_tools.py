@@ -15,13 +15,18 @@ _CLOUDTAP_MANIFEST = {
     "id": "cloudtap",
     "name": "Cloudtap",
     "icon": "cloud",
-    "description": "One-tap Cloudflare tunnel.",
-    "version": "0.1.0",
+    "description": "One-tap Cloudflare tunnels.",
+    "version": "0.2.0",
     "fields": [{"key": "port", "type": "number", "label": "Local port", "required": True}],
     "actions": [
-        {"id": "tunnel", "label": "Open tunnel", "primary": True,
-         "available_in": ["idle", "stopped", "error"]},
-        {"id": "stop", "label": "Close tunnel", "available_in": ["launching", "launched"]},
+        {"id": "tunnel", "label": "Open tunnel", "primary": True, "scope": "tool"},
+        {
+            "id": "close",
+            "label": "Close",
+            "danger": True,
+            "scope": "item",
+            "available_in": ["launching", "launched", "error"],
+        },
     ],
 }
 
@@ -38,7 +43,7 @@ def _harness(tmp_path: Path):
         json.dumps(_CLOUDTAP_MANIFEST), encoding="utf-8"
     )
 
-    registry = ToolRegistry(tools_dir, bus)
+    registry = ToolRegistry(tools_dir, bus, storage)
     registry.load()
     app = build_app(storage, bus, tool_registry=registry)
     return TestClient(app), storage
@@ -55,9 +60,12 @@ def test_list_tools_returns_cloudtap(tmp_path: Path) -> None:
         assert entry["manifest"]["id"] == "cloudtap"
         assert entry["manifest"]["runnable"] is True
         assert entry["state"]["status"] == "idle"
-        # available_in round-trips so the UI can disable buttons by state.
+        assert entry["state"]["items"] == []
+        # Action scope round-trips so the UI can place buttons correctly.
         actions = {a["id"]: a for a in entry["manifest"]["actions"]}
-        assert actions["tunnel"]["available_in"] == ["idle", "stopped", "error"]
+        assert actions["tunnel"]["scope"] == "tool"
+        assert actions["close"]["scope"] == "item"
+        assert actions["close"]["available_in"] == ["launching", "launched", "error"]
 
 
 def test_get_one_tool(tmp_path: Path) -> None:
@@ -80,6 +88,16 @@ def test_unknown_action_is_422(tmp_path: Path) -> None:
     client, _ = _harness(tmp_path)
     with client as c:
         res = c.post("/api/v1/tools/cloudtap/actions/teleport")
+        assert res.status_code == 422
+        assert res.json()["code"] == "tool.invalid"
+
+
+def test_item_scoped_action_without_item_id_is_422(tmp_path: Path) -> None:
+    """'close' is item-scoped — calling it with no item_id is rejected."""
+
+    client, _ = _harness(tmp_path)
+    with client as c:
+        res = c.post("/api/v1/tools/cloudtap/actions/close", json={"fields": {}})
         assert res.status_code == 422
         assert res.json()["code"] == "tool.invalid"
 

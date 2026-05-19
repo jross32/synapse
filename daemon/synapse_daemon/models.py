@@ -138,6 +138,13 @@ class ToolField(BaseModel):
     help: str | None = None
 
 
+class ToolActionScope(str, Enum):
+    """Whether an action acts on the whole tool or one live instance."""
+
+    TOOL = "tool"  # e.g. "Open a new tunnel" — always a card-level button
+    ITEM = "item"  # e.g. "Close this tunnel" — rendered per instance row
+
+
 class ToolAction(BaseModel):
     """A button a tool card exposes.
 
@@ -145,10 +152,13 @@ class ToolAction(BaseModel):
     resolves it against its compiled-in handler table — an unknown reference
     is refused at load time, never imported.
 
-    ``available_in`` lists the tool statuses in which the action is enabled.
-    Empty (the default) means "always enabled" — the UI greys the button out
-    in every other state so a user can't, e.g., open a tunnel that is already
-    open.
+    ``scope`` decides where the button renders: ``tool`` actions are the
+    card's own buttons; ``item`` actions render once per live instance (a
+    Cloudtap tunnel, a terminal session, …) and carry that instance's id.
+
+    ``available_in`` lists the statuses in which the action is enabled —
+    checked against the tool status for ``tool`` actions, or the instance
+    status for ``item`` actions. Empty (the default) means "always enabled".
     """
 
     id: str
@@ -156,6 +166,7 @@ class ToolAction(BaseModel):
     handler: str | None = None
     primary: bool = False
     danger: bool = False
+    scope: ToolActionScope = ToolActionScope.TOOL
     available_in: list[EntityStatus] = Field(default_factory=list)
 
 
@@ -175,13 +186,35 @@ class ToolManifest(BaseModel):
     runnable: bool = False
 
 
+class ToolItem(BaseModel):
+    """One live instance owned by a multi-instance tool (Contract #2).
+
+    Cloudtap is the first such tool: each open tunnel is a ToolItem. A
+    single-shot tool simply leaves :attr:`ToolState.items` empty.
+    """
+
+    id: str
+    label: str
+    status: EntityStatus = EntityStatus.IDLE
+    result: dict[str, Any] = Field(default_factory=dict)
+    message: str | None = None
+    last_error: ErrorRef | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class ToolState(BaseModel):
-    """Live state of one tool — what the card renders (Contract #2)."""
+    """Live state of one tool — what the card renders (Contract #2).
+
+    ``items`` carries the live instances of a multi-instance tool; each gets
+    its own row + per-instance action buttons in the UI. Single-shot tools
+    leave it empty and use ``status`` / ``result`` directly.
+    """
 
     tool_id: str
     status: EntityStatus = EntityStatus.IDLE
     fields: dict[str, Any] = Field(default_factory=dict)
     result: dict[str, Any] = Field(default_factory=dict)
+    items: list[ToolItem] = Field(default_factory=list)
     message: str | None = None
     last_error: ErrorRef | None = None
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -196,8 +229,10 @@ __all__ = [
     "HealthResponse",
     "StateTransition",
     "ToolAction",
+    "ToolActionScope",
     "ToolField",
     "ToolFieldType",
+    "ToolItem",
     "ToolManifest",
     "ToolState",
 ]
@@ -239,10 +274,12 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "EnvVar": _secrets.EnvVar,
         "SnapshotPayload": _snap.SnapshotPayload,
         "RestoreReport": _snap.RestoreReport,
-        # Tool plugin system (v0.1.9)
+        # Tool plugin system (v0.1.9 · multi-instance v0.1.9.5)
         "ToolFieldType": ToolFieldType,  # type: ignore[dict-item]
         "ToolField": ToolField,
+        "ToolActionScope": ToolActionScope,  # type: ignore[dict-item]
         "ToolAction": ToolAction,
         "ToolManifest": ToolManifest,
+        "ToolItem": ToolItem,
         "ToolState": ToolState,
     }

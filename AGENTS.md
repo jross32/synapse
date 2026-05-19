@@ -412,6 +412,17 @@ the UI greys buttons by state. The UI renders the card automatically —
 **you do not edit `renderer/pages/Tools.tsx` or `ToolCard.tsx` to add a
 tool.** If you want to, the manifest schema needs extending instead.
 
+### Single-shot vs multi-instance tools
+
+A tool may be **single-shot** (one state — `ToolState.status` / `result`) or
+**multi-instance** (a list of live instances — `ToolState.items`, each a
+`ToolItem`). Cloudtap is multi-instance: each open tunnel is one `ToolItem`
+with its own row + buttons. An action's `scope` decides where its button
+renders: `tool` actions are the card's own buttons (e.g. "Open tunnel");
+`item` actions render once per instance and carry that instance's id (e.g.
+"Close" *this* tunnel). The action POST body's `item_id` targets an instance.
+The generic `ToolCard` handles both — no per-tool UI.
+
 ### Adding a *built-in* tool (one with behaviour)
 
 1. Drop the manifest folder in `tools/<id>/manifest.json`.

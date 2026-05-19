@@ -10,6 +10,49 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.9.5] -- 2026-05-19
+
+### Multi-tunnel Cloudtap + multi-instance tool model
+
+Cloudtap can now hold **any number of tunnels open at once** — open one per
+app, close whichever you want individually. The old single global "Close
+tunnel" button (which looked like it closed everything) is gone.
+
+#### Added -- daemon
+- `models.py` -- `ToolItem` (one live instance of a tool) and
+  `ToolState.items`. `ToolActionScope` + `ToolAction.scope` (`tool` =
+  card-level button, `item` = rendered per instance). This makes the plugin
+  model generically multi-instance -- any future tool (terminal sessions,
+  multiple servers) reuses it.
+- `routes_tools.py` -- the action POST body accepts `item_id` to target one
+  instance; an item-scoped action with no `item_id` is a 422.
+- `tools_registry.py` -- `run_action` validates action scope and forwards
+  `item_id`; handlers are now constructed with `(bus, storage)`.
+
+#### Changed -- Cloudtap (v0.2.0 manifest)
+- Rewritten around a `dict` of `_Tunnel` instances. `tunnel` (tool-scoped)
+  opens a new one; `close` (item-scoped) terminates exactly the targeted
+  tunnel and leaves the rest running. All tunnels close on daemon shutdown.
+- **Auto-labels each tunnel** with the registered project whose
+  `expected_port` matches the tunnelled port (e.g. a tunnel on `:5173` shows
+  as "Synapse"); falls back to `localhost:<port>`.
+- A tunnel that drops on its own is marked errored in its own row instead of
+  taking the whole tool down.
+
+#### Changed -- renderer
+- `ToolCard.tsx` renders an **Active (N)** list -- one row per live instance
+  with its label, port badge, public URL, status, and its own per-instance
+  action buttons (Close). `tool`-scoped actions stay as the card's buttons.
+- `tools-client.ts` -- `runToolAction` takes an optional `itemId`.
+- `generated-types.ts` -- `ToolItem`, `ToolActionScope`, `ToolAction.scope`,
+  `ToolState.items`.
+
+#### Verified
+- 210 tests pass (+4 new multi-tunnel / labeling cases); typecheck green.
+- E2E: opened two real tunnels at once (`:7878` + `:5173`), closed one,
+  confirmed the other kept serving traffic over the public internet; the
+  `:5173` tunnel auto-labelled "Synapse" from the project registry.
+
 ## [0.1.9] -- 2026-05-18
 
 ### Tool plugin system + Cloudtap

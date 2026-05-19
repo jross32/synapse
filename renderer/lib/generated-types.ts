@@ -241,12 +241,16 @@ export interface ToolField {
   help: string | null;
 }
 
+export type ToolActionScope = 'tool' | 'item';
+
 export interface ToolAction {
   id: string;
   label: string;
   handler: string | null;
   primary: boolean;
   danger: boolean;
+  /** 'tool' = a card-level button; 'item' = rendered per live instance. */
+  scope: ToolActionScope;
   /** Statuses in which this action is enabled. Empty = always enabled. */
   available_in: EntityStatus[];
 }
@@ -264,11 +268,24 @@ export interface ToolManifest {
   runnable: boolean;
 }
 
+/** One live instance of a multi-instance tool (e.g. a Cloudtap tunnel). */
+export interface ToolItem {
+  id: string;
+  label: string;
+  status: EntityStatus;
+  result: Record<string, unknown>;
+  message: string | null;
+  last_error: ErrorRef | null;
+  created_at: string;
+}
+
 export interface ToolState {
   tool_id: string;
   status: EntityStatus;
   fields: Record<string, unknown>;
   result: Record<string, unknown>;
+  /** Live instances — each gets its own row + per-instance actions. */
+  items: ToolItem[];
   message: string | null;
   last_error: ErrorRef | null;
   updated_at: string;

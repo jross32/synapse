@@ -3,8 +3,8 @@
   "name": "Cloudtap",
   "category": "tools",
   "icon": "cloud",
-  "description": "One-tap Cloudflare tunnel — enter a local port, get a public URL.",
-  "version": "0.1.0",
+  "description": "One-tap Cloudflare tunnels — enter a local port, get a public URL. Open as many as you need; each tunnel is tracked and closed independently.",
+  "version": "0.2.0",
   "fields": [
     {
       "key": "port",
@@ -14,7 +14,7 @@
       "min": 1,
       "max": 65535,
       "placeholder": "12345",
-      "help": "The port a local server is already listening on."
+      "help": "The port a local server is already listening on. Cloudtap auto-labels the tunnel with the matching registered project."
     }
   ],
   "actions": [
@@ -23,13 +23,15 @@
       "label": "Open tunnel",
       "handler": "cloudtap:tunnel",
       "primary": true,
-      "available_in": ["idle", "stopped", "error"]
+      "scope": "tool"
     },
     {
-      "id": "stop",
-      "label": "Close tunnel",
-      "handler": "cloudtap:stop",
-      "available_in": ["launching", "launched", "stopping"]
+      "id": "close",
+      "label": "Close",
+      "handler": "cloudtap:close",
+      "danger": true,
+      "scope": "item",
+      "available_in": ["launching", "launched", "error"]
     }
   ]
 }

@@ -1,9 +1,10 @@
-// Generic, manifest-driven tool card (Milestone F · v0.1.9).
+// Generic, manifest-driven tool card (Milestone F · v0.1.9, multi-instance v0.1.9.5).
 //
 // One component renders every tool: it reads the manifest's fields + actions
-// and the live ToolState. No tool-specific UI code -- a new tool is a folder
-// + a manifest, never a renderer change. `public_url` in a tool's result is
-// the one value rendered specially (as an openable link).
+// and the live ToolState. `tool`-scoped actions are the card's own buttons;
+// `item`-scoped actions render once per live instance (e.g. one Cloudtap
+// tunnel) with that instance's id. No tool-specific UI code -- a new tool is
+// a folder + a manifest, never a renderer change.
 
 import { useState } from 'react';
 import {
@@ -16,7 +17,12 @@ import {
   Wrench,
 } from 'lucide-react';
 
-import type { ToolAction, ToolEntry, ToolField } from '@shared/generated-types';
+import type {
+  ToolAction,
+  ToolEntry,
+  ToolField,
+  ToolItem,
+} from '@shared/generated-types';
 import { runToolAction } from '@shared/tools-client';
 import { openExternal } from '@shared/electron-bridge';
 import { Badge } from './ui/badge';
@@ -34,12 +40,39 @@ const ICONS: Record<string, typeof Wrench> = {
 function initialFields(entry: ToolEntry): Record<string, string> {
   const values: Record<string, string> = {};
   for (const f of entry.manifest.fields) {
-    const prior = entry.state.fields?.[f.key];
-    const fallback = f.default;
-    const seed = prior ?? fallback;
+    const seed = f.default;
     values[f.key] = seed === undefined || seed === null ? '' : String(seed);
   }
   return values;
+}
+
+/** Renders a `public_url` result value as an openable + copyable link. */
+function PublicUrl({ url }: { url: string }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  async function copy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked -- ignore */
+    }
+  }
+  return (
+    <div className='flex items-center gap-2'>
+      <button
+        type='button'
+        onClick={() => void openExternal(url)}
+        className='flex min-w-0 items-center gap-1.5 font-mono text-sm text-primary hover:underline'
+      >
+        <ExternalLink className='h-3.5 w-3.5 shrink-0' />
+        <span className='truncate'>{url}</span>
+      </button>
+      <Button variant='ghost' size='sm' className='h-7 shrink-0 px-2' onClick={copy}>
+        {copied ? <Check className='h-3.5 w-3.5' /> : <Copy className='h-3.5 w-3.5' />}
+      </Button>
+    </div>
+  );
 }
 
 export interface ToolCardProps {
@@ -50,13 +83,14 @@ export interface ToolCardProps {
 export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Element {
   const [entry, setEntry] = useState<ToolEntry>(initial);
   const [fields, setFields] = useState<Record<string, string>>(() => initialFields(initial));
-  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const { manifest, state } = entry;
   const Icon = ICONS[manifest.icon] ?? Wrench;
-  const publicUrl = typeof state.result.public_url === 'string' ? state.result.public_url : null;
+  const toolActions = manifest.actions.filter((a) => a.scope === 'tool');
+  const itemActions = manifest.actions.filter((a) => a.scope === 'item');
+  const toolUrl = typeof state.result.public_url === 'string' ? state.result.public_url : null;
 
   function coerce(field: ToolField, raw: string): unknown {
     if (field.type === 'number') return raw === '' ? null : Number(raw);
@@ -64,31 +98,87 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
     return raw;
   }
 
-  async function handleAction(action: ToolAction): Promise<void> {
-    setBusyAction(action.id);
+  async function handleAction(action: ToolAction, itemId?: string): Promise<void> {
+    const key = itemId ? `${action.id}:${itemId}` : action.id;
+    setBusyKey(key);
     setActionError(null);
     const payload: Record<string, unknown> = {};
     for (const f of manifest.fields) payload[f.key] = coerce(f, fields[f.key] ?? '');
     try {
-      const next = await runToolAction(manifest.id, action.id, payload);
+      const next = await runToolAction(manifest.id, action.id, payload, itemId);
       setEntry(next);
       onChanged?.(next);
     } catch (err) {
       setActionError((err as Error).message || 'Action failed');
     } finally {
-      setBusyAction(null);
+      setBusyKey(null);
     }
   }
 
-  async function copyUrl(): Promise<void> {
-    if (!publicUrl) return;
-    try {
-      await navigator.clipboard.writeText(publicUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked -- ignore */
-    }
+  function actionButton(
+    action: ToolAction,
+    enabled: boolean,
+    itemId?: string
+  ): JSX.Element {
+    const key = itemId ? `${action.id}:${itemId}` : action.id;
+    return (
+      <Button
+        key={key}
+        size='sm'
+        variant={action.danger ? 'destructive' : action.primary ? 'default' : 'outline'}
+        disabled={!manifest.runnable || busyKey !== null || !enabled}
+        onClick={() => void handleAction(action, itemId)}
+      >
+        {busyKey === key && <Loader2 className='h-4 w-4 animate-spin' />}
+        {action.label}
+      </Button>
+    );
+  }
+
+  function renderItem(item: ToolItem): JSX.Element {
+    const url = typeof item.result.public_url === 'string' ? item.result.public_url : null;
+    const port = item.result.local_port;
+    return (
+      <div
+        key={item.id}
+        className='flex flex-col gap-2 rounded-md border border-border bg-secondary/40 p-3'
+      >
+        <div className='flex items-center justify-between gap-2'>
+          <div className='flex min-w-0 items-center gap-2'>
+            <span className='truncate font-medium'>{item.label}</span>
+            {port !== undefined && port !== null && (
+              <Badge variant='outline' className='font-mono text-[10px]'>
+                :{String(port)}
+              </Badge>
+            )}
+          </div>
+          <StatusBadge status={item.status} />
+        </div>
+        {url && <PublicUrl url={url} />}
+        {item.message && !item.last_error && (
+          <p className='text-xs text-muted-foreground'>{item.message}</p>
+        )}
+        {item.last_error && (
+          <p
+            role='alert'
+            className='rounded-sm border border-destructive bg-destructive/10 px-2 py-1 font-mono text-xs text-destructive'
+          >
+            [{item.last_error.code}] {item.last_error.message}
+          </p>
+        )}
+        {itemActions.length > 0 && (
+          <div className='flex flex-wrap gap-2'>
+            {itemActions.map((a) =>
+              actionButton(
+                a,
+                a.available_in.length === 0 || a.available_in.includes(item.status),
+                item.id
+              )
+            )}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -128,7 +218,7 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
                 min={f.min ?? undefined}
                 max={f.max ?? undefined}
                 placeholder={f.placeholder ?? undefined}
-                disabled={!manifest.runnable || busyAction !== null}
+                disabled={!manifest.runnable || busyKey !== null}
                 onChange={(e) =>
                   setFields((prev) => ({ ...prev, [f.key]: e.target.value }))
                 }
@@ -139,22 +229,21 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
         </div>
       )}
 
-      {publicUrl && (
+      {/* Tool-level result link (single-shot tools). Multi-instance tools use items. */}
+      {toolUrl && (
         <div className='flex flex-col gap-1 rounded-md border border-border bg-secondary/50 p-3'>
           <span className='text-xs font-medium text-muted-foreground'>Public URL</span>
-          <div className='flex items-center gap-2'>
-            <button
-              type='button'
-              onClick={() => void openExternal(publicUrl)}
-              className='flex min-w-0 items-center gap-1.5 font-mono text-sm text-primary hover:underline'
-            >
-              <ExternalLink className='h-3.5 w-3.5 shrink-0' />
-              <span className='truncate'>{publicUrl}</span>
-            </button>
-            <Button variant='ghost' size='sm' className='h-7 shrink-0 px-2' onClick={copyUrl}>
-              {copied ? <Check className='h-3.5 w-3.5' /> : <Copy className='h-3.5 w-3.5' />}
-            </Button>
-          </div>
+          <PublicUrl url={toolUrl} />
+        </div>
+      )}
+
+      {/* Live instances (e.g. Cloudtap tunnels). */}
+      {state.items.length > 0 && (
+        <div className='flex flex-col gap-2'>
+          <span className='text-xs font-medium text-muted-foreground'>
+            Active ({state.items.length})
+          </span>
+          {state.items.map(renderItem)}
         </div>
       )}
 
@@ -178,25 +267,12 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
       )}
 
       <div className='mt-auto flex flex-wrap gap-2'>
-        {manifest.actions.map((a) => {
-          // available_in empty = always enabled; otherwise the action is only
-          // live in the listed statuses (e.g. can't "Open tunnel" when one is
-          // already open).
-          const wrongState =
-            a.available_in.length > 0 && !a.available_in.includes(state.status);
-          return (
-            <Button
-              key={a.id}
-              size='sm'
-              variant={a.danger ? 'destructive' : a.primary ? 'default' : 'outline'}
-              disabled={!manifest.runnable || busyAction !== null || wrongState}
-              onClick={() => void handleAction(a)}
-            >
-              {busyAction === a.id && <Loader2 className='h-4 w-4 animate-spin' />}
-              {a.label}
-            </Button>
-          );
-        })}
+        {toolActions.map((a) =>
+          actionButton(
+            a,
+            a.available_in.length === 0 || a.available_in.includes(state.status)
+          )
+        )}
       </div>
     </Card>
   );

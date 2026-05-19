@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.9` — **Plugin system + Cloudtap.** Tools are now manifest plugins: a tool is a folder under `tools/` with a `manifest.json` — drop one in, get a card, no UI surgery. The daemon never imports code from a tool folder; actions run via curated built-in handlers (the hybrid model). First built-in tool ships: **Cloudtap** — enter a local port, get a public Cloudflare tunnel URL. Auto-discovery (v0.1.8.5) still fingerprints any folder — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — and bulk-imports projects; tiles pin + group. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). Double-click `synapse.cmd` to launch — no PowerShell needed. **206 tests passing.** Next: v0.1.10 (Home slideshow + Nucleus polish). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.9.5` — **Plugin system + multi-tunnel Cloudtap.** Tools are manifest plugins: a tool is a folder under `tools/` with a `manifest.json` — drop one in, get a card, no UI surgery. The daemon never imports code from a tool folder; actions run via curated built-in handlers (the hybrid model). First built-in tool: **Cloudtap** — open as many public Cloudflare tunnels as you need, each tracked separately and closed individually, auto-labelled with the matching registered project. Auto-discovery (v0.1.8.5) still fingerprints any folder — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — and bulk-imports projects; tiles pin + group. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). Double-click `synapse.cmd` to launch — no PowerShell needed. **210 tests passing.** Next: v0.1.10 (Home slideshow + Nucleus polish). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 206 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 210 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd

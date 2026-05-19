@@ -27,7 +27,8 @@ import logging
 from pathlib import Path
 
 from .errors import conflict, invalid, not_found
-from .models import EntityStatus, ToolManifest, ToolState
+from .models import EntityStatus, ToolActionScope, ToolManifest, ToolState
+from .storage import Storage
 from .tools import ToolHandler
 from .tools.cloudtap import CloudtapTool
 from .ws import EventBus
@@ -36,7 +37,8 @@ log = logging.getLogger(__name__)
 
 # Curated handler table. A manifest id maps to the handler class the daemon
 # ships for it. Adding a built-in tool = drop a manifest folder + one entry
-# here. Anything not in this table is listed read-only.
+# here. Anything not in this table is listed read-only. Each class is
+# constructed with ``(bus, storage)``.
 _BUILTIN_HANDLER_FACTORIES: dict[str, type[ToolHandler]] = {
     "cloudtap": CloudtapTool,
 }
@@ -45,9 +47,10 @@ _BUILTIN_HANDLER_FACTORIES: dict[str, type[ToolHandler]] = {
 class ToolRegistry:
     """Loads tool manifests and dispatches their actions to handlers."""
 
-    def __init__(self, tools_dir: Path, bus: EventBus) -> None:
+    def __init__(self, tools_dir: Path, bus: EventBus, storage: Storage | None = None) -> None:
         self._tools_dir = tools_dir
         self._bus = bus
+        self._storage = storage
         self._manifests: dict[str, ToolManifest] = {}
         self._handlers: dict[str, ToolHandler] = {}
 
@@ -78,7 +81,7 @@ class ToolRegistry:
             factory = _BUILTIN_HANDLER_FACTORIES.get(manifest.id)
             if factory is not None:
                 manifest.runnable = True
-                self._handlers[manifest.id] = factory(self._bus)
+                self._handlers[manifest.id] = factory(self._bus, self._storage)
             else:
                 manifest.runnable = False
                 log.info(
@@ -124,11 +127,25 @@ class ToolRegistry:
 
     # ── actions ──────────────────────────────────────────────────────────
 
-    async def run_action(self, tool_id: str, action_id: str, fields: dict) -> ToolState:
+    async def run_action(
+        self,
+        tool_id: str,
+        action_id: str,
+        fields: dict,
+        item_id: str | None = None,
+    ) -> ToolState:
         manifest = self.get_manifest(tool_id)
 
-        if not any(a.id == action_id for a in manifest.actions):
+        action = next((a for a in manifest.actions if a.id == action_id), None)
+        if action is None:
             raise invalid("tool", f"Tool '{tool_id}' has no action '{action_id}'.")
+
+        # An item-scoped action (e.g. "close this tunnel") needs a target.
+        if action.scope == ToolActionScope.ITEM and not item_id:
+            raise invalid(
+                "tool",
+                f"Action '{action_id}' is item-scoped and requires an item id.",
+            )
 
         handler = self._handlers.get(tool_id)
         if handler is None:
@@ -137,7 +154,7 @@ class ToolRegistry:
                 f"Tool '{tool_id}' has no executable handler in this build.",
             )
 
-        return await handler.run_action(action_id, fields or {})
+        return await handler.run_action(action_id, fields or {}, item_id)
 
     # ── lifecycle ────────────────────────────────────────────────────────
 

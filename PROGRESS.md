@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.9`
+`0.1.9.5`
 
 ## Current milestone
 
-**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) done. Tools are manifest plugins now: a folder under `tools/` with a `manifest.json` → a card, no UI surgery. First built-in tool: Cloudtap (port → Cloudflare tunnel URL). 206 tests pass. Next: v0.1.10 (Home slideshow + Nucleus polish + snapshot/restore).
+**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) + multi-tunnel Cloudtap (v0.1.9.5) done. Tools are manifest plugins: a folder under `tools/` with a `manifest.json` → a card, no UI surgery. Cloudtap holds many tunnels at once, each closed individually + auto-labelled with the matching project. 210 tests pass. Next: v0.1.10 (Home slideshow + Nucleus polish + snapshot/restore).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -31,6 +31,7 @@
 | `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ✅ done |
 | `0.1.8.6` | UI/UX audit fixes — WS replay-envelope bug, responsive overflow, version/path polish | ✅ done |
 | `0.1.9` | Milestone F — tool plugin system (manifest + curated handlers) + Cloudtap | ✅ done |
+| `0.1.9.5` | Milestone F — multi-instance tool model + multi-tunnel Cloudtap + app labeling | ✅ done |
 | `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ next |
 
 ## What's done
@@ -136,6 +137,13 @@
 - Renderer: `tools-client.ts`, `ToolCard.tsx` (one generic manifest-driven card — no tool-specific UI), `Tools.tsx` page; `Tool*` types
 - Audit fixes: state-aware action buttons (manifest `available_in`); Tools page refetches on `v1.tool.*` WS events
 - 206 tests passing (+23); typecheck green; E2E verified a real tunnel served traffic over the public internet
+
+### v0.1.9.5 — Multi-tunnel Cloudtap + multi-instance tool model
+- **Generic multi-instance model:** `ToolState.items` (list of `ToolItem`) + `ToolAction.scope` (`tool` vs `item`). Any tool can now own multiple live instances, each with its own row + per-instance action buttons. Reusable by future tools (terminal sessions, etc.).
+- Cloudtap rewritten around a `dict` of `_Tunnel`s — open many tunnels, `close` (item-scoped) terminates exactly one and leaves the rest running. No more misleading global "Close tunnel" button.
+- Cloudtap auto-labels each tunnel with the registered project whose `expected_port` matches (handler gets `storage`); falls back to `localhost:<port>`.
+- Renderer: `ToolCard` renders an "Active (N)" instance list; `runToolAction` takes an optional `itemId`.
+- 210 tests passing (+4); typecheck green; E2E opened two real tunnels at once, closed one, the other kept serving.
 
 ## What's next (immediate)
 

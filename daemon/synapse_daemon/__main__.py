@@ -166,7 +166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     bus = EventBus()
     pm = ProcessManager(storage, bus)
-    registry = ToolRegistry(args.tools_dir, bus)
+    registry = ToolRegistry(args.tools_dir, bus, storage)
     app = build_app(storage, bus, process_manager=pm, tool_registry=registry)
     app.state.bound_port = args.port
     app.router.lifespan_context = _build_lifespan(storage, bus, pm, registry)

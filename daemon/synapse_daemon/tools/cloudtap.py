@@ -1,16 +1,20 @@
 """Cloudtap — the first built-in Synapse tool (Milestone F · v0.1.9).
 
 Enter a local port; Cloudtap spawns ``cloudflared`` as a quick tunnel and
-parses the public ``*.trycloudflare.com`` URL out of its output. One tunnel
-at a time. The tunnel is tied to the daemon session — :meth:`shutdown` kills
-it when the daemon stops (unlike a managed project, an exposed tunnel should
-never outlive its owner).
+parses the public ``*.trycloudflare.com`` URL out of its output.
+
+v0.1.9.5 makes Cloudtap **multi-instance**: any number of tunnels can be open
+at once, each tracked as its own :class:`~synapse_daemon.models.ToolItem`
+with an individual "Close" button. A tunnel is auto-labelled with the
+registered project whose ``expected_port`` matches, so you can tell at a
+glance which app each tunnel exposes. Tunnels are session-scoped — they are
+all killed on daemon shutdown (an exposed tunnel must never outlive its
+owner).
 
 Action ids (mirror ``tools/cloudtap/manifest.json``):
 
-  • ``tunnel`` — start a tunnel for ``fields["port"]``; blocks until the URL
-                 is parsed or a timeout elapses, then returns it.
-  • ``stop``   — terminate the running tunnel.
+  • ``tunnel`` — tool-scoped: open a new tunnel for ``fields["port"]``.
+  • ``close``  — item-scoped: close the tunnel identified by ``item_id``.
 """
 
 from __future__ import annotations
@@ -21,9 +25,13 @@ import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
+from .. import projects as projects_module
 from ..api_versions import event_name
-from ..models import EntityStatus, ErrorRef, ToolState
+from ..models import EntityStatus, ErrorRef, ToolItem, ToolState
+from ..storage import Storage
 from ..ws import EventBus
 from . import ToolHandler
 
@@ -42,80 +50,124 @@ _INSTALL_HINT = (
 )
 
 
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+@dataclass
+class _Tunnel:
+    """One live cloudflared tunnel tracked by :class:`CloudtapTool`."""
+
+    id: str
+    port: int
+    label: str
+    status: EntityStatus = EntityStatus.LAUNCHING
+    public_url: str | None = None
+    message: str | None = None
+    error: ErrorRef | None = None
+    proc: asyncio.subprocess.Process | None = None
+    reader_task: asyncio.Task | None = None
+    url_event: asyncio.Event = field(default_factory=asyncio.Event)
+    expected_stop: bool = False
+    created_at: datetime = field(default_factory=_utcnow)
+
+    def to_item(self) -> ToolItem:
+        result: dict = {"local_port": self.port}
+        if self.public_url:
+            result["public_url"] = self.public_url
+        return ToolItem(
+            id=self.id,
+            label=self.label,
+            status=self.status,
+            result=result,
+            message=self.message,
+            last_error=self.error,
+            created_at=self.created_at,
+        )
+
+
 class CloudtapTool(ToolHandler):
-    """Manages a single ``cloudflared`` quick tunnel."""
+    """Manages any number of concurrent ``cloudflared`` quick tunnels."""
 
     tool_id = "cloudtap"
 
-    def __init__(self, bus: EventBus) -> None:
+    def __init__(self, bus: EventBus, storage: Storage | None = None) -> None:
         self._bus = bus
-        self._proc: asyncio.subprocess.Process | None = None
-        self._reader_task: asyncio.Task | None = None
-        self._url_event = asyncio.Event()
-        self._public_url: str | None = None
-        self._port: int | None = None
-        self._status: EntityStatus = EntityStatus.IDLE
-        self._error: ErrorRef | None = None
-        self._message: str | None = None
-        self._expected_stop = False
+        self._storage = storage
+        self._tunnels: dict[str, _Tunnel] = {}
+        self._counter = 0
+        self._tool_error: ErrorRef | None = None
 
     # ── ToolHandler API ──────────────────────────────────────────────────
 
     def state(self) -> ToolState:
-        result: dict = {}
-        if self._public_url:
-            result["public_url"] = self._public_url
-        if self._port is not None:
-            result["local_port"] = self._port
+        items = [t.to_item() for t in self._tunnels.values()]
+        statuses = {t.status for t in self._tunnels.values()}
+        if EntityStatus.LAUNCHED in statuses:
+            overall = EntityStatus.LAUNCHED
+        elif EntityStatus.LAUNCHING in statuses:
+            overall = EntityStatus.LAUNCHING
+        elif self._tool_error is not None:
+            overall = EntityStatus.ERROR
+        else:
+            overall = EntityStatus.IDLE
+        live = sum(1 for t in self._tunnels.values() if t.status == EntityStatus.LAUNCHED)
         return ToolState(
             tool_id=self.tool_id,
-            status=self._status,
-            fields={"port": self._port} if self._port is not None else {},
-            result=result,
-            message=self._message,
-            last_error=self._error,
+            status=overall,
+            items=items,
+            message=f"{live} tunnel(s) open" if live else None,
+            last_error=self._tool_error,
         )
 
-    async def run_action(self, action_id: str, fields: dict) -> ToolState:
+    async def run_action(
+        self, action_id: str, fields: dict, item_id: str | None = None
+    ) -> ToolState:
+        self._tool_error = None  # cleared on every fresh action
         if action_id == "tunnel":
-            return await self._start(fields)
-        if action_id == "stop":
-            return await self._stop(expected=True)
-        self._fail("cloudtap.unknown_action", f"Cloudtap has no action '{action_id}'.")
+            return await self._open(fields)
+        if action_id == "close":
+            return await self._close(item_id)
+        self._tool_error = ErrorRef(
+            code="cloudtap.unknown_action",
+            message=f"Cloudtap has no action '{action_id}'.",
+        )
         return self.state()
 
     async def shutdown(self) -> None:
-        if self._proc is not None and self._proc.returncode is None:
-            log.info("Cloudtap: closing tunnel on daemon shutdown.")
-            await self._stop(expected=True)
+        for tunnel in list(self._tunnels.values()):
+            if tunnel.proc is not None and tunnel.proc.returncode is None:
+                log.info("Cloudtap: closing tunnel '%s' on daemon shutdown.", tunnel.id)
+                tunnel.expected_stop = True
+                await self._kill(tunnel)
+        self._tunnels.clear()
 
-    # ── start ────────────────────────────────────────────────────────────
+    # ── open ─────────────────────────────────────────────────────────────
 
-    async def _start(self, fields: dict) -> ToolState:
-        if self._proc is not None and self._proc.returncode is None:
-            self._fail(
-                "cloudtap.already_running",
-                "A Cloudtap tunnel is already open. Stop it before starting another.",
-            )
-            return self.state()
-
+    async def _open(self, fields: dict) -> ToolState:
         port = self._coerce_port(fields.get("port"))
         if port is None:
             return self.state()
 
         exe = shutil.which("cloudflared")
         if exe is None:
-            self._fail("cloudtap.not_installed", _INSTALL_HINT)
+            self._tool_error = ErrorRef(code="cloudtap.not_installed", message=_INSTALL_HINT)
             return self.state()
 
-        self._reset_run_state(port)
+        self._counter += 1
+        tunnel = _Tunnel(
+            id=f"t{self._counter}",
+            port=port,
+            label=self._label_for_port(port),
+        )
+        self._tunnels[tunnel.id] = tunnel
 
         creationflags = 0
         if sys.platform == "win32":
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         try:
-            self._proc = await asyncio.create_subprocess_exec(
+            tunnel.proc = await asyncio.create_subprocess_exec(
                 exe,
                 "tunnel",
                 "--url",
@@ -126,69 +178,90 @@ class CloudtapTool(ToolHandler):
                 creationflags=creationflags,
             )
         except OSError as exc:
-            self._fail("cloudtap.spawn_failed", f"Could not start cloudflared: {exc}")
+            tunnel.status = EntityStatus.ERROR
+            tunnel.error = ErrorRef(
+                code="cloudtap.spawn_failed", message=f"Could not start cloudflared: {exc}"
+            )
             return self.state()
 
-        self._reader_task = asyncio.create_task(self._read_output())
+        tunnel.reader_task = asyncio.create_task(self._read_output(tunnel))
 
         try:
-            await asyncio.wait_for(
-                self._url_event.wait(), timeout=URL_WAIT_TIMEOUT_SECONDS
-            )
+            await asyncio.wait_for(tunnel.url_event.wait(), timeout=URL_WAIT_TIMEOUT_SECONDS)
         except TimeoutError:
-            await self._kill_proc()
-            self._fail(
-                "cloudtap.no_url",
-                f"cloudflared did not return a tunnel URL within "
-                f"{int(URL_WAIT_TIMEOUT_SECONDS)}s. Is something serving on port {port}?",
+            tunnel.expected_stop = True
+            await self._kill(tunnel)
+            tunnel.status = EntityStatus.ERROR
+            tunnel.error = ErrorRef(
+                code="cloudtap.no_url",
+                message=(
+                    f"cloudflared returned no URL within {int(URL_WAIT_TIMEOUT_SECONDS)}s. "
+                    f"Is something serving on port {port}?"
+                ),
             )
             return self.state()
 
-        if self._public_url is None:
-            # The reader signalled the event because the process exited first.
-            self._fail(
-                "cloudtap.spawn_failed",
-                "cloudflared exited before a tunnel URL appeared.",
+        if tunnel.public_url is None:
+            tunnel.status = EntityStatus.ERROR
+            tunnel.error = ErrorRef(
+                code="cloudtap.spawn_failed",
+                message="cloudflared exited before a tunnel URL appeared.",
             )
             return self.state()
 
-        self._status = EntityStatus.LAUNCHED
-        self._error = None
-        self._message = f"Tunnel live for localhost:{port}"
+        tunnel.status = EntityStatus.LAUNCHED
+        tunnel.error = None
+        tunnel.message = f"Live for {tunnel.label}"
         await self._bus.publish(
             event_name("tool", "tunnel_opened"),
-            {"tool_id": self.tool_id, "public_url": self._public_url, "local_port": port},
+            {
+                "tool_id": self.tool_id,
+                "tunnel_id": tunnel.id,
+                "public_url": tunnel.public_url,
+                "local_port": port,
+                "label": tunnel.label,
+            },
         )
-        log.info("Cloudtap: tunnel open %s -> localhost:%d", self._public_url, port)
+        log.info(
+            "Cloudtap: tunnel '%s' open %s -> localhost:%d (%s)",
+            tunnel.id, tunnel.public_url, port, tunnel.label,
+        )
         return self.state()
 
-    # ── stop ─────────────────────────────────────────────────────────────
+    # ── close ────────────────────────────────────────────────────────────
 
-    async def _stop(self, *, expected: bool) -> ToolState:
-        if self._proc is None or self._proc.returncode is not None:
-            self._status = EntityStatus.STOPPED
-            self._message = "No tunnel was running."
+    async def _close(self, item_id: str | None) -> ToolState:
+        if not item_id:
+            self._tool_error = ErrorRef(
+                code="cloudtap.no_tunnel", message="No tunnel id supplied to close."
+            )
+            return self.state()
+        tunnel = self._tunnels.get(item_id)
+        if tunnel is None:
+            self._tool_error = ErrorRef(
+                code="cloudtap.no_tunnel", message=f"No tunnel '{item_id}' to close."
+            )
             return self.state()
 
-        self._expected_stop = expected
-        await self._kill_proc()
-        self._status = EntityStatus.STOPPED
-        self._error = None
-        self._message = "Tunnel closed."
-        closed_url = self._public_url
-        self._public_url = None
+        tunnel.expected_stop = True
+        closed_url = tunnel.public_url
+        if tunnel.proc is not None and tunnel.proc.returncode is None:
+            await self._kill(tunnel)
+        # Remove it entirely — a closed tunnel just vanishes from the list.
+        self._tunnels.pop(item_id, None)
         await self._bus.publish(
             event_name("tool", "tunnel_closed"),
-            {"tool_id": self.tool_id, "public_url": closed_url},
+            {"tool_id": self.tool_id, "tunnel_id": item_id, "public_url": closed_url},
         )
+        log.info("Cloudtap: tunnel '%s' closed.", item_id)
         return self.state()
 
     # ── output reader ────────────────────────────────────────────────────
 
-    async def _read_output(self) -> None:
-        """Scan cloudflared output for the tunnel URL; watch for early exit."""
+    async def _read_output(self, tunnel: _Tunnel) -> None:
+        """Scan one tunnel's cloudflared output for its URL; watch for exit."""
 
-        proc = self._proc
+        proc = tunnel.proc
         if proc is None or proc.stdout is None:
             return
         try:
@@ -197,23 +270,22 @@ class CloudtapTool(ToolHandler):
                 if not raw:
                     break
                 text = raw.decode("utf-8", errors="replace")
-                if self._public_url is None:
+                if tunnel.public_url is None:
                     match = _URL_RE.search(text)
                     if match:
-                        self._public_url = match.group(0)
-                        self._url_event.set()
+                        tunnel.public_url = match.group(0)
+                        tunnel.url_event.set()
         except asyncio.CancelledError:
             return
         finally:
-            # stdout closed -> the process is exiting. Unblock any waiter.
-            if not self._url_event.is_set():
-                self._url_event.set()
-            await self._handle_exit()
+            if not tunnel.url_event.is_set():
+                tunnel.url_event.set()
+            await self._handle_exit(tunnel)
 
-    async def _handle_exit(self) -> None:
-        """The cloudflared process ended. Classify expected vs. crash."""
+    async def _handle_exit(self, tunnel: _Tunnel) -> None:
+        """The cloudflared process for one tunnel ended."""
 
-        proc = self._proc
+        proc = tunnel.proc
         if proc is None:
             return
         try:
@@ -221,29 +293,32 @@ class CloudtapTool(ToolHandler):
         except Exception:  # pragma: no cover — defensive
             pass
 
-        if self._expected_stop:
-            return  # _stop() owns the state transition
-        if self._status != EntityStatus.LAUNCHED:
-            return  # start() will report its own failure
+        if tunnel.expected_stop:
+            return  # _close()/_kill() owns the transition
+        if tunnel.status != EntityStatus.LAUNCHED:
+            return  # _open() reports its own failure
 
         # The tunnel was live and cloudflared died on its own.
-        self._status = EntityStatus.ERROR
-        self._error = ErrorRef(
+        tunnel.status = EntityStatus.ERROR
+        tunnel.message = None
+        tunnel.error = ErrorRef(
             code="cloudtap.tunnel_dropped",
             message=f"cloudflared exited unexpectedly (code {proc.returncode}).",
         )
-        self._message = None
-        dropped_url = self._public_url
-        self._public_url = None
         await self._bus.publish(
             event_name("tool", "tunnel_closed"),
-            {"tool_id": self.tool_id, "public_url": dropped_url, "reason": "dropped"},
+            {
+                "tool_id": self.tool_id,
+                "tunnel_id": tunnel.id,
+                "public_url": tunnel.public_url,
+                "reason": "dropped",
+            },
         )
 
     # ── helpers ──────────────────────────────────────────────────────────
 
-    async def _kill_proc(self) -> None:
-        proc = self._proc
+    async def _kill(self, tunnel: _Tunnel) -> None:
+        proc = tunnel.proc
         if proc is None or proc.returncode is not None:
             return
         try:
@@ -257,30 +332,32 @@ class CloudtapTool(ToolHandler):
                 proc.kill()
             except ProcessLookupError:
                 pass
-        if self._reader_task is not None:
-            self._reader_task.cancel()
+        if tunnel.reader_task is not None:
+            tunnel.reader_task.cancel()
 
-    def _reset_run_state(self, port: int) -> None:
-        self._url_event = asyncio.Event()
-        self._public_url = None
-        self._port = port
-        self._status = EntityStatus.LAUNCHING
-        self._error = None
-        self._message = None
-        self._expected_stop = False
+    def _label_for_port(self, port: int) -> str:
+        """Name a tunnel after the registered project that owns the port."""
+
+        if self._storage is not None:
+            try:
+                for project in projects_module.list_projects(self._storage.conn):
+                    if project.expected_port == port:
+                        return project.name
+            except Exception:  # pragma: no cover — labelling is best-effort
+                log.debug("Cloudtap: project lookup for port %d failed.", port)
+        return f"localhost:{port}"
 
     def _coerce_port(self, value: object) -> int | None:
         try:
             port = int(value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            self._fail("cloudtap.bad_port", "Port must be a whole number.")
+            self._tool_error = ErrorRef(
+                code="cloudtap.bad_port", message="Port must be a whole number."
+            )
             return None
         if not (1 <= port <= 65535):
-            self._fail("cloudtap.bad_port", "Port must be between 1 and 65535.")
+            self._tool_error = ErrorRef(
+                code="cloudtap.bad_port", message="Port must be between 1 and 65535."
+            )
             return None
         return port
-
-    def _fail(self, code: str, message: str) -> None:
-        self._status = EntityStatus.ERROR
-        self._error = ErrorRef(code=code, message=message)
-        self._message = None

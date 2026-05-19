@@ -70,7 +70,7 @@ def build_app(
     if process_manager is None:
         process_manager = ProcessManager(storage, bus)
     if tool_registry is None:
-        tool_registry = ToolRegistry(Path("tools"), bus)
+        tool_registry = ToolRegistry(Path("tools"), bus, storage)
         tool_registry.load()
 
     app = FastAPI(

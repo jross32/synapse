@@ -20,16 +20,25 @@ class ToolHandler(ABC):
 
     Subclasses set :attr:`tool_id` to match their ``manifest.json`` and
     implement :meth:`run_action` + :meth:`state`. :meth:`shutdown` is called
-    once when the daemon stops so a handler can release OS resources (kill a
-    spawned tunnel, close a handle, …).
+    once when the daemon stops so a handler can release OS resources (kill
+    spawned tunnels, close handles, …).
+
+    A handler is constructed by the registry with ``(bus, storage)``. Handlers
+    that don't need one may ignore it.
     """
 
     #: Must equal the ``id`` field of the tool's manifest.
     tool_id: str = ""
 
     @abstractmethod
-    async def run_action(self, action_id: str, fields: dict) -> ToolState:
-        """Run one manifest action and return the tool's new state."""
+    async def run_action(
+        self, action_id: str, fields: dict, item_id: str | None = None
+    ) -> ToolState:
+        """Run one manifest action and return the tool's new state.
+
+        ``item_id`` is set for ``item``-scoped actions (e.g. close *this*
+        tunnel) and ``None`` for ``tool``-scoped actions (e.g. open a new one).
+        """
 
     @abstractmethod
     def state(self) -> ToolState:

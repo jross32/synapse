@@ -16,15 +16,20 @@ export async function getTool(id: string): Promise<ToolEntry> {
   return apiFetch<ToolEntry>(`/tools/${encodeURIComponent(id)}`, { method: 'GET' });
 }
 
-/** Run one manifest action with the user's field values. Returns the new entry. */
+/**
+ * Run one manifest action. `itemId` targets a single live instance for
+ * item-scoped actions (e.g. close one Cloudtap tunnel); omit it for
+ * tool-scoped actions. Returns the tool's new entry.
+ */
 export async function runToolAction(
   toolId: string,
   actionId: string,
   fields: Record<string, unknown>,
+  itemId?: string,
   source: AuditSource = 'desktop'
 ): Promise<ToolEntry> {
   return apiFetch<ToolEntry>(
     `/tools/${encodeURIComponent(toolId)}/actions/${encodeURIComponent(actionId)}`,
-    { method: 'POST', body: { fields, source } }
+    { method: 'POST', body: { fields, item_id: itemId ?? null, source } }
   );
 }
