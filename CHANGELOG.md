@@ -10,6 +10,41 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.10.5] -- 2026-05-19
+
+### Snapshot / restore (Contract #28)
+
+The project registry is now portable: export it as one JSON file, restore it
+on any machine. This finishes Milestone F's contract coverage.
+
+#### Added -- daemon
+- `snapshot.py` -- `build_snapshot()` reads the live registry (every project,
+  the loaded tool ids, an audit-log tail, and the *keys* of secret env vars)
+  into a `SnapshotPayload`. `restore_snapshot()` merges a payload back:
+  creates projects that don't exist, updates those that do — by id, never
+  deletes. Restored projects come back `idle` with secret values blanked
+  (DPAPI-bound secrets never travel; the report lists the keys to re-enter).
+- `routes_snapshot.py` -- `GET /api/v1/snapshot` (export) and
+  `POST /api/v1/restore` (restore). Restore checks `format_version` +
+  `schema_migration` compatibility first and audits the result (Contract #11).
+
+#### Added -- renderer
+- `lib/snapshot-client.ts` -- typed `exportSnapshot` / `restoreSnapshot`.
+- `components/SnapshotPanel.tsx` -- a **Backup & restore** card on Settings:
+  "Download snapshot" saves a timestamped JSON file; "Restore from file"
+  reads one back and shows a report (created / updated counts, warnings, and
+  any secret keys that need re-entering).
+
+#### Changed -- renderer
+- `pages/Settings.tsx` -- hosts the new panel; snapshot/restore dropped from
+  the "Coming soon" list.
+
+#### Verified
+- 216 tests pass (+6 snapshot-route cases: round-trip, idempotent merge,
+  incompatible-format rejection, secret blanking, status reset); typecheck
+  green. E2E: downloaded a 21-project snapshot from the Settings UI and
+  restored it back — "0 created, 21 updated", no duplicates.
+
 ## [0.1.10] -- 2026-05-19
 
 ### Home featured slideshow

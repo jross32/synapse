@@ -32,6 +32,7 @@ from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
+from .routes_snapshot import build_snapshot_router
 from .routes_tools import build_tools_router
 from .storage import Storage
 from .time_utils import to_iso, utc_now
@@ -121,6 +122,7 @@ def build_app(
     app.include_router(build_projects_router(storage, process_manager), prefix=API_PREFIX)
     app.include_router(build_discovery_router(storage), prefix=API_PREFIX)
     app.include_router(build_tools_router(storage, tool_registry), prefix=API_PREFIX)
+    app.include_router(build_snapshot_router(storage, tool_registry), prefix=API_PREFIX)
 
     # Stash state on the app for tests + later wiring.
     app.state.storage = storage

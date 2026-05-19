@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.10`
+`0.1.10.5`
 
 ## Current milestone
 
-**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) + multi-tunnel Cloudtap (v0.1.9.5) + Home slideshow (v0.1.10) done. Tools are manifest plugins; Cloudtap holds many tunnels at once. Home now leads with a featured-projects slideshow. 210 tests pass. Next: v0.1.10.5 (snapshot/restore) → finishes Milestone F.
+**Milestone F complete — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) + multi-tunnel Cloudtap (v0.1.9.5) + Home slideshow (v0.1.10) + snapshot/restore (v0.1.10.5) all done. Tools are manifest plugins; Cloudtap holds many tunnels at once; the registry is portable via JSON snapshot. 216 tests pass. Milestone G (Cloudtap) shipped early in v0.1.9. Next: Milestone H — mobile Web UI served by the daemon over LAN.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -33,7 +33,7 @@
 | `0.1.9` | Milestone F — tool plugin system (manifest + curated handlers) + Cloudtap | ✅ done |
 | `0.1.9.5` | Milestone F — multi-instance tool model + multi-tunnel Cloudtap + app labeling | ✅ done |
 | `0.1.10` | Milestone F — Home featured slideshow + page restructure | ✅ done |
-| `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ⚪ next |
+| `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ✅ done |
 
 ## What's done
 
@@ -151,12 +151,18 @@
 - `pages/Home.tsx` restructured — hero, heartbeat HUD, then "Recent activity" beside "Jump in". Fixes the top-heavy empty space the audits flagged. Welcome empty state when no projects.
 - 210 tests pass; typecheck green; E2E verified in browser + Electron, no overflow at 400px.
 
+### v0.1.10.5 — Snapshot / restore (Contract #28)
+- `snapshot.py` — `build_snapshot()` (registry → `SnapshotPayload`) + `restore_snapshot()` (merge by id; create new, update existing, never delete; restored projects come back idle with secret values blanked).
+- `routes_snapshot.py` — `GET /api/v1/snapshot`, `POST /api/v1/restore` (compatibility-checked + audited).
+- Renderer: `snapshot-client.ts`, `components/SnapshotPanel.tsx` (Settings "Backup & restore" card — download a snapshot, restore one from file, see the report).
+- 216 tests pass (+6); typecheck green; E2E downloaded a 21-project snapshot and restored it → "0 created, 21 updated".
+
 ## What's next (immediate)
 
-**v0.1.10.5 — snapshot / restore (Contract #28).** Finishes Milestone F:
-- REST endpoints to export the registry (projects + tools + settings) as one JSON file and restore it (`snapshot.py` is already scaffolded)
-- Settings page UI to download a snapshot + upload one to restore
-- Then Milestone G is already done (Cloudtap shipped v0.1.9) → Milestone H (mobile Web UI)
+**Milestone H — mobile Web UI.** Milestone F is done; G (Cloudtap) shipped early in v0.1.9.
+- The daemon serves a responsive Web UI over LAN (`http://<pc-lan-ip>:7878/mobile`)
+- Phone can view processes + launch/stop projects + use Cloudtap
+- Then Milestone I (auto-start + tray polish) → J (packaging) → K (v0.1.0 release)
 
 ## Known issues / broken state
 

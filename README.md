@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.10` — **Home slideshow + plugin system + multi-tunnel Cloudtap.** The Home page now leads with a Microsoft-Store-style featured slideshow over your projects — launch one straight from the hero. Tools are manifest plugins: a tool is a folder under `tools/` with a `manifest.json` — drop one in, get a card, no UI surgery. First built-in tool: **Cloudtap** — open as many public Cloudflare tunnels as you need, each tracked separately and closed individually, auto-labelled with the matching registered project. Auto-discovery (v0.1.8.5) fingerprints any folder — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — and bulk-imports projects; tiles pin + group. Built on the Milestone F shell (shadcn/ui sidebar + 5 pages). Double-click `synapse.cmd` to launch — no PowerShell needed. **210 tests passing.** Next: v0.1.10.5 (snapshot/restore). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.10.5` — **Milestone F complete: real UI, plugin tools, snapshot/restore.** Home leads with a Microsoft-Store-style featured slideshow over your projects — launch one straight from the hero. Tools are manifest plugins: a folder under `tools/` with a `manifest.json` — drop one in, get a card, no UI surgery. First built-in tool **Cloudtap** opens as many public Cloudflare tunnels as you need, each tracked + closed individually, auto-labelled with the matching project. The whole project registry is portable — export it as one JSON snapshot from Settings and restore it anywhere. Auto-discovery fingerprints any folder — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — and bulk-imports projects; tiles pin + group. Double-click `synapse.cmd` to launch — no PowerShell needed. **216 tests passing.** Next: Milestone H (mobile Web UI). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 210 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 216 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
@@ -122,7 +122,7 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | D | Project registry + launcher (full CRUD UI) | ✅ done (`v0.1.5`) |
 | ⌁ | Clickable launcher + Electron CDP inspector | ✅ done (`v0.1.6`) |
 | E | Live process monitor (psutil heartbeat + crash detect + auto-restart) | ✅ done (`v0.1.7`) |
-| F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | 🟡 in progress (`v0.1.8` shell · `v0.1.8.5` discovery · `v0.1.9` plugin system) |
+| F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | ✅ done (`v0.1.8` shell · `v0.1.8.5` discovery · `v0.1.9` plugin system · `v0.1.10` slideshow · `v0.1.10.5` snapshot) |
 | G | Cloudtap tool (port → tunnel URL) | ✅ done (`v0.1.9`) |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ⚪ pending |
 | I | Auto-start + tray polish (login items, detached daemon, full tray menu) | ⚪ pending |

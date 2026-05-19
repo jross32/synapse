@@ -87,3 +87,103 @@ def assert_compatible(payload: SnapshotPayload, current_schema: int) -> list[str
             f"current {current_schema}). Restore will apply current defaults to new columns."
         )
     return warnings
+
+
+# ── build + restore ──────────────────────────────────────────────────────
+#
+# A snapshot's substance is the *project registry* — the thing worth porting
+# to a new machine or keeping as a backup. Tool manifests live as files under
+# ``tools/`` (not the DB), so they're exported for reference only and never
+# restored. Secret env values are DPAPI-bound and never leave the daemon —
+# only their keys travel, so the UI can prompt for re-entry.
+
+_AUDIT_TAIL_DEFAULT = 50
+
+
+def build_snapshot(storage: Any, *, tool_ids: list[str] | None = None) -> SnapshotPayload:
+    """Read the live registry into a :class:`SnapshotPayload`."""
+
+    from . import projects as projects_module
+
+    conn = storage.conn
+    rows = projects_module.list_projects(conn)
+
+    projects = [projects_module.model_dump_for_client(p) for p in rows]
+    secret_keys = [
+        {"project_id": p.id, "key": ev.key}
+        for p in rows
+        for ev in p.env
+        if ev.secret
+    ]
+
+    audit_tail: list[dict[str, Any]] = []
+    try:
+        cursor = conn.execute(
+            "SELECT timestamp_utc, entity_type, entity_id, action, source, result "
+            "FROM audit_log ORDER BY id DESC LIMIT ?",
+            (_AUDIT_TAIL_DEFAULT,),
+        )
+        audit_tail = [dict(r) for r in cursor.fetchall()]
+    except Exception:  # pragma: no cover — audit tail is best-effort context
+        audit_tail = []
+
+    return SnapshotPayload(
+        schema_migration=storage.schema_migration(),
+        projects=projects,
+        tools=[{"id": t} for t in (tool_ids or [])],
+        settings={},
+        audit_log_tail=audit_tail,
+        secret_keys=secret_keys,
+    )
+
+
+def _clean_project_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalise a snapshot project for restore.
+
+    Resets runtime state (a restored project is never mid-launch) and blanks
+    secret env values — those don't travel and must be re-entered.
+    """
+
+    data = dict(raw)
+    data["status"] = "idle"
+    data["last_error"] = None
+    env = data.get("env")
+    if isinstance(env, list):
+        data["env"] = [
+            {**e, "value": None} if isinstance(e, dict) and e.get("secret") else e
+            for e in env
+        ]
+    return data
+
+
+def restore_snapshot(storage: Any, payload: SnapshotPayload) -> RestoreReport:
+    """Merge a snapshot into the live registry: create new, update existing.
+
+    Non-destructive — nothing is deleted. Compatibility is the caller's job
+    (run :func:`assert_compatible` first); its warnings should be passed in
+    via ``payload`` already validated.
+    """
+
+    from . import projects as projects_module
+    from .projects import Project, ProjectUpdate
+
+    report = RestoreReport(secrets_needing_reentry=list(payload.secret_keys))
+
+    for raw in payload.projects:
+        pid = raw.get("id")
+        if not pid:
+            report.warnings.append("Skipped a project with no id.")
+            continue
+        cleaned = _clean_project_dict(raw)
+        try:
+            with storage.transaction() as conn:
+                if projects_module.get_or_none(conn, pid) is None:
+                    projects_module.create(conn, Project.model_validate(cleaned))
+                    report.projects_created += 1
+                else:
+                    projects_module.update(conn, pid, ProjectUpdate.model_validate(cleaned))
+                    report.projects_updated += 1
+        except Exception as exc:
+            report.warnings.append(f"Project '{pid}': {exc}")
+
+    return report
