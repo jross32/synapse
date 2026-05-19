@@ -11,6 +11,7 @@
 
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron';
 import { ChildProcess, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 
@@ -48,6 +49,14 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let daemonProc: ChildProcess | null = null;
 let isQuitting = false;
+// True only when *this* Electron spawned the daemon. If we attached to a
+// daemon that was already running, we must not kill it on quit.
+let spawnedDaemon = false;
+let trayRefreshTimer: ReturnType<typeof setInterval> | null = null;
+// Projects last fetched for the tray submenu.
+let trayProjects: Array<{ id: string; name: string; status: string }> = [];
+
+const repoRoot = path.resolve(__dirname, '..');
 
 const iconPath = path.join(__dirname, '..', 'electron', 'icons', 'synapse.png');
 const iconPathPackaged = path.join(process.resourcesPath ?? '', 'electron', 'icons', 'synapse.png');
@@ -137,6 +146,57 @@ function probeHealth(): Promise<boolean> {
   });
 }
 
+// ── authenticated daemon requests (Milestone H/I) ─────────────────────────
+// The daemon requires X-Synapse-Token on every data route. The main process
+// reads the local token straight off disk — it lives on the same machine.
+function readAuthToken(): string | null {
+  try {
+    const token = fs.readFileSync(path.join(repoRoot, 'data', 'auth-token'), 'utf-8').trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
+function daemonRequest<T = unknown>(
+  method: string,
+  apiPath: string
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const token = readAuthToken();
+    const req = http.request(
+      `${daemonUrl}/api/v1${apiPath}`,
+      {
+        method,
+        timeout: 4000,
+        headers: token ? { 'X-Synapse-Token': token, Accept: 'application/json' } : {},
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf-8');
+        res.on('data', (c) => (body += c));
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode} on ${apiPath}`));
+            return;
+          }
+          try {
+            resolve(body ? (JSON.parse(body) as T) : (null as T));
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('daemon request timed out'));
+    });
+    req.end();
+  });
+}
+
 // ── window + tray ─────────────────────────────────────────────────────────
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -187,17 +247,37 @@ function createTray(): void {
   const image = nativeImage.createFromPath(resolveIconPath());
   tray = new Tray(image);
   tray.setToolTip('Synapse · The WhatIf Company');
+  tray.setContextMenu(buildTrayMenu());
+  tray.on('click', () => showWindow());
+  tray.on('double-click', () => showWindow());
+}
 
-  const menu = Menu.buildFromTemplate([
+// Build the tray context menu from the latest project snapshot (Milestone I).
+function buildTrayMenu(): Electron.Menu {
+  const projectItems: Electron.MenuItemConstructorOptions[] = trayProjects.length
+    ? trayProjects.map((p) => ({
+        label: p.name,
+        type: 'checkbox',
+        checked: p.status === 'launched' || p.status === 'stopping',
+        click: () => onTrayProjectClick(p),
+      }))
+    : [{ label: 'No projects yet', enabled: false }];
+
+  return Menu.buildFromTemplate([
+    { label: 'Show Synapse', click: () => showWindow() },
+    { label: 'Open mobile UI', click: () => void shell.openExternal(`${daemonUrl}/mobile`) },
+    { type: 'separator' },
+    { label: 'Projects', submenu: projectItems },
+    { type: 'separator' },
     {
-      label: 'Show Synapse',
-      click: () => showWindow(),
+      label: 'Start with Windows',
+      type: 'checkbox',
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => setAutostart(item.checked),
     },
     {
-      label: 'Open daemon health page',
-      click: () => {
-        void shell.openExternal(`${daemonUrl}/api/v1/health`);
-      },
+      label: 'Daemon health',
+      click: () => void shell.openExternal(`${daemonUrl}/api/v1/health`),
     },
     { type: 'separator' },
     {
@@ -208,10 +288,41 @@ function createTray(): void {
       },
     },
   ]);
+}
 
-  tray.setContextMenu(menu);
-  tray.on('click', () => showWindow());
-  tray.on('double-click', () => showWindow());
+// A tray project click: launch it if idle, otherwise just surface the window.
+function onTrayProjectClick(p: { id: string; status: string }): void {
+  const running = p.status === 'launched' || p.status === 'stopping';
+  if (running) {
+    showWindow();
+    return;
+  }
+  daemonRequest('POST', `/projects/${encodeURIComponent(p.id)}/launch`)
+    .then(() => refreshTrayMenu())
+    .catch((err) => console.error('[synapse] tray launch failed:', err));
+}
+
+// Pull the project list for the tray submenu, then rebuild the menu.
+async function refreshTrayMenu(): Promise<void> {
+  try {
+    const res = await daemonRequest<{ projects: Array<{ id: string; name: string; status: string }> }>(
+      'GET',
+      '/projects'
+    );
+    trayProjects = (res?.projects ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+    }));
+  } catch {
+    // Daemon not ready / unreachable — keep the last snapshot.
+  }
+  tray?.setContextMenu(buildTrayMenu());
+}
+
+// Toggle the Windows login item (Milestone I — auto-start on login).
+function setAutostart(enabled: boolean): void {
+  app.setLoginItemSettings({ openAtLogin: enabled, args: [] });
 }
 
 function showWindow(): void {
@@ -245,6 +356,16 @@ ipcMain.handle('synapse:open-external', async (_event, target: unknown) => {
   }
 });
 
+// ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
+ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
+
+ipcMain.handle('synapse:set-autostart', (_event, enabled: unknown) => {
+  setAutostart(enabled === true);
+  // Reflect the change in the tray's checkbox too.
+  tray?.setContextMenu(buildTrayMenu());
+  return app.getLoginItemSettings().openAtLogin;
+});
+
 // ── app lifecycle ─────────────────────────────────────────────────────────
 app.on('second-instance', () => {
   // Another launch attempt → focus the existing window.
@@ -254,13 +375,23 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   refuseAdminIfNeeded();
 
-  // Start the daemon, then create UI once it answers /health.
-  daemonProc = spawnDaemon();
+  // Attach to a daemon that's already running (e.g. one that survived an
+  // Electron crash, or was launched by synapse.cmd); otherwise spawn our own.
+  if (await probeHealth()) {
+    console.log('[synapse] a daemon is already running — attaching to it');
+    spawnedDaemon = false;
+  } else {
+    daemonProc = spawnDaemon();
+    spawnedDaemon = true;
+  }
   createTray();
 
   try {
     await waitForDaemon();
     console.log('[synapse] daemon ready');
+    // Populate the tray's Projects submenu + keep it fresh.
+    void refreshTrayMenu();
+    trayRefreshTimer = setInterval(() => void refreshTrayMenu(), 20_000);
   } catch (err) {
     console.error('[synapse] daemon failed to start:', err);
     tray?.setToolTip('Synapse | daemon failed to start');
@@ -285,7 +416,13 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
-  if (daemonProc && !daemonProc.killed) {
+  if (trayRefreshTimer) {
+    clearInterval(trayRefreshTimer);
+    trayRefreshTimer = null;
+  }
+  // Only stop the daemon if *we* started it. If we attached to one that was
+  // already running, leave it alone — something else owns its lifecycle.
+  if (spawnedDaemon && daemonProc && !daemonProc.killed) {
     console.log('[synapse] terminating daemon child');
     try {
       daemonProc.kill();

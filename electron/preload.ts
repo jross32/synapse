@@ -29,6 +29,13 @@ contextBridge.exposeInMainWorld('synapse', {
    */
   openExternal: (target: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('synapse:open-external', target),
+
+  /** Whether Synapse is registered to start at Windows login (Milestone I). */
+  getAutostart: (): Promise<boolean> => ipcRenderer.invoke('synapse:get-autostart'),
+
+  /** Enable/disable start-at-login; resolves to the resulting state. */
+  setAutostart: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('synapse:set-autostart', enabled),
 });
 
 declare global {
@@ -39,6 +46,8 @@ declare global {
       daemonWsBase: () => string;
       platform: () => NodeJS.Platform;
       openExternal: (target: string) => Promise<{ ok: boolean; error?: string }>;
+      getAutostart: () => Promise<boolean>;
+      setAutostart: (enabled: boolean) => Promise<boolean>;
     };
   }
 }

@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.12` — **Milestone H complete: control Synapse from your phone.** The daemon serves a responsive Web UI at `/mobile` — pair the device with a 6-digit code (from desktop Settings → Paired devices), then launch/stop projects and drive Cloudtap from anywhere: on the LAN with `--bind-lan`, or off-network through a Cloudflare tunnel. Every API request is token-authenticated, so nothing is exposed without pairing. Milestone F is complete too — Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel, auto-labelled), JSON snapshot/restore, multi-stack auto-discovery. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone I (auto-start + tray polish). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.13` — **Milestone I complete: auto-start + tray polish.** Synapse can now start with Windows (toggle in Settings), and the tray menu carries a live Projects submenu, an Open-mobile-UI entry, and a start-with-Windows checkbox. The Electron app probes for an already-running daemon and attaches instead of double-spawning. Everything before it still stands: control from your phone (paired, token-authenticated mobile Web UI at `/mobile`), the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, and multi-stack auto-discovery. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone J (packaging — single-`.exe` installer). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -125,7 +125,7 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | ✅ done (`v0.1.8` shell · `v0.1.8.5` discovery · `v0.1.9` plugin system · `v0.1.10` slideshow · `v0.1.10.5` snapshot) |
 | G | Cloudtap tool (port → tunnel URL) | ✅ done (`v0.1.9`) |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ✅ done (`v0.1.11` device auth · `v0.1.12` mobile UI) |
-| I | Auto-start + tray polish (login items, detached daemon, full tray menu) | ⚪ pending |
+| I | Auto-start + tray polish (login items, daemon attach-or-spawn, full tray menu) | ✅ done (`v0.1.13`) |
 | J | Packaging (PyInstaller + electron-builder + NSIS installer) | ⚪ pending |
 | K | `v0.1.0` release (tag, GitHub release, README screenshots, desktop shortcut) | ⚪ pending |
 

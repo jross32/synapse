@@ -9,6 +9,8 @@ interface SynapseBridge {
   daemonWsBase: () => string;
   platform: () => string;
   openExternal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
+  getAutostart?: () => Promise<boolean>;
+  setAutostart?: (enabled: boolean) => Promise<boolean>;
 }
 
 function bridge(): SynapseBridge | null {
@@ -17,6 +19,23 @@ function bridge(): SynapseBridge | null {
 
 export function hasElectronBridge(): boolean {
   return bridge() !== null;
+}
+
+/** True if this build can manage the Windows login item (Electron only). */
+export function canManageAutostart(): boolean {
+  return typeof bridge()?.getAutostart === 'function';
+}
+
+/** Read whether Synapse starts at login. Returns null outside Electron. */
+export async function getAutostart(): Promise<boolean | null> {
+  const b = bridge();
+  return b?.getAutostart ? b.getAutostart() : null;
+}
+
+/** Enable/disable start-at-login; resolves to the resulting state. */
+export async function setAutostart(enabled: boolean): Promise<boolean | null> {
+  const b = bridge();
+  return b?.setAutostart ? b.setAutostart(enabled) : null;
 }
 
 /**

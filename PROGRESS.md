@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.12`
+`0.1.13`
 
 ## Current milestone
 
-**Milestone H complete — remote access.** Milestones A–H done. v0.1.11 added device auth (token on every request); v0.1.12 ships the mobile Web UI — the daemon serves a responsive page at `/mobile`, the phone pairs with a 6-digit code, then launches/stops projects and drives Cloudtap. Works on the LAN (`--bind-lan`) or off-network through a Cloudflare tunnel. 231 tests pass. Next: Milestone I — auto-start on login + tray polish.
+**Milestone I complete — auto-start + tray polish.** Milestones A–I done. Synapse can register itself as a Windows login item (Settings toggle); the tray menu carries a live Projects submenu + Open-mobile-UI + a start-with-Windows checkbox; the Electron app probes for an already-running daemon and attaches instead of double-spawning. 231 tests pass. Next: Milestone J — packaging (PyInstaller + electron-builder + NSIS → a single-`.exe` installer).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -36,6 +36,7 @@
 | `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ✅ done |
 | `0.1.11` | Milestone H — device auth + pairing foundation (token on every request) | ✅ done |
 | `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ✅ done |
+| `0.1.13` | Milestone I — auto-start on login + tray polish + daemon attach-or-spawn | ✅ done |
 
 ## What's done
 
@@ -171,12 +172,19 @@
 - `app.py` — mounts `mobile/` as static files at `/mobile` (open, so a phone can load the page before pairing).
 - 231 tests pass (+1); typecheck green; E2E at a 390×844 phone viewport — paired, listed 21 projects, opened + closed a real Cloudflare tunnel from the phone, 0 console errors.
 
+### v0.1.13 — Auto-start + tray polish (Milestone I)
+- `electron/main.ts` — `synapse:get-autostart` / `synapse:set-autostart` IPC over `setLoginItemSettings`; richer tray menu (Projects submenu with launch + running checkmarks, Open-mobile-UI, Start-with-Windows checkbox), refreshed every 20s via authenticated daemon calls (main process reads the local token off disk).
+- **Probe-before-spawn:** Electron checks `/health` on launch — attaches to an already-running daemon instead of spawning a second one; only kills a daemon it spawned itself.
+- Renderer: `StartupPanel` in Settings (start-with-Windows toggle; degrades to "Desktop app only" in a browser).
+- 231 tests pass; typecheck green; E2E — Electron rebooted clean, attached to the running daemon (one `:7878` holder), Startup toggle present, 0 console errors.
+
 ## What's next (immediate)
 
-**Milestone I — auto-start + tray polish.** Milestones A–H are done.
-- Register Synapse as a Windows login item; daemon stays alive when the Electron window closes
-- Tray context menu: projects submenu + processes submenu + quit
-- Then Milestone J (packaging: PyInstaller + electron-builder + NSIS installer) → K (`v0.1.0` release)
+**Milestone J — packaging.** Milestones A–I are done.
+- PyInstaller bundles the daemon → `synapsed.exe`
+- electron-builder + an NSIS installer → one double-click install
+- First-run wizard creates a desktop shortcut
+- Then Milestone K — `v0.1.0` release (tag, GitHub release, screenshots)
 
 ## Known issues / broken state
 

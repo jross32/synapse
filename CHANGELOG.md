@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.13] -- 2026-05-19
+
+### Auto-start + tray polish -- Milestone I
+
+#### Added
+- **Start with Windows.** `electron/main.ts` exposes `synapse:get-autostart` /
+  `synapse:set-autostart` IPC over `app.getLoginItemSettings()` /
+  `setLoginItemSettings()`. `components/StartupPanel.tsx` -- a Settings card
+  with a toggle; outside Electron it degrades to a "Desktop app only" note.
+- **Richer tray menu.** The tray now carries a **Projects** submenu (every
+  project, a checkmark on the running ones, click to launch an idle one or
+  surface the window), an **Open mobile UI** entry, a **Start with Windows**
+  checkbox, daemon health, and Quit. The Projects submenu is refreshed from
+  the daemon every 20 s -- the main process reads the local auth token off
+  disk to make those calls.
+
+#### Changed
+- **Probe-before-spawn.** On launch the Electron app checks `/health` first:
+  if a daemon is already running (one that survived an Electron crash, or was
+  started by `synapse.cmd`) it **attaches** instead of spawning a second one
+  -- no more port `7878` conflicts. A daemon we only attached to is left
+  running on quit; one we spawned is still stopped.
+
+#### Verified
+- 231 tests pass; typecheck green. E2E: Electron rebooted on the new main
+  process -- log shows "a daemon is already running -- attaching to it" and
+  exactly one daemon holds `:7878`; 0 renderer console errors; the Startup
+  toggle renders in the desktop app (and shows "Desktop app only" in a plain
+  browser).
+
 ## [0.1.12] -- 2026-05-19
 
 ### Mobile Web UI -- Milestone H complete
