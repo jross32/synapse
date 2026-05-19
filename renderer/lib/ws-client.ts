@@ -10,7 +10,7 @@
 //
 // This file is wired to a real daemon WebSocket in Milestone C.
 
-import { daemonBase } from './api-client';
+import { daemonBase, getAuthToken } from './api-client';
 
 export type ConnState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -86,7 +86,11 @@ export class SynapseWsClient {
     sock.addEventListener('open', () => {
       this.retryIndex = 0;
       this.transition('open');
-      sock.send(JSON.stringify({ type: 'resume', since: this.lastEventId }));
+      // The resume frame carries the auth token (Milestone H) so a non-local
+      // socket can authenticate; the daemon trusts loopback without it.
+      sock.send(
+        JSON.stringify({ type: 'resume', since: this.lastEventId, token: getAuthToken() })
+      );
     });
 
     sock.addEventListener('message', (msg) => {

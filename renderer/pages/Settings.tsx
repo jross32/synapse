@@ -10,6 +10,7 @@ import { Button } from '../components/ui/button';
 import { StatusBadge } from '../components/StatusBadge';
 import { PageHeader } from '../components/PageHeader';
 import { SnapshotPanel } from '../components/SnapshotPanel';
+import { PairedDevicesPanel } from '../components/PairedDevicesPanel';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
 
@@ -63,6 +64,8 @@ export function SettingsPage(): JSX.Element {
           </Button>
         </div>
       </Card>
+
+      <PairedDevicesPanel />
 
       <SnapshotPanel />
 

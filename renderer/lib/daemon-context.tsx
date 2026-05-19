@@ -17,7 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { apiFetch, daemonBase, setDaemonBase } from './api-client';
+import { apiFetch, bootstrapLocalToken, daemonBase, setDaemonBase } from './api-client';
 import type { HealthResponse, Project, ResourceSnapshot } from './generated-types';
 import { listProjects } from './projects-client';
 import { type ConnState, SynapseWsClient, type SynapseEvent } from './ws-client';
@@ -99,9 +99,7 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   useEffect(() => {
     if (bridge) setDaemonBase(bridge.daemonBase());
 
-    void refreshHealth();
-    void refreshProjects();
-
+    let cancelled = false;
     const ws = new SynapseWsClient();
     wsRef.current = ws;
     const unsubState = ws.onState(setConnState);
@@ -120,9 +118,23 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
         void refreshProjects();
       }
     });
-    ws.start();
+
+    // Auth bootstrap (Milestone H): grab the local token before any protected
+    // request or the WebSocket handshake. /health is open so it can go first.
+    void (async () => {
+      void refreshHealth();
+      try {
+        await bootstrapLocalToken();
+      } catch {
+        // Off-machine or daemon down — protected calls will surface the error.
+      }
+      if (cancelled) return;
+      void refreshProjects();
+      ws.start();
+    })();
 
     return () => {
+      cancelled = true;
       unsubState();
       unsubEvent();
       ws.stop();

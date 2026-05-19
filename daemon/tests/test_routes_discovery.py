@@ -22,7 +22,8 @@ def _harness(tmp_path: Path):
     bus = EventBus()
     pm = ProcessManager(storage, bus)
     app = build_app(storage, bus, process_manager=pm)
-    return TestClient(app), storage
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    return client, storage
 
 
 def _mk_project_dir(root: Path, name: str, files: dict[str, str]) -> Path:

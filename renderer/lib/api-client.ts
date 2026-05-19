@@ -26,6 +26,32 @@ export function daemonBase(): string {
   return baseUrl;
 }
 
+// ── auth token (Milestone H) ──────────────────────────────────────────────
+//
+// Every protected /api/v1 route needs an X-Synapse-Token. The desktop + dev
+// browser bootstrap it from /auth/local-token (open to this machine only);
+// a paired mobile device gets its own token via the pairing flow.
+
+const TOKEN_HEADER = 'X-Synapse-Token';
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
+/**
+ * Fetch the daemon's local token (works from this machine only) and remember
+ * it for every later request. Call once at startup before any protected call.
+ */
+export async function bootstrapLocalToken(): Promise<void> {
+  const res = await apiFetch<{ token: string }>('/auth/local-token', { method: 'GET' });
+  authToken = res.token;
+}
+
 export class SynapseApiError extends Error {
   public readonly envelope: ErrorEnvelope;
   public readonly status: number;
@@ -55,6 +81,7 @@ export async function apiFetch<T = unknown>(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      ...(authToken ? { [TOKEN_HEADER]: authToken } : {}),
       ...(headers ?? {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

@@ -32,14 +32,11 @@ If a managed project genuinely needs elevation (rare), the project's manifest ca
 
 ## LAN exposure
 
-The daemon binds `0.0.0.0:7878` so the mobile Web UI can reach it from the user's phone. This means **anyone on the same network can reach the daemon**. Acceptable for trusted home Wi-Fi; not acceptable for cafes, hotels, or shared offices.
-
-v0.1 mitigation: the daemon will log every connection it accepts (audit log, source = `mobile`).
-
-v0.2+ roadmap:
-- Per-device pairing PIN (one-time code displayed on the desktop UI).
-- Network ACL (default allow only RFC1918 addresses).
-- Optional Cloudflare tunnel + authenticated origin if the user wants off-LAN access.
+The daemon binds `127.0.0.1:7878` (loopback) by default — unreachable from
+other devices. Passing `--bind-lan` binds `0.0.0.0:7878` so a phone can reach
+it. As of v0.1.11 that is safe to do: every request needs a token (see
+**Device authentication** below), so a LAN neighbour who reaches the port
+still cannot read or control anything without pairing first.
 
 ## Cloudtap caveats
 
@@ -48,6 +45,40 @@ v0.2+ roadmap:
 - Is listening on `127.0.0.1` only (suggests the service was deliberately local-only).
 - Has no detected authentication on a quick probe.
 - Belongs to a service Synapse is not managing (so the user actually knows what they're sharing).
+
+## Device authentication (v0.1.11, Milestone H)
+
+So Synapse can be reached from a phone — including off-network via a Cloudflare
+tunnel — without anyone bypassing auth.
+
+**Every `/api/v1` data route requires an `X-Synapse-Token` bearer token.** Only
+`/health`, `/auth/local-token`, and `/pair` (redeem) are open.
+
+Two token kinds:
+
+- **Local token** — a random secret the daemon writes to `data/auth-token` on
+  boot. The desktop app + the dev browser fetch it from
+  `GET /api/v1/auth/local-token` and send it on every request.
+- **Device token** — minted when a phone redeems a 6-digit pairing code
+  (`POST /pair`). Codes are single-use, expire after 10 minutes, and live in
+  daemon memory only. The token's SHA-256 is stored in `paired_devices`; the
+  raw token is shown to the device exactly once. Revoking a device makes its
+  token stop verifying immediately.
+
+**Why not "trust loopback":** a Cloudflare tunnel runs `cloudflared` on this
+machine, so a tunnelled request reaches the daemon from `127.0.0.1` — it looks
+local. Trusting loopback would let anyone with the tunnel URL through. So the
+daemon trusts **no** request by IP. The one exception is the
+`/auth/local-token` bootstrap endpoint, gated by `is_trusted_local()` —
+loopback **and** no proxy/tunnel headers (`X-Forwarded-For`, `CF-*`). A
+tunnelled request always carries those headers, so it cannot reach the local
+token; it must pair instead.
+
+WebSocket connections carry the token in the `resume` frame; a non-local
+socket without a valid token is closed (code 1008).
+
+v0.2+ roadmap: an account-less device-pairing flow polished for a fixed public
+address (same token mechanism, friendlier UX).
 
 ## Secrets
 

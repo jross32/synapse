@@ -135,8 +135,9 @@ def test_websocket_replay_handshake(harness) -> None:
     _seed_event(bus, name="v1.tick", payload={"i": 1})
     _seed_event(bus, name="v1.tick", payload={"i": 2})
 
+    token = app.state.auth.local_token
     with c.websocket_connect("/api/v1/ws") as ws:
-        ws.send_json({"type": "resume", "since": 0})
+        ws.send_json({"type": "resume", "since": 0, "token": token})
         message = ws.receive_json()
         assert message["type"] == "replay"
         replayed_ids = [e["id"] for e in message["events"]]
@@ -154,17 +155,17 @@ def test_websocket_replay_window_exceeded(harness) -> None:
     assert bus.buffer_min_id == 2
 
     with c.websocket_connect("/api/v1/ws") as ws:
-        ws.send_json({"type": "resume", "since": 1})
+        ws.send_json({"type": "resume", "since": 1, "token": app.state.auth.local_token})
         first = ws.receive_json()
         # Either an error event or a replay envelope marking the window loss.
         assert first.get("type") == "error" or "replay_window_exceeded" in json.dumps(first)
 
 
 def test_websocket_ping_pong(harness) -> None:
-    c, *_ = harness
+    c, app, *_ = harness
     with c.websocket_connect("/api/v1/ws") as ws:
         # Skip the initial replay envelope.
-        ws.send_json({"type": "resume", "since": 0})
+        ws.send_json({"type": "resume", "since": 0, "token": app.state.auth.local_token})
         _ = ws.receive_json()
 
         ws.send_json({"type": "ping"})

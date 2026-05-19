@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.10.5` — **Milestone F complete: real UI, plugin tools, snapshot/restore.** Home leads with a Microsoft-Store-style featured slideshow over your projects — launch one straight from the hero. Tools are manifest plugins: a folder under `tools/` with a `manifest.json` — drop one in, get a card, no UI surgery. First built-in tool **Cloudtap** opens as many public Cloudflare tunnels as you need, each tracked + closed individually, auto-labelled with the matching project. The whole project registry is portable — export it as one JSON snapshot from Settings and restore it anywhere. Auto-discovery fingerprints any folder — Node, Python, Rust, Go, .NET, Java, Ruby, PHP, Docker, static, Make — and bulk-imports projects; tiles pin + group. Double-click `synapse.cmd` to launch — no PowerShell needed. **216 tests passing.** Next: Milestone H (mobile Web UI). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.11` — **Device auth + pairing foundation (Milestone H).** The daemon is now authenticated: every API request carries a token, so Synapse can be safely exposed to a phone — even over a Cloudflare tunnel. The desktop bootstraps a local token automatically; phones pair with a 6-digit code generated from Settings → Paired devices. Milestone F is complete — Home leads with a Microsoft-Store-style featured slideshow; tools are manifest plugins (first one: **Cloudtap**, multi-tunnel, auto-labelled); the project registry exports/restores as one JSON snapshot; auto-discovery fingerprints any folder and bulk-imports projects. Double-click `synapse.cmd` to launch — no PowerShell needed. **230 tests passing.** Next: v0.1.12 (the mobile Web UI itself). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 216 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 230 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
@@ -124,7 +124,7 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | E | Live process monitor (psutil heartbeat + crash detect + auto-restart) | ✅ done (`v0.1.7`) |
 | F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | ✅ done (`v0.1.8` shell · `v0.1.8.5` discovery · `v0.1.9` plugin system · `v0.1.10` slideshow · `v0.1.10.5` snapshot) |
 | G | Cloudtap tool (port → tunnel URL) | ✅ done (`v0.1.9`) |
-| H | Mobile Web UI (responsive, served by daemon on LAN) | ⚪ pending |
+| H | Mobile Web UI (responsive, served by daemon on LAN) | 🟡 in progress (`v0.1.11` device auth + pairing) |
 | I | Auto-start + tray polish (login items, detached daemon, full tray menu) | ⚪ pending |
 | J | Packaging (PyInstaller + electron-builder + NSIS installer) | ⚪ pending |
 | K | `v0.1.0` release (tag, GitHub release, README screenshots, desktop shortcut) | ⚪ pending |

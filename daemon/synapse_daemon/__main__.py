@@ -29,6 +29,7 @@ from fastapi import FastAPI
 
 from . import __version__
 from .app import boot_publish_daemon_started, boot_publish_reconciliation, build_app
+from .auth import AuthManager, ensure_local_token
 from .orphan_reconciler import reconcile, reconcile_project_statuses
 from .process_manager import ProcessManager
 from .security import assert_not_admin
@@ -167,7 +168,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     bus = EventBus()
     pm = ProcessManager(storage, bus)
     registry = ToolRegistry(args.tools_dir, bus, storage)
-    app = build_app(storage, bus, process_manager=pm, tool_registry=registry)
+    auth = AuthManager(storage, ensure_local_token(storage.data_dir))
+    app = build_app(
+        storage, bus, process_manager=pm, tool_registry=registry, auth=auth
+    )
     app.state.bound_port = args.port
     app.router.lifespan_context = _build_lifespan(storage, bus, pm, registry)
 

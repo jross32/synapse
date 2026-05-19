@@ -20,16 +20,18 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import __version__
 from .api_versions import API_PREFIX, event_name
+from .auth import AuthManager, ensure_local_token, require_token
 from .errors import ErrorEnvelope, SynapseError
 from .models import HealthResponse
 from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
+from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_snapshot import build_snapshot_router
@@ -58,13 +60,14 @@ def build_app(
     *,
     process_manager: ProcessManager | None = None,
     tool_registry: ToolRegistry | None = None,
+    auth: AuthManager | None = None,
 ) -> FastAPI:
     """Construct the FastAPI app bound to a Storage + EventBus.
 
-    ``process_manager`` and ``tool_registry`` are created on demand if not
-    supplied (so tests that only care about ``/health`` don't have to wire
-    them up themselves). A freshly-created registry is loaded immediately —
-    scanning ``tools/`` is pure file IO and safe before the lifespan starts.
+    ``process_manager``, ``tool_registry`` and ``auth`` are created on demand
+    if not supplied (so tests that only care about ``/health`` don't have to
+    wire them up themselves). A freshly-created registry is loaded immediately
+    — scanning ``tools/`` is pure file IO and safe before the lifespan starts.
     """
 
     started_at = utc_now()
@@ -73,6 +76,8 @@ def build_app(
     if tool_registry is None:
         tool_registry = ToolRegistry(Path("tools"), bus, storage)
         tool_registry.load()
+    if auth is None:
+        auth = AuthManager(storage, ensure_local_token(storage.data_dir))
 
     app = FastAPI(
         title="Synapse daemon",
@@ -87,7 +92,7 @@ def build_app(
         allow_origins=_ALLOWED_ORIGINS,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Accept"],
+        allow_headers=["Content-Type", "Accept", "X-Synapse-Token"],
     )
 
     # ── exception handler ───────────────────────────────────────────────
@@ -112,23 +117,43 @@ def build_app(
     async def health() -> HealthResponse:
         return HealthResponse(ok=True, version=__version__, started_at=started_at)
 
-    hub = WsHub(bus)
+    hub = WsHub(bus, auth)
 
     @app.websocket(f"{API_PREFIX}/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
         await hub.handle(websocket)
 
+    # Every data router requires a valid X-Synapse-Token (Milestone H).
+    token_guard = Depends(require_token(auth))
+
     # Mount the REST routers under /api/v1.
-    app.include_router(build_projects_router(storage, process_manager), prefix=API_PREFIX)
-    app.include_router(build_discovery_router(storage), prefix=API_PREFIX)
-    app.include_router(build_tools_router(storage, tool_registry), prefix=API_PREFIX)
-    app.include_router(build_snapshot_router(storage, tool_registry), prefix=API_PREFIX)
+    app.include_router(
+        build_projects_router(storage, process_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_discovery_router(storage), prefix=API_PREFIX, dependencies=[token_guard]
+    )
+    app.include_router(
+        build_tools_router(storage, tool_registry),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_snapshot_router(storage, tool_registry),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # The auth router guards its own routes (some are open: /pair, /local-token).
+    app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
 
     # Stash state on the app for tests + later wiring.
     app.state.storage = storage
     app.state.bus = bus
     app.state.process_manager = process_manager
     app.state.tool_registry = tool_registry
+    app.state.auth = auth
     app.state.started_at = started_at
 
     return app

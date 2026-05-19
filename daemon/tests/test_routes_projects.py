@@ -24,7 +24,8 @@ def _harness(tmp_path: Path):
     bus = EventBus()
     pm = ProcessManager(storage, bus)
     app = build_app(storage, bus, process_manager=pm)
-    return TestClient(app), storage, bus, pm
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    return client, storage, bus, pm
 
 
 def _seed_probe(storage: Storage, tmp_path: Path) -> str:

@@ -10,6 +10,53 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.11] -- 2026-05-19
+
+### Device auth + pairing foundation (Milestone H, part 1)
+
+The daemon is now authenticated. Every `/api/v1` data route requires a bearer
+token -- the groundwork for safely exposing Synapse to a phone (and, over a
+Cloudflare tunnel, off-network).
+
+**Why every request, not just "trust localhost":** a Cloudflare tunnel runs
+`cloudflared` on this machine, so tunnelled requests reach the daemon from
+`127.0.0.1` -- they look local. Trusting loopback would let anyone with the
+tunnel URL bypass auth. So nothing is trusted by IP; every request carries a
+token.
+
+#### Added -- daemon
+- `migration 004_paired_devices.sql` -- `paired_devices` table (a device is
+  remembered by the SHA-256 of its token; the raw token is shown once).
+- `auth.py` -- `AuthManager`: a **local token** written to `data/auth-token`
+  on boot (the desktop's credential) and **device tokens** minted when a
+  phone redeems a 6-digit pairing code (10-min expiry, single-use, codes live
+  in memory only). `is_trusted_local()` -- loopback AND no proxy/tunnel
+  headers -- gates exactly one bootstrap endpoint. `require_token()` -- the
+  FastAPI dependency that 401s every protected route.
+- `routes_auth.py` -- `GET /auth/local-token` (trusted-local only),
+  `POST /pair/code` (mint a code), `POST /pair` (redeem -> device token),
+  `GET`/`DELETE /pair/devices` (list / revoke). Pair + revoke are audited.
+- `app.py` -- the `X-Synapse-Token` guard is applied to the projects /
+  discovery / tools / snapshot routers; `/health` + `/auth/local-token` +
+  `/pair` stay open. `X-Synapse-Token` added to CORS allowed headers.
+- `ws.py` -- the WebSocket resume frame accepts a `token`; a non-local socket
+  must present a valid one or the daemon closes it (code 1008).
+
+#### Added -- renderer
+- `api-client.ts` -- `bootstrapLocalToken()` fetches the local token at
+  startup; every request then carries `X-Synapse-Token`.
+- `ws-client.ts` -- the resume frame carries the token.
+- `lib/pairing-client.ts` + `components/PairedDevicesPanel.tsx` -- a Settings
+  card to generate a pairing code (with a live expiry countdown) and
+  list / revoke paired devices.
+
+#### Verified
+- 230 tests pass (+14 auth cases: local-token verify, pairing redeem / wrong
+  code / single-use / revoke, trusted-local gating, full pair flow over
+  REST); typecheck green. E2E: desktop app bootstraps its token and runs
+  normally (21 projects); a pairing code generates with a countdown;
+  unauthenticated `/projects` returns 401.
+
 ## [0.1.10.5] -- 2026-05-19
 
 ### Snapshot / restore (Contract #28)

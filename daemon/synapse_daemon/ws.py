@@ -144,13 +144,16 @@ class EventBus:
 class _Resume(BaseModel):
     type: str = Field(pattern=r"^resume$")
     since: int = Field(ge=0)
+    token: str | None = None  # device auth token (Milestone H)
 
 
 class WsHub:
     """Connects a FastAPI :class:`WebSocket` to the :class:`EventBus`."""
 
-    def __init__(self, bus: EventBus) -> None:
+    def __init__(self, bus: EventBus, auth: object | None = None) -> None:
         self.bus = bus
+        # AuthManager — optional so tests can build a hub without auth.
+        self.auth = auth
 
     async def handle(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -167,7 +170,17 @@ class WsHub:
             # Phase 1 — wait briefly for an optional resume frame. The
             # protocol says clients SHOULD send it immediately on connect, but
             # we tolerate it not arriving (treat as ``since=0``).
-            since = await self._read_resume_or_zero(websocket)
+            since, token = await self._read_resume_or_zero(websocket)
+
+            # Auth (Milestone H): a socket straight from this machine is
+            # trusted; anything else (LAN, a tunnel) must present a valid
+            # device token in the resume frame.
+            if self.auth is not None:
+                from .auth import is_trusted_local
+
+                if not (is_trusted_local(websocket) or self.auth.verify(token)):
+                    await websocket.close(code=1008)  # policy violation
+                    return
 
             if self.bus.replay_window_exceeded(since):
                 await websocket.send_json(
@@ -208,16 +221,18 @@ class WsHub:
 
     # ── private helpers ──────────────────────────────────────────────────
 
-    async def _read_resume_or_zero(self, websocket: WebSocket) -> int:
+    async def _read_resume_or_zero(self, websocket: WebSocket) -> tuple[int, str | None]:
+        """Return ``(since, token)`` from the optional resume frame."""
+
         try:
             data = await asyncio.wait_for(websocket.receive_json(), timeout=0.5)
-        except (asyncio.TimeoutError, Exception):
-            return 0
+        except (TimeoutError, Exception):
+            return 0, None
         try:
             resume = _Resume.model_validate(data)
         except Exception:
-            return 0
-        return resume.since
+            return 0, None
+        return resume.since, resume.token
 
     async def _sender(self, websocket: WebSocket, queue: asyncio.Queue[Event]) -> None:
         while True:

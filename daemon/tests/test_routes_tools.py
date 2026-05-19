@@ -46,7 +46,8 @@ def _harness(tmp_path: Path):
     registry = ToolRegistry(tools_dir, bus, storage)
     registry.load()
     app = build_app(storage, bus, tool_registry=registry)
-    return TestClient(app), storage
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    return client, storage
 
 
 def test_list_tools_returns_cloudtap(tmp_path: Path) -> None:

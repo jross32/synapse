@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.10.5`
+`0.1.11`
 
 ## Current milestone
 
-**Milestone F complete — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) + multi-tunnel Cloudtap (v0.1.9.5) + Home slideshow (v0.1.10) + snapshot/restore (v0.1.10.5) all done. Tools are manifest plugins; Cloudtap holds many tunnels at once; the registry is portable via JSON snapshot. 216 tests pass. Milestone G (Cloudtap) shipped early in v0.1.9. Next: Milestone H — mobile Web UI served by the daemon over LAN.
+**Milestone H in progress — remote access.** Milestone F (real UI) + G (Cloudtap) are done. v0.1.11 is the device-auth foundation: every `/api/v1` request now carries a token, so the daemon can be exposed to a phone — even over a Cloudflare tunnel — without anyone bypassing auth. The desktop bootstraps a local token; phones pair with a 6-digit code from Settings. 230 tests pass. Next: v0.1.12 — the mobile Web UI itself (responsive page at `/mobile`, pair screen, full control).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -34,6 +34,8 @@
 | `0.1.9.5` | Milestone F — multi-instance tool model + multi-tunnel Cloudtap + app labeling | ✅ done |
 | `0.1.10` | Milestone F — Home featured slideshow + page restructure | ✅ done |
 | `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ✅ done |
+| `0.1.11` | Milestone H — device auth + pairing foundation (token on every request) | ✅ done |
+| `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ⚪ next |
 
 ## What's done
 
@@ -157,11 +159,18 @@
 - Renderer: `snapshot-client.ts`, `components/SnapshotPanel.tsx` (Settings "Backup & restore" card — download a snapshot, restore one from file, see the report).
 - 216 tests pass (+6); typecheck green; E2E downloaded a 21-project snapshot and restored it → "0 created, 21 updated".
 
+### v0.1.11 — Device auth + pairing foundation (Milestone H, part 1)
+- **Token on every request.** `migration 004` (`paired_devices`), `auth.py` (`AuthManager` — local token in `data/auth-token`, device tokens via 6-digit pairing codes, `is_trusted_local()`, `require_token()` dependency), `routes_auth.py` (`/auth/local-token`, `/pair/code`, `/pair`, `/pair/devices`).
+- Why not "trust localhost": a Cloudflare tunnel makes tunnelled requests look loopback — so nothing is trusted by IP; only the one bootstrap endpoint uses the trusted-local check (loopback + no proxy headers).
+- `app.py` guards projects/discovery/tools/snapshot routers with `X-Synapse-Token`; `ws.py` accepts a token in the resume frame. CORS allows the header.
+- Renderer: `bootstrapLocalToken()` at startup; `api-client`/`ws-client` send the token; `PairedDevicesPanel` in Settings (generate code with countdown, list/revoke devices).
+- 230 tests pass (+14); typecheck green; E2E verified token bootstrap, 401 without token, pairing-code generation.
+
 ## What's next (immediate)
 
-**Milestone H — mobile Web UI.** Milestone F is done; G (Cloudtap) shipped early in v0.1.9.
-- The daemon serves a responsive Web UI over LAN (`http://<pc-lan-ip>:7878/mobile`)
-- Phone can view processes + launch/stop projects + use Cloudtap
+**v0.1.12 — the mobile Web UI.** Finishes Milestone H:
+- The daemon serves a responsive Web UI at `/mobile` (reachable over LAN with `--bind-lan`, or off-network via a Cloudtap tunnel)
+- Pair screen (enter the 6-digit code) → device token stored → full control: view processes, launch/stop projects, use Cloudtap
 - Then Milestone I (auto-start + tray polish) → J (packaging) → K (v0.1.0 release)
 
 ## Known issues / broken state

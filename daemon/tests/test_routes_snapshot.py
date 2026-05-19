@@ -18,7 +18,8 @@ def _harness(tmp_path: Path, *, sub: str = "data"):
     storage.open()
     storage.migrate()
     app = build_app(storage, EventBus())
-    return TestClient(app), storage
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    return client, storage
 
 
 def _seed(storage: Storage, project: Project) -> None:
