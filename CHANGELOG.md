@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.10] -- 2026-05-19
+
+### Home featured slideshow
+
+The Home page gets a Microsoft-Store-style hero: a rotating banner over the
+user's featured projects, replacing the top-heavy empty space the UI/UX
+audits flagged.
+
+#### Added -- renderer
+- `components/FeaturedSlideshow.tsx` -- the Home hero. Rotates through
+  featured projects (pinned first, then most-recently-active), auto-advances
+  every ~6.5s, pauses on hover, and exposes prev/next arrows + dot
+  navigation. Each slide shows the project's name, status, description,
+  group/tags, and a **Launch** button that starts the project straight from
+  the hero plus a "View in Apps" jump.
+
+#### Changed -- renderer
+- `pages/Home.tsx` -- restructured around the slideshow: hero, then the
+  heartbeat HUD, then a wider "Recent activity" feed beside a stacked
+  "Jump in" panel. Recent activity now shows 10 events. When no projects are
+  registered the hero is replaced by a "Welcome to Synapse" empty state.
+
+#### Verified
+- 210 tests pass; typecheck green. E2E: slideshow renders + auto-advances in
+  browser + Electron; no responsive overflow at 400px.
+
 ## [0.1.9.5] -- 2026-05-19
 
 ### Multi-tunnel Cloudtap + multi-instance tool model

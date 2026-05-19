@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.9.5`
+`0.1.10`
 
 ## Current milestone
 
-**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) + multi-tunnel Cloudtap (v0.1.9.5) done. Tools are manifest plugins: a folder under `tools/` with a `manifest.json` → a card, no UI surgery. Cloudtap holds many tunnels at once, each closed individually + auto-labelled with the matching project. 210 tests pass. Next: v0.1.10 (Home slideshow + Nucleus polish + snapshot/restore).
+**Milestone F in progress — the real UI.** Shell (v0.1.8) + auto-discovery (v0.1.8.5) + audit hardening (v0.1.8.6) + plugin system & Cloudtap (v0.1.9) + multi-tunnel Cloudtap (v0.1.9.5) + Home slideshow (v0.1.10) done. Tools are manifest plugins; Cloudtap holds many tunnels at once. Home now leads with a featured-projects slideshow. 210 tests pass. Next: v0.1.10.5 (snapshot/restore) → finishes Milestone F.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -32,7 +32,8 @@
 | `0.1.8.6` | UI/UX audit fixes — WS replay-envelope bug, responsive overflow, version/path polish | ✅ done |
 | `0.1.9` | Milestone F — tool plugin system (manifest + curated handlers) + Cloudtap | ✅ done |
 | `0.1.9.5` | Milestone F — multi-instance tool model + multi-tunnel Cloudtap + app labeling | ✅ done |
-| `0.1.10` | Milestone F — Home slideshow + Nucleus polish + snapshot/restore | ⚪ next |
+| `0.1.10` | Milestone F — Home featured slideshow + page restructure | ✅ done |
+| `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ⚪ next |
 
 ## What's done
 
@@ -145,13 +146,17 @@
 - Renderer: `ToolCard` renders an "Active (N)" instance list; `runToolAction` takes an optional `itemId`.
 - 210 tests passing (+4); typecheck green; E2E opened two real tunnels at once, closed one, the other kept serving.
 
+### v0.1.10 — Home featured slideshow
+- `components/FeaturedSlideshow.tsx` — Microsoft-Store-style hero: rotates featured projects (pinned first, then most-recently-active), auto-advances + pauses on hover, prev/next arrows + dot nav, **Launch straight from the hero**.
+- `pages/Home.tsx` restructured — hero, heartbeat HUD, then "Recent activity" beside "Jump in". Fixes the top-heavy empty space the audits flagged. Welcome empty state when no projects.
+- 210 tests pass; typecheck green; E2E verified in browser + Electron, no overflow at 400px.
+
 ## What's next (immediate)
 
-**v0.1.10 — Home slideshow + Nucleus polish.** Milestone F finishes:
-- Microsoft-Store-style featured slideshow on Home
-- Nucleus center-pane polish; fill the top-heavy empty space on Home/Tools/Settings
-- Snapshot / restore (Contract #28) wired to the Settings page
-- Then Milestone G is already done (Cloudtap shipped in v0.1.9) → Milestone H (mobile Web UI)
+**v0.1.10.5 — snapshot / restore (Contract #28).** Finishes Milestone F:
+- REST endpoints to export the registry (projects + tools + settings) as one JSON file and restore it (`snapshot.py` is already scaffolded)
+- Settings page UI to download a snapshot + upload one to restore
+- Then Milestone G is already done (Cloudtap shipped v0.1.9) → Milestone H (mobile Web UI)
 
 ## Known issues / broken state
 
