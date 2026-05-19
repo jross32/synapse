@@ -23,6 +23,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .api_versions import API_PREFIX, event_name
@@ -147,6 +148,16 @@ def build_app(
     )
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
+
+    # Serve the mobile Web UI (Milestone H). Static files are open — a phone
+    # must load the page before it can pair. Mounted only if the folder ships.
+    mobile_dir = Path("mobile")
+    if (mobile_dir / "index.html").exists():
+        app.mount(
+            "/mobile",
+            StaticFiles(directory=mobile_dir, html=True),
+            name="mobile",
+        )
 
     # Stash state on the app for tests + later wiring.
     app.state.storage = storage

@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="icon" href="data:," />
+  <title>Synapse</title>
+  <style>
+    /* Synapse mobile Web UI (Milestone H · v0.1.12) -- self-contained, no
+       external resources (Contract #15). Dark theme matching the desktop. */
+    :root {
+      --bg: #0b0f17; --surface: #161b26; --surface-2: #1d2330;
+      --border: #2a3242; --text: #e6e9f2; --muted: #8b93a7;
+      --primary: #7c5cff; --primary-press: #6a48f0;
+      --green: #3fb950; --amber: #d8a017; --red: #f85149; --grey: #6e7681;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg); color: var(--text); min-height: 100vh;
+      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    #app { max-width: 640px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; font-weight: 600; }
+    h2 { font-size: 14px; font-weight: 600; color: var(--muted);
+         text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
+    p { color: var(--muted); font-size: 14px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .spread { justify-content: space-between; }
+    .grow { flex: 1; min-width: 0; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    header { display: flex; align-items: center; gap: 10px; padding: 4px 0 8px; }
+    .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--primary);
+            display: grid; place-items: center; font-weight: 700; color: #fff; }
+    .conn { margin-left: auto; font-size: 12px; color: var(--muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+           background: var(--grey); vertical-align: middle; margin-right: 5px; }
+    .dot.ok { background: var(--green); }
+
+    .card { background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+    .card.tap { cursor: pointer; }
+
+    input {
+      width: 100%; background: var(--surface-2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 10px; padding: 12px 14px; font-size: 16px;
+      font-family: inherit;
+    }
+    input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+    input.code { font-size: 30px; text-align: center; letter-spacing: .35em;
+                 font-family: ui-monospace, monospace; }
+
+    button {
+      font: inherit; font-weight: 600; border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 16px; color: var(--text);
+      background: var(--surface-2); cursor: pointer; min-height: 44px;
+    }
+    button:active { transform: scale(.98); }
+    button:disabled { opacity: .5; }
+    button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    button.primary:active { background: var(--primary-press); }
+    button.danger { color: var(--red); }
+    button.full { width: 100%; }
+    button.sm { padding: 8px 12px; min-height: 38px; font-size: 14px; }
+
+    .badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+             border: 1px solid var(--border); white-space: nowrap; }
+    .badge .dot { width: 7px; height: 7px; margin-right: 4px; }
+
+    .err { color: var(--red); font-size: 14px; margin-top: 8px; }
+    .ok-msg { color: var(--green); font-size: 14px; margin-top: 8px; }
+    .empty { text-align: center; color: var(--muted); padding: 28px 12px; }
+    a { color: var(--primary); word-break: break-word; }
+    .stack { display: flex; flex-direction: column; gap: 6px; }
+    .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+  (function () {
+    'use strict';
+    var API = '/api/v1';
+    var TOKEN_KEY = 'synapse.deviceToken';
+    var token = localStorage.getItem(TOKEN_KEY) || null;
+    var app = document.getElementById('app');
+
+    var state = { projects: [], tool: null, conn: false, error: null };
+
+    // ── REST ────────────────────────────────────────────────────────────
+    function api(path, opts) {
+      opts = opts || {};
+      var headers = { Accept: 'application/json' };
+      if (token) headers['X-Synapse-Token'] = token;
+      if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+      return fetch(API + path, {
+        method: opts.method || 'GET',
+        headers: headers,
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      }).then(function (res) {
+        return res.text().then(function (text) {
+          var data = text ? JSON.parse(text) : null;
+          if (res.status === 401) {
+            // Token revoked or invalid -- drop it, back to pairing.
+            token = null;
+            localStorage.removeItem(TOKEN_KEY);
+            render();
+            throw new Error('Not paired');
+          }
+          if (!res.ok) throw new Error((data && data.message) || 'HTTP ' + res.status);
+          return data;
+        });
+      });
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    // ── pairing screen ──────────────────────────────────────────────────
+    function renderPair() {
+      app.innerHTML =
+        '<header><div class="logo">S</div><h1>Synapse</h1></header>' +
+        '<div class="card">' +
+        '<h1 style="margin-bottom:6px">Pair this device</h1>' +
+        '<p>On your computer, open <b>Settings &rsaquo; Paired devices</b> and tap ' +
+        '<b>Pair a device</b>. Enter the 6-digit code below.</p>' +
+        '<div class="stack" style="margin-top:14px">' +
+        '<input id="code" class="code" inputmode="numeric" maxlength="6" ' +
+        'placeholder="000000" autocomplete="one-time-code" />' +
+        '<input id="name" placeholder="Device name (e.g. My phone)" />' +
+        '<button class="primary full" id="pairBtn">Pair</button>' +
+        '</div><div class="err" id="pairErr"></div></div>';
+
+      var codeEl = document.getElementById('code');
+      var nameEl = document.getElementById('name');
+      var errEl = document.getElementById('pairErr');
+      var btn = document.getElementById('pairBtn');
+      codeEl.focus();
+
+      btn.onclick = function () {
+        var code = codeEl.value.trim();
+        errEl.textContent = '';
+        if (!/^\d{6}$/.test(code)) { errEl.textContent = 'Enter the 6-digit code.'; return; }
+        btn.disabled = true; btn.textContent = 'Pairing...';
+        api('/pair', { method: 'POST', body: { code: code, device_name: nameEl.value.trim() } })
+          .then(function (res) {
+            token = res.token;
+            localStorage.setItem(TOKEN_KEY, token);
+            load();
+            connectWs();
+          })
+          .catch(function (e) {
+            errEl.textContent = e.message;
+            btn.disabled = false; btn.textContent = 'Pair';
+          });
+      };
+    }
+
+    // ── dashboard ───────────────────────────────────────────────────────
+    var STATUS = {
+      idle: ['Idle', 'grey'], launching: ['Starting', 'amber'],
+      launched: ['Running', 'green'], stopping: ['Stopping', 'amber'],
+      stopped: ['Stopped', 'grey'], error: ['Error', 'red'],
+    };
+    function badge(status) {
+      var s = STATUS[status] || [status, 'grey'];
+      return '<span class="badge"><span class="dot" style="background:var(--' +
+        s[1] + ')"></span>' + esc(s[0]) + '</span>';
+    }
+
+    function renderDashboard() {
+      var projects = state.projects.slice().sort(function (a, b) {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      var running = projects.filter(function (p) { return p.status === 'launched'; }).length;
+
+      var html =
+        '<header><div class="logo">S</div><h1>Synapse</h1>' +
+        '<span class="conn"><span class="dot' + (state.conn ? ' ok' : '') + '"></span>' +
+        (state.conn ? 'Live' : 'Offline') + '</span></header>' +
+        '<p>' + running + ' running &middot; ' + projects.length + ' project' +
+        (projects.length === 1 ? '' : 's') + '</p>';
+
+      if (state.error) html += '<div class="err">' + esc(state.error) + '</div>';
+
+      html += '<h2>Projects</h2>';
+      if (!projects.length) {
+        html += '<div class="card empty">No projects registered.</div>';
+      } else {
+        projects.forEach(function (p) {
+          var running = p.status === 'launched' || p.status === 'stopping';
+          var transitioning = p.status === 'launching' || p.status === 'stopping';
+          html += '<div class="card"><div class="row spread">' +
+            '<div class="grow"><div class="truncate" style="font-weight:600">' +
+            esc(p.name) + '</div>' +
+            '<div class="truncate mono" style="font-size:12px;color:var(--muted)">' +
+            esc(p.path) + '</div></div>' + badge(p.status) + '</div>' +
+            '<div class="pill-row">' +
+            (running
+              ? '<button class="sm danger" data-stop="' + esc(p.id) + '"' +
+                (transitioning ? ' disabled' : '') + '>Stop</button>'
+              : '<button class="sm primary" data-launch="' + esc(p.id) + '"' +
+                (transitioning ? ' disabled' : '') + '>Launch</button>') +
+            (p.expected_port
+              ? '<a class="badge mono" href="http://' + location.hostname + ':' +
+                esc(p.expected_port) + '" target="_blank">:' + esc(p.expected_port) + '</a>'
+              : '') +
+            '</div></div>';
+        });
+      }
+
+      html += renderCloudtap();
+      html += '<div style="margin:18px 0 8px"><button class="sm full" id="unpair">' +
+        'Unpair this device</button></div>';
+      app.innerHTML = html;
+      wireDashboard();
+    }
+
+    function renderCloudtap() {
+      if (!state.tool) return '';
+      var m = state.tool.manifest, s = state.tool.state;
+      var html = '<h2>Cloudtap</h2><div class="card">' +
+        '<p style="margin-bottom:10px">' + esc(m.description) + '</p>' +
+        '<div class="row" style="gap:8px">' +
+        '<input id="ctPort" class="grow" inputmode="numeric" placeholder="Local port" />' +
+        '<button class="primary" id="ctOpen">Open</button></div>';
+      if (s.items && s.items.length) {
+        s.items.forEach(function (it) {
+          var url = it.result && it.result.public_url;
+          html += '<div class="card" style="margin:10px 0 0;background:var(--surface-2)">' +
+            '<div class="row spread"><span class="truncate grow">' + esc(it.label) +
+            '</span>' + badge(it.status) + '</div>' +
+            (url ? '<div style="margin-top:6px"><a href="' + esc(url) +
+              '" target="_blank">' + esc(url) + '</a></div>' : '') +
+            (it.last_error
+              ? '<div class="err">' + esc(it.last_error.message) + '</div>' : '') +
+            '<div class="pill-row"><button class="sm danger" data-close="' +
+            esc(it.id) + '">Close</button></div></div>';
+        });
+      }
+      if (s.last_error) html += '<div class="err">' + esc(s.last_error.message) + '</div>';
+      return html + '</div>';
+    }
+
+    function wireDashboard() {
+      document.querySelectorAll('[data-launch]').forEach(function (b) {
+        b.onclick = function () { act(b, '/projects/' + b.dataset.launch + '/launch', {}); };
+      });
+      document.querySelectorAll('[data-stop]').forEach(function (b) {
+        b.onclick = function () { act(b, '/projects/' + b.dataset.stop + '/stop', {}); };
+      });
+      var open = document.getElementById('ctOpen');
+      if (open) open.onclick = function () {
+        var port = parseInt(document.getElementById('ctPort').value, 10);
+        if (!port) return;
+        toolAct(open, 'tunnel', { fields: { port: port } });
+      };
+      document.querySelectorAll('[data-close]').forEach(function (b) {
+        b.onclick = function () {
+          toolAct(b, 'close', { fields: {}, item_id: b.dataset.close });
+        };
+      });
+      var unpair = document.getElementById('unpair');
+      if (unpair) unpair.onclick = function () {
+        token = null; localStorage.removeItem(TOKEN_KEY); render();
+      };
+    }
+
+    function act(btn, path, body) {
+      btn.disabled = true;
+      body.source = 'mobile';
+      api(path, { method: 'POST', body: body })
+        .then(function () { return load(); })
+        .catch(function (e) { state.error = e.message; render(); });
+    }
+
+    function toolAct(btn, action, body) {
+      btn.disabled = true; btn.textContent = '...';
+      body.source = 'mobile';
+      api('/tools/cloudtap/actions/' + action, { method: 'POST', body: body })
+        .then(function (entry) { state.tool = entry; render(); })
+        .catch(function (e) { state.error = e.message; render(); });
+    }
+
+    // ── data + live updates ─────────────────────────────────────────────
+    function load() {
+      state.error = null;
+      return Promise.all([
+        api('/projects').then(function (r) { state.projects = r.projects; }),
+        api('/tools/cloudtap').then(function (r) { state.tool = r; })
+          .catch(function () { state.tool = null; }),
+      ]).then(render, function (e) {
+        if (token) { state.error = e.message; render(); }
+      });
+    }
+
+    var reloadTimer = null;
+    function scheduleReload() {
+      if (reloadTimer) return;
+      reloadTimer = setTimeout(function () { reloadTimer = null; load(); }, 400);
+    }
+
+    function connectWs() {
+      if (!token) return;
+      var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      var ws;
+      try { ws = new WebSocket(proto + '://' + location.host + API + '/ws'); }
+      catch (e) { return; }
+      ws.onopen = function () {
+        state.conn = true; render();
+        ws.send(JSON.stringify({ type: 'resume', since: 0, token: token }));
+      };
+      ws.onmessage = function () { scheduleReload(); };
+      ws.onclose = function () {
+        state.conn = false;
+        if (token) { render(); setTimeout(connectWs, 3000); }
+      };
+      ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    }
+
+    function render() {
+      if (!token) { renderPair(); return; }
+      renderDashboard();
+    }
+
+    // ── boot ────────────────────────────────────────────────────────────
+    render();
+    if (token) { load(); connectWs(); }
+  })();
+  </script>
+</body>
+</html>

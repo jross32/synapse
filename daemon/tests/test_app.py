@@ -171,3 +171,13 @@ def test_websocket_ping_pong(harness) -> None:
         ws.send_json({"type": "ping"})
         reply = ws.receive_json()
         assert reply == {"type": "pong"}
+
+
+def test_mobile_ui_is_served_without_a_token(harness) -> None:
+    """The mobile Web UI is static + open — a phone loads it, then pairs."""
+
+    c, *_ = harness
+    res = c.get("/mobile/")  # no X-Synapse-Token
+    assert res.status_code == 200
+    assert "text/html" in res.headers["content-type"]
+    assert "Synapse" in res.text

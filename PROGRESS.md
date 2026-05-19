@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.11`
+`0.1.12`
 
 ## Current milestone
 
-**Milestone H in progress — remote access.** Milestone F (real UI) + G (Cloudtap) are done. v0.1.11 is the device-auth foundation: every `/api/v1` request now carries a token, so the daemon can be exposed to a phone — even over a Cloudflare tunnel — without anyone bypassing auth. The desktop bootstraps a local token; phones pair with a 6-digit code from Settings. 230 tests pass. Next: v0.1.12 — the mobile Web UI itself (responsive page at `/mobile`, pair screen, full control).
+**Milestone H complete — remote access.** Milestones A–H done. v0.1.11 added device auth (token on every request); v0.1.12 ships the mobile Web UI — the daemon serves a responsive page at `/mobile`, the phone pairs with a 6-digit code, then launches/stops projects and drives Cloudtap. Works on the LAN (`--bind-lan`) or off-network through a Cloudflare tunnel. 231 tests pass. Next: Milestone I — auto-start on login + tray polish.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -35,7 +35,7 @@
 | `0.1.10` | Milestone F — Home featured slideshow + page restructure | ✅ done |
 | `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ✅ done |
 | `0.1.11` | Milestone H — device auth + pairing foundation (token on every request) | ✅ done |
-| `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ⚪ next |
+| `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ✅ done |
 
 ## What's done
 
@@ -166,12 +166,17 @@
 - Renderer: `bootstrapLocalToken()` at startup; `api-client`/`ws-client` send the token; `PairedDevicesPanel` in Settings (generate code with countdown, list/revoke devices).
 - 230 tests pass (+14); typecheck green; E2E verified token bootstrap, 401 without token, pairing-code generation.
 
+### v0.1.12 — Mobile Web UI (Milestone H complete)
+- `mobile/index.html` — a self-contained responsive Web UI (HTML + CSS + vanilla JS, one file, no external resources). Pair screen (6-digit code → device token in `localStorage`) → dashboard: every project as a card with live status + Launch/Stop, `:port` links, a Cloudtap section (open/close tunnels), live WebSocket updates, "Unpair this device".
+- `app.py` — mounts `mobile/` as static files at `/mobile` (open, so a phone can load the page before pairing).
+- 231 tests pass (+1); typecheck green; E2E at a 390×844 phone viewport — paired, listed 21 projects, opened + closed a real Cloudflare tunnel from the phone, 0 console errors.
+
 ## What's next (immediate)
 
-**v0.1.12 — the mobile Web UI.** Finishes Milestone H:
-- The daemon serves a responsive Web UI at `/mobile` (reachable over LAN with `--bind-lan`, or off-network via a Cloudtap tunnel)
-- Pair screen (enter the 6-digit code) → device token stored → full control: view processes, launch/stop projects, use Cloudtap
-- Then Milestone I (auto-start + tray polish) → J (packaging) → K (v0.1.0 release)
+**Milestone I — auto-start + tray polish.** Milestones A–H are done.
+- Register Synapse as a Windows login item; daemon stays alive when the Electron window closes
+- Tray context menu: projects submenu + processes submenu + quit
+- Then Milestone J (packaging: PyInstaller + electron-builder + NSIS installer) → K (`v0.1.0` release)
 
 ## Known issues / broken state
 

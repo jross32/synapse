@@ -10,6 +10,34 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.12] -- 2026-05-19
+
+### Mobile Web UI -- Milestone H complete
+
+The daemon now serves a responsive Web UI to your phone. Pair the device once,
+then launch/stop projects and drive Cloudtap from anywhere -- on the LAN with
+`--bind-lan`, or off-network through a Cloudflare tunnel.
+
+#### Added
+- `mobile/index.html` -- a self-contained mobile Web UI (HTML + CSS + vanilla
+  JS in one file, zero external resources -- Contract #15). Dark theme
+  matching the desktop.
+  - **Pair screen** -- enter the 6-digit code from desktop Settings; the
+    device token is kept in `localStorage` so the phone stays paired.
+  - **Dashboard** -- every project as a card with live status + Launch/Stop;
+    `:port` links open the running app; a Cloudtap section opens/closes
+    tunnels. A WebSocket keeps it live; "Unpair this device" clears the token.
+  - A revoked or invalid token drops the phone straight back to the pair
+    screen.
+- `app.py` -- mounts `mobile/` as static files at `/mobile` (open, so a phone
+  can load the page before it has a token).
+
+#### Verified
+- 231 tests pass (+1: the mobile UI is served without a token); typecheck
+  green. E2E (Playwright at a 390x844 phone viewport): paired with a live
+  code, the dashboard listed all 21 projects, and a real Cloudflare tunnel
+  was opened **and** closed from the phone UI -- 0 console errors.
+
 ## [0.1.11] -- 2026-05-19
 
 ### Device auth + pairing foundation (Milestone H, part 1)
