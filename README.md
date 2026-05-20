@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.14` — **Universal command palette.** Hit `Ctrl+K` (or `⌘K`) anywhere in the app to launch any project, jump to any page, or trigger any action — symmetric word-prefix matching means "paired" still finds *Pair a device* mid-typing. Everything before it still stands: Windows auto-start, a token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone J (packaging — single-`.exe` installer, run as its own focused session). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.15` — **`Ctrl+K` palette + Apps filter.** Hit `Ctrl+K` (or `⌘K`) anywhere to launch a project, jump to a page, or trigger an action; on the Apps page, a filter input narrows the tile grid by name / path / tag / group / launch command. Everything before it still stands: Windows auto-start, a token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone J (packaging — single-`.exe` installer, run as its own focused session). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 

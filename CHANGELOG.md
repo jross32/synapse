@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.15] -- 2026-05-20
+
+### Apps page filter
+
+A search box on the Apps page so finding a tile in a 21-project registry is
+one keystroke -- complements the `Ctrl+K` palette (which is for *execution*)
+with a stay-in-place way to *browse* and *edit*.
+
+#### Added -- renderer
+- `pages/Apps.tsx` -- a filter input above the tile grid (with a leading
+  search icon + clear button) and an "N of M projects" counter. Matches each
+  query word against the project's name, id, path, description, group, tags,
+  and `launch_cmd`. Empty query = show everything. Empty result = a "Nothing
+  matches ..." hint with a nudge to clear.
+
+#### Verified
+- 231 tests pass; typecheck green. E2E: typing "scrap" narrowed 21 projects
+  to the 4 scraping-related ones; "zzz-no-match" shows the empty state;
+  clearing restores everything.
+
 ## [0.1.14] -- 2026-05-20
 
 ### Universal command palette (Contract #21)

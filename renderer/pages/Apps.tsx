@@ -4,19 +4,40 @@
 // resource snapshots, refresh. No own WebSocket.
 
 import { useMemo, useState } from 'react';
-import { FolderSearch, Plus } from 'lucide-react';
+import { FolderSearch, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project } from '@shared/generated-types';
 import { useDaemon } from '@shared/daemon-context';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { Input } from '../components/ui/input';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DiscoveryDialog } from '../components/DiscoveryDialog';
 import { LogViewer } from '../components/LogViewer';
 import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFormDialog';
 import { ProjectTile } from '../components/ProjectTile';
 import { PageHeader } from '../components/PageHeader';
+
+function matchesQuery(p: Project, q: string): boolean {
+  if (!q) return true;
+  const haystack = [
+    p.name,
+    p.id,
+    p.path,
+    p.description ?? '',
+    p.group ?? '',
+    (p.tags ?? []).join(' '),
+    p.launch_cmd,
+  ]
+    .join(' ')
+    .toLowerCase();
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => haystack.includes(word));
+}
 
 interface FormState {
   mode: ProjectFormMode;
@@ -33,6 +54,7 @@ export function AppsPage(): JSX.Element {
   const [logsFor, setLogsFor] = useState<Project | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   // Pinned projects float to the top, then alphabetical.
   const sorted = useMemo(
@@ -42,6 +64,13 @@ export function AppsPage(): JSX.Element {
         return a.name.localeCompare(b.name);
       }),
     [projects]
+  );
+
+  // Filter on every keystroke -- matches name, id, path, description, group,
+  // tags, and launch command. Empty query => everything.
+  const visible = useMemo(
+    () => sorted.filter((p) => matchesQuery(p, query)),
+    [sorted, query]
   );
 
   async function handleConfirmDelete(target: Project): Promise<void> {
@@ -95,23 +124,59 @@ export function AppsPage(): JSX.Element {
           </div>
         </Card>
       ) : (
-        <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6'>
-          {sorted.map((p) => (
-            <ProjectTile
-              key={p.id}
-              project={p}
-              resources={resourcesById[p.id]}
-              onEdit={(project) => setForm({ mode: 'edit', project })}
-              onDelete={(project) => {
-                setDeleteError(null);
-                setDeleting(project);
-              }}
-              onViewLogs={(project) => setLogsFor(project)}
-              onChanged={(updated) => upsertProjectLocal(updated)}
-              onActionError={(_p, err) => setActionError(err.message)}
-            />
-          ))}
-        </div>
+        <>
+          <div className='flex flex-wrap items-center gap-3'>
+            <div className='relative grow sm:max-w-md'>
+              <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder='Filter by name, path, tag, group…'
+                className='pl-9 pr-9'
+                aria-label='Filter projects'
+              />
+              {query && (
+                <button
+                  type='button'
+                  aria-label='Clear filter'
+                  onClick={() => setQuery('')}
+                  className='absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground'
+                >
+                  <X className='h-3.5 w-3.5' />
+                </button>
+              )}
+            </div>
+            <span className='text-xs text-muted-foreground'>
+              {query
+                ? `${visible.length} of ${sorted.length} project${sorted.length === 1 ? '' : 's'}`
+                : `${sorted.length} project${sorted.length === 1 ? '' : 's'}`}
+            </span>
+          </div>
+
+          {visible.length === 0 ? (
+            <Card className='border-dashed p-10 text-center text-sm text-muted-foreground'>
+              Nothing matches "{query}". Try a different word, or clear the filter.
+            </Card>
+          ) : (
+            <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6'>
+              {visible.map((p) => (
+                <ProjectTile
+                  key={p.id}
+                  project={p}
+                  resources={resourcesById[p.id]}
+                  onEdit={(project) => setForm({ mode: 'edit', project })}
+                  onDelete={(project) => {
+                    setDeleteError(null);
+                    setDeleting(project);
+                  }}
+                  onViewLogs={(project) => setLogsFor(project)}
+                  onChanged={(updated) => upsertProjectLocal(updated)}
+                  onActionError={(_p, err) => setActionError(err.message)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {form && (

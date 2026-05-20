@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.14`
+`0.1.15`
 
 ## Current milestone
 
-**Polish — universal command palette (Contract #21).** Milestones A–I done; v0.1.14 adds `Ctrl+K` / `⌘K` palette to launch projects, jump to pages, and trigger actions from one shortcut. 231 tests pass. Next: Milestone J — packaging (deferred to a focused session, since installer binaries need real-machine verification).
+**Polish track — daily-use ergonomics.** Milestones A–I done. v0.1.14 added `Ctrl+K` / `⌘K` command palette; v0.1.15 added an Apps page filter. 231 tests pass. Next: Open-in-VSCode tile action (v0.1.16) → Milestone J packaging (deferred to a focused session).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -38,6 +38,7 @@
 | `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ✅ done |
 | `0.1.13` | Milestone I — auto-start on login + tray polish + daemon attach-or-spawn | ✅ done |
 | `0.1.14` | Polish — universal `Ctrl+K` command palette (Contract #21) | ✅ done |
+| `0.1.15` | Polish — Apps page filter (name / path / tags / group / launch_cmd) | ✅ done |
 
 ## What's done
 
