@@ -10,6 +10,40 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.18] -- 2026-05-20
+
+### Light / Dark theme (Contract #14)
+
+A real, working light theme. Pick Light, Dark, or System on Settings → Theme,
+or hit `Ctrl+K → "Toggle light / dark theme"`. The choice persists; "System"
+follows your OS preference live.
+
+#### Added
+- `styles.css` -- a full `html.light` block with the inverted shadcn HSL
+  palette (background / foreground / card / popover / primary / secondary /
+  muted / accent / destructive / border / input / ring + the status colours
+  re-keyed for legibility on a light background).
+- `renderer/lib/theme.ts` -- `Theme` type, `getStoredTheme()`,
+  `setStoredTheme()`, `applyTheme()`, `watchOsTheme()`. The class lives on
+  `<html>`, choice in `localStorage["synapse.theme"]`.
+- `renderer/App.tsx` -- applies the stored theme on mount and re-applies
+  when the OS preference flips (only while in "system" mode).
+- `renderer/components/ThemePanel.tsx` -- a 3-way Light / Dark / System
+  selector in Settings.
+- `renderer/components/CommandPalette.tsx` -- "Toggle light / dark theme"
+  action so the palette can flip themes too.
+
+#### Fixed
+- `renderer/index.html` -- removed the hardcoded `text-slate-100 bg-nucleus`
+  classes from `<body>`. They were overriding the theme tokens with the
+  dark palette, which made the light theme look broken (light background,
+  light text). The body now leans on the CSS variables in `styles.css`.
+
+#### Verified
+- 235 tests pass; typecheck green. E2E: `Ctrl+K → "theme" → Enter` flipped
+  `<html>` to `class="light"`, swapped the body to a light background with
+  dark text, and persisted to localStorage. Doing it again flipped back.
+
 ## [0.1.17] -- 2026-05-20
 
 ### Audit log viewer

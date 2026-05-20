@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 
 import { DaemonProvider } from '@shared/daemon-context';
 import { DEFAULT_PAGE, type PageId } from '@shared/nav';
+import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { Sidebar } from './components/Sidebar';
 import { CommandPalette } from './components/CommandPalette';
 import { HomePage } from './pages/Home';
@@ -16,6 +17,16 @@ import { ProcessesPage } from './pages/Processes';
 import { SettingsPage } from './pages/Settings';
 
 export default function App(): JSX.Element {
+  // Apply the stored theme as early as possible to avoid a flash of dark
+  // when the user is on light. Also re-apply if the OS preference flips
+  // while we're in 'system' mode (Contract #14).
+  useEffect(() => {
+    applyTheme(getStoredTheme());
+    return watchOsTheme(() => {
+      if (getStoredTheme() === 'system') applyTheme('system');
+    });
+  }, []);
+
   return (
     <DaemonProvider>
       <Shell />

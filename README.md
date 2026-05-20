@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.17` — **Polish track: palette, filter, VS Code, audit log.** Hit `Ctrl+K` to fire any action; filter the Apps grid; **Open in VS Code** on any tile; review every state change Synapse ever made on Settings → Audit log (Contract #11). Everything before it still stands: Windows auto-start, token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **235 tests passing.** Next: Milestone J (packaging — focused session). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.18` — **Polish track: palette, filter, VS Code, audit log, light/dark theme.** Hit `Ctrl+K` for any action; filter the Apps grid; **Open in VS Code** on any tile; review every state change on Settings → Audit log; pick Light / Dark / System on Settings → Theme. Everything before it still stands: Windows auto-start, token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **235 tests passing.** Next: Milestone J (packaging — focused session). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 

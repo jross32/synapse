@@ -17,6 +17,7 @@ import {
   Settings as SettingsIcon,
   Smartphone,
   Square,
+  SunMoon,
   Triangle,
   Wrench,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ import { exportSnapshot } from '@shared/snapshot-client';
 import { openExternal } from '@shared/electron-bridge';
 import type { Project } from '@shared/generated-types';
 import type { PageId } from '@shared/nav';
+import { applyTheme, getStoredTheme, setStoredTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { Modal } from './ui/modal';
 
@@ -133,6 +135,18 @@ function buildCommands(args: {
     icon: ExternalLink,
     searchString: 'mobile phone open browser web ui',
     run: () => void openExternal('http://localhost:7878/mobile'),
+  });
+  list.push({
+    id: 'action:theme',
+    label: 'Toggle light / dark theme',
+    hint: 'Action',
+    icon: SunMoon,
+    searchString: 'theme dark light toggle switch appearance',
+    run: () => {
+      const next = getStoredTheme() === 'light' ? 'dark' : 'light';
+      setStoredTheme(next);
+      applyTheme(next);
+    },
   });
 
   // Projects -- contextual action by status

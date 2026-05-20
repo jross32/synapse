@@ -13,6 +13,7 @@ import { SnapshotPanel } from '../components/SnapshotPanel';
 import { PairedDevicesPanel } from '../components/PairedDevicesPanel';
 import { StartupPanel } from '../components/StartupPanel';
 import { AuditLogPanel } from '../components/AuditLogPanel';
+import { ThemePanel } from '../components/ThemePanel';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
 
@@ -67,6 +68,8 @@ export function SettingsPage(): JSX.Element {
         </div>
       </Card>
 
+      <ThemePanel />
+
       <StartupPanel />
 
       <PairedDevicesPanel />
@@ -78,7 +81,7 @@ export function SettingsPage(): JSX.Element {
       <Card className='flex flex-col gap-2 border-dashed p-6'>
         <h2 className='text-lg font-semibold'>Coming soon</h2>
         <p className='text-sm text-muted-foreground'>
-          A light/dark theme toggle and LAN exposure controls for the mobile UI land in
+          LAN exposure controls for the mobile UI and per-project health probes land in
           upcoming versions as their daemon settings are wired.
         </p>
       </Card>

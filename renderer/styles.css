@@ -41,6 +41,37 @@
     --status-error: 0 91% 71%;
   }
 
+  /* Light theme (Contract #14) -- inverted shadcn palette, toggled via
+   * `<html class="light">`. Synapse stays dark by default. */
+  html.light {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 263 76% 52%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 210 40% 90%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 76% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 86%;
+    --input: 214 32% 86%;
+    --ring: 263 76% 52%;
+
+    --status-idle: 215 16% 40%;
+    --status-launching: 38 92% 42%;
+    --status-launched: 152 60% 38%;
+    --status-stopping: 33 95% 42%;
+    --status-stopped: 215 14% 50%;
+    --status-error: 0 76% 48%;
+  }
+
   * {
     border-color: hsl(var(--border));
   }
