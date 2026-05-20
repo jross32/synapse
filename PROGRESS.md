@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.15`
+`0.1.16`
 
 ## Current milestone
 
-**Polish track — daily-use ergonomics.** Milestones A–I done. v0.1.14 added `Ctrl+K` / `⌘K` command palette; v0.1.15 added an Apps page filter. 231 tests pass. Next: Open-in-VSCode tile action (v0.1.16) → Milestone J packaging (deferred to a focused session).
+**Polish track — daily-use ergonomics.** Milestones A–I done. v0.1.14 = `Ctrl+K` palette; v0.1.15 = Apps page filter; v0.1.16 = Open-in-VS Code tile action. 231 tests pass. Next: more polish (theme toggle / audit log viewer / health probes) → Milestone J packaging (focused session).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -39,6 +39,7 @@
 | `0.1.13` | Milestone I — auto-start on login + tray polish + daemon attach-or-spawn | ✅ done |
 | `0.1.14` | Polish — universal `Ctrl+K` command palette (Contract #21) | ✅ done |
 | `0.1.15` | Polish — Apps page filter (name / path / tags / group / launch_cmd) | ✅ done |
+| `0.1.16` | Polish — Open-in-VS Code tile quick-action | ✅ done |
 
 ## What's done
 

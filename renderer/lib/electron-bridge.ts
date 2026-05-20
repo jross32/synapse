@@ -9,6 +9,7 @@ interface SynapseBridge {
   daemonWsBase: () => string;
   platform: () => string;
   openExternal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
+  openInVscode?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   getAutostart?: () => Promise<boolean>;
   setAutostart?: (enabled: boolean) => Promise<boolean>;
 }
@@ -24,6 +25,25 @@ export function hasElectronBridge(): boolean {
 /** True if this build can manage the Windows login item (Electron only). */
 export function canManageAutostart(): boolean {
   return typeof bridge()?.getAutostart === 'function';
+}
+
+/** True if the build can launch VS Code via the `code` CLI (Electron only). */
+export function canOpenInVscode(): boolean {
+  return typeof bridge()?.openInVscode === 'function';
+}
+
+/**
+ * Open a folder in VS Code. Returns the IPC result so callers can surface
+ * "code CLI not found" hints to the user.
+ */
+export async function openInVscode(
+  target: string
+): Promise<{ ok: boolean; error?: string }> {
+  const b = bridge();
+  if (!b?.openInVscode) {
+    return { ok: false, error: 'VS Code launching is only available in the desktop app.' };
+  }
+  return b.openInVscode(target);
 }
 
 /** Read whether Synapse starts at login. Returns null outside Electron. */

@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.16] -- 2026-05-20
+
+### Open-in-VS Code tile action
+
+A one-click "Open in VS Code" button on every project tile -- launches the
+project's folder in VS Code via the `code` CLI. Daily-use ergonomics for a
+dev's command center.
+
+#### Added
+- `electron/main.ts` -- `synapse:open-in-vscode` IPC: probes `code --version`
+  synchronously first so the user gets a meaningful error ("install the CLI
+  via Cmd+Shift+P -> Shell Command") instead of a silent no-op when VS Code
+  isn't installed. Then spawns `code <path>` detached so the editor outlives
+  Electron.
+- `electron/preload.ts` -- exposes `synapse.openInVscode(path)`.
+- `renderer/lib/electron-bridge.ts` -- `canOpenInVscode()` + `openInVscode()`.
+- `renderer/components/ProjectTile.tsx` -- a new **Open in VS Code** button
+  alongside *Open folder* and *Open in browser*. Hidden in browser dev mode
+  where the IPC isn't available.
+
+#### Verified
+- 231 tests pass; typecheck green. Rebooted Electron -- 0 console errors;
+  all 21 project tiles show the new button; `code --version` returns
+  1.118.1 on this machine.
+
 ## [0.1.15] -- 2026-05-20
 
 ### Apps page filter

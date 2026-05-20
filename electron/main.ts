@@ -10,7 +10,7 @@
 //   4. Refuse to run elevated unless --allow-admin is passed (Contract #16).
 
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron';
-import { ChildProcess, spawn } from 'node:child_process';
+import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -350,6 +350,49 @@ ipcMain.handle('synapse:open-external', async (_event, target: unknown) => {
       const err = await shell.openPath(target);
       if (err) return { ok: false, error: err };
     }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+// ── IPC: open a project in VS Code (v0.1.16) ──────────────────────────────
+// Probe for the `code` CLI synchronously so the user gets a meaningful error
+// when VS Code isn't installed instead of a silent no-op. Then spawn detached
+// so it outlives Electron.
+ipcMain.handle('synapse:open-in-vscode', async (_event, target: unknown) => {
+  if (typeof target !== 'string' || !target) {
+    return { ok: false, error: 'No path provided.' };
+  }
+  const cmd = process.platform === 'win32' ? 'code.cmd' : 'code';
+  const useShell = process.platform === 'win32';
+
+  // Quick existence probe -- "code --version" is fast (~50ms).
+  const probe = spawnSync(cmd, ['--version'], {
+    shell: useShell,
+    windowsHide: true,
+    timeout: 3000,
+  });
+  if (probe.error || probe.status !== 0) {
+    return {
+      ok: false,
+      error:
+        'VS Code CLI ("code") not found on PATH. Open VS Code, run ' +
+        '"Shell Command: Install \'code\' command in PATH", then try again.',
+    };
+  }
+
+  try {
+    const child = spawn(cmd, [target], {
+      detached: true,
+      stdio: 'ignore',
+      shell: useShell,
+      windowsHide: true,
+    });
+    child.on('error', () => {
+      /* probe passed, so this is unusual -- ignore silently */
+    });
+    child.unref();
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
