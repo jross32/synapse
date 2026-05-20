@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.16`
+`0.1.17`
 
 ## Current milestone
 
-**Polish track — daily-use ergonomics.** Milestones A–I done. v0.1.14 = `Ctrl+K` palette; v0.1.15 = Apps page filter; v0.1.16 = Open-in-VS Code tile action. 231 tests pass. Next: more polish (theme toggle / audit log viewer / health probes) → Milestone J packaging (focused session).
+**Polish track — daily-use ergonomics.** Milestones A–I done. v0.1.14 = `Ctrl+K` palette; v0.1.15 = Apps filter; v0.1.16 = Open-in-VS Code tile action; v0.1.17 = Audit log viewer (Contract #11 surfaced). 235 tests pass. Next: more polish → Milestone J packaging (focused session).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -40,6 +40,7 @@
 | `0.1.14` | Polish — universal `Ctrl+K` command palette (Contract #21) | ✅ done |
 | `0.1.15` | Polish — Apps page filter (name / path / tags / group / launch_cmd) | ✅ done |
 | `0.1.16` | Polish — Open-in-VS Code tile quick-action | ✅ done |
+| `0.1.17` | Polish — Audit log viewer in Settings (Contract #11 surfaced) | ✅ done |
 
 ## What's done
 

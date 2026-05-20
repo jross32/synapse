@@ -12,6 +12,7 @@ import { PageHeader } from '../components/PageHeader';
 import { SnapshotPanel } from '../components/SnapshotPanel';
 import { PairedDevicesPanel } from '../components/PairedDevicesPanel';
 import { StartupPanel } from '../components/StartupPanel';
+import { AuditLogPanel } from '../components/AuditLogPanel';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
 
@@ -71,6 +72,8 @@ export function SettingsPage(): JSX.Element {
       <PairedDevicesPanel />
 
       <SnapshotPanel />
+
+      <AuditLogPanel />
 
       <Card className='flex flex-col gap-2 border-dashed p-6'>
         <h2 className='text-lg font-semibold'>Coming soon</h2>

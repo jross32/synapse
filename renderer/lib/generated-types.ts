@@ -225,6 +225,27 @@ export interface ProjectListResponse {
   projects: Project[];
 }
 
+// ── Audit log (Contract #11 · v0.1.17) ───────────────────────────────────
+
+export interface AuditEntry {
+  id: number;
+  timestamp_utc: string;
+  entity_type: string;
+  entity_id: string | null;
+  action: string;
+  source: AuditSource;
+  result: string; // 'success' | 'error'
+  error_code: string | null;
+  details: Record<string, unknown> | null;
+}
+
+export interface AuditListResponse {
+  entries: AuditEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ── Tool plugin system (Milestone F · v0.1.9) ────────────────────────────
 
 export type ToolFieldType = 'number' | 'text' | 'path' | 'boolean';

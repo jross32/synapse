@@ -10,6 +10,40 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.17] -- 2026-05-20
+
+### Audit log viewer
+
+The daemon's audit_log table (Contract #11) is now visible in the UI. Every
+state-changing action -- launches, stops, project edits, tool actions,
+device pairings, snapshot restores -- shows up newest-first on Settings,
+including which source triggered it (Desktop / Mobile / Tray / CLI / Auto).
+
+#### Added -- daemon
+- `routes_audit.py` -- `GET /api/v1/audit?limit&offset` returns the audit
+  rows newest-first with `total`, `limit`, `offset`. Token-guarded.
+- `app.py` wires it under `/api/v1`.
+
+#### Added -- renderer
+- `lib/audit-client.ts` -- typed `listAudit(limit, offset)`.
+- `lib/generated-types.ts` -- `AuditEntry` + `AuditListResponse`.
+- `components/AuditLogPanel.tsx` -- a Settings card with a refresh button,
+  a free-text filter (matches entity / id / action / source / result /
+  error_code), live counts ("3 of 75 shown · 75 total"), and a scrollable
+  log of entries. Each row shows local time, entity, action, source, and a
+  green/red result pill.
+
+#### Fixed
+- A subtle bug found while wiring this in: the panel's old `mounted` ref
+  pattern interacted with React 18 Strict Mode's double-effect to leave
+  state-setters short-circuited and the panel permanently "Loading…".
+  Removed the ref -- React 18 no longer warns about unmounted setState.
+
+#### Verified
+- 235 tests pass (+4 audit-route cases); typecheck green. E2E: the panel
+  loaded 75 real audit entries from the daemon; typing "mobile" filtered to
+  the 3 mobile-sourced actions.
+
 ## [0.1.16] -- 2026-05-20
 
 ### Open-in-VS Code tile action

@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.16` — **Dev ergonomics: `Ctrl+K` palette, Apps filter, Open-in-VS Code.** Hit `Ctrl+K` to launch a project / jump to a page / trigger an action; filter the Apps tile grid by name / path / tag; click **Open in VS Code** on any tile to launch its folder in your editor. Everything before it still stands: Windows auto-start, a token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone J (packaging — focused session). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.17` — **Polish track: palette, filter, VS Code, audit log.** Hit `Ctrl+K` to fire any action; filter the Apps grid; **Open in VS Code** on any tile; review every state change Synapse ever made on Settings → Audit log (Contract #11). Everything before it still stands: Windows auto-start, token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **235 tests passing.** Next: Milestone J (packaging — focused session). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 231 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 235 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
