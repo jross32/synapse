@@ -3,11 +3,12 @@
 // The whole tree sits under <DaemonProvider> so every page shares one
 // daemon connection. "Routing" is just an activePage enum -- no URL router.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { DaemonProvider } from '@shared/daemon-context';
 import { DEFAULT_PAGE, type PageId } from '@shared/nav';
 import { Sidebar } from './components/Sidebar';
+import { CommandPalette } from './components/CommandPalette';
 import { HomePage } from './pages/Home';
 import { AppsPage } from './pages/Apps';
 import { ToolsPage } from './pages/Tools';
@@ -24,10 +25,23 @@ export default function App(): JSX.Element {
 
 function Shell(): JSX.Element {
   const [page, setPage] = useState<PageId>(DEFAULT_PAGE);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Global Ctrl+K / Cmd+K — the universal command palette (Contract #21).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
-      <Sidebar active={page} onNavigate={setPage} />
+      <Sidebar active={page} onNavigate={setPage} onOpenPalette={() => setPaletteOpen(true)} />
       <main className='flex-1 overflow-y-auto'>
         <div className='mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8'>
           {page === 'home' && <HomePage onNavigate={setPage} />}
@@ -37,6 +51,11 @@ function Shell(): JSX.Element {
           {page === 'settings' && <SettingsPage />}
         </div>
       </main>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={(p) => setPage(p)}
+      />
     </div>
   );
 }

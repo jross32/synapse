@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.13` — **Milestone I complete: auto-start + tray polish.** Synapse can now start with Windows (toggle in Settings), and the tray menu carries a live Projects submenu, an Open-mobile-UI entry, and a start-with-Windows checkbox. The Electron app probes for an already-running daemon and attaches instead of double-spawning. Everything before it still stands: control from your phone (paired, token-authenticated mobile Web UI at `/mobile`), the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, and multi-stack auto-discovery. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone J (packaging — single-`.exe` installer). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.14` — **Universal command palette.** Hit `Ctrl+K` (or `⌘K`) anywhere in the app to launch any project, jump to any page, or trigger any action — symmetric word-prefix matching means "paired" still finds *Pair a device* mid-typing. Everything before it still stands: Windows auto-start, a token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **231 tests passing.** Next: Milestone J (packaging — single-`.exe` installer, run as its own focused session). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 

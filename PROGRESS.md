@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.13`
+`0.1.14`
 
 ## Current milestone
 
-**Milestone I complete — auto-start + tray polish.** Milestones A–I done. Synapse can register itself as a Windows login item (Settings toggle); the tray menu carries a live Projects submenu + Open-mobile-UI + a start-with-Windows checkbox; the Electron app probes for an already-running daemon and attaches instead of double-spawning. 231 tests pass. Next: Milestone J — packaging (PyInstaller + electron-builder + NSIS → a single-`.exe` installer).
+**Polish — universal command palette (Contract #21).** Milestones A–I done; v0.1.14 adds `Ctrl+K` / `⌘K` palette to launch projects, jump to pages, and trigger actions from one shortcut. 231 tests pass. Next: Milestone J — packaging (deferred to a focused session, since installer binaries need real-machine verification).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -37,6 +37,7 @@
 | `0.1.11` | Milestone H — device auth + pairing foundation (token on every request) | ✅ done |
 | `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ✅ done |
 | `0.1.13` | Milestone I — auto-start on login + tray polish + daemon attach-or-spawn | ✅ done |
+| `0.1.14` | Polish — universal `Ctrl+K` command palette (Contract #21) | ✅ done |
 
 ## What's done
 

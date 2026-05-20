@@ -4,7 +4,7 @@
 // mark on top, one icon+label button per destination, a live connection dot
 // at the bottom. Active page is owned by App.tsx and passed down.
 
-import { Wifi, WifiOff } from 'lucide-react';
+import { Search, Wifi, WifiOff } from 'lucide-react';
 
 import { cn } from '@shared/utils';
 import { useDaemon } from '@shared/daemon-context';
@@ -13,11 +13,14 @@ import { NAV_ITEMS, type PageId } from '@shared/nav';
 export interface SidebarProps {
   active: PageId;
   onNavigate: (page: PageId) => void;
+  onOpenPalette?: () => void;
 }
 
-export function Sidebar({ active, onNavigate }: SidebarProps): JSX.Element {
+export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JSX.Element {
   const { connState } = useDaemon();
   const online = connState === 'open';
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+  const shortcutKey = isMac ? '⌘K' : 'Ctrl+K';
 
   return (
     <nav
@@ -60,6 +63,19 @@ export function Sidebar({ active, onNavigate }: SidebarProps): JSX.Element {
           );
         })}
       </div>
+
+      {/* Command palette shortcut hint */}
+      {onOpenPalette && (
+        <button
+          type='button'
+          onClick={onOpenPalette}
+          title='Open the command palette'
+          className='mt-2 flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground'
+        >
+          <Search className='h-4 w-4' aria-hidden='true' />
+          <span className='font-mono'>{shortcutKey}</span>
+        </button>
+      )}
 
       {/* Connection indicator */}
       <div

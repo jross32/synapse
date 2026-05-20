@@ -10,6 +10,34 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.14] -- 2026-05-20
+
+### Universal command palette (Contract #21)
+
+`Ctrl+K` (or `Cmd+K`) opens a Synapse-wide command palette: launch any
+project, jump to any page, or trigger an action -- all from one shortcut.
+
+#### Added -- renderer
+- `components/CommandPalette.tsx` -- a modal command palette with a search
+  input + keyboard-navigated result list. Filters across:
+  - **Projects** (one entry each, **Launch** when idle, **Stop** when
+    running -- the action contextualises by status; matches on name, id,
+    path, group, tags).
+  - **Pages** (Home / Apps / Tools / Processes / Settings).
+  - **Actions** (Add a project, Scan for projects, Pair a device, Download
+    snapshot, Open mobile UI in browser).
+  - Symmetric word-prefix matching, so "paired" still finds **Pair a
+    device** and "set" still finds **Go to Settings** -- useful mid-typing.
+- `App.tsx` -- a global `Ctrl+K` / `Cmd+K` keyboard listener toggles the
+  palette. `↑` / `↓` to navigate, `Enter` to run, `Esc` to close.
+- `components/Sidebar.tsx` -- a small `Ctrl+K` (or `⌘K` on macOS) button at
+  the bottom of the rail, so the shortcut is discoverable. Click it too.
+
+#### Verified
+- 231 tests pass; typecheck green. E2E: `Ctrl+K` opened the palette;
+  typing "paired" filtered to **Pair a device** alone; `Enter` ran it and
+  navigated to Settings. 0 console errors.
+
 ## [0.1.13] -- 2026-05-19
 
 ### Auto-start + tray polish -- Milestone I
