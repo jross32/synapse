@@ -168,6 +168,12 @@ class ToolAction(BaseModel):
     danger: bool = False
     scope: ToolActionScope = ToolActionScope.TOOL
     available_in: list[EntityStatus] = Field(default_factory=list)
+    # Declarative tier (v0.1.22 · ADR-0001 step 2). When set, the daemon runs
+    # the named vetted primitive (e.g. "process.spawn", "url.open") with
+    # params + the user's field values -- no Python handler needed. That's
+    # how a third-party tool can ship as pure manifest JSON.
+    primitive: str | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolManifest(BaseModel):

@@ -35,6 +35,7 @@ from .models import EntityStatus, ToolActionScope, ToolManifest, ToolState
 from .storage import Storage
 from .tools import ToolHandler
 from .tools.cloudtap import CloudtapTool
+from .tools_primitives import is_known_primitive, run_primitive
 from .ws import EventBus
 
 if TYPE_CHECKING:
@@ -91,13 +92,18 @@ class ToolRegistry:
                 continue
 
             factory = _BUILTIN_HANDLER_FACTORIES.get(manifest.id)
+            has_primitives = any(a.primitive for a in manifest.actions)
             if factory is not None:
                 manifest.runnable = True
                 self._handlers[manifest.id] = factory(self._bus, self._storage)
+            elif has_primitives:
+                # Declarative tier (v0.1.22) -- runnable without a handler.
+                manifest.runnable = True
             else:
                 manifest.runnable = False
                 log.info(
-                    "Tool '%s' has no built-in handler; listing it read-only.", manifest.id
+                    "Tool '%s' has no built-in handler or primitives; listing it read-only.",
+                    manifest.id,
                 )
 
             self._manifests[manifest.id] = manifest
@@ -152,6 +158,19 @@ class ToolRegistry:
         if action is None:
             raise invalid("tool", f"Tool '{tool_id}' has no action '{action_id}'.")
 
+        # Declarative tier (v0.1.22): the manifest invokes a vetted primitive
+        # directly; no Python handler involved. Item scope doesn't apply --
+        # primitives are stateless one-shots, so any item_id is ignored.
+        if action.primitive:
+            if not is_known_primitive(action.primitive):
+                raise invalid(
+                    "tool",
+                    f"Action '{action_id}' invokes unknown primitive '{action.primitive}'.",
+                )
+            return await run_primitive(
+                action.primitive, action.params or {}, fields or {}, self._bus, tool_id
+            )
+
         # An item-scoped action (e.g. "close this tunnel") needs a target.
         if action.scope == ToolActionScope.ITEM and not item_id:
             raise invalid(
@@ -187,7 +206,9 @@ class ToolRegistry:
                 manifest = self._read_manifest(manifest_path)
                 if manifest is None or manifest.id in new_manifests:
                     continue
-                if manifest.id in _BUILTIN_HANDLER_FACTORIES:
+                if manifest.id in _BUILTIN_HANDLER_FACTORIES or any(
+                    a.primitive for a in manifest.actions
+                ):
                     manifest.runnable = True
                 new_manifests[manifest.id] = manifest
 

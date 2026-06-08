@@ -288,6 +288,10 @@ export interface ToolAction {
   scope: ToolActionScope;
   /** Statuses in which this action is enabled. Empty = always enabled. */
   available_in: EntityStatus[];
+  /** Declarative tier (v0.1.22): vetted primitive (e.g. 'url.open'). */
+  primitive?: string | null;
+  /** Primitive params (e.g. {url: 'https://...{port}'}). */
+  params?: Record<string, unknown>;
 }
 
 export interface ToolManifest {

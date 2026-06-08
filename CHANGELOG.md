@@ -10,6 +10,66 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.22] -- 2026-06-08
+
+### Declarative tool primitives (ADR-0001 step 2)
+
+A tool can now ship as a **pure-JSON manifest** with no Python handler. An
+action declares ``primitive`` + ``params`` and the daemon dispatches to a
+vetted built-in primitive. That's the "third-party tools just drop in" property
+the marketplace needs -- no curated handler review, no daemon rebuild.
+
+#### Added
+- `synapse_daemon/models.py` -- `ToolAction.primitive: str | None` and
+  `ToolAction.params: dict`. The TS mirror in `lib/generated-types.ts`
+  picks them up.
+- `synapse_daemon/tools_primitives.py` -- the runtime:
+  - `PRIMITIVES` -- the audited set. v0.1.22 ships **two**:
+    - `url.open` -- opens a URL in the default browser. Refuses non-`http(s)`
+      schemes. Substitutes `{field}` placeholders in the template.
+    - `process.spawn` -- spawns a one-shot subprocess (argv list, **no shell**,
+      so values like `"; rm -rf /"` cannot inject a command). Combined
+      stdout/stderr is captured, with a default 5 s timeout (cap 30 s).
+      Output is tail-trimmed to 4 KB so a chatty process doesn't blow the
+      response.
+  - `substitute(template, fields)` -- the field substitution rule.
+    `{field_name}` is replaced by `str(fields[field_name])`; missing fields
+    become empty strings. Not a template language -- no expressions, no
+    chains, no shell.
+  - `run_primitive(name, params, fields, bus, tool_id) -> ToolState` --
+    publishes a `v1.tool.primitive_ran` event on success.
+- `synapse_daemon/tools_registry.py`:
+  - `load()` / `reload()` mark a manifest **runnable** when any of its
+    actions has a `primitive`, even if no handler is bound in
+    `_BUILTIN_HANDLER_FACTORIES`. That's how third-party tools light up
+    without a Synapse build.
+  - `run_action()` dispatches to `run_primitive` whenever the action has
+    a `primitive`; the handler path is only taken when it doesn't.
+
+#### Verified
+- 273 tests pass (+18 in `test_tools_primitives.py`: catalogue,
+  substitution, url.open success / non-http rejection / missing-param /
+  failed-open, process.spawn success / non-zero exit / missing-argv /
+  missing-binary / timeout, unknown primitive, and the registry
+  integration: declarative manifest is runnable + dispatch + bad-primitive
+  rejection). Typecheck green.
+- E2E live: wrote `tools/_primitives-demo/manifest.json` with a single
+  action `{primitive: "process.spawn", params: {argv: ["python", "-c",
+  "print('synapse says: {message}')"]}}` -- watchdog hot-reloaded it,
+  `runnable=true`, and `POST /api/v1/tools/primitives-demo/actions/echo`
+  with `fields.message="hello from v0.1.22"` returned
+  `status: launched`, output `synapse says: hello from v0.1.22`. **No
+  daemon code touched the tool.** Deleted the folder; the daemon dropped
+  it within a beat.
+
+#### Why this matters
+
+This is the load-bearing chunk of ADR-0001: with primitives + hot reload,
+ADR-0001's "Install / Uninstall a declarative tool" flow is essentially
+**already possible by hand** -- a marketplace can write the manifest to
+`tools/<id>/` and the daemon picks it up. The Browse / Install UI in
+v0.1.23 mostly wraps that loop in a discovery + click-to-install layer.
+
 ## [0.1.21] -- 2026-06-08
 
 ### Hot manifest reload for tools (Contract #26 · ADR-0001 step 1)

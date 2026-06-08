@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.21` — **Hot manifest reload + project kinds.** Drop a `tools/<id>/manifest.json` into the running daemon and it appears in the UI within ~250 ms (no restart) — the foundation for the in-app tool marketplace from [ADR-0001](./docs/adr/0001-tool-marketplace.md). Every project carries a **kind** (App / UI / Service / **MCP server** / Library / Script / Other); discovery infers it from the folder, the Apps page has filter chips, tiles wear a coloured kind badge. Plus the existing polish: `Ctrl+K` palette, Apps text filter, Open-in-VS Code, Open-in-Terminal, audit log, light/dark theme, responsive sidebar. Windows auto-start, token-authenticated mobile Web UI at `/mobile`, Home featured slideshow, multi-tunnel **Cloudtap**, JSON snapshot/restore, richer tray menu — all still there. Double-click `synapse.cmd` to launch — no PowerShell needed. **255 tests passing.** Next: declarative tool primitives, then the Browse / Install marketplace flow. See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.22` — **Declarative tool primitives.** A tool can now ship as a **pure-JSON manifest** — no Python, no daemon build — and the daemon dispatches its actions to vetted primitives (`url.open`, `process.spawn`). Combined with `v0.1.21`'s hot reload, that's the install/uninstall loop the in-app tool marketplace from [ADR-0001](./docs/adr/0001-tool-marketplace.md) needs. Every project carries a **kind** (App / UI / Service / **MCP server** / Library / Script / Other); the Apps page has filter chips and tiles wear a coloured kind badge. Plus the polish: `Ctrl+K` palette, Apps text filter, Open-in-VS Code, Open-in-Terminal, audit log, light/dark theme, responsive sidebar. Windows auto-start, token-authenticated mobile Web UI at `/mobile`, Home featured slideshow, multi-tunnel **Cloudtap**, JSON snapshot/restore, richer tray menu — all still there. Double-click `synapse.cmd` to launch — no PowerShell needed. **273 tests passing.** Next: Tools → Browse page (registry fetch). See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 255 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 273 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
