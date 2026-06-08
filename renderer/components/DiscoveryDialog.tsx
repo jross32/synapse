@@ -10,6 +10,8 @@ import { FolderSearch, Loader2 } from 'lucide-react';
 
 import { importProjects, scanForProjects, type ImportItem } from '@shared/discovery-client';
 import type { DetectedProject } from '@shared/generated-types';
+import { kindMeta } from '@shared/project-kinds';
+import { cn } from '@shared/utils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -87,6 +89,7 @@ export function DiscoveryDialog({ open, onClose, onImported }: DiscoveryDialogPr
         expected_port: r.detected.suggested_port,
         icon: r.detected.icon,
         tags: r.detected.stack !== 'unknown' ? [r.detected.stack] : [],
+        kind: r.detected.kind,
       }));
     if (picks.length === 0) {
       onClose();
@@ -243,6 +246,22 @@ function DiscoveryRow({
           <div className='flex flex-wrap items-center gap-2'>
             <span className='font-medium'>{d.name}</span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tone}`}>{d.stack}</span>
+            {d.kind && d.kind !== 'app' && (() => {
+              const km = kindMeta(d.kind);
+              const KIcon = km.icon;
+              return (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                    km.badgeClass
+                  )}
+                  title={`Detected as ${km.label}`}
+                >
+                  <KIcon className='h-2.5 w-2.5' />
+                  {km.label}
+                </span>
+              );
+            })()}
             <span className='text-[10px] text-muted-foreground'>
               {Math.round(d.confidence * 100)}% match
             </span>

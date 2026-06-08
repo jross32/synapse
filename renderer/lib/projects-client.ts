@@ -6,6 +6,7 @@
 import { apiFetch } from './api-client';
 import type {
   Project,
+  ProjectKind,
   ProjectListResponse,
   ProjectUpdate,
 } from './generated-types';
@@ -32,6 +33,7 @@ export interface ProjectCreateInput {
   icon?: string | null;
   expected_port?: number | null;
   group?: string | null;
+  kind?: ProjectKind;
 }
 
 export async function createProject(input: ProjectCreateInput): Promise<Project> {

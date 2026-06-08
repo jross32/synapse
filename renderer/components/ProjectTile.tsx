@@ -11,6 +11,7 @@ import { launchProject, patchProject, stopProject } from '@shared/projects-clien
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import { canOpenInVscode, openExternal, openInVscode } from '@shared/electron-bridge';
+import { kindMeta } from '@shared/project-kinds';
 import { cn } from '@shared/utils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -92,16 +93,35 @@ export function ProjectTile({
         </div>
       </header>
 
-      {(project.group || project.tags.length > 0) && (
-        <div className='flex flex-wrap items-center gap-1.5'>
-          {project.group && <Badge variant='secondary'>{project.group}</Badge>}
-          {project.tags.map((t) => (
-            <Badge key={t} variant='outline'>
-              {t}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {(() => {
+        const km = kindMeta(project.kind);
+        const KIcon = km.icon;
+        const showRow =
+          project.kind !== 'app' || project.group || project.tags.length > 0;
+        if (!showRow) return null;
+        return (
+          <div className='flex flex-wrap items-center gap-1.5'>
+            {project.kind !== 'app' && (
+              <span
+                title={`Kind: ${km.label}`}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border-transparent px-2 py-0.5 text-[11px] font-medium',
+                  km.badgeClass
+                )}
+              >
+                <KIcon className='h-3 w-3' />
+                {km.label}
+              </span>
+            )}
+            {project.group && <Badge variant='secondary'>{project.group}</Badge>}
+            {project.tags.map((t) => (
+              <Badge key={t} variant='outline'>
+                {t}
+              </Badge>
+            ))}
+          </div>
+        );
+      })()}
 
       {project.description && (
         <p className='text-sm text-muted-foreground'>{project.description}</p>

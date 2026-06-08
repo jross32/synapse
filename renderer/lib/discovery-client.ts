@@ -20,6 +20,8 @@ export interface ImportItem {
   icon?: string | null;
   group?: string | null;
   tags?: string[];
+  /** Discovery's classification — passed through to the new project. */
+  kind?: string;
 }
 
 /** Bulk-import the chosen detected projects (created with discovered=true). */

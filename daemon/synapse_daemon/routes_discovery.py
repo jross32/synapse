@@ -45,6 +45,7 @@ class ImportRequestItem(BaseModel):
     icon: str | None = None
     group: str | None = None
     tags: list[str] = Field(default_factory=list)
+    kind: str | None = None    # discovery's classification, passed through
 
 
 class ImportRequest(BaseModel):
@@ -100,7 +101,10 @@ def build_discovery_router(storage: Storage) -> APIRouter:
                 target_id = f"{base}-{n}"
 
             try:
-                project = Project(
+                # The kind field accepts any string from discovery; the
+                # Project model validates it against ProjectKind. An unknown
+                # value falls back to APP rather than rejecting the import.
+                project_kwargs: dict = dict(
                     id=target_id,
                     name=item.name,
                     path=item.path,
@@ -112,6 +116,13 @@ def build_discovery_router(storage: Storage) -> APIRouter:
                     tags=item.tags,
                     discovered=True,
                 )
+                if item.kind:
+                    try:
+                        from .projects import ProjectKind as _K
+                        project_kwargs["kind"] = _K(item.kind)
+                    except ValueError:
+                        pass  # fall back to APP default
+                project = Project(**project_kwargs)
             except Exception as exc:  # invalid id / fields
                 report.skipped.append({"id": item.id, "reason": str(exc)})
                 continue

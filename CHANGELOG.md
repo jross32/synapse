@@ -10,6 +10,68 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.19] -- 2026-06-08
+
+### Project kinds + filtering
+
+Tame the 21-projects-is-a-mess problem: every project now carries a *kind*
+(App / UI / Service / MCP server / Library / Script / Other). Discovery
+infers it automatically; the Apps page has a chips row above the grid that
+filters by kind. A small kind badge appears on each tile. The edit dialog
+exposes a kind picker.
+
+This is the foundation the user asked for ("I want to be able to separate
+[wbscrper UI from its MCP backend], or have it auto-detect if it's an MCP
+server as well as a project or app, and organize/filter for that under
+projects, so it's not a huge list of stuff").
+
+#### Added -- daemon
+- `migration 005_project_kinds.sql` -- adds a `kind` column to projects
+  (default `'app'`) and an index.
+- `synapse_daemon/projects.py` -- `ProjectKind` enum (`app` / `ui` / `service`
+  / `mcp-server` / `library` / `script` / `other`); `Project` + `ProjectUpdate`
+  gain `kind`; row reader/writer round-trip it; unknown values fall back to
+  `'app'` so a future kind can land in the DB without breaking an older daemon.
+- `synapse_daemon/discovery.py` -- `DetectedProject.kind`; a `_classify`
+  pass after each per-stack detector maps the result to a kind. MCP server
+  detection looks at file naming (`mcp-server.js`, `mcp_server.py`, `mcp/__main__.py`),
+  Node deps/scripts/keywords/bin entries containing `mcp` or
+  `@modelcontextprotocol/*`, and Python `pyproject.toml` deps mentioning `mcp`.
+- `synapse_daemon/routes_discovery.py` -- `ImportRequestItem.kind` is passed
+  through on bulk-import so detection results stick.
+
+#### Added -- renderer
+- `lib/project-kinds.ts` -- single source of truth (label / icon / badge
+  tone) so a new kind drops in one place.
+- `pages/Apps.tsx` -- a chips row above the tile grid (only the kinds with
+  at least one project show up, each with a live count). Clicking a chip
+  filters; combined with the existing text search.
+- `components/ProjectTile.tsx` -- a small coloured kind badge next to the
+  group / tag row. Hidden when the kind is the default `'app'`.
+- `components/ProjectFormDialog.tsx` -- a Kind select; PATCH passes it
+  through on edit.
+- `components/DiscoveryDialog.tsx` -- detected kind shows as a coloured pill
+  on each row and is sent on import.
+- `lib/discovery-client.ts` + `lib/projects-client.ts` + `lib/generated-types.ts`
+  -- types updated.
+
+#### Added -- docs
+- `docs/adr/0001-tool-marketplace.md` -- design ADR for the tool marketplace
+  the user asked for: a two-tier model (declarative tools the daemon can
+  auto-install + curated handler tools that ship in trusted builds), a
+  registry index, hot install/uninstall via `watchdog`, and an Install-from-URL
+  flow. Lays out the v0.1.20 -> v0.1.25+ roadmap to land it.
+
+#### Verified
+- 248 tests pass (+13: new `test_project_kinds.py` covering Node UI / Express
+  service / MCP detection by dep, filename, script name / Python FastAPI /
+  Python MCP by dep / Python single-file script / static / docker-compose
+  service / Rust app, plus sqlite round-trip and the default fallback).
+  Typecheck green. E2E: PATCHed `wbscrper` to `mcp-server` and a few others
+  to `ui`; the Apps chips read **All 21 / App 17 / UI 3 / MCP server 1** with
+  accurate filtering, and Web Scraper's tile now wears a violet MCP-server
+  badge.
+
 ## [0.1.18] -- 2026-05-20
 
 ### Light / Dark theme (Contract #14)

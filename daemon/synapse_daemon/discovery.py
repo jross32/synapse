@@ -54,6 +54,9 @@ class DetectedProject(BaseModel):
     icon: str | None = None
     description: str | None = None
     markers: list[str] = Field(default_factory=list)   # files that triggered detection
+    # Classification (v0.1.19) -- string to stay compatible with the
+    # ProjectKind enum without an import cycle. 'app' = default.
+    kind: str = "app"
     already_registered: bool = False                   # set by the scan route, not the detector
 
 
@@ -472,8 +475,110 @@ def detect_project(path: Path) -> DetectedProject | None:
     for detector in _DETECTORS:
         result = detector(path, names)
         if result is not None:
+            result.kind = _classify(result, path, names)
             return result
     return None
+
+
+# ── classification ─────────────────────────────────────────────────────────
+# Maps a detection onto a `ProjectKind`-string so the Apps page can filter
+# the grid (v0.1.19). The post-detection pass keeps the per-stack detectors
+# small and lets the rules evolve without touching every detector.
+
+
+_NODE_UI_FRAMEWORKS = {
+    "vite", "next", "react-scripts", "angular", "nuxt", "astro", "svelte", "vue-cli",
+}
+_NODE_SERVICE_FRAMEWORKS = {"express", "nest"}
+_PY_SERVICE_FRAMEWORKS = {"django", "flask", "fastapi"}
+
+
+def _classify(detected: DetectedProject, path: Path, names: set[str]) -> str:
+    stack = detected.stack
+    framework = detected.framework
+
+    if stack == "node":
+        if _looks_like_node_mcp(path, names):
+            return "mcp-server"
+        if framework in _NODE_UI_FRAMEWORKS:
+            return "ui"
+        if framework in _NODE_SERVICE_FRAMEWORKS:
+            return "service"
+        return "app"
+
+    if stack.startswith("python"):
+        if _looks_like_python_mcp(path, names):
+            return "mcp-server"
+        if framework in _PY_SERVICE_FRAMEWORKS:
+            return "service"
+        cmd = detected.suggested_launch_cmd or ""
+        # `python foo.py` with no framework = a one-shot script.
+        if re.match(r"^python\s+\w+\.py$", cmd) and not framework:
+            return "script"
+        return "app"
+
+    if stack == "static":
+        return "ui"
+    if stack == "docker-compose":
+        return "service"
+    if stack == "make":
+        return "other"
+    if stack == "unknown":
+        return "library"  # bare git repo with no recognised stack
+
+    # rust / go / dotnet / java-* / ruby / php / deno -> a generic launchable app.
+    return "app"
+
+
+def _looks_like_node_mcp(path: Path, names: set[str]) -> bool:
+    """Detect a Node-based MCP server (file conventions + package.json hints)."""
+
+    # File-based signal -- `mcp-server.js`, `mcp_server.ts`, `mcp.mjs`, …
+    if any(re.fullmatch(r"mcp[-_]?server\.(js|ts|mjs|cjs)", n) for n in names):
+        return True
+
+    pkg = _read_json(path / "package.json") or {}
+    deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+    if any("modelcontextprotocol" in k.lower() for k in deps):
+        return True
+    keywords = pkg.get("keywords") or []
+    if any(
+        isinstance(k, str) and ("mcp" == k.lower() or "model-context-protocol" in k.lower())
+        for k in keywords
+    ):
+        return True
+    scripts = pkg.get("scripts") or {}
+    if isinstance(scripts, dict) and any("mcp" in name.lower() for name in scripts):
+        return True
+    bin_field = pkg.get("bin")
+    if isinstance(bin_field, dict) and any("mcp" in name.lower() for name in bin_field):
+        return True
+    if isinstance(bin_field, str) and "mcp" in bin_field.lower():
+        return True
+    return False
+
+
+def _looks_like_python_mcp(path: Path, names: set[str]) -> bool:
+    """Detect a Python-based MCP server."""
+
+    if any(re.fullmatch(r"mcp[-_]?server\.py", n) for n in names):
+        return True
+    for sub in ("mcp_server", "mcp"):
+        if (path / sub / "__main__.py").exists():
+            return True
+
+    if "pyproject.toml" in names:
+        pp = _read_toml(path / "pyproject.toml") or {}
+        proj = pp.get("project", {}) if isinstance(pp.get("project"), dict) else {}
+        deps_str = " ".join(proj.get("dependencies", []) or []).lower()
+        if re.search(r"(?:^|[\s>=<])mcp(?:[\s>=<\[,]|$)", deps_str):
+            return True
+        if "modelcontextprotocol" in deps_str:
+            return True
+        name = str(proj.get("name", ""))
+        if "mcp" in name.lower():
+            return True
+    return False
 
 
 def scan_directory(root: Path, max_depth: int = 2) -> list[DetectedProject]:

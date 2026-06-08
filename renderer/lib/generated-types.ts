@@ -141,6 +141,16 @@ export interface RestoreReport {
 
 // ── Projects (Milestone D) ───────────────────────────────────────────────
 
+/** What a project IS (v0.1.19) -- drives the Apps page filter. */
+export type ProjectKind =
+  | 'app'
+  | 'ui'
+  | 'service'
+  | 'mcp-server'
+  | 'library'
+  | 'script'
+  | 'other';
+
 export interface Project {
   id: string;
   name: string;
@@ -159,6 +169,7 @@ export interface Project {
   tags: string[];
   pinned: boolean;
   discovered: boolean;
+  kind: ProjectKind;
   status: EntityStatus;
   last_error: ErrorRef | null;
   current_health: HealthState;
@@ -189,6 +200,8 @@ export interface DetectedProject {
   icon: string | null;
   description: string | null;
   markers: string[];
+  /** Discovery's classification (v0.1.19). */
+  kind: ProjectKind;
   already_registered: boolean;
 }
 
@@ -219,6 +232,7 @@ export interface ProjectUpdate {
   group?: string | null;
   tags?: string[];
   pinned?: boolean;
+  kind?: ProjectKind;
 }
 
 export interface ProjectListResponse {

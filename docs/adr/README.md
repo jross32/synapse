@@ -51,4 +51,4 @@ What did we choose? Be specific.
 
 ## Index
 
-_No ADRs yet. The first one will likely be `0001-sqlite-vs-postgres.md` or `0001-electron-bundling-strategy.md` during Milestone B/J._
+- [`0001-tool-marketplace.md`](./0001-tool-marketplace.md) — two-tier (declarative + curated handler) marketplace for distributing third-party + first-party tools through a registry, with hot install/uninstall and an in-app Browse / Install from URL flow. (Proposed, v0.1.19.)

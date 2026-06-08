@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.18` — **Polish track: palette, filter, VS Code, audit log, light/dark theme.** Hit `Ctrl+K` for any action; filter the Apps grid; **Open in VS Code** on any tile; review every state change on Settings → Audit log; pick Light / Dark / System on Settings → Theme. Everything before it still stands: Windows auto-start, token-authenticated mobile Web UI at `/mobile`, the Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, multi-stack auto-discovery, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **235 tests passing.** Next: Milestone J (packaging — focused session). See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.19` — **Project kinds + filtering.** Every project carries a kind (App / UI / Service / **MCP server** / Library / Script / Other); discovery infers it from the folder (Node + Python MCP detection, framework matching, file conventions), the Apps page has filter chips above the grid, and tiles wear a coloured kind badge. Solves the 21-projects-is-a-mess problem and surfaces "is this an MCP server or a UI?" at a glance. Plus the existing polish: `Ctrl+K`, Apps text filter, Open-in-VS Code, audit log, light/dark theme. Everything before still stands: Windows auto-start, token-authenticated mobile Web UI at `/mobile`, Home featured slideshow, manifest-plugin tools (**Cloudtap**, multi-tunnel), JSON snapshot/restore, richer tray menu. Double-click `synapse.cmd` to launch — no PowerShell needed. **248 tests passing.** A design ADR for the tool marketplace ships alongside ([`docs/adr/0001-tool-marketplace.md`](./docs/adr/0001-tool-marketplace.md)). Next: hot manifest reload + the Tool marketplace UI. See [`PROGRESS.md`](./PROGRESS.md).
 
 ## What it is
 
@@ -65,7 +65,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 235 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 248 tests pass (1 platform-conditional skip)
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd

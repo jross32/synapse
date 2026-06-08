@@ -7,8 +7,10 @@ import { useMemo, useState } from 'react';
 import { FolderSearch, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
-import type { Project } from '@shared/generated-types';
+import type { Project, ProjectKind } from '@shared/generated-types';
 import { useDaemon } from '@shared/daemon-context';
+import { KIND_META, KIND_ORDER, kindMeta } from '@shared/project-kinds';
+import { cn } from '@shared/utils';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -55,6 +57,7 @@ export function AppsPage(): JSX.Element {
   const [actionError, setActionError] = useState<string | null>(null);
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [kindFilter, setKindFilter] = useState<ProjectKind | 'all'>('all');
 
   // Pinned projects float to the top, then alphabetical.
   const sorted = useMemo(
@@ -66,11 +69,24 @@ export function AppsPage(): JSX.Element {
     [projects]
   );
 
+  // Count by kind so the chips can show "MCP (3)" etc. Empty kinds are
+  // hidden -- a fresh registry shouldn't show seven empty chips.
+  const kindCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of sorted) counts[p.kind] = (counts[p.kind] ?? 0) + 1;
+    return counts;
+  }, [sorted]);
+
   // Filter on every keystroke -- matches name, id, path, description, group,
-  // tags, and launch command. Empty query => everything.
+  // tags, and launch command. Empty query => everything. The kind filter
+  // intersects with the text filter.
   const visible = useMemo(
-    () => sorted.filter((p) => matchesQuery(p, query)),
-    [sorted, query]
+    () =>
+      sorted.filter(
+        (p) =>
+          (kindFilter === 'all' || p.kind === kindFilter) && matchesQuery(p, query)
+      ),
+    [sorted, query, kindFilter]
   );
 
   async function handleConfirmDelete(target: Project): Promise<void> {
@@ -147,10 +163,31 @@ export function AppsPage(): JSX.Element {
               )}
             </div>
             <span className='text-xs text-muted-foreground'>
-              {query
+              {query || kindFilter !== 'all'
                 ? `${visible.length} of ${sorted.length} project${sorted.length === 1 ? '' : 's'}`
                 : `${sorted.length} project${sorted.length === 1 ? '' : 's'}`}
             </span>
+          </div>
+
+          {/* Kind filter chips (v0.1.19). Only non-empty kinds are shown so
+              the row stays tight while a registry has a narrow mix. */}
+          <div className='flex flex-wrap items-center gap-1.5'>
+            <KindChip
+              label='All'
+              count={sorted.length}
+              active={kindFilter === 'all'}
+              onClick={() => setKindFilter('all')}
+            />
+            {KIND_ORDER.filter((k) => (kindCounts[k] ?? 0) > 0).map((k) => (
+              <KindChip
+                key={k}
+                label={KIND_META[k].label}
+                count={kindCounts[k] ?? 0}
+                active={kindFilter === k}
+                onClick={() => setKindFilter(k)}
+                icon={KIND_META[k].icon}
+              />
+            ))}
           </div>
 
           {visible.length === 0 ? (
@@ -230,5 +267,40 @@ export function AppsPage(): JSX.Element {
         }}
       />
     </div>
+  );
+}
+
+
+interface KindChipProps {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  icon?: typeof Search;
+}
+
+function KindChip({ label, count, active, onClick, icon: Icon }: KindChipProps): JSX.Element {
+  return (
+    <button
+      type='button'
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-secondary/40 text-muted-foreground hover:text-foreground'
+      )}
+    >
+      {Icon && <Icon className='h-3 w-3' />}
+      <span>{label}</span>
+      <span
+        className={cn(
+          'rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
+          active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/60'
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }

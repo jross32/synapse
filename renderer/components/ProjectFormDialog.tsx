@@ -6,7 +6,8 @@
 import { useState } from 'react';
 
 import { createProject, patchProject } from '@shared/projects-client';
-import type { Project, ProjectUpdate } from '@shared/generated-types';
+import type { Project, ProjectKind, ProjectUpdate } from '@shared/generated-types';
+import { KIND_META, KIND_ORDER } from '@shared/project-kinds';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Modal } from './ui/modal';
@@ -41,6 +42,7 @@ export function ProjectFormDialog({
   const [expectedPort, setExpectedPort] = useState<string>(
     project?.expected_port == null ? '' : String(project.expected_port)
   );
+  const [kind, setKind] = useState<ProjectKind>(project?.kind ?? 'app');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +72,7 @@ export function ProjectFormDialog({
           description: description.trim() || null,
           expected_port: expectedPort === '' ? null : Number(expectedPort),
           group: group.trim() || null,
+          kind,
         })
       );
     } catch (err) {
@@ -91,6 +94,7 @@ export function ProjectFormDialog({
     if (parsedPort !== project.expected_port && (parsedPort === undefined || !Number.isNaN(parsedPort))) {
       patch.expected_port = parsedPort;
     }
+    if (kind !== project.kind) patch.kind = kind;
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
@@ -151,6 +155,19 @@ export function ProjectFormDialog({
             inputMode='numeric'
             placeholder='3000'
           />
+        </Field>
+        <Field label='Kind'>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as ProjectKind)}
+            className='h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          >
+            {KIND_ORDER.map((k) => (
+              <option key={k} value={k}>
+                {KIND_META[k].label}
+              </option>
+            ))}
+          </select>
         </Field>
 
         {error && (

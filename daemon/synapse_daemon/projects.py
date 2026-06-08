@@ -21,6 +21,7 @@ import json
 import re
 import sqlite3
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -34,6 +35,23 @@ from .secrets import EnvVar
 from .time_utils import from_iso, to_iso, utc_now
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$")
+
+
+class ProjectKind(str, Enum):
+    """What a project IS, so the Apps grid can be filtered by category.
+
+    Discovery populates this on import; the edit dialog lets the user change
+    it. Stored as a free string column (migration 005) so future kinds drop
+    in without a new migration.
+    """
+
+    APP = "app"                 # generic launchable application (default)
+    UI = "ui"                   # frontend / browser UI (Vite, Next, React, ...)
+    SERVICE = "service"         # HTTP backend (FastAPI, Express, Django, ...)
+    MCP_SERVER = "mcp-server"   # Model Context Protocol server (stdio or HTTP)
+    LIBRARY = "library"         # code package with no launch target
+    SCRIPT = "script"           # one-shot script
+    OTHER = "other"             # explicitly other; the user knows best
 
 
 class Project(BaseModel):
@@ -58,6 +76,9 @@ class Project(BaseModel):
     tags: list[str] = Field(default_factory=list)
     pinned: bool = False
     discovered: bool = Field(default=False, description="True if imported via auto-discovery.")
+
+    # Classification (migration 005) — drives the Apps page filter.
+    kind: ProjectKind = ProjectKind.APP
 
     # Live-status (Contract #2) — always returned, written by process_manager.
     status: EntityStatus = EntityStatus.IDLE
@@ -97,6 +118,7 @@ class ProjectUpdate(BaseModel):
     group: str | None = None
     tags: list[str] | None = None
     pinned: bool | None = None
+    kind: ProjectKind | None = None
 
 
 # ── row helpers ──────────────────────────────────────────────────────────
@@ -125,6 +147,7 @@ def _row_to_project(row: sqlite3.Row) -> Project:
         tags=_loads_tags(row["tags_json"]),
         pinned=bool(row["pinned"]),
         discovered=bool(row["discovered"]),
+        kind=_safe_kind(row["kind"]),
         status=EntityStatus(row["status"]),
         last_error=_error_ref(row["last_error_code"], row["last_error_msg"]),
         current_health=HealthState(row["current_health"]),
@@ -133,6 +156,18 @@ def _row_to_project(row: sqlite3.Row) -> Project:
         updated_at=from_iso(row["updated_at"]),
         last_transition_at=from_iso(row["last_transition_at"]),
     )
+
+
+def _safe_kind(value: str | None) -> ProjectKind:
+    """Hydrate a kind column robustly — unknown values fall back to APP so a
+    future kind can land in the DB without breaking an older daemon."""
+
+    if not value:
+        return ProjectKind.APP
+    try:
+        return ProjectKind(value)
+    except ValueError:
+        return ProjectKind.APP
 
 
 def _loads_tags(payload: str | None) -> list[str]:
@@ -222,8 +257,8 @@ def create(conn: sqlite3.Connection, project: Project) -> Project:
             last_error_msg, created_at, updated_at, last_transition_at,
             health_probe_json, restart_policy_json, max_rss_mb, max_cpu_percent,
             current_health, last_health_at,
-            discovered, pinned, group_name, tags_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            discovered, pinned, group_name, tags_json, kind
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             project.id, project.name, project.path, project.launch_cmd,
@@ -243,6 +278,7 @@ def create(conn: sqlite3.Connection, project: Project) -> Project:
             1 if project.pinned else 0,
             project.group,
             json.dumps(project.tags),
+            project.kind.value,
         ),
     )
     return project
@@ -275,7 +311,7 @@ def update(conn: sqlite3.Connection, project_id: str, patch: ProjectUpdate) -> P
           updated_at = ?,
           health_probe_json = ?, restart_policy_json = ?,
           max_rss_mb = ?, max_cpu_percent = ?,
-          group_name = ?, tags_json = ?, pinned = ?
+          group_name = ?, tags_json = ?, pinned = ?, kind = ?
         WHERE id = ?
         """,
         (
@@ -291,6 +327,7 @@ def update(conn: sqlite3.Connection, project_id: str, patch: ProjectUpdate) -> P
             next_project.group,
             json.dumps(next_project.tags),
             1 if next_project.pinned else 0,
+            next_project.kind.value,
             project_id,
         ),
     )
