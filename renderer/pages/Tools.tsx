@@ -5,17 +5,22 @@
 // folder + a manifest, never a renderer change.
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Wrench } from 'lucide-react';
+import { Loader2, Store, Wrench } from 'lucide-react';
 
 import type { ToolEntry } from '@shared/generated-types';
 import { listTools } from '@shared/tools-client';
 import { useDaemon } from '@shared/daemon-context';
+import { cn } from '@shared/utils';
 import { Card } from '../components/ui/card';
+import { MarketplaceBrowser } from '../components/MarketplaceBrowser';
 import { PageHeader } from '../components/PageHeader';
 import { ToolCard } from '../components/ToolCard';
 
+type ToolsTab = 'installed' | 'browse';
+
 export function ToolsPage(): JSX.Element {
   const { recentEvents } = useDaemon();
+  const [tab, setTab] = useState<ToolsTab>('installed');
   const [tools, setTools] = useState<ToolEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Highest WS event id already accounted for -- so we only refetch on
@@ -58,38 +63,104 @@ export function ToolsPage(): JSX.Element {
         subtitle='Synapses — modular tools backed by manifest plugins. Drop a folder in, get a card.'
       />
 
-      {error && (
-        <p role='alert' className='text-sm text-destructive'>
-          {error}
-        </p>
+      {/* Installed / Browse tab toggle (v0.1.23). */}
+      <div
+        role='tablist'
+        aria-label='Tools view'
+        className='inline-flex w-fit gap-1 rounded-lg border border-border bg-secondary/30 p-1'
+      >
+        <TabButton
+          active={tab === 'installed'}
+          onClick={() => setTab('installed')}
+          icon={Wrench}
+          label='Installed'
+          count={tools?.length}
+        />
+        <TabButton
+          active={tab === 'browse'}
+          onClick={() => setTab('browse')}
+          icon={Store}
+          label='Browse'
+        />
+      </div>
+
+      {tab === 'installed' && (
+        <>
+          {error && (
+            <p role='alert' className='text-sm text-destructive'>
+              {error}
+            </p>
+          )}
+
+          {tools === null && !error && (
+            <Card className='flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground'>
+              <Loader2 className='h-4 w-4 animate-spin' /> Loading tools…
+            </Card>
+          )}
+
+          {tools !== null && tools.length === 0 && (
+            <Card className='flex flex-col items-center gap-3 border-dashed p-12 text-center'>
+              <div className='flex h-12 w-12 items-center justify-center rounded-lg bg-secondary'>
+                <Wrench className='h-6 w-6 text-primary' />
+              </div>
+              <h3 className='text-lg font-semibold'>No tools loaded</h3>
+              <p className='max-w-md text-sm text-muted-foreground'>
+                Browse the catalogue, or drop a manifest into{' '}
+                <code className='font-mono'>tools/</code> directly — hot reload picks
+                it up live.
+              </p>
+            </Card>
+          )}
+
+          {tools !== null && tools.length > 0 && (
+            <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-6'>
+              {tools.map((entry) => (
+                <ToolCard key={entry.manifest.id} entry={entry} onChanged={handleChanged} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {tools === null && !error && (
-        <Card className='flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground'>
-          <Loader2 className='h-4 w-4 animate-spin' /> Loading tools…
-        </Card>
-      )}
-
-      {tools !== null && tools.length === 0 && (
-        <Card className='flex flex-col items-center gap-3 border-dashed p-12 text-center'>
-          <div className='flex h-12 w-12 items-center justify-center rounded-lg bg-secondary'>
-            <Wrench className='h-6 w-6 text-primary' />
-          </div>
-          <h3 className='text-lg font-semibold'>No tools loaded</h3>
-          <p className='max-w-md text-sm text-muted-foreground'>
-            Drop a tool folder with a <code className='font-mono'>manifest.json</code> into{' '}
-            <code className='font-mono'>tools/</code> and restart the daemon.
-          </p>
-        </Card>
-      )}
-
-      {tools !== null && tools.length > 0 && (
-        <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-6'>
-          {tools.map((entry) => (
-            <ToolCard key={entry.manifest.id} entry={entry} onChanged={handleChanged} />
-          ))}
-        </div>
-      )}
+      {tab === 'browse' && <MarketplaceBrowser />}
     </div>
+  );
+}
+
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Wrench;
+  label: string;
+  count?: number;
+}
+
+function TabButton({ active, onClick, icon: Icon, label, count }: TabButtonProps): JSX.Element {
+  return (
+    <button
+      type='button'
+      role='tab'
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+        active
+          ? 'bg-card text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      <Icon className='h-4 w-4' />
+      {label}
+      {count !== undefined && (
+        <span
+          className={cn(
+            'rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
+            active ? 'bg-secondary text-foreground' : 'bg-background/60'
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }

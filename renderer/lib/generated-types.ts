@@ -340,6 +340,35 @@ export interface ToolListResponse {
   tools: ToolEntry[];
 }
 
+// ── Marketplace (v0.1.23 · ADR-0001 step 3) ──────────────────────────────
+
+export type ToolTier = 'declarative' | 'handler';
+
+export interface RegistryEntry {
+  id: string;
+  name: string;
+  publisher: string;
+  tier: ToolTier;
+  version: string;
+  description: string;
+  homepage: string | null;
+  verified: boolean;
+  manifest_url: string | null;
+}
+
+export interface RegistryIndex {
+  version: number;
+  generated_at: string | null;
+  tools: RegistryEntry[];
+}
+
+export interface MarketplaceResponse {
+  source: { kind: 'url' | 'file'; location: string };
+  registry: RegistryIndex;
+  installed_ids: string[];
+  cached: boolean;
+}
+
 // Re-export ErrorEnvelope for ergonomics. (It's defined in error-types.ts
 // because it's referenced before the generator runs.)
 export type { ErrorEnvelope };

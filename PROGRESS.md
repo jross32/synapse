@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.22`
+`0.1.23`
 
 ## Current milestone
 
-**Tool-marketplace foundation landing.** Milestones A–I done. v0.1.14–v0.1.18 = palette / Apps filter / VS Code / audit / theme. v0.1.19 = project kinds + ADR-0001. v0.1.20 = Open-in-Terminal + responsive sidebar. v0.1.21 = hot manifest reload (ADR-0001 step 1). **v0.1.22 = declarative tool primitives** (`url.open`, `process.spawn`) — a tool can now ship as pure JSON; ADR-0001 step 2. 273 tests pass. Next: v0.1.23 Tools → Browse page (registry fetch + read-only listing) → Milestone J packaging.
+**Marketplace browser shipping.** Milestones A–I done. v0.1.14–v0.1.18 = palette / Apps filter / VS Code / audit / theme. v0.1.19 = project kinds + ADR-0001. v0.1.20 = Open-in-Terminal + responsive sidebar. v0.1.21 = hot manifest reload. v0.1.22 = declarative tool primitives. **v0.1.23 = Tools → Browse page** (read-only registry catalogue; ADR-0001 step 3). 279 tests pass. Next: v0.1.24 Install / Uninstall (writes the manifest, hot reload picks it up) → Milestone J packaging.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -46,6 +46,7 @@
 | `0.1.20` | Open-in-Terminal tile button + responsive sidebar (collapses to 56px at < 640px) | ✅ done |
 | `0.1.21` | Hot tool-manifest reload via watchdog (ADR-0001 step 1, Contract #26) | ✅ done |
 | `0.1.22` | Declarative tool primitives — `url.open` + `process.spawn` (ADR-0001 step 2) | ✅ done |
+| `0.1.23` | Tools → Browse page (read-only marketplace catalogue) (ADR-0001 step 3) | ✅ done |
 
 ## What's done
 

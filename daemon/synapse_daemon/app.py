@@ -33,6 +33,7 @@ from .models import HealthResponse
 from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
 from .routes_audit import build_audit_router
+from .routes_marketplace import build_marketplace_router
 from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
@@ -149,6 +150,11 @@ def build_app(
     )
     app.include_router(
         build_audit_router(storage), prefix=API_PREFIX, dependencies=[token_guard]
+    )
+    app.include_router(
+        build_marketplace_router(tool_registry),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
     )
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)

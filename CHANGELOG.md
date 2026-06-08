@@ -10,6 +10,58 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.23] -- 2026-06-08
+
+### Tools → Browse (ADR-0001 step 3)
+
+A read-only catalogue of tools available to install, served by the daemon
+and rendered on the Tools page behind a new **Installed / Browse** tab
+toggle. Cards show tier (Declarative / Handler), Verified badge, version,
+publisher, and an **Already installed** indicator for any tool whose id
+matches one already in `tools/`.
+
+#### Added -- daemon
+- `routes_marketplace.py` -- `GET /api/v1/marketplace?refresh=bool`.
+  Resolves the registry source from `SYNAPSE_TOOL_REGISTRY_URL` (live
+  `httpx` fetch, 10 s timeout) or the bundled
+  `docs/marketplace-sample.json` if unset. 60 s in-memory TTL cache
+  (`?refresh=true` busts it). Returns `{source, registry, installed_ids,
+  cached}` so the renderer can mark "Already installed" and surface the
+  source URL in the corner. Shallow validation drops malformed entries
+  rather than failing the whole feed.
+- `docs/marketplace-sample.json` -- bundled fallback index with three
+  example tools: `cloudtap` (handler, verified), `open-synapse-docs`
+  (declarative, verified), and `git-status` (declarative, unverified
+  community entry). Exercises every UI state.
+- `app.py` wires the router (token-guarded).
+
+#### Added -- renderer
+- `lib/marketplace-client.ts` + `RegistryEntry` / `RegistryIndex` /
+  `MarketplaceResponse` types.
+- `components/MarketplaceBrowser.tsx` -- card grid with tier + verified +
+  installed badges + a Homepage link. Refresh button bypasses the cache.
+- `pages/Tools.tsx` -- a **tablist** at the top: **Installed** (with the
+  loaded-tool count) and **Browse**. Each tab swaps the content panel
+  underneath; the existing live event refetch logic is unchanged.
+
+#### Verified
+- 279 tests pass (+6 in `test_routes_marketplace.py`: bundled-sample
+  served, installed_ids marked, in-memory cache hit + `?refresh` bust,
+  validator drops malformed entries, route is token-guarded). Typecheck
+  green.
+- E2E live: navigated to **Tools → Browse**; the three sample tools
+  rendered with correct tier colours, Verified pills on the first two,
+  Git status without one, and Cloudtap correctly green-checked as
+  *Already installed*. Source label read **"bundled sample"** since no
+  `SYNAPSE_TOOL_REGISTRY_URL` was set.
+
+#### Why this matters
+
+This is the **discovery half** of the marketplace from ADR-0001. v0.1.24
+adds the *Install* button on each card -- which, thanks to v0.1.21's hot
+reload and v0.1.22's primitives, just needs to fetch the manifest and
+write it to `tools/<id>/manifest.json` for the loop to close.
+
 ## [0.1.22] -- 2026-06-08
 
 ### Declarative tool primitives (ADR-0001 step 2)

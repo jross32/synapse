@@ -1,0 +1,40 @@
+{
+  "_comment": "Bundled fallback registry index for the Synapse marketplace (ADR-0001). Used by GET /api/v1/marketplace when no SYNAPSE_TOOL_REGISTRY_URL env var is set. The real first-party index will live at https://synapse.whatif.dev/tools/index.json once the marketplace ships.",
+  "version": 1,
+  "generated_at": "2026-06-08T00:00:00Z",
+  "tools": [
+    {
+      "id": "cloudtap",
+      "name": "Cloudtap",
+      "publisher": "The WhatIf Company",
+      "tier": "handler",
+      "version": "1.0.0",
+      "description": "Multi-tunnel Cloudflare quick tunnels. Auto-labels by registered project port.",
+      "homepage": "https://github.com/jross32/synapse#cloudtap",
+      "verified": true,
+      "manifest_url": null
+    },
+    {
+      "id": "open-synapse-docs",
+      "name": "Open Synapse docs",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Opens the Synapse documentation in your default browser. A 12-line manifest — nothing else.",
+      "homepage": "https://github.com/jross32/synapse",
+      "verified": true,
+      "manifest_url": "https://github.com/jross32/synapse/raw/main/docs/marketplace/open-synapse-docs.json"
+    },
+    {
+      "id": "git-status",
+      "name": "Git status",
+      "publisher": "Community",
+      "tier": "declarative",
+      "version": "0.1.0",
+      "description": "Runs `git status` in a chosen folder and shows the output. Demonstrates the process.spawn primitive.",
+      "homepage": null,
+      "verified": false,
+      "manifest_url": null
+    }
+  ]
+}
