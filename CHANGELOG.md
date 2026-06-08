@@ -10,6 +10,50 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.21] -- 2026-06-08
+
+### Hot manifest reload for tools (Contract #26 · ADR-0001 step 1)
+
+Drop a `tools/<id>/manifest.json` into the running daemon and it appears
+in the UI within ~250 ms. Delete the folder, it disappears. No daemon
+restart, no UI refresh. This is the foundation for the tool marketplace
+laid out in ADR-0001 — install/uninstall flows now have a sub-second
+live-reload story to plug into.
+
+#### Added
+- `synapse_daemon/tools_registry.py`:
+  - `async reload()` — re-scans `tools/` in place. Preserves the live handler
+    instance for any tool whose id is unchanged (so a running Cloudtap tunnel
+    doesn't die just because someone wrote a different tool's manifest).
+    Shuts down handlers for removed tools, instantiates new ones, swaps the
+    manifest dict last so concurrent readers always see a coherent state.
+    Returns `{added, removed, kept}` and broadcasts
+    `v1.tool.reloaded` on the bus.
+  - `start_watching(loop)` / `stop_watching()` — a `watchdog.Observer`
+    on the tools directory. Coalesces a flurry of FS events into one
+    reload via a 250 ms debounce + `asyncio.run_coroutine_threadsafe`
+    back to the main loop. Idempotent; a missing `tools/` is a no-op.
+- `synapse_daemon/__main__.py` lifespan starts the watcher after the
+  initial `registry.load()`; `shutdown_all()` now stops it.
+
+#### Verified
+- 255 tests pass (+7 in `test_tools_hot_reload.py`: add / remove / kept /
+  field-update / event-broadcast / idempotent-start / handler-shutdown).
+  Typecheck green.
+- E2E: live daemon serving `['cloudtap']`. Ran `mkdir tools/_hotreload-test`
+  and wrote a `manifest.json`; ~250 ms later the daemon logged
+  `ToolRegistry reload: +1 added` and `/api/v1/tools` returned
+  `['cloudtap', 'hotreload-demo']`. Deleted the folder and the daemon
+  reported `-1 removed` and the API dropped back to `['cloudtap']` --
+  all without restarting the daemon.
+
+#### Why this matters
+
+The renderer's Tools page already auto-refetches on any `v1.tool.*` event
+(wired in v0.1.9.5), so the new `v1.tool.reloaded` ping makes the UI
+update live too — no extra renderer code required. That's the
+"hot install/uninstall" property ADR-0001 needs for the marketplace.
+
 ## [0.1.20] -- 2026-06-08
 
 ### Open-in-Terminal tile button + responsive sidebar

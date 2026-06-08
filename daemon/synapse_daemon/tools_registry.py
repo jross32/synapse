@@ -22,16 +22,23 @@ Boot flow (called from the FastAPI lifespan):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from .api_versions import event_name
 from .errors import conflict, invalid, not_found
 from .models import EntityStatus, ToolActionScope, ToolManifest, ToolState
 from .storage import Storage
 from .tools import ToolHandler
 from .tools.cloudtap import CloudtapTool
 from .ws import EventBus
+
+if TYPE_CHECKING:
+    from watchdog.observers.api import BaseObserver
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +60,11 @@ class ToolRegistry:
         self._storage = storage
         self._manifests: dict[str, ToolManifest] = {}
         self._handlers: dict[str, ToolHandler] = {}
+        # Hot-reload plumbing (v0.1.21).
+        self._observer: BaseObserver | None = None
+        self._watch_loop: asyncio.AbstractEventLoop | None = None
+        self._reload_lock = threading.Lock()
+        self._reload_scheduled = False
 
     # ── loading ──────────────────────────────────────────────────────────
 
@@ -156,9 +168,148 @@ class ToolRegistry:
 
         return await handler.run_action(action_id, fields or {}, item_id)
 
+    # ── hot reload (v0.1.21 · ADR-0001 step 1) ───────────────────────────
+
+    async def reload(self) -> dict[str, list[str]]:
+        """Re-scan ``tools/`` in place. Preserves live handler state for any
+        tool whose id is still present.
+
+        Returns ``{"added": [...], "removed": [...], "kept": [...]}`` so
+        callers can log meaningful diffs. Publishes ``v1.tool.reloaded`` on
+        the bus so the renderer's Tools page refetches automatically.
+        """
+
+        old_ids = set(self._manifests.keys())
+        new_manifests: dict[str, ToolManifest] = {}
+
+        if self._tools_dir.exists():
+            for manifest_path in sorted(self._tools_dir.glob("*/manifest.json")):
+                manifest = self._read_manifest(manifest_path)
+                if manifest is None or manifest.id in new_manifests:
+                    continue
+                if manifest.id in _BUILTIN_HANDLER_FACTORIES:
+                    manifest.runnable = True
+                new_manifests[manifest.id] = manifest
+
+        new_ids = set(new_manifests)
+        added = sorted(new_ids - old_ids)
+        removed = sorted(old_ids - new_ids)
+        kept = sorted(old_ids & new_ids)
+
+        for tool_id in removed:
+            handler = self._handlers.pop(tool_id, None)
+            if handler is not None:
+                try:
+                    await handler.shutdown()
+                except Exception:  # pragma: no cover — defensive
+                    log.exception("Tool '%s' raised during reload shutdown.", tool_id)
+
+        for tool_id in added:
+            factory = _BUILTIN_HANDLER_FACTORIES.get(tool_id)
+            if factory is not None:
+                self._handlers[tool_id] = factory(self._bus, self._storage)
+
+        # Swap manifests last so any concurrent reader sees a coherent state.
+        self._manifests = new_manifests
+
+        log.info(
+            "ToolRegistry reload: +%d added, -%d removed, %d kept",
+            len(added),
+            len(removed),
+            len(kept),
+        )
+        await self._bus.publish(
+            event_name("tool", "reloaded"),
+            {
+                "loaded": sorted(new_ids),
+                "added": added,
+                "removed": removed,
+                "kept": kept,
+            },
+        )
+        return {"added": added, "removed": removed, "kept": kept}
+
+    def start_watching(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Begin watching ``tools/`` for manifest changes. Idempotent."""
+
+        if self._observer is not None:
+            return
+        if not self._tools_dir.exists():
+            log.info("Tools dir %s missing; hot reload not started.", self._tools_dir)
+            return
+        try:
+            from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
+        except ImportError:  # pragma: no cover — watchdog is in dev deps
+            log.warning("watchdog not installed; hot tool reload disabled.")
+            return
+
+        registry = self
+
+        class _Handler(FileSystemEventHandler):
+            def on_any_event(self, event) -> None:  # type: ignore[override]
+                src = getattr(event, "src_path", "") or ""
+                dst = getattr(event, "dest_path", "") or ""
+                # Filter to manifest.json files + directory create/delete --
+                # ignores transient editor side-files (e.g. .swp).
+                if (
+                    src.endswith("manifest.json")
+                    or dst.endswith("manifest.json")
+                    or event.is_directory
+                ):
+                    registry._schedule_reload()
+
+        observer = Observer()
+        observer.schedule(_Handler(), str(self._tools_dir), recursive=True)
+        observer.start()
+        self._observer = observer
+        self._watch_loop = loop
+        log.info("Watching %s for tool manifest changes.", self._tools_dir)
+
+    def stop_watching(self) -> None:
+        """Stop the watcher. Idempotent."""
+
+        observer = self._observer
+        if observer is None:
+            return
+        self._observer = None
+        try:
+            observer.stop()
+            observer.join(timeout=2)
+        except Exception:  # pragma: no cover — defensive
+            log.exception("Error stopping tools-dir observer.")
+
+    def _schedule_reload(self) -> None:
+        """Coalesce a flurry of file events into one reload (250 ms debounce)."""
+
+        with self._reload_lock:
+            if self._reload_scheduled:
+                return
+            self._reload_scheduled = True
+
+        loop = self._watch_loop
+        if loop is None:
+            return
+
+        registry = self
+
+        async def _coalesced() -> None:
+            try:
+                await asyncio.sleep(0.25)
+            finally:
+                with registry._reload_lock:
+                    registry._reload_scheduled = False
+            try:
+                await registry.reload()
+            except Exception:  # pragma: no cover — defensive
+                log.exception("Hot reload failed.")
+
+        asyncio.run_coroutine_threadsafe(_coalesced(), loop)
+
     # ── lifecycle ────────────────────────────────────────────────────────
 
     async def shutdown_all(self) -> None:
+        self.stop_watching()
         for tool_id, handler in self._handlers.items():
             try:
                 await handler.shutdown()

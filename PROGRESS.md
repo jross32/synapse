@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.20`
+`0.1.21`
 
 ## Current milestone
 
-**Polish + tool-marketplace foundation.** Milestones A–I done. v0.1.14 = `Ctrl+K`; v0.1.15 = Apps text filter; v0.1.16 = Open-in-VS Code; v0.1.17 = Audit log; v0.1.18 = Theme; v0.1.19 = Project kinds + filter chips + ADR-0001 (tool marketplace); **v0.1.20 = Open-in-Terminal tile button + responsive sidebar collapse**. 248 tests pass. Next: v0.1.21 hot manifest reload → v0.1.22 declarative tool primitives → Milestone J packaging (focused session).
+**Tool-marketplace foundation landing.** Milestones A–I done. v0.1.14–v0.1.18 = palette / Apps filter / VS Code / audit / theme. v0.1.19 = project kinds + ADR-0001. v0.1.20 = Open-in-Terminal + responsive sidebar. **v0.1.21 = hot manifest reload** (drop a `tools/<id>/manifest.json` and it appears live in ~250 ms; ADR-0001 step 1, Contract #26). 255 tests pass. Next: v0.1.22 declarative tool primitives (`process.spawn`, `url.open`) → v0.1.23 Tools → Browse page → Milestone J packaging.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -44,6 +44,7 @@
 | `0.1.18` | Polish — Light / Dark / System theme (Contract #14) | ✅ done |
 | `0.1.19` | Project kinds + Apps filter chips + MCP-server auto-detect; ADR-0001 tool marketplace | ✅ done |
 | `0.1.20` | Open-in-Terminal tile button + responsive sidebar (collapses to 56px at < 640px) | ✅ done |
+| `0.1.21` | Hot tool-manifest reload via watchdog (ADR-0001 step 1, Contract #26) | ✅ done |
 
 ## What's done
 

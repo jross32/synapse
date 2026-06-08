@@ -125,10 +125,12 @@ def _build_lifespan(
         await boot_publish_reconciliation(bus, outcomes)
         await boot_publish_daemon_started(bus, schema)
 
-        # Load tool plugin manifests (Milestone F plugin system).
+        # Load tool plugin manifests (Milestone F plugin system) + start the
+        # watchdog so a manifest dropped into tools/ shows up live (v0.1.21).
         loaded = await asyncio.to_thread(registry.load)
         if loaded:
             log.info("Loaded %d tool(s): %s", len(loaded), loaded)
+        registry.start_watching(asyncio.get_running_loop())
 
         # Start the resource heartbeat loop (Contract #19).
         pm.start_monitoring()
