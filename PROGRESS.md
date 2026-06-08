@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.19`
+`0.1.20`
 
 ## Current milestone
 
-**Polish track + tool-marketplace foundation.** Milestones A–I done. v0.1.14 = `Ctrl+K`; v0.1.15 = Apps text filter; v0.1.16 = Open-in-VS Code; v0.1.17 = Audit log; v0.1.18 = Theme; **v0.1.19 = Project kinds + filter chips** (auto-detects MCP servers, UIs, services) and a design ADR for the tool marketplace. 248 tests pass. Next: v0.1.20 hot manifest reload → v0.1.21 declarative tool primitives (per the marketplace ADR) → Milestone J packaging (focused session).
+**Polish + tool-marketplace foundation.** Milestones A–I done. v0.1.14 = `Ctrl+K`; v0.1.15 = Apps text filter; v0.1.16 = Open-in-VS Code; v0.1.17 = Audit log; v0.1.18 = Theme; v0.1.19 = Project kinds + filter chips + ADR-0001 (tool marketplace); **v0.1.20 = Open-in-Terminal tile button + responsive sidebar collapse**. 248 tests pass. Next: v0.1.21 hot manifest reload → v0.1.22 declarative tool primitives → Milestone J packaging (focused session).
 
 | Version | Phase | Status |
 |---|---|---|
@@ -43,6 +43,7 @@
 | `0.1.17` | Polish — Audit log viewer in Settings (Contract #11 surfaced) | ✅ done |
 | `0.1.18` | Polish — Light / Dark / System theme (Contract #14) | ✅ done |
 | `0.1.19` | Project kinds + Apps filter chips + MCP-server auto-detect; ADR-0001 tool marketplace | ✅ done |
+| `0.1.20` | Open-in-Terminal tile button + responsive sidebar (collapses to 56px at < 640px) | ✅ done |
 
 ## What's done
 

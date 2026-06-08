@@ -10,6 +10,7 @@ interface SynapseBridge {
   platform: () => string;
   openExternal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   openInVscode?: (target: string) => Promise<{ ok: boolean; error?: string }>;
+  openInTerminal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   getAutostart?: () => Promise<boolean>;
   setAutostart?: (enabled: boolean) => Promise<boolean>;
 }
@@ -30,6 +31,21 @@ export function canManageAutostart(): boolean {
 /** True if the build can launch VS Code via the `code` CLI (Electron only). */
 export function canOpenInVscode(): boolean {
   return typeof bridge()?.openInVscode === 'function';
+}
+
+/** True if the build can open a folder in a terminal (Electron only). */
+export function canOpenInTerminal(): boolean {
+  return typeof bridge()?.openInTerminal === 'function';
+}
+
+export async function openInTerminal(
+  target: string
+): Promise<{ ok: boolean; error?: string }> {
+  const b = bridge();
+  if (!b?.openInTerminal) {
+    return { ok: false, error: 'Terminal launching is only available in the desktop app.' };
+  }
+  return b.openInTerminal(target);
 }
 
 /**

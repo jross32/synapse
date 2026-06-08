@@ -399,6 +399,45 @@ ipcMain.handle('synapse:open-in-vscode', async (_event, target: unknown) => {
   }
 });
 
+// ── IPC: open a project's folder in a terminal (v0.1.20) ──────────────────
+// On Windows we prefer Windows Terminal (`wt.exe`, lands on a clean tab in the
+// project folder); fall back to `cmd /K cd` if `wt` isn't on PATH.
+ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
+  if (typeof target !== 'string' || !target) {
+    return { ok: false, error: 'No path provided.' };
+  }
+
+  if (process.platform === 'win32') {
+    const wt = spawnSync('where', ['wt'], { shell: true, windowsHide: true, timeout: 1500 });
+    const hasWt = wt.status === 0;
+    try {
+      if (hasWt) {
+        spawn('wt.exe', ['-d', target], {
+          detached: true, stdio: 'ignore', shell: false, windowsHide: true,
+        }).unref();
+      } else {
+        // Fall back to a hidden parent that pops a regular cmd window in cwd.
+        spawn('cmd.exe', ['/c', 'start', '""', 'cmd.exe', '/K', `cd /d "${target}"`], {
+          detached: true, stdio: 'ignore', shell: false, windowsHide: true,
+        }).unref();
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  // macOS / Linux fall-through: shell out to the OS via `open -a Terminal`.
+  const bin = process.platform === 'darwin' ? 'open' : 'x-terminal-emulator';
+  const args = process.platform === 'darwin' ? ['-a', 'Terminal', target] : [];
+  try {
+    spawn(bin, args, { detached: true, stdio: 'ignore', cwd: target }).unref();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
 

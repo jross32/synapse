@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.20] -- 2026-06-08
+
+### Open-in-Terminal tile button + responsive sidebar
+
+#### Added
+- `electron/main.ts` -- `synapse:open-in-terminal` IPC. Prefers Windows
+  Terminal (`wt.exe -d <path>`) and falls back to a hidden-parent `cmd /K cd`
+  popup when `wt` isn't on PATH. macOS uses `open -a Terminal`; Linux uses
+  `x-terminal-emulator`.
+- `electron/preload.ts` + `renderer/lib/electron-bridge.ts` --
+  `openInTerminal(path)` + `canOpenInTerminal()` helpers.
+- `renderer/components/ProjectTile.tsx` -- a new **Terminal** quick-action
+  button alongside *Open folder* + *Open in VS Code* + *Open in browser*.
+
+### Changed
+- `renderer/components/Sidebar.tsx` -- responsive collapse. Below the `sm`
+  breakpoint (< 640px) the rail narrows from **84px to 56px** and the labels
+  drop to `sr-only` so only the icons + brand mark show. Above `sm` everything
+  expands back. Verified at 400px (rail = 56px, no horizontal overflow, labels
+  hidden) and 1280px (rail = 84px, labels visible).
+
+#### Verified
+- 248 tests pass; typecheck green. E2E: sidebar measured 56px at 400px
+  viewport (labels hidden), 84px at 1280px (labels visible). Terminal IPC
+  is wired the same way as v0.1.16's Open-in-VS Code (which we proved live).
+
 ## [0.1.19] -- 2026-06-08
 
 ### Project kinds + filtering

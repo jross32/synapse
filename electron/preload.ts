@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('synapse', {
   openInVscode: (target: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('synapse:open-in-vscode', target),
 
+  /** Open a folder in a terminal (Windows Terminal preferred) (v0.1.20). */
+  openInTerminal: (target: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('synapse:open-in-terminal', target),
+
   /** Whether Synapse is registered to start at Windows login (Milestone I). */
   getAutostart: (): Promise<boolean> => ipcRenderer.invoke('synapse:get-autostart'),
 
@@ -51,6 +55,7 @@ declare global {
       platform: () => NodeJS.Platform;
       openExternal: (target: string) => Promise<{ ok: boolean; error?: string }>;
       openInVscode: (target: string) => Promise<{ ok: boolean; error?: string }>;
+      openInTerminal: (target: string) => Promise<{ ok: boolean; error?: string }>;
       getAutostart: () => Promise<boolean>;
       setAutostart: (enabled: boolean) => Promise<boolean>;
     };

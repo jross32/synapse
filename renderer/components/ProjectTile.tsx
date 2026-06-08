@@ -5,12 +5,18 @@
 // A "more actions" row exposes quick OS actions (open folder / browser).
 
 import { useState } from 'react';
-import { Code2, FolderOpen, Globe, Pin } from 'lucide-react';
+import { Code2, FolderOpen, Globe, Pin, TerminalSquare } from 'lucide-react';
 
 import { launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
-import { canOpenInVscode, openExternal, openInVscode } from '@shared/electron-bridge';
+import {
+  canOpenInTerminal,
+  canOpenInVscode,
+  openExternal,
+  openInTerminal,
+  openInVscode,
+} from '@shared/electron-bridge';
 import { kindMeta } from '@shared/project-kinds';
 import { cn } from '@shared/utils';
 import { Badge } from './ui/badge';
@@ -64,6 +70,13 @@ export function ProjectTile({
 
   async function handleOpenInVscode(): Promise<void> {
     const result = await openInVscode(project.path);
+    if (!result.ok && result.error) {
+      onActionError?.(project, new Error(result.error));
+    }
+  }
+
+  async function handleOpenInTerminal(): Promise<void> {
+    const result = await openInTerminal(project.path);
     if (!result.ok && result.error) {
       onActionError?.(project, new Error(result.error));
     }
@@ -206,6 +219,17 @@ export function ProjectTile({
               onClick={() => void handleOpenInVscode()}
             >
               <Code2 className='h-3.5 w-3.5' /> Open in VS Code
+            </Button>
+          )}
+          {canOpenInTerminal() && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              title='Open a terminal in this project'
+              onClick={() => void handleOpenInTerminal()}
+            >
+              <TerminalSquare className='h-3.5 w-3.5' /> Terminal
             </Button>
           )}
           {project.expected_port !== null && (

@@ -25,17 +25,17 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
   return (
     <nav
       aria-label='Primary'
-      className='flex h-full w-[84px] shrink-0 flex-col items-center gap-1 border-r border-border bg-card py-4'
+      className='flex h-full w-[56px] shrink-0 flex-col items-center gap-1 border-r border-border bg-card py-4 sm:w-[84px]'
     >
       {/* Brand mark */}
       <div className='mb-3 flex flex-col items-center gap-1'>
-        <div className='flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-lg font-bold text-primary-foreground'>
+        <div className='flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-base font-bold text-primary-foreground sm:h-10 sm:w-10 sm:text-lg'>
           S
         </div>
       </div>
 
       {/* Destinations */}
-      <div className='flex flex-1 flex-col items-stretch gap-1 self-stretch px-2'>
+      <div className='flex flex-1 flex-col items-stretch gap-1 self-stretch px-1.5 sm:px-2'>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = item.id === active;
@@ -58,7 +58,8 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
                 className={cn('h-5 w-5', isActive ? 'text-primary' : 'text-current')}
                 aria-hidden='true'
               />
-              {item.label}
+              {/* Hide the label on the collapsed rail; visible md+. */}
+              <span className='sr-only sm:not-sr-only'>{item.label}</span>
             </button>
           );
         })}
@@ -69,11 +70,11 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
         <button
           type='button'
           onClick={onOpenPalette}
-          title='Open the command palette'
+          title={`Open the command palette (${shortcutKey})`}
           className='mt-2 flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground'
         >
           <Search className='h-4 w-4' aria-hidden='true' />
-          <span className='font-mono'>{shortcutKey}</span>
+          <span className='sr-only font-mono sm:not-sr-only'>{shortcutKey}</span>
         </button>
       )}
 
