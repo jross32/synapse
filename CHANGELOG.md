@@ -10,6 +10,63 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.26] -- 2026-06-09
+
+### Live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2)
+
+The xterm.js half of the AI workbench. **Click Sessions → Python REPL,
+get a real Python REPL in a tab.** Or PowerShell, or any binary on PATH.
+Each session is a real PTY with colours, line editing and Ctrl+C; the
+daemon's `pty.spawn` from `v0.1.25` plus xterm.js v5 here closes the
+loop end-to-end.
+
+#### Added -- renderer
+- `lib/pty-client.ts` + `Pty*` types in `generated-types.ts` -- typed
+  REST clients for spawn / list / get / input / resize / close.
+- `components/SessionTerminal.tsx` -- xterm.js v5 + `@xterm/addon-fit`
+  bound to a Synapse PTY session. Subscribes to the bus event stream and
+  base64-decodes `v1.pty.session_output` straight onto the terminal;
+  `term.onData` POSTs keystrokes to `/pty/{id}/input`; `term.onResize`
+  POSTs to `/pty/{id}/resize`. Lifecycle is wired so the daemon's
+  `v1.pty.session_exited` event prints `[synapse] session exited (code N)`
+  and disables further input.
+- `pages/Sessions.tsx` -- a new top-level page (also a new sidebar entry
+  with a sparkles icon). Quick-launch row for **Claude / Codex / Python
+  REPL / PowerShell** (or shell-of-the-day on POSIX), a custom-argv
+  spawn form, and a tab strip per open session. Sessions spawned
+  out-of-band (curl, other windows) appear under a "Re-attach to" rail.
+- `lib/nav.ts` + `App.tsx` -- new `sessions` page id wired through the
+  shell.
+- `package.json` -- `@xterm/xterm@^5.5` + `@xterm/addon-fit@^0.10`.
+
+#### Fixed
+- **Late-binding bug in `DaemonProvider.subscribeRaw`.** React runs child
+  effects before parent effects on mount, so `SessionTerminal`'s effect
+  ran *before* the provider's WS-init effect populated `wsRef.current`.
+  The provider used to read `wsRef.current` at subscribe time and hand
+  back a no-op unsubscriber when the ref was still `null`. Now raw
+  handlers go into a `Set<>` on a ref; `subscribeRaw` is stable across
+  renders; the WS effect fans every event out to that set as soon as it
+  arrives. Output (and input via the same wiring) now reaches the
+  terminal from the first frame.
+- **xterm dimensions race.** Calling `fit.fit()` synchronously after
+  `term.open()` threw "Cannot read properties of undefined (reading
+  'dimensions')" because the Viewport isn't measurable yet. Fits now
+  defer to `requestAnimationFrame` and bail out if the host bounding
+  rect is below a 4 px minimum.
+
+#### Verified
+- 291 tests pass (daemon-side suites unchanged); typecheck green.
+- E2E live in the browser at 1280×800: clicked **Sessions → Python
+  REPL**, the prompt `>>>` painted; pressed `2+2` + Enter; the terminal
+  rendered `>>> 2+2 / 4 / >>>`. 0 console errors. Session lifecycle
+  verified -- new sessions appear in `GET /pty` and clean up on DELETE.
+
+#### What's next
+v0.1.27 ships `claude` and `codex` manifests in the bundled marketplace
+registry so the user can install them from Tools → Browse and open
+sessions from the marketplace card.
+
 ## [0.1.25] -- 2026-06-09
 
 ### ADR-0002 + PTY session foundation (Phase A step 1)

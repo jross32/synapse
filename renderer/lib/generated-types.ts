@@ -371,6 +371,35 @@ export interface UninstallReport {
   reload: { added: string[]; removed: string[]; kept: string[] };
 }
 
+// ── PTY sessions (v0.1.25 / v0.1.26 · ADR-0002 Phase A) ──────────────────
+
+export interface PtySessionSummary {
+  session_id: string;
+  argv: string[];
+  cwd: string | null;
+  started_at: string;
+  exit_code: number | null;
+  rows: number;
+  cols: number;
+}
+
+export interface PtySessionListResponse {
+  sessions: PtySessionSummary[];
+}
+
+export interface PtySessionDetail extends PtySessionSummary {
+  /** Base64-encoded tail of the output ring buffer (cap: 64 KiB). */
+  scrollback: string;
+}
+
+export interface PtySpawnRequest {
+  argv: string[];
+  cwd?: string | null;
+  env?: Record<string, string> | null;
+  rows?: number;
+  cols?: number;
+}
+
 export interface RegistryIndex {
   version: number;
   generated_at: string | null;

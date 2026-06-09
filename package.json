@@ -1,7 +1,7 @@
 {
   "name": "synapse",
   "productName": "Synapse",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "description": "Synapse — a modular developer command center. By The WhatIf Company.",
   "author": {
     "name": "The WhatIf Company",
@@ -23,6 +23,8 @@
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",

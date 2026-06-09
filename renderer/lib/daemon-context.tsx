@@ -41,6 +41,12 @@ export interface DaemonContextValue {
   resourcesById: Record<string, ResourceSnapshot>;
   /** Most recent events, newest first (capped) -- handy for Home / debugging. */
   recentEvents: SynapseEvent[];
+  /**
+   * Subscribe to every event from the daemon as it arrives. Returns an
+   * unsubscribe function. Use this for high-frequency streams (PTY output,
+   * heartbeats) that would otherwise overflow the 30-item recentEvents cap.
+   */
+  subscribeRaw: (handler: (event: SynapseEvent) => void) => () => void;
   uiVersion: string;
   platform: string;
   daemonBaseUrl: string;
@@ -66,6 +72,19 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [resourcesById, setResourcesById] = useState<Record<string, ResourceSnapshot>>({});
   const [recentEvents, setRecentEvents] = useState<SynapseEvent[]>([]);
   const wsRef = useRef<SynapseWsClient | null>(null);
+  // Raw-event subscribers. Lives on a ref so the subscribe function we hand
+  // to consumers is stable across renders AND survives the WS being created
+  // *after* the child effect that subscribed. Child effects run before
+  // parent effects on mount, so subscribers were missing events until we
+  // routed through this in-memory Set rather than ws.onEvent directly.
+  const rawHandlersRef = useRef<Set<(event: SynapseEvent) => void>>(new Set());
+
+  const subscribeRaw = useCallback((handler: (event: SynapseEvent) => void) => {
+    rawHandlersRef.current.add(handler);
+    return () => {
+      rawHandlersRef.current.delete(handler);
+    };
+  }, []);
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -105,6 +124,15 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
     const unsubState = ws.onState(setConnState);
     const unsubEvent = ws.onEvent((event) => {
       setRecentEvents((prev) => [event, ...prev].slice(0, RECENT_EVENTS_CAP));
+      // Fan out to raw subscribers (PTY terminals etc.) BEFORE the routing
+      // below so high-volume streams aren't gated on React re-renders.
+      for (const handler of rawHandlersRef.current) {
+        try {
+          handler(event);
+        } catch {
+          // A bad subscriber must never poison the others.
+        }
+      }
       if (event.name === 'v1.process.heartbeat') {
         const procs = (event.payload as { processes?: ResourceSnapshot[] }).processes ?? [];
         setResourcesById((prev) => {
@@ -152,6 +180,7 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
     projects,
     resourcesById,
     recentEvents,
+    subscribeRaw,
     uiVersion,
     platform,
     daemonBaseUrl: bridge?.daemonBase() ?? daemonBase(),

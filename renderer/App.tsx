@@ -13,6 +13,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { HomePage } from './pages/Home';
 import { AppsPage } from './pages/Apps';
 import { ToolsPage } from './pages/Tools';
+import { SessionsPage } from './pages/Sessions';
 import { ProcessesPage } from './pages/Processes';
 import { SettingsPage } from './pages/Settings';
 
@@ -58,6 +59,7 @@ function Shell(): JSX.Element {
           {page === 'home' && <HomePage onNavigate={setPage} />}
           {page === 'apps' && <AppsPage />}
           {page === 'tools' && <ToolsPage />}
+          {page === 'sessions' && <SessionsPage />}
           {page === 'processes' && <ProcessesPage />}
           {page === 'settings' && <SettingsPage />}
         </div>
