@@ -1,7 +1,7 @@
 # ADR-0003 — Workbench Expansion
 
 Date: 2026-06-09
-Status: Proposed
+Status: Accepted (2026-06-09 after the tightening pass)
 Supersedes: —
 Related: ADR-0001 (tool marketplace), ADR-0002 (AI workbench)
 
@@ -69,8 +69,11 @@ data/transcripts/<project_id>/
 - `GET /api/v1/projects/{id}/files/{file_id}/inspect` -- the safe
   metadata + the first 64 KiB tail, for the "are you sure?" preview.
 - `DELETE /api/v1/projects/{id}/files/{file_id}` -- soft-delete.
-- Multi-project files (the user asked): later. For Phase A files are
-  per-project. Cross-project sharing comes in Phase E.
+- **Multi-project / shared files are in Phase A, not deferred.** The
+  schema treats a NULL `project_id` as "shared workspace" -- files
+  accessible from any project context. Implementation drops out of the
+  same table; we just allow `project_id` to be nullable and route the
+  shared endpoint at `/api/v1/files`. (See *Detailed design* below.)
 
 **Renderer:**
 - A new **Files** tab on the project detail/workbench view (the
@@ -234,6 +237,188 @@ real provisioning, separate doc.
   call it out in the UI copy.
 - Cross-platform AV is uneven. Mac / Linux without ClamAV installed
   will upload unscanned. The UX banner is the answer; we don't pretend.
+
+## Detailed design (Phase A + D, locked at acceptance)
+
+The tightening pass added during the move from Proposed → Accepted. These
+are the concrete decisions implementation will follow; deviations need an
+ADR amendment.
+
+### Storage layout (on disk)
+
+```
+data/
+  projects/
+    <project_id>/
+      files/
+        <file_id><.ext>         # the actual bytes; ext preserved for tools that sniff it
+      transcripts/
+        <session_id>.log        # PTY scrollback; also indexed in project_files w/ source='transcript'
+  files/
+    _shared/
+      <file_id><.ext>           # files whose project_id IS NULL
+  quarantine/
+    <file_id><.ext>             # temp landing during AV scan (Phase C); deleted on pass or fail
+```
+
+- `file_id` is a 12-hex-char identifier (`secrets.token_hex(6)`); same
+  alphabet as PTY session ids for consistency.
+- The on-disk extension is best-effort cosmetic so `cat`/`code` open the
+  right tool; the source of truth for type is the `mime` column.
+
+### Migration 006 -- `project_files`
+
+```sql
+CREATE TABLE project_files (
+  id              TEXT PRIMARY KEY,                 -- file_id (12 hex chars)
+  project_id      TEXT,                             -- NULL = shared workspace
+  original_name   TEXT NOT NULL,                    -- as picked by the user
+  on_disk_name    TEXT NOT NULL,                    -- <file_id><.ext> under data/...
+  mime            TEXT NOT NULL,                    -- magic-byte detected (Phase B) or "application/octet-stream"
+  size_bytes      INTEGER NOT NULL,
+  sha256          TEXT NOT NULL,                    -- hex digest; indexed for dedup checks
+  source          TEXT NOT NULL,                    -- 'upload' | 'transcript' | 'chatgpt-import'
+  source_session  TEXT,                             -- the PTY session_id for source='transcript'
+  uploaded_at     TEXT NOT NULL,                    -- ISO 8601 UTC (Contract #24)
+  deleted_at      TEXT,                             -- soft delete; purge 30 d later
+  scan_result     TEXT,                             -- 'clean' | 'blocked' | 'unavailable' | NULL (pre-scan)
+  scan_engine     TEXT,                             -- 'defender' | 'clamav' | NULL
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE INDEX project_files_project_idx ON project_files (project_id) WHERE deleted_at IS NULL;
+CREATE INDEX project_files_sha256_idx ON project_files (sha256);
+```
+
+### Multipart upload limits (Phase A defaults)
+
+- **100 files per request** (effectively unlimited for normal workflows;
+  cap is to keep request memory bounded).
+- **256 MiB per file** (the daemon streams to disk; not in memory).
+- **No total-request cap** beyond the per-file × per-request product
+  (~25 GiB) -- the user wanted "unlimited".
+- Configurable from the start via env vars
+  `SYNAPSE_MAX_FILES_PER_REQUEST` and `SYNAPSE_MAX_FILE_BYTES` so
+  later versions can lower them for cloud / multi-tenant cases without
+  another migration.
+
+### Upload happy-path flow
+
+1. Renderer POSTs `multipart/form-data` to
+   `/api/v1/projects/{id}/files` (or `/api/v1/files` for shared).
+2. Daemon streams each part to `data/quarantine/<file_id><ext>` as
+   bytes arrive, hashing with SHA-256 on the fly.
+3. After write closes:
+   - If Phase C is shipped: run the platform AV (see below). On block,
+     delete the quarantine file, write a `project_files` row with
+     `source='upload', scan_result='blocked'`, audit
+     `file.upload_blocked`, return per-file warning in the response.
+     Pre-Phase-C: write `scan_result=NULL`.
+   - On pass / pre-Phase-C: `os.replace()` to the final location, write
+     the `project_files` row with `scan_result='clean'`/`NULL`, audit
+     `file.upload`.
+4. Response shape (per file):
+   ```json
+   {
+     "ok": true,
+     "id": "abc123def456",
+     "original_name": "notes.md",
+     "size_bytes": 4096,
+     "mime": "text/markdown",
+     "sha256": "...",
+     "scan_result": "clean",
+     "duplicate_of": null
+   }
+   ```
+   On rejection: `"ok": false`, `"reason": "...", "duplicate_of": null`.
+
+### Deduplication policy (Phase A)
+
+- We **record** every upload (no silent skip).
+- If `sha256` matches an existing not-deleted row in the same scope
+  (same `project_id`, including the shared scope), the new row sets
+  `duplicate_of` -> the existing `file_id` AND still keeps a fresh row
+  (zero-length on-disk content; the actual bytes are referenced from
+  the original). Lets the user re-upload the same file under a
+  different name without paying the disk cost.
+- Phase B's "Are you sure?" dialog also surfaces the duplicate up
+  front so the user can cancel.
+
+### Soft delete + purge
+
+- `DELETE /api/v1/projects/{id}/files/{file_id}` flips `deleted_at`
+  and renames the on-disk file to `<file_id><ext>.deleted-<iso>`.
+- A background sweep on daemon boot deletes any `*.deleted-*` files
+  older than 30 days.
+- Restore is a future ADR -- no API for it in Phase A.
+
+### AV quarantine flow (Phase C, anchored here so the schema covers it)
+
+- Defender on Windows: `MpCmdRun.exe -Scan -ScanType 3 -File <path>`.
+  Exit code 0 = clean, 2 = signature found, 3 = engine error. We
+  classify (0 -> clean), (2 -> blocked, parse stdout for threat name),
+  (3 -> unavailable + warn).
+- ClamAV on POSIX: `clamscan --no-summary <path>`. Exit code 0 = clean,
+  1 = signature found, 2 = engine error. Same mapping.
+- 30 s timeout; engine-error or timeout records `scan_result='unavailable'`
+  and surfaces the banner the UX promised. The file still uploads.
+- Result lands in `scan_result` + `scan_engine` -- always visible in
+  the file metadata so the user (and any AI session) knows the
+  provenance.
+
+### AI access to project files
+
+The cross-project / per-project files are exposed two ways:
+
+1. **REST list inside `/api/v1/ai/context`** -- each project's
+   `files` is added inline (file_id, name, size, mime, scan_result),
+   so a Claude session reads its current project's file inventory on
+   prompt 1.
+2. **Filesystem mirror inside the session's cwd** -- when *Open in
+   workbench* spawns the PTY (v0.1.29), the daemon ensures
+   `<project_path>/.synapse-files/` exists and is a **Windows
+   directory junction** (POSIX: symlink) pointing at
+   `data/projects/<project_id>/files/`. Directory junctions don't need
+   admin or developer mode on Windows -- this was a deliberate choice
+   over symlinks. The shared workspace is mirrored at
+   `<project_path>/.synapse-files-shared/`.
+
+### `_imported-chatgpt` "auto-project"
+
+Phase E introduces this. To avoid special-casing the schema, it's just
+a real `projects` row created lazily on first ChatGPT import (kind=
+`'other'`, path=`data/projects/_imported-chatgpt`). The user can
+inspect / delete it like any other project.
+
+### Phase F "scratch project"
+
+Same idea: a `_scratch` lazy-created `projects` row used as the cwd for
+quick-action sessions that don't belong to one of the user's real
+projects. Lives at `data/projects/_scratch`.
+
+### Implementation order inside Phase A + D
+
+This is the order the code actually drops in -- written here so
+implementation is mechanical:
+
+1. **Migration 006** + `_safe_kind` style hydration for source enum
+   (one PR, lands first).
+2. **`files_storage.py`** -- the on-disk write / move / soft-delete /
+   hash module. Pure functions, no FastAPI. Unit-tested.
+3. **`routes_files.py`** -- multipart POST, GET (list + download),
+   DELETE. Uses files_storage. Token-guarded.
+4. **`routes_transcripts.py`** -- a wrapper that turns Sessions
+   close-events into `project_files` rows with `source='transcript'`.
+   Lives separately so deleting it doesn't take the file API with it.
+5. **PTY session-exit hook** in `pty_sessions.py` -- when a workbench
+   session ends, persist its scrollback through the transcript wrapper.
+6. **`/api/v1/ai/context` extension** -- inline the current project's
+   files (and shared) into the existing payload.
+7. **Renderer**: `lib/files-client.ts`, a `<FilesPanel>` component, and
+   wire it into the project workbench landing.
+
+After step 7 ships as `v0.1.30`, sit on it for a few sessions. Phase B
+(inspection dialog) only starts after real upload workflows show what
+the "are you sure?" surface actually needs.
 
 ## Status
 
