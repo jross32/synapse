@@ -7,6 +7,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  ExternalLink,
+  HelpCircle,
   Loader2,
   Plus,
   Sparkles,
@@ -20,15 +25,78 @@ import {
   closeSession,
   getSession,
   listSessions,
+  probeCommand,
   spawnSession,
 } from '@shared/pty-client';
 import { useDaemon } from '@shared/daemon-context';
+import { openExternal } from '@shared/electron-bridge';
 import { cn } from '@shared/utils';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { Modal } from '../components/ui/modal';
 import { PageHeader } from '../components/PageHeader';
 import { SessionTerminal } from '../components/SessionTerminal';
+
+function HelpPanel(): JSX.Element {
+  return (
+    <Card className='flex flex-col gap-3 border-dashed p-5 text-sm'>
+      <h2 className='text-base font-semibold'>How Synapse Sessions work</h2>
+      <ul className='ml-5 list-disc space-y-1 text-muted-foreground'>
+        <li>
+          Every session is a real pseudo-terminal — colours, line editing,
+          Ctrl+C, all work like a normal shell.
+        </li>
+        <li>
+          Quick-launch buttons spawn the CLI for you. If the binary isn't on
+          PATH, Synapse offers to install it (npm) and shows the output live.
+        </li>
+        <li>
+          You can also paste any custom argv into the text field — anything on
+          PATH works (<span className='font-mono'>node --version</span>,{' '}
+          <span className='font-mono'>psql</span>,{' '}
+          <span className='font-mono'>gh repl</span>, ...).
+        </li>
+        <li>
+          Sessions opened from elsewhere (curl, another tab) appear under{' '}
+          <span className='font-mono'>Re-attach to</span> — click to bind a
+          terminal panel to a session that was already alive.
+        </li>
+      </ul>
+      <h2 className='text-base font-semibold'>Claude Code & Codex inside Sessions</h2>
+      <ul className='ml-5 list-disc space-y-1 text-muted-foreground'>
+        <li>
+          Sign-in happens inside the CLI on first launch — Claude opens an
+          OAuth flow in your browser; Codex uses your existing ChatGPT
+          session. Synapse stores no credentials.
+        </li>
+        <li>
+          Runtime controls (Claude Code): <span className='font-mono'>/permissions</span>{' '}
+          to manage edit approvals, <span className='font-mono'>/tools</span> to see
+          what's wired in, <span className='font-mono'>--dangerously-skip-permissions</span>{' '}
+          to bypass approval prompts (yolo mode — be careful).
+        </li>
+        <li>
+          MCP servers configured for your Claude / Codex install are available
+          inside the session unchanged.
+        </li>
+        <li>
+          Sessions survive page navigation — you can flip to Apps, edit a
+          project, and come back; the terminal keeps running.
+        </li>
+      </ul>
+      <h2 className='text-base font-semibold'>Built for AI agents too</h2>
+      <p className='text-muted-foreground'>
+        This dashboard is designed to be used by an AI inside a Sessions tab
+        just as much as by a human at the keyboard. Each project's path,
+        installed tools, registry contents, and (in v0.1.29) workbench
+        transcripts are exposed through the REST API so a Claude session can
+        introspect what's running and where files live. The README and
+        AGENTS.md call out which surfaces are AI-callable.
+      </p>
+    </Card>
+  );
+}
 
 interface QuickLaunch {
   id: string;
@@ -59,6 +127,43 @@ const QUICK_LAUNCH: QuickLaunch[] = [
   },
 ];
 
+/**
+ * Install recipes for coders that aren't on PATH yet (v0.1.28). The user
+ * sees the exact command before we run anything; the install itself runs
+ * as a Synapse session so they can watch the output live.
+ *
+ * Auth note: every coder here manages its own auth on first launch
+ * (Claude Code opens a browser OAuth flow, etc.). Synapse stores no
+ * credentials -- the CLI caches them in its own home directory. That's
+ * the ADR-0002 contract.
+ */
+interface InstallRecipe {
+  label: string;
+  install_argv: string[];
+  needs: string;
+  docs: string;
+  notes?: string;
+}
+
+const INSTALL_RECIPES: Record<string, InstallRecipe> = {
+  claude: {
+    label: 'Claude Code',
+    install_argv: ['npm', 'install', '-g', '@anthropic-ai/claude-code'],
+    needs: 'npm (Node.js)',
+    docs: 'https://docs.claude.com/en/docs/claude-code/quickstart',
+    notes:
+      'First launch opens a browser for sign-in. Cookies are cached in ~/.claude — next time it just starts up.',
+  },
+  codex: {
+    label: 'OpenAI Codex CLI',
+    install_argv: ['npm', 'install', '-g', '@openai/codex'],
+    needs: 'npm (Node.js)',
+    docs: 'https://github.com/openai/codex',
+    notes:
+      'Uses your existing ChatGPT login on first run. Synapse just spawns the CLI -- no API keys to hand it.',
+  },
+};
+
 interface OpenTab {
   sessionId: string;
   argv: string[];
@@ -85,6 +190,12 @@ export function SessionsPage({
   const [argvText, setArgvText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [spawning, setSpawning] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // Drives the Install dialog when a quick-launch's binary isn't on PATH.
+  const [installPrompt, setInstallPrompt] = useState<
+    | (InstallRecipe & { quickLaunchId: string; original_argv: string[] })
+    | null
+  >(null);
 
   // Bring the existing session list in on mount so a refresh doesn't lose
   // sessions started from elsewhere (curl / a previous tab).
@@ -155,7 +266,13 @@ export function SessionsPage({
     }
   }
 
-  async function spawnAndOpen(argv: string[]): Promise<void> {
+  /** Look up the binary on PATH first. If a known coder is missing, route
+   *  through the Install dialog instead of just surfacing "command not
+   *  found". Anything else falls through to the daemon's normal error. */
+  async function spawnAndOpen(
+    argv: string[],
+    opts: { quickLaunchId?: string } = {}
+  ): Promise<void> {
     if (argv.length === 0 || !argv[0].trim()) {
       setError('argv must have at least one entry.');
       return;
@@ -163,6 +280,22 @@ export function SessionsPage({
     setSpawning(true);
     setError(null);
     try {
+      // Skip the probe for the custom argv path -- the user typed it; let the
+      // daemon's error be the source of truth.
+      if (opts.quickLaunchId) {
+        const probe = await probeCommand(argv[0]).catch(() => null);
+        if (probe && !probe.available) {
+          const recipe = INSTALL_RECIPES[opts.quickLaunchId];
+          if (recipe) {
+            setInstallPrompt({
+              ...recipe,
+              quickLaunchId: opts.quickLaunchId,
+              original_argv: argv,
+            });
+            return;
+          }
+        }
+      }
       const session = await spawnSession({ argv });
       await openTab(session.session_id, session.argv);
       setArgvText('');
@@ -170,6 +303,19 @@ export function SessionsPage({
       setError((err as Error).message || 'Spawn failed.');
     } finally {
       setSpawning(false);
+    }
+  }
+
+  /** Run the recipe's install command as a Synapse session so the user can
+   *  watch the output in xterm. After it finishes (they close the tab or it
+   *  exits) they click the quick-launch again to use the installed binary. */
+  async function runInstall(recipe: InstallRecipe): Promise<void> {
+    try {
+      const session = await spawnSession({ argv: recipe.install_argv });
+      await openTab(session.session_id, session.argv);
+      setInstallPrompt(null);
+    } catch (err) {
+      setError((err as Error).message || 'Install spawn failed.');
     }
   }
 
@@ -216,13 +362,29 @@ export function SessionsPage({
                 variant='outline'
                 size='sm'
                 disabled={spawning}
-                onClick={() => void spawnAndOpen(q.argv)}
+                onClick={() => void spawnAndOpen(q.argv, { quickLaunchId: q.id })}
               >
                 <Icon className='h-4 w-4' />
                 {q.label}
               </Button>
             );
           })}
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            onClick={() => setHelpOpen((o) => !o)}
+            className='ml-auto text-muted-foreground'
+            title='How sessions work'
+          >
+            <HelpCircle className='h-4 w-4' />
+            Help
+            {helpOpen ? (
+              <ChevronUp className='h-3 w-3' />
+            ) : (
+              <ChevronDown className='h-3 w-3' />
+            )}
+          </Button>
         </div>
         <form
           className='flex flex-wrap items-center gap-2'
@@ -271,6 +433,55 @@ export function SessionsPage({
       </Card>
 
       {/* Tab strip */}
+      {/* Install dialog (v0.1.28). Surfaces when a quick-launch's binary
+          isn't on PATH; the install runs as a real Synapse session so the
+          user can watch the output. */}
+      {installPrompt && (
+        <Modal
+          open
+          onClose={() => setInstallPrompt(null)}
+          labelledBy='install-prompt-title'
+        >
+          <h2 id='install-prompt-title' className='text-lg font-semibold'>
+            {installPrompt.label} isn't installed yet
+          </h2>
+          <p className='text-sm text-muted-foreground'>
+            Synapse will spawn the install command as a regular session so you
+            can watch the output. After it's done, click {installPrompt.label}{' '}
+            again and you'll land in a real {installPrompt.label} session.
+          </p>
+          <div className='rounded-md border border-border bg-secondary/40 p-3 font-mono text-xs'>
+            $ {installPrompt.install_argv.join(' ')}
+          </div>
+          <div className='text-xs text-muted-foreground'>
+            Requires <span className='font-mono'>{installPrompt.needs}</span>.
+            {installPrompt.notes && (
+              <>
+                <br />
+                {installPrompt.notes}
+              </>
+            )}
+          </div>
+          <div className='flex flex-wrap justify-end gap-2'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => void openExternal(installPrompt.docs)}
+            >
+              <ExternalLink className='h-4 w-4' />
+              Open docs
+            </Button>
+            <Button
+              size='sm'
+              onClick={() => void runInstall(installPrompt)}
+            >
+              <Download className='h-4 w-4' />
+              Run install
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {tabs.length > 0 && (
         <div role='tablist' aria-label='Open sessions' className='flex flex-wrap items-center gap-1'>
           {tabs.map((t) => {
@@ -308,6 +519,8 @@ export function SessionsPage({
           })}
         </div>
       )}
+
+      {helpOpen && <HelpPanel />}
 
       {/* Terminal panel — fixed height keeps fit math stable. */}
       {activeTab ? (

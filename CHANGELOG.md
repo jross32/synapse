@@ -10,6 +10,39 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.28] -- 2026-06-09
+
+### Sessions install dialog + Help panel
+
+The Claude / Codex quick-launch buttons used to surface a raw "command not
+found on PATH" error if the binary wasn't installed. Now they detect
+that, offer an Install dialog with the exact npm command, and run the
+install as a real Synapse session so the user can watch the output live.
+
+#### Added
+- `routes_pty.py` -- `GET /api/v1/pty/probe?cmd=X`. Cheap `shutil.which`
+  wrapper; returns `{cmd, available, resolved}`. Lets the renderer decide
+  whether to spawn or offer an install before the daemon errors.
+- `lib/pty-client.ts` -- typed `probeCommand` helper.
+- `pages/Sessions.tsx`:
+  - `INSTALL_RECIPES` table for the known coders (Claude Code, OpenAI
+    Codex CLI). Each entry has the install argv, prerequisites, docs URL,
+    and a friendly note about auth (CLI manages its own).
+  - Probe before spawn for quick-launch buttons. If unavailable, an
+    Install modal pops with the exact command + a "Run install" button
+    that spawns the install in a new tab.
+  - Help panel (toggle button next to the quick-launches) explaining how
+    sessions work, Claude Code's runtime controls (`/permissions`,
+    `/tools`, `--dangerously-skip-permissions`), and the **Built for AI
+    agents too** stance — the dashboard exposes its state through REST
+    so a Claude session in a tab can introspect what's running.
+
+#### Verified
+- 293 tests pass (+2 probe-route cases); typecheck green. Live probe on
+  Windows: `claude` -> `available: false`, `python` -> `available: true,
+  resolved: ".../python.EXE"`. Clicking Claude in the UI no longer raw-
+  errors; it opens the Install dialog.
+
 ## [0.1.27] -- 2026-06-09
 
 ### Marketplace ships Claude + Codex (ADR-0002 Phase A complete)

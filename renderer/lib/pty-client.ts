@@ -17,6 +17,19 @@ export async function listSessions(): Promise<PtySessionSummary[]> {
   return res.sessions;
 }
 
+export interface PtyProbeResult {
+  cmd: string;
+  available: boolean;
+  resolved: string | null;
+}
+
+/** Cheap check before spawning so we can offer an Install dialog if the
+ *  binary isn't on PATH yet. */
+export async function probeCommand(cmd: string): Promise<PtyProbeResult> {
+  const params = new URLSearchParams({ cmd });
+  return apiFetch<PtyProbeResult>(`/pty/probe?${params}`, { method: 'GET' });
+}
+
 export async function spawnSession(req: PtySpawnRequest): Promise<PtySessionSummary> {
   return apiFetch<PtySessionSummary>('/pty', { method: 'POST', body: req });
 }

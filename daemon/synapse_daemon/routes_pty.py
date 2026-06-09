@@ -14,6 +14,8 @@ Live output rides the WebSocket bus as ``v1.pty.session_output`` events
 from __future__ import annotations
 
 import base64
+import shutil
+import sys
 from typing import Any
 
 from fastapi import APIRouter
@@ -49,6 +51,19 @@ def _summary_dict(session: PtySession) -> dict[str, Any]:
 
 def build_pty_router(manager: PtySessionManager) -> APIRouter:
     router = APIRouter(prefix="/pty", tags=["pty"])
+
+    @router.get("/probe", response_model=None)
+    async def probe(cmd: str) -> dict[str, Any]:
+        """Cheap "is this binary on PATH?" check (v0.1.28).
+
+        The Sessions page hits this before spawning so we can show an
+        Install dialog instead of a raw "command not found" toast when
+        the user clicks Claude / Codex / anything else that may not be
+        installed yet.
+        """
+
+        resolved = shutil.which(cmd)
+        return {"cmd": cmd, "available": resolved is not None, "resolved": resolved}
 
     @router.get("", response_model=None)
     async def list_sessions() -> dict[str, Any]:

@@ -82,6 +82,28 @@ def test_get_unknown_session_is_404(tmp_path: Path) -> None:
         assert c.get("/api/v1/pty/nope").status_code == 404
 
 
+def test_probe_returns_true_for_python(tmp_path: Path) -> None:
+    """Python is always on PATH in test environments -- a stable positive case."""
+
+    client = _harness(tmp_path)
+    with client as c:
+        res = c.get("/api/v1/pty/probe", params={"cmd": sys.executable})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["available"] is True
+        assert body["resolved"] is not None
+
+
+def test_probe_returns_false_for_nonsense(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    with client as c:
+        res = c.get("/api/v1/pty/probe", params={"cmd": "zzz-not-real-9999"})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["available"] is False
+        assert body["resolved"] is None
+
+
 def test_pty_requires_auth(tmp_path: Path) -> None:
     storage = Storage(tmp_path / "data")
     storage.open()
