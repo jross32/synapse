@@ -66,7 +66,18 @@ interface OpenTab {
   scrollbackLoaded: boolean;
 }
 
-export function SessionsPage(): JSX.Element {
+export interface SessionsPageProps {
+  /** Auto-open this session id on mount (used by the Tools deep link). */
+  initialSessionId?: string | null;
+  /** Called after the initial session id has been consumed, so it doesn't
+   *  re-trigger on next mount. */
+  onConsumedInitial?: () => void;
+}
+
+export function SessionsPage({
+  initialSessionId,
+  onConsumedInitial,
+}: SessionsPageProps = {}): JSX.Element {
   const { recentEvents } = useDaemon();
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [active, setActive] = useState<string | null>(null);
@@ -80,6 +91,27 @@ export function SessionsPage(): JSX.Element {
   useEffect(() => {
     void listSessions().then(setRegistry).catch(() => undefined);
   }, []);
+
+  // Deep link from Tools → "Open in Sessions" (v0.1.27). Look up the session
+  // detail to know its argv, then open a tab and consume the id so a re-mount
+  // doesn't loop.
+  useEffect(() => {
+    if (!initialSessionId) return;
+    let cancelled = false;
+    void getSession(initialSessionId)
+      .then((s) => {
+        if (cancelled) return;
+        void openTab(s.session_id, s.argv);
+        onConsumedInitial?.();
+      })
+      .catch(() => {
+        if (!cancelled) onConsumedInitial?.();
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSessionId]);
 
   // Auto-refresh the registry when a session lifecycle event lands. The
   // daemon broadcasts session_started + session_exited; that's enough to

@@ -42,6 +42,60 @@
       }
     },
     {
+      "id": "claude",
+      "name": "Claude Code",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Run Claude Code as a Synapse session tab. Uses your existing Claude CLI credentials -- no new sign-in. Requires `claude` on PATH.",
+      "homepage": "https://docs.claude.com/en/docs/claude-code",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "claude",
+        "name": "Claude Code",
+        "icon": "wrench",
+        "description": "Live Claude Code session under a real PTY. Output streams into a Sessions tab; type to interact.",
+        "version": "1.0.0",
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open Claude session",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {"argv": ["claude"]}
+          }
+        ]
+      }
+    },
+    {
+      "id": "codex",
+      "name": "OpenAI Codex CLI",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Run OpenAI's Codex CLI as a Synapse session tab. Inherits your Codex login. Requires `codex` on PATH.",
+      "homepage": "https://github.com/openai/codex",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "codex",
+        "name": "OpenAI Codex CLI",
+        "icon": "wrench",
+        "description": "Live Codex CLI session under a real PTY.",
+        "version": "1.0.0",
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open Codex session",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {"argv": ["codex"]}
+          }
+        ]
+      }
+    },
+    {
       "id": "git-status",
       "name": "Git status",
       "publisher": "Community",

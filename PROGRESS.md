@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.26`
+`0.1.27`
 
 ## Current milestone
 
-**ADR-0002 Phase A live: AI/shell sessions in the dashboard.** Milestones A–I done. Marketplace loop closed at v0.1.24. v0.1.25 = PTY foundation. **v0.1.26 = xterm.js + Sessions tab** — click *Python REPL* (or PowerShell, or any binary), get a real interactive terminal in a tab with colours and line editing; daemon-side `pty.spawn` + WS event stream + xterm.js loop closed end-to-end. Plus a tiny but high-impact fix to `DaemonProvider.subscribeRaw` so child-effect subscribers don't miss events on first mount. 291 tests pass. Next: v0.1.27 bundle `claude` / `codex` manifests in the marketplace → Milestone J packaging.
+**ADR-0002 Phase A complete: install Claude / Codex from the marketplace, open a live session.** Milestones A–I done. v0.1.24 closed the marketplace install loop; v0.1.25 added the `pty.spawn` primitive + REST; v0.1.26 added xterm.js + Sessions tab. **v0.1.27 = Claude + Codex in the bundled registry** as declarative manifests, **plus** a Tools → Sessions deep link so installing a coder lands you on a working tab in one click. No bespoke code for Claude or Codex — they ride on the existing tiers. 291 tests pass. Next: Phase B (project-scoped workspace, when go-ahead given) → Milestone J packaging.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -50,6 +50,7 @@
 | `0.1.24` | Marketplace Install / Uninstall — loop closed via hot reload + primitives (ADR-0001 step 4) | ✅ done |
 | `0.1.25` | ADR-0002 + PTY session foundation (`pty.spawn` primitive + REST control plane) | ✅ done |
 | `0.1.26` | xterm.js + Sessions tab — live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2) | ✅ done |
+| `0.1.27` | Marketplace ships Claude + Codex + Tools → Sessions deep link (ADR-0002 Phase A complete) | ✅ done |
 
 ## What's done
 

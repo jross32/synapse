@@ -38,6 +38,9 @@ export default function App(): JSX.Element {
 function Shell(): JSX.Element {
   const [page, setPage] = useState<PageId>(DEFAULT_PAGE);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Set by ToolCard "Open in Sessions" → SessionsPage reads it on mount and
+  // auto-attaches a tab so the user doesn't have to know the session id.
+  const [pendingSession, setPendingSession] = useState<string | null>(null);
 
   // Global Ctrl+K / Cmd+K — the universal command palette (Contract #21).
   useEffect(() => {
@@ -51,6 +54,20 @@ function Shell(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // ToolCard fires `synapse:open-session` when a `pty.spawn` action lands a
+  // session id. We catch it here -- ToolCard never has to know which page
+  // owns the terminal UI.
+  useEffect(() => {
+    function onOpenSession(event: Event): void {
+      const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
+      if (typeof detail?.sessionId !== 'string' || !detail.sessionId) return;
+      setPendingSession(detail.sessionId);
+      setPage('sessions');
+    }
+    window.addEventListener('synapse:open-session', onOpenSession);
+    return () => window.removeEventListener('synapse:open-session', onOpenSession);
+  }, []);
+
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
       <Sidebar active={page} onNavigate={setPage} onOpenPalette={() => setPaletteOpen(true)} />
@@ -59,7 +76,12 @@ function Shell(): JSX.Element {
           {page === 'home' && <HomePage onNavigate={setPage} />}
           {page === 'apps' && <AppsPage />}
           {page === 'tools' && <ToolsPage />}
-          {page === 'sessions' && <SessionsPage />}
+          {page === 'sessions' && (
+            <SessionsPage
+              initialSessionId={pendingSession}
+              onConsumedInitial={() => setPendingSession(null)}
+            />
+          )}
           {page === 'processes' && <ProcessesPage />}
           {page === 'settings' && <SettingsPage />}
         </div>

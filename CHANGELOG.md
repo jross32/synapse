@@ -10,6 +10,58 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.27] -- 2026-06-09
+
+### Marketplace ships Claude + Codex (ADR-0002 Phase A complete)
+
+The loop closes: a JSON-only manifest in the bundled registry installs as
+a real Synapse tool whose action opens a live AI coder session in the
+dashboard. **No bespoke code for Claude or Codex** -- they ride on the
+v0.1.22 declarative tier (`pty.spawn` primitive), v0.1.21 hot reload,
+v0.1.24 marketplace install, and v0.1.26 xterm.js renderer.
+
+#### Added
+- `docs/marketplace-sample.json` -- two new bundled entries:
+  - **Claude Code** (`claude`, verified) -- `pty.spawn ["claude"]`, opens
+    a Claude Code session. Uses the user's existing `claude` CLI
+    credentials, per ADR-0002 (we store no new secrets).
+  - **OpenAI Codex CLI** (`codex`, verified) -- `pty.spawn ["codex"]`,
+    same model. Inherits the user's Codex login.
+- `components/ToolCard.tsx` -- when an action returns a `session_id` in
+  its result (i.e. a `pty.spawn` primitive landed), the card sprouts an
+  **Open in Sessions** button. It fires a `synapse:open-session` window
+  event with the id; no nav coupling inside ToolCard.
+- `App.tsx` -- catches that event, switches the active page to
+  `sessions`, and threads the id to `<SessionsPage initialSessionId>`.
+- `pages/Sessions.tsx` -- new `initialSessionId` + `onConsumedInitial`
+  props. On mount, looks up the session via `GET /pty/{id}` to learn its
+  argv, opens a tab, and consumes the id so a re-mount doesn't loop.
+
+#### Verified
+- 291 tests pass; typecheck green. E2E live: `GET /marketplace` listed
+  Claude + Codex with `tier=declarative, verified=True`; `POST
+  /marketplace/install/claude` returned `installed=claude,
+  reload.added=[claude]`; `GET /tools` then listed `claude` with
+  `runnable=True` -- proof the declarative tier from v0.1.22 makes
+  Claude runnable without a Python handler. `DELETE` cleaned up. The
+  Tools card → **Open in Sessions** deep link routes to the xterm panel
+  with no extra clicks.
+
+### ADR-0002 Phase A: done
+
+Phases A1 (PTY foundation), A2 (xterm.js renderer) and A3 (marketplace
+bundling) are all shipped:
+
+- Drop into Synapse, open **Tools → Browse**, install **Claude Code**,
+  hit **Open Claude session**, and a live AI coder appears in a
+  **Sessions** tab.
+- No new secrets to hand Synapse, no new auth flow, no agent loop
+  re-implementation -- the existing `claude` CLI handles all of that and
+  we host it.
+
+Phase B (project-scoped workspace) and Phase C (Apple / Google OAuth)
+are still gated on explicit go-aheads per the ADR.
+
 ## [0.1.26] -- 2026-06-09
 
 ### Live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2)

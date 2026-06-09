@@ -91,6 +91,11 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
   const toolActions = manifest.actions.filter((a) => a.scope === 'tool');
   const itemActions = manifest.actions.filter((a) => a.scope === 'item');
   const toolUrl = typeof state.result.public_url === 'string' ? state.result.public_url : null;
+  // pty.spawn primitive (v0.1.27) stamps a session_id on the tool state when
+  // the action launches a terminal session. We surface it as "Open in
+  // Sessions" so the user lands on the live xterm tab in one click.
+  const sessionId =
+    typeof state.result.session_id === 'string' ? state.result.session_id : null;
 
   function coerce(field: ToolField, raw: string): unknown {
     if (field.type === 'number') return raw === '' ? null : Number(raw);
@@ -234,6 +239,30 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
         <div className='flex flex-col gap-1 rounded-md border border-border bg-secondary/50 p-3'>
           <span className='text-xs font-medium text-muted-foreground'>Public URL</span>
           <PublicUrl url={toolUrl} />
+        </div>
+      )}
+
+      {/* PTY session deep link (v0.1.27). Fires a global event the App shell
+          listens for so we can switch pages without coupling ToolCard to the
+          nav model. */}
+      {sessionId && (
+        <div className='flex flex-col gap-2 rounded-md border border-border bg-secondary/50 p-3'>
+          <span className='text-xs font-medium text-muted-foreground'>
+            Session opened
+          </span>
+          <div className='flex items-center justify-between gap-2'>
+            <span className='truncate font-mono text-xs'>{sessionId}</span>
+            <Button
+              size='sm'
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('synapse:open-session', { detail: { sessionId } })
+                )
+              }
+            >
+              Open in Sessions
+            </Button>
+          </div>
         </div>
       )}
 
