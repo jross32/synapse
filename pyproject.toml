@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse-daemon"
-version = "0.1.28"
+version = "0.1.29"
 description = "Synapse execution layer — FastAPI daemon that owns all managed processes. By The WhatIf Company."
 readme = "README.md"
 requires-python = ">=3.11"

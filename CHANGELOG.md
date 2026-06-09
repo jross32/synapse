@@ -10,6 +10,74 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.29] -- 2026-06-09
+
+### ADR-0002 Phase B + "Built for AI agents too" surfaces
+
+The Apps tiles now have an **Open in workbench** button that spawns a
+PTY session pre-`cd`'d into the project's working directory, picking
+Claude → Codex → shell automatically based on what's on PATH. And the
+app now has an explicit AI-facing layer: `GET /api/v1/ai/context`
+returns a compact orientation digest so a Claude / Codex session in a
+Sessions tab can read what's running, what's installed, and which REST
+endpoints are designed for it to call.
+
+#### Added -- daemon
+- `routes_workbench.py` -- `POST /api/v1/projects/{id}/workbench`. Body
+  is optional `{argv?, rows?, cols?, source?}`; if `argv` is omitted the
+  daemon picks **`claude` → `codex` → `powershell.exe`/`zsh`/`bash`**
+  via `shutil.which`. Spawns under the project's `cwd`, audits as
+  `workbench.open` (Contract #11), returns the PTY summary plus
+  `project_id` + `project_name` so the UI knows where to land.
+- `routes_ai.py` -- `GET /api/v1/ai/context`. Compact digest with schema
+  `synapse.ai.context/v1`: projects (id / name / path / kind / status
+  / launch_cmd / port / health), tools (id / runnable / actions
+  metadata), live PTY sessions, the last 25 audit rows, and an
+  `endpoints_for_ai` field that explicitly maps "what you want to do
+  next" -> REST path. This is the orientation surface for an AI session.
+
+#### Added -- renderer
+- `lib/workbench-client.ts` -- typed `openProjectWorkbench(id, opts?)`.
+- `components/ProjectTile.tsx` -- new ghost-style **Open in workbench**
+  button next to *Open folder* / *Open in VS Code* / *Terminal*. It
+  POSTs the workbench endpoint and dispatches the v0.1.27 deep-link
+  event; the user lands in the Sessions tab with the coder already
+  running in the project's directory.
+- `pages/Home.tsx` -- a "Built for AI agents too" callout card making
+  the dual-audience design explicit, plus a new **Sessions** quick-jump
+  button in the existing "Jump in" rail.
+
+#### Added -- docs
+- `AGENTS.md` gets an **AI-facing surfaces** section: how to use
+  `/ai/context` for orientation, the workbench launcher, the
+  marketplace install API, and (honestly) what's *not* AI-callable yet
+  with the planned versions.
+
+#### Verified
+- 297 tests pass (+4: workbench POSIX-only spawn + workbench unknown
+  project 404 + workbench auth-gated, AI context returns versioned
+  digest + AI context auth-gated). Typecheck green.
+- E2E live: `POST /projects/anchor/workbench {"argv":["cmd.exe"]}`
+  returned `session_id=46d8b92ccfaa`, `cwd=C:\Users\justi\Anchor`,
+  `project=Anchor` (proof of pre-`cd`). `/ai/context` returned a digest
+  for 21 projects, 1 tool, 25 audit rows, 8 endpoint pointers.
+
+#### Why this matters
+
+Phase B was always the "useful framing for the AI workbench" -- the AI
+sits **inside** your project, not next to it. Combined with the AI
+context endpoint, a Claude session opened from a tile can introspect
+what Synapse knows about its current project on its first prompt and
+act accordingly. No bespoke handoff -- just JSON over REST.
+
+#### What's still gated per the ADRs
+
+- Phase C (Apple / Google OAuth refactor of pairing) is still in
+  ADR-0003 territory and not happening without an explicit go-ahead.
+- Per-project file upload + transcript history, ChatGPT folder
+  migration, malware scanning, and AI-driven "build me an MCP / a tool"
+  quick-actions all need ADR-0003 first.
+
 ## [0.1.28] -- 2026-06-09
 
 ### Sessions install dialog + Help panel

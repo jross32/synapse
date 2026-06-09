@@ -459,6 +459,44 @@ seeded from `daemon/synapse_daemon/seed.py`. wbscrper is the seed example.
 
 ---
 
+## AI-facing surfaces (v0.1.29+)
+
+Synapse is built so a Claude / Codex session **running inside a Sessions
+tab** can drive it just as well as a human at the mouse. When you (the AI)
+are operating inside the app:
+
+- Start by `GET /api/v1/ai/context` for a compact orientation digest:
+  projects (with kind, path, status), installed tools (and whether
+  they're runnable), live PTY sessions, recent audit tail, and a list of
+  the REST endpoints meant for you.
+- Use the per-project workbench launcher at
+  `POST /api/v1/projects/{id}/workbench` to spawn a coder session
+  pre-`cd`'d into a project's working directory. If you don't pass an
+  `argv`, the daemon picks claude → codex → shell based on what's on PATH.
+- Install a new tool from the marketplace with
+  `POST /api/v1/marketplace/install/{id}` -- the manifest lands in
+  `tools/<id>/manifest.json`, hot reload picks it up within ~250 ms, and
+  the new card appears in the Tools tab. You can do this for the user.
+- A tool's actions are JSON-declarative when possible. To author a new
+  declarative tool, drop a manifest in `tools/<id>/manifest.json` (no
+  registry entry needed for local development) using one of the vetted
+  primitives: `url.open`, `process.spawn`, `pty.spawn`. The daemon
+  validates against `ToolManifest`; invalid manifests are skipped.
+- Audit your work. Every action you take through the REST API is logged
+  to `audit_log` with `source` -- the entries you originate land under
+  whatever AuditSource the caller passes (we pass `desktop` for the UI;
+  consider passing a distinct source if/when you wire programmatic AI
+  callers).
+
+Things that are NOT yet AI-callable (planned, see ADRs):
+
+- File upload to projects (planned: v0.1.30+).
+- Per-project transcript history (planned: v0.1.30+).
+- Workflow / multi-step recipes ("when user clicks X, run sequence Y").
+
+If you find yourself wanting one of these and it'd unblock a real task,
+write the design as an ADR in `docs/adr/` and then implement.
+
 ## Forbidden
 
 - Don't add a second port (we use 7878 only — daemon allocates any others it needs).

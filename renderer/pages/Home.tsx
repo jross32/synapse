@@ -130,6 +130,9 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
             <Button variant='secondary' className='justify-start' onClick={() => onNavigate('apps')}>
               Open Apps
             </Button>
+            <Button variant='secondary' className='justify-start' onClick={() => onNavigate('sessions')}>
+              Sessions (Claude / Codex / shells)
+            </Button>
             <Button variant='secondary' className='justify-start' onClick={() => onNavigate('processes')}>
               Live Processes
             </Button>
@@ -139,6 +142,27 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           </div>
         </Card>
       </div>
+
+      {/* "Built for AI agents too" -- this is the explicit ADR-0002 stance.
+          Goes on Home so a fresh human sees it, and any Claude session that
+          opens / from the workbench has a trivial pointer to GET /ai/context. */}
+      <Card className='flex flex-col gap-3 border-dashed p-6'>
+        <h2 className='text-lg font-semibold'>Built for AI agents too</h2>
+        <p className='max-w-3xl text-sm text-muted-foreground'>
+          The dashboard works in two directions. A human navigates by clicking;
+          a Claude or Codex session running in a <b>Sessions</b> tab navigates
+          by REST. Every project, tool, marketplace entry, audit row and live
+          PTY session is exposed as JSON — and there's a compact orientation
+          digest at <code className='font-mono'>GET /api/v1/ai/context</code>{' '}
+          so a coder session can introspect what's running and where files
+          live without sifting through individual endpoints.
+        </p>
+        <div className='flex flex-wrap gap-2'>
+          <Button variant='secondary' size='sm' onClick={() => onNavigate('sessions')}>
+            Open a coder session
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

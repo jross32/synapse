@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.27`
+`0.1.29`
 
 ## Current milestone
 
-**ADR-0002 Phase A complete: install Claude / Codex from the marketplace, open a live session.** Milestones A–I done. v0.1.24 closed the marketplace install loop; v0.1.25 added the `pty.spawn` primitive + REST; v0.1.26 added xterm.js + Sessions tab. **v0.1.27 = Claude + Codex in the bundled registry** as declarative manifests, **plus** a Tools → Sessions deep link so installing a coder lands you on a working tab in one click. No bespoke code for Claude or Codex — they ride on the existing tiers. 291 tests pass. Next: Phase B (project-scoped workspace, when go-ahead given) → Milestone J packaging.
+**ADR-0002 Phase A + B complete.** Milestones A–I done. v0.1.24 closed the marketplace install loop; v0.1.25 / v0.1.26 / v0.1.27 shipped Phase A (PTY foundation + xterm.js + Claude/Codex marketplace bundles). v0.1.28 = install dialog + Help panel + `/pty/probe`. **v0.1.29 = Phase B**: Apps tiles get *Open in workbench* (spawns a PTY pre-`cd`'d into the project's cwd, picks Claude → Codex → shell automatically), plus `/ai/context` digest endpoint and a "Built for AI agents too" callout on Home. 297 tests pass. Next: ADR-0003 (file upload + transcripts + ChatGPT migration etc.) when given the go.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -51,6 +51,8 @@
 | `0.1.25` | ADR-0002 + PTY session foundation (`pty.spawn` primitive + REST control plane) | ✅ done |
 | `0.1.26` | xterm.js + Sessions tab — live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2) | ✅ done |
 | `0.1.27` | Marketplace ships Claude + Codex + Tools → Sessions deep link (ADR-0002 Phase A complete) | ✅ done |
+| `0.1.28` | Sessions install dialog + Help panel + `/pty/probe` | ✅ done |
+| `0.1.29` | Apps tile "Open in workbench" + `/ai/context` digest + "Built for AI" Home callout (ADR-0002 Phase B) | ✅ done |
 
 ## What's done
 

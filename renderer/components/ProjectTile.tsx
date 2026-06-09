@@ -5,7 +5,7 @@
 // A "more actions" row exposes quick OS actions (open folder / browser).
 
 import { useState } from 'react';
-import { Code2, FolderOpen, Globe, Pin, TerminalSquare } from 'lucide-react';
+import { Code2, FolderOpen, Globe, Pin, Sparkles, TerminalSquare } from 'lucide-react';
 
 import { launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
@@ -17,6 +17,7 @@ import {
   openInTerminal,
   openInVscode,
 } from '@shared/electron-bridge';
+import { openProjectWorkbench } from '@shared/workbench-client';
 import { kindMeta } from '@shared/project-kinds';
 import { cn } from '@shared/utils';
 import { Badge } from './ui/badge';
@@ -79,6 +80,21 @@ export function ProjectTile({
     const result = await openInTerminal(project.path);
     if (!result.ok && result.error) {
       onActionError?.(project, new Error(result.error));
+    }
+  }
+
+  async function handleOpenInWorkbench(): Promise<void> {
+    try {
+      const session = await openProjectWorkbench(project.id);
+      // Hand off to the Sessions page via the same global event the
+      // marketplace deep-link uses (v0.1.27).
+      window.dispatchEvent(
+        new CustomEvent('synapse:open-session', {
+          detail: { sessionId: session.session_id },
+        })
+      );
+    } catch (err) {
+      onActionError?.(project, err as Error);
     }
   }
 
@@ -232,6 +248,15 @@ export function ProjectTile({
               <TerminalSquare className='h-3.5 w-3.5' /> Terminal
             </Button>
           )}
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-7 px-2 text-xs text-muted-foreground'
+            title='Open a coder session (claude / codex / shell) pre-cd into this project'
+            onClick={() => void handleOpenInWorkbench()}
+          >
+            <Sparkles className='h-3.5 w-3.5' /> Open in workbench
+          </Button>
           {project.expected_port !== null && (
             <Button
               variant='ghost'

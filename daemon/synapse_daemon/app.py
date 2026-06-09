@@ -33,9 +33,11 @@ from .models import HealthResponse
 from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
 from .pty_sessions import PtySessionManager
+from .routes_ai import build_ai_router
 from .routes_audit import build_audit_router
 from .routes_marketplace import build_marketplace_router
 from .routes_pty import build_pty_router
+from .routes_workbench import build_workbench_router
 from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
@@ -167,6 +169,18 @@ def build_app(
     app.state.pty_manager = pty_manager
     app.include_router(
         build_pty_router(pty_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Phase B workbench (v0.1.29): "Open in workbench" on an Apps tile.
+    app.include_router(
+        build_workbench_router(storage, pty_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # AI-facing digest -- what a Claude session in a tab should read first.
+    app.include_router(
+        build_ai_router(storage, tool_registry, pty_manager),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
