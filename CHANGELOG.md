@@ -10,6 +10,131 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.25] -- 2026-06-09
+
+### ADR-0002 + PTY session foundation (Phase A step 1)
+
+The first piece of the AI workbench from the new ADR-0002. The daemon
+can now host real interactive child processes -- `claude`, `codex`,
+`python -i`, `psql`, anything -- under a true pseudo-terminal. v0.1.26
+adds the renderer (xterm.js + a sessions tab); this version ships the
+control plane so curl can already drive it.
+
+#### Added -- docs
+- `docs/adr/0002-ai-workbench.md` -- the design. Three phases (CLI
+  passthrough → AI workspace → account auth), what's in scope, what's
+  honest about not happening (VS Code Copilot can't be CLI-driven; we're
+  not re-implementing an agent loop). Auth is **inherited** from the
+  user's existing Claude/Codex CLI sessions -- Synapse stores no new
+  secrets.
+
+#### Added -- daemon
+- `pty_sessions.py` -- `PtySession` + `PtySessionManager`. POSIX backend
+  via stdlib `pty.fork` + `loop.add_reader`; Windows backend via
+  `pywinpty` on a reader thread that posts to the event loop. Output is
+  base64-fanned-out on the bus as `v1.pty.session_output`; lifecycle
+  rides `v1.pty.session_started` / `v1.pty.session_exited`. Bounded 64
+  KiB scrollback ring; fresh subscribers get the tail on `GET /pty/{id}`.
+- `routes_pty.py` -- token-guarded REST control plane:
+  `POST /pty` (spawn) · `GET /pty` (list) · `GET /pty/{id}` (summary +
+  scrollback) · `POST /pty/{id}/input` (base64 OR text) ·
+  `POST /pty/{id}/resize` · `DELETE /pty/{id}` (close).
+- `tools_primitives.py` -- third primitive `pty.spawn`. A declarative
+  manifest can now ship an interactive coder as pure JSON; the
+  marketplace install/uninstall loop from v0.1.24 already covers it.
+- `app.py` wires the manager onto `bus._pty_manager` so the primitive
+  finds it without an import cycle, and on `app.state` for tests.
+- `__main__.py` lifespan shuts every live session down on daemon exit.
+- `pyproject.toml` -- `pywinpty>=2.0.0; sys_platform == "win32"` (POSIX
+  uses stdlib).
+
+#### Verified
+- 291 tests pass (+6 PTY + 6 routes; 7 POSIX-only end-to-end cases skip
+  cleanly on Windows so CI works either way). Typecheck green.
+- E2E live on Windows: `POST /api/v1/pty {"argv":["python","-i","-q"]}`
+  returned `session_id=39554f35fbb9`; sending `print(2*21)\r\n` via
+  `/input` reported 13 bytes written; `GET /pty/{id}` returned base64
+  scrollback containing real terminal control bytes (xterm.js will
+  render those in v0.1.26); `DELETE /pty/{id}` returned 204.
+
+#### What's next
+v0.1.26 adds xterm.js + a `<SessionTerminal>` component bound to the
+WS stream; v0.1.27 ships `claude` and `codex` manifests in the bundled
+marketplace registry so a user can click *Install → Open session* and
+have a working AI coder tab.
+
+## [0.1.24] -- 2026-06-08
+
+### Marketplace install / uninstall (ADR-0001 step 4 — loop closed)
+
+The Browse cards now have **Install** and **Uninstall** buttons. Click
+Install and the daemon writes the manifest into `tools/<id>/manifest.json`;
+the watchdog reload from `v0.1.21` picks it up; the declarative primitives
+from `v0.1.22` make its actions runnable. **No daemon code touches the
+tool. No restart.** End-to-end live install ↔ uninstall is verified.
+
+#### Added -- daemon
+- `routes_marketplace.py` (v0.1.23 file extended):
+  - `_fetch_manifest_payload(entry)` -- prefers `manifest_inline` from the
+    registry, else fetches `manifest_url` via httpx with the same 10 s
+    timeout the listing uses. Either way the JSON body is the manifest the
+    user will run.
+  - `POST /api/v1/marketplace/install/{tool_id}?force=bool` -- validates
+    the payload against `ToolManifest`, **refuses if the manifest's `id`
+    doesn't match the registry id** (the registry id is the trust anchor
+    against malicious or misnamed payloads), refuses to clobber an
+    existing folder unless `?force=true`, writes
+    `tools/<tool_id>/manifest.json`, then triggers a synchronous
+    `registry.reload()` so the response carries `{added, removed, kept}`.
+  - `DELETE /api/v1/marketplace/install/{tool_id}` -- removes the manifest
+    and the folder if it has no other files. Hot reload (already wired)
+    drops the tool from the in-memory registry.
+- `docs/marketplace-sample.json` now ships `manifest_inline` bodies for
+  the two declarative sample tools (`open-synapse-docs` runs `url.open`
+  to the README; `git-status` runs `process.spawn ["git", "-C", "{path}",
+  "status", "--short"]`). They install + run **for real** off the
+  bundled registry without an external network round-trip.
+
+#### Added -- renderer
+- `lib/marketplace-client.ts` -- `installTool(id, force?)` /
+  `uninstallTool(id)` typed REST clients.
+- `lib/generated-types.ts` -- `RegistryEntry.manifest_inline`,
+  `InstallReport`, `UninstallReport`.
+- `components/MarketplaceBrowser.tsx` -- each card now sprouts an
+  **Install** button (with a spinner during the round-trip) or an
+  **Uninstall** button (red ghost, with a confirm prompt) depending on
+  whether the id is already in `installed_ids`. Optimistic local update
+  on success plus the existing `v1.tool.reloaded` event makes the
+  **Installed** tab counter tick up the same instant.
+
+#### Verified
+- 285 tests pass (+6 in `test_routes_marketplace.py`: install writes the
+  manifest + reload + runnable; install refuses-without-force then
+  forced overwrite; install unknown id is 404; install rejects a
+  manifest whose id disagrees with the registry id; uninstall removes
+  manifest + folder; uninstall unknown is 404). Typecheck green.
+- E2E live (curl + browser):
+  - `POST /api/v1/marketplace/install/open-synapse-docs` returned
+    `installed=open-synapse-docs, tier=declarative, reload.added=[
+    "open-synapse-docs"]`. The file landed at
+    `tools/open-synapse-docs/manifest.json`. `/api/v1/tools` listed it
+    with `runnable=True`. `POST .../tools/open-synapse-docs/actions/open`
+    returned `status=launched, message="Opened
+    https://github.com/jross32/synapse#readme"` -- the primitive ran.
+  - Clicking **Install** on Git status in the Browse UI flipped the card
+    to "Already installed", swapped the button to **Uninstall**, and the
+    **Installed** tab counter went from 1 → 2 -- all within one paint.
+  - `DELETE` then returned `reload.removed=["git-status"]`, folder was
+    cleaned up, registry dropped the id.
+
+#### Why this matters
+
+This is the **loop close** for the in-app tool marketplace from
+ADR-0001. A third party can now publish a single JSON manifest, a user
+clicks Install, and Synapse runs it without ever touching Python. The
+remaining v0.1.25+ work (Install-from-URL, scaffolder, registry index
+domain) is purely about polish + reach.
+
 ## [0.1.23] -- 2026-06-08
 
 ### Tools → Browse (ADR-0001 step 3)

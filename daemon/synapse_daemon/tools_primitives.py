@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 
 #: Public set of primitive ids the registry will dispatch to. Order matters
 #: for documentation only -- runtime is keyed by exact match.
-PRIMITIVES: frozenset[str] = frozenset({"url.open", "process.spawn"})
+PRIMITIVES: frozenset[str] = frozenset({"url.open", "process.spawn", "pty.spawn"})
 
 _SPAWN_TIMEOUT_DEFAULT = 5.0
 _SPAWN_TIMEOUT_MAX = 30.0
@@ -89,6 +89,8 @@ async def run_primitive(
         return await _url_open(params, fields, bus, tool_id)
     if primitive == "process.spawn":
         return await _process_spawn(params, fields, bus, tool_id)
+    if primitive == "pty.spawn":
+        return await _pty_spawn(params, fields, bus, tool_id)
     # The guard above keeps us out of here; this is for type-checkers.
     return _error(tool_id, "primitive.unknown", primitive)
 
@@ -243,6 +245,69 @@ async def _process_spawn(
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
+
+
+async def _pty_spawn(
+    params: dict[str, Any],
+    fields: dict[str, Any],
+    bus: EventBus,
+    tool_id: str,
+) -> ToolState:
+    """Launch an interactive child under a PTY (v0.1.25 · ADR-0002 Phase A).
+
+    The session manager is resolved lazily via the bus's ``_pty_manager``
+    attribute, which the app wires up at boot. We avoid a hard import cycle
+    that way and the primitive stays optional in cut-down test harnesses.
+    """
+
+    manager = getattr(bus, "_pty_manager", None)
+    if manager is None:
+        return _error(
+            tool_id,
+            "primitive.unavailable",
+            "pty.spawn primitive needs a PtySessionManager wired on the bus.",
+        )
+
+    raw_argv = params.get("argv")
+    if not isinstance(raw_argv, list) or not raw_argv:
+        return _error(
+            tool_id,
+            "primitive.bad_params",
+            "pty.spawn requires a non-empty 'argv' list param.",
+        )
+    argv = [substitute(str(part), fields) for part in raw_argv]
+    if not argv[0]:
+        return _error(tool_id, "primitive.bad_params", "pty.spawn argv[0] is empty.")
+
+    cwd_template = params.get("cwd")
+    cwd = (
+        substitute(cwd_template, fields)
+        if isinstance(cwd_template, str) and cwd_template.strip()
+        else None
+    )
+
+    rows = int(params.get("rows", 24))
+    cols = int(params.get("cols", 80))
+
+    try:
+        session = await manager.spawn(argv=argv, cwd=cwd, rows=rows, cols=cols)
+    except FileNotFoundError as exc:
+        return _error(tool_id, "primitive.spawn_failed", str(exc))
+    except Exception as exc:  # pragma: no cover -- defensive
+        return _error(tool_id, "primitive.spawn_failed", f"PTY spawn failed: {exc}")
+
+    return ToolState(
+        tool_id=tool_id,
+        status=EntityStatus.LAUNCHED,
+        result={
+            "primitive": "pty.spawn",
+            "session_id": session.session_id,
+            "argv": session.argv,
+            "rows": session.rows,
+            "cols": session.cols,
+        },
+        message=f"Opened PTY session {session.session_id}",
+    )
 
 
 def _error(tool_id: str, code: str, message: str) -> ToolState:

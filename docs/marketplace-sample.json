@@ -23,7 +23,23 @@
       "description": "Opens the Synapse documentation in your default browser. A 12-line manifest — nothing else.",
       "homepage": "https://github.com/jross32/synapse",
       "verified": true,
-      "manifest_url": "https://github.com/jross32/synapse/raw/main/docs/marketplace/open-synapse-docs.json"
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "open-synapse-docs",
+        "name": "Open Synapse docs",
+        "icon": "wrench",
+        "description": "One-tap link to the Synapse README on GitHub.",
+        "version": "1.0.0",
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open docs",
+            "primary": true,
+            "primitive": "url.open",
+            "params": {"url": "https://github.com/jross32/synapse#readme"}
+          }
+        ]
+      }
     },
     {
       "id": "git-status",
@@ -31,10 +47,32 @@
       "publisher": "Community",
       "tier": "declarative",
       "version": "0.1.0",
-      "description": "Runs `git status` in a chosen folder and shows the output. Demonstrates the process.spawn primitive.",
+      "description": "Runs `git status --short` in a folder you pick and shows the output. Demonstrates the process.spawn primitive.",
       "homepage": null,
       "verified": false,
-      "manifest_url": null
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "git-status",
+        "name": "Git status",
+        "icon": "terminal",
+        "description": "Run `git status --short` in any folder.",
+        "version": "0.1.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\repo"}
+        ],
+        "actions": [
+          {
+            "id": "run",
+            "label": "Run git status",
+            "primary": true,
+            "primitive": "process.spawn",
+            "params": {
+              "argv": ["git", "-C", "{path}", "status", "--short"],
+              "timeout": 10
+            }
+          }
+        ]
+      }
     }
   ]
 }

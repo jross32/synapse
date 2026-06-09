@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse-daemon"
-version = "0.1.23"
+version = "0.1.25"
 description = "Synapse execution layer — FastAPI daemon that owns all managed processes. By The WhatIf Company."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,7 @@ dependencies = [
   "websockets>=13.0,<14.0",
   "watchdog>=4.0.0,<7.0.0",
   "cryptography>=43.0.0,<46.0.0",
+  'pywinpty>=2.0.0; sys_platform == "win32"',
 ]
 
 [project.optional-dependencies]

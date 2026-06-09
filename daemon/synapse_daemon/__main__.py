@@ -144,6 +144,11 @@ def _build_lifespan(
         yield
         log.info("Synapse daemon shutting down.")
         await registry.shutdown_all()
+        # Close every live PTY session before the loop tears down -- the
+        # session manager rides on app.state (wired in build_app).
+        pty_manager = getattr(app.state, "pty_manager", None)
+        if pty_manager is not None:
+            await pty_manager.shutdown_all()
         pm.shutdown()
 
     return lifespan

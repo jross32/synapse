@@ -354,6 +354,21 @@ export interface RegistryEntry {
   homepage: string | null;
   verified: boolean;
   manifest_url: string | null;
+  /** Inline manifest body — when set, install can skip the HTTP fetch. */
+  manifest_inline?: Record<string, unknown> | null;
+}
+
+export interface InstallReport {
+  installed: string;
+  tier: string | null;
+  version: string | null;
+  path: string;
+  reload: { added: string[]; removed: string[]; kept: string[] };
+}
+
+export interface UninstallReport {
+  uninstalled: string;
+  reload: { added: string[]; removed: string[]; kept: string[] };
 }
 
 export interface RegistryIndex {

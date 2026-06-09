@@ -34,8 +34,10 @@ def _write_manifest(tools_dir: Path, tool_id: str, body: dict) -> None:
 
 
 def test_known_primitives_are_published() -> None:
-    assert PRIMITIVES == frozenset({"url.open", "process.spawn"})
+    # pty.spawn added in v0.1.25 (ADR-0002 Phase A).
+    assert PRIMITIVES == frozenset({"url.open", "process.spawn", "pty.spawn"})
     assert is_known_primitive("url.open")
+    assert is_known_primitive("pty.spawn")
     assert not is_known_primitive("filesystem.delete")
 
 

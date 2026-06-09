@@ -111,3 +111,97 @@ def test_marketplace_route_requires_auth(tmp_path: Path) -> None:
     app = build_app(storage, EventBus())
     unauthed = TestClient(app)
     assert unauthed.get("/api/v1/marketplace").status_code == 401
+
+
+# ── install / uninstall (v0.1.24) ──────────────────────────────────────────
+
+
+def test_install_writes_manifest_and_makes_it_runnable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client, registry, tools_dir = _harness(tmp_path, monkeypatch=monkeypatch)
+    with client as c:
+        res = c.post("/api/v1/marketplace/install/open-synapse-docs")
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["installed"] == "open-synapse-docs"
+        assert body["reload"]["added"] == ["open-synapse-docs"]
+
+    # File landed in tools/<id>/manifest.json.
+    target = tools_dir / "open-synapse-docs" / "manifest.json"
+    assert target.exists()
+
+    # Registry now has it AND marks it runnable (declarative + primitive
+    # action means the daemon can execute it without a Python handler).
+    assert "open-synapse-docs" in {m.id for m in registry.list_manifests()}
+    assert registry.get_manifest("open-synapse-docs").runnable is True
+
+
+def test_install_refuses_to_clobber_without_force(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client, _, _ = _harness(tmp_path, monkeypatch=monkeypatch)
+    with client as c:
+        c.post("/api/v1/marketplace/install/open-synapse-docs")
+        again = c.post("/api/v1/marketplace/install/open-synapse-docs")
+        assert again.status_code == 409
+        forced = c.post("/api/v1/marketplace/install/open-synapse-docs?force=true")
+        assert forced.status_code == 200
+
+
+def test_install_rejects_unknown_tool(tmp_path: Path, monkeypatch) -> None:
+    client, _, _ = _harness(tmp_path, monkeypatch=monkeypatch)
+    with client as c:
+        res = c.post("/api/v1/marketplace/install/never-heard-of-it")
+        assert res.status_code == 404
+
+
+def test_install_rejects_manifest_with_mismatched_id(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A registry entry pointing at a manifest whose own ``id`` differs is
+    refused -- the registry id is the trust anchor for "this tool is what it
+    claims to be"."""
+
+    client, registry, tools_dir = _harness(tmp_path, monkeypatch=monkeypatch)
+    # Monkey-patch the cached index to inject a malicious manifest_inline.
+    from synapse_daemon.routes_marketplace import _cache, _load_from_file, _resolve_source
+
+    _cache.clear()
+    _, location = _resolve_source()
+    index = _load_from_file(location)
+    for entry in index["tools"]:
+        if entry["id"] == "git-status":
+            entry["manifest_inline"] = {"id": "definitely-not-git-status", "name": "Sneaky", "actions": []}
+            break
+    _cache.set(location, index)
+
+    with client as c:
+        res = c.post("/api/v1/marketplace/install/git-status")
+        assert res.status_code == 422
+        assert "does not match" in res.json()["message"]
+
+
+def test_uninstall_removes_manifest_and_folder(tmp_path: Path, monkeypatch) -> None:
+    client, registry, tools_dir = _harness(tmp_path, monkeypatch=monkeypatch)
+    with client as c:
+        c.post("/api/v1/marketplace/install/open-synapse-docs")
+        target = tools_dir / "open-synapse-docs"
+        assert target.exists()
+
+        res = c.delete("/api/v1/marketplace/install/open-synapse-docs")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["uninstalled"] == "open-synapse-docs"
+        assert body["reload"]["removed"] == ["open-synapse-docs"]
+
+    # Folder should be gone (only contained the manifest).
+    assert not target.exists()
+    assert "open-synapse-docs" not in {m.id for m in registry.list_manifests()}
+
+
+def test_uninstall_unknown_returns_404(tmp_path: Path, monkeypatch) -> None:
+    client, _, _ = _harness(tmp_path, monkeypatch=monkeypatch)
+    with client as c:
+        res = c.delete("/api/v1/marketplace/install/not-installed")
+        assert res.status_code == 404

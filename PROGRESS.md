@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.23`
+`0.1.25`
 
 ## Current milestone
 
-**Marketplace browser shipping.** Milestones A–I done. v0.1.14–v0.1.18 = palette / Apps filter / VS Code / audit / theme. v0.1.19 = project kinds + ADR-0001. v0.1.20 = Open-in-Terminal + responsive sidebar. v0.1.21 = hot manifest reload. v0.1.22 = declarative tool primitives. **v0.1.23 = Tools → Browse page** (read-only registry catalogue; ADR-0001 step 3). 279 tests pass. Next: v0.1.24 Install / Uninstall (writes the manifest, hot reload picks it up) → Milestone J packaging.
+**ADR-0002 Phase A landing.** Milestones A–I done. Marketplace loop closed at v0.1.24. **v0.1.25 = ADR-0002 written + PTY session foundation** — the daemon hosts interactive children under a real pseudo-terminal so v0.1.26's xterm.js renderer + v0.1.27's `claude` / `codex` manifests can stack on top with no architecture surprises. Auth is inherited from existing CLI sessions; we store no new secrets. 291 tests pass. Next: v0.1.26 renderer (xterm.js + sessions tab) → v0.1.27 bundled `claude` / `codex` manifests → Milestone J packaging.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -47,6 +47,8 @@
 | `0.1.21` | Hot tool-manifest reload via watchdog (ADR-0001 step 1, Contract #26) | ✅ done |
 | `0.1.22` | Declarative tool primitives — `url.open` + `process.spawn` (ADR-0001 step 2) | ✅ done |
 | `0.1.23` | Tools → Browse page (read-only marketplace catalogue) (ADR-0001 step 3) | ✅ done |
+| `0.1.24` | Marketplace Install / Uninstall — loop closed via hot reload + primitives (ADR-0001 step 4) | ✅ done |
+| `0.1.25` | ADR-0002 + PTY session foundation (`pty.spawn` primitive + REST control plane) | ✅ done |
 
 ## What's done
 

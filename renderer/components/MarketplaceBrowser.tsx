@@ -8,16 +8,22 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  Download,
   ExternalLink,
   Layers,
   Loader2,
   PackageOpen,
   RefreshCw,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 
 import type { MarketplaceResponse, RegistryEntry } from '@shared/generated-types';
-import { fetchMarketplace } from '@shared/marketplace-client';
+import {
+  fetchMarketplace,
+  installTool,
+  uninstallTool,
+} from '@shared/marketplace-client';
 import { openExternal } from '@shared/electron-bridge';
 import { cn } from '@shared/utils';
 import { Badge } from './ui/badge';
@@ -58,8 +64,46 @@ export function MarketplaceBrowser(): JSX.Element {
     void load();
   }, []);
 
+  const [busyId, setBusyId] = useState<string | null>(null);
   const installed = new Set(data?.installed_ids ?? []);
   const entries = data?.registry.tools ?? [];
+
+  async function handleInstall(id: string): Promise<void> {
+    setBusyId(id);
+    setError(null);
+    try {
+      const res = await installTool(id);
+      // Optimistically mark installed; the v1.tool.reloaded broadcast will
+      // also poke the Installed tab.
+      setData((prev) =>
+        prev
+          ? { ...prev, installed_ids: Array.from(new Set([...prev.installed_ids, res.installed])).sort() }
+          : prev
+      );
+    } catch (err) {
+      setError(`Install failed: ${(err as Error).message}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleUninstall(id: string): Promise<void> {
+    if (!window.confirm(`Uninstall '${id}'? Its manifest will be removed from tools/.`)) return;
+    setBusyId(id);
+    setError(null);
+    try {
+      await uninstallTool(id);
+      setData((prev) =>
+        prev
+          ? { ...prev, installed_ids: prev.installed_ids.filter((x) => x !== id) }
+          : prev
+      );
+    } catch (err) {
+      setError(`Uninstall failed: ${(err as Error).message}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className='flex flex-col gap-4'>
@@ -110,7 +154,14 @@ export function MarketplaceBrowser(): JSX.Element {
       {entries.length > 0 && (
         <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-4'>
           {entries.map((e) => (
-            <RegistryCard key={e.id} entry={e} installed={installed.has(e.id)} />
+            <RegistryCard
+              key={e.id}
+              entry={e}
+              installed={installed.has(e.id)}
+              busy={busyId === e.id}
+              onInstall={() => void handleInstall(e.id)}
+              onUninstall={() => void handleUninstall(e.id)}
+            />
           ))}
         </div>
       )}
@@ -121,9 +172,23 @@ export function MarketplaceBrowser(): JSX.Element {
 interface RegistryCardProps {
   entry: RegistryEntry;
   installed: boolean;
+  busy: boolean;
+  onInstall: () => void;
+  onUninstall: () => void;
 }
 
-function RegistryCard({ entry, installed }: RegistryCardProps): JSX.Element {
+function RegistryCard({
+  entry,
+  installed,
+  busy,
+  onInstall,
+  onUninstall,
+}: RegistryCardProps): JSX.Element {
+  // Handler-tier tools without a bundled handler are still "installable" --
+  // they just won't run until a Synapse build ships the matching handler.
+  // We surface that via the Verified hint in the description; the install
+  // itself is the same flow.
+  const canInstall = !installed && (!!entry.manifest_inline || !!entry.manifest_url);
   return (
     <Card className='flex flex-col gap-3 p-5'>
       <header className='flex items-start justify-between gap-3'>
@@ -173,17 +238,43 @@ function RegistryCard({ entry, installed }: RegistryCardProps): JSX.Element {
             Not installed
           </Badge>
         )}
-        {entry.homepage && (
-          <Button
-            variant='ghost'
-            size='sm'
-            className='h-7 px-2 text-xs'
-            onClick={() => void openExternal(entry.homepage as string)}
-            title={entry.homepage}
-          >
-            <ExternalLink className='h-3 w-3' /> Homepage
-          </Button>
-        )}
+        <div className='flex items-center gap-1'>
+          {entry.homepage && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs'
+              onClick={() => void openExternal(entry.homepage as string)}
+              title={entry.homepage}
+            >
+              <ExternalLink className='h-3 w-3' /> Homepage
+            </Button>
+          )}
+          {installed ? (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-destructive hover:bg-destructive/10'
+              onClick={onUninstall}
+              disabled={busy}
+              title='Remove this tool from tools/'
+            >
+              {busy ? <Loader2 className='h-3 w-3 animate-spin' /> : <Trash2 className='h-3 w-3' />}
+              Uninstall
+            </Button>
+          ) : (
+            <Button
+              size='sm'
+              className='h-7 px-2 text-xs'
+              onClick={onInstall}
+              disabled={!canInstall || busy}
+              title={canInstall ? 'Install this tool' : 'No installable manifest for this entry'}
+            >
+              {busy ? <Loader2 className='h-3 w-3 animate-spin' /> : <Download className='h-3 w-3' />}
+              Install
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
   );

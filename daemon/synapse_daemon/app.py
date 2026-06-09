@@ -32,8 +32,10 @@ from .errors import ErrorEnvelope, SynapseError
 from .models import HealthResponse
 from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
+from .pty_sessions import PtySessionManager
 from .routes_audit import build_audit_router
 from .routes_marketplace import build_marketplace_router
+from .routes_pty import build_pty_router
 from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
@@ -153,6 +155,18 @@ def build_app(
     )
     app.include_router(
         build_marketplace_router(tool_registry),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+
+    # ── PTY sessions (v0.1.25 · ADR-0002 Phase A) ──────────────────────
+    # The manager is attached to the bus so the pty.spawn tool primitive
+    # can find it without an import cycle.
+    pty_manager = PtySessionManager(bus)
+    bus._pty_manager = pty_manager  # type: ignore[attr-defined]
+    app.state.pty_manager = pty_manager
+    app.include_router(
+        build_pty_router(pty_manager),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
