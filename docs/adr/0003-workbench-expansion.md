@@ -283,10 +283,13 @@ CREATE TABLE project_files (
   deleted_at      TEXT,                             -- soft delete; purge 30 d later
   scan_result     TEXT,                             -- 'clean' | 'blocked' | 'unavailable' | NULL (pre-scan)
   scan_engine     TEXT,                             -- 'defender' | 'clamav' | NULL
-  FOREIGN KEY (project_id) REFERENCES projects(id)
+  duplicate_of    TEXT,                             -- another project_files.id whose on-disk bytes we share
+  FOREIGN KEY (project_id) REFERENCES projects(id),
+  FOREIGN KEY (duplicate_of) REFERENCES project_files(id)
 );
 CREATE INDEX project_files_project_idx ON project_files (project_id) WHERE deleted_at IS NULL;
 CREATE INDEX project_files_sha256_idx ON project_files (sha256);
+CREATE INDEX project_files_duplicate_of_idx ON project_files (duplicate_of) WHERE duplicate_of IS NOT NULL;
 ```
 
 ### Multipart upload limits (Phase A defaults)
