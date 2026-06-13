@@ -35,6 +35,7 @@ from .process_manager import ProcessManager
 from .pty_sessions import PtySessionManager
 from .routes_ai import build_ai_router
 from .routes_audit import build_audit_router
+from .routes_files import build_files_router
 from .routes_marketplace import build_marketplace_router
 from .routes_pty import build_pty_router
 from .routes_workbench import build_workbench_router
@@ -175,6 +176,12 @@ def build_app(
     # Phase B workbench (v0.1.29): "Open in workbench" on an Apps tile.
     app.include_router(
         build_workbench_router(storage, pty_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # ADR-0003 Phase A files (v0.1.30): per-project + shared uploads.
+    app.include_router(
+        build_files_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

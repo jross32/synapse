@@ -292,12 +292,18 @@ def find_existing_duplicate(
     from the test pass).
     """
 
+    # The (uploaded_at, id) tiebreak matters: two concurrent uploads of the
+    # same bytes can land with identical timestamps, and without the id
+    # tiebreak each one would link to the other (circular). With the tiebreak
+    # both queries deterministically pick the same canonical -- so the
+    # canonical itself sees nothing in its lookup (it's excluded by id) and
+    # stays canonical; the other links.
     if project_id is None:
         cursor = conn.execute(
             "SELECT id FROM project_files WHERE sha256 = ? AND project_id IS NULL "
             "AND deleted_at IS NULL AND id != ? "
             "AND duplicate_of IS NULL "
-            "ORDER BY uploaded_at LIMIT 1",
+            "ORDER BY uploaded_at, id LIMIT 1",
             (sha256, exclude_id),
         )
     else:
@@ -305,7 +311,7 @@ def find_existing_duplicate(
             "SELECT id FROM project_files WHERE sha256 = ? AND project_id = ? "
             "AND deleted_at IS NULL AND id != ? "
             "AND duplicate_of IS NULL "
-            "ORDER BY uploaded_at LIMIT 1",
+            "ORDER BY uploaded_at, id LIMIT 1",
             (sha256, project_id, exclude_id),
         )
     row = cursor.fetchone()
