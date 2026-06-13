@@ -420,6 +420,127 @@ After step 7 ships as `v0.1.30`, sit on it for a few sessions. Phase B
 (inspection dialog) only starts after real upload workflows show what
 the "are you sure?" surface actually needs.
 
+## Test pass (2026-06-09)
+
+A focused adversarial review of the Accepted ADR turned up seven real
+issues. Each is decided here in the doc before any code lands — they
+amend the *Detailed design* section above.
+
+### 1. `.synapse-files/` writes into the user's source tree
+
+**Problem.** The mirror sat at `<project_path>/.synapse-files/`. That's
+the user's working copy — often a git repo. The mirror would either
+appear in `git status` or need a gitignore line, and on Windows the
+junction can confuse build tooling that walks the tree.
+
+**Decision.** **No write into the user's tree.** Instead, every
+workbench-spawned PTY gets the path injected as environment variables:
+
+- `SYNAPSE_FILES` -> `<data>/projects/<project_id>/files/`
+- `SYNAPSE_SHARED_FILES` -> `<data>/files/_shared/`
+- `SYNAPSE_PROJECT_ID` -> the project id
+- `SYNAPSE_API` -> `http://localhost:7878/api/v1`
+- `SYNAPSE_TOKEN` -> the local auth token
+
+A Claude session does `ls $SYNAPSE_FILES`. No junctions, no gitignore.
+Phase F's quick-actions and any future workbench surface inherit this
+automatically.
+
+### 2. Concurrent uploads with the same sha256
+
+**Problem.** Two POSTs hitting `/files` simultaneously with the same
+bytes each see no existing row at hash-time, both write, both insert,
+no `duplicate_of` linkage.
+
+**Decision.** **After-write reconciliation under transaction.** The
+insert runs inside `storage.transaction()` together with a `SELECT id
+FROM project_files WHERE sha256 = ? AND project_id IS ? AND deleted_at
+IS NULL AND id != ? ORDER BY uploaded_at LIMIT 1`. If a hit comes
+back, the freshly-inserted row's `duplicate_of` is set to that hit and
+the freshly-written on-disk bytes are deleted. SQLite's writer lock
+serialises us. Both requests still return — neither gets a 5xx.
+
+### 3. Dangling `duplicate_of` when the canonical is deleted
+
+**Problem.** File A holds the bytes; file B has `duplicate_of=A` and a
+zero-length file on disk. Soft-delete A and B can no longer be
+downloaded.
+
+**Decision.** **Reference-counted on-disk content.** A delete operation
+runs:
+```sql
+SELECT COUNT(*) FROM project_files
+WHERE sha256 = ? AND deleted_at IS NULL AND id != ?
+```
+If the count is 0, rename the on-disk file to `.deleted-<iso>`. If the
+count is > 0 and the row being deleted **owns** the bytes (i.e. some
+other row's `duplicate_of` points at it), promote the oldest surviving
+duplicate to canonical: copy the bytes into its on-disk slot, null its
+`duplicate_of`, then proceed with the soft-delete. Pure SQLite + one
+`os.replace`; no daemon-wide GC needed.
+
+### 4. Periodic purge
+
+**Problem.** ADR said "background sweep on daemon boot deletes
+`*.deleted-*` files older than 30 days". A daemon up for weeks would
+never run it.
+
+**Decision.** Boot + every 24 h via the existing heartbeat task in
+`process_manager.py`. The sweep is cheap (one glob, one stat per file)
+so it can ride alongside the resource monitor without its own thread.
+
+### 5. Defender exit codes are not stable across Windows versions
+
+**Problem.** ADR cited `0/2/3` for Defender. The truth is more
+nuanced — different Defender builds return different codes; the
+reliable signal is parsing `MpCmdRun.exe` stdout for
+`Threat information:` or `Threat                  :` lines.
+
+**Decision.** **Parse stdout, not exit code.**
+- Stdout contains `Threat information:` followed by a threat name -> blocked.
+- Stdout contains `Scanning ... Scan completed.` with no threat lines -> clean.
+- Anything else (exit code != 0 with no threat output, timeout) -> unavailable.
+
+The exit code stays a hint, not the source of truth. ClamAV's exit
+codes (0 clean, 1 found, 2 error) **are** stable — we keep relying on
+them for that engine.
+
+### 6. Cascading delete from a deleted project
+
+**Problem.** What happens to a project's files when the project itself
+is soft-deleted via `DELETE /api/v1/projects/{id}`?
+
+**Decision.** **Cascade soft-delete.** The existing
+`projects_module.soft_delete()` is extended to set
+`deleted_at = now()` on every `project_files` row where
+`project_id = ?`. The 30 d purge sweep handles the eventual on-disk
+removal via the reference-counting rule from issue 3.
+
+### 7. `_shared` vs `_scratch` — different things, both lazy
+
+**Problem.** ADR used both terms. They mean different things and the
+text blurred them.
+
+**Decision.**
+- **`_shared` is NOT a project row.** It's the symbolic destination
+  for `project_id IS NULL` rows. Files live at
+  `data/files/_shared/<file_id>`. Surfaced via
+  `GET /api/v1/files` and `SYNAPSE_SHARED_FILES`.
+- **`_scratch` IS a project row** created on first quick-action launch
+  (Phase F). It's a real `projects` row, `kind='other'`, that the user
+  can rename, delete, edit, like any project. Its files live at
+  `data/projects/_scratch/files/`.
+
+Two different surfaces; one is a special-case sentinel
+(`project_id NULL`), the other is a normal project. Document
+unambiguously in code comments at point-of-use.
+
+### Verdict
+
+After this pass the ADR holds — the seven items above are concrete
+decisions, not new uncertainty. Phase A + D implementation can start
+from this doc verbatim.
+
 ## Status
 
 ADR is approved into `docs/adr/0003-workbench-expansion.md`. Implementation
