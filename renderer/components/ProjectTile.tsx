@@ -5,7 +5,7 @@
 // A "more actions" row exposes quick OS actions (open folder / browser).
 
 import { useState } from 'react';
-import { Code2, FolderOpen, Globe, Pin, Sparkles, TerminalSquare } from 'lucide-react';
+import { Code2, FolderOpen, Globe, Paperclip, Pin, Sparkles, TerminalSquare } from 'lucide-react';
 
 import { launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
@@ -23,6 +23,8 @@ import { cn } from '@shared/utils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { Modal } from './ui/modal';
+import { FilesPanel } from './FilesPanel';
 import { StatusBadge } from './StatusBadge';
 
 export interface ProjectTileProps {
@@ -45,6 +47,7 @@ export function ProjectTile({
   onActionError,
 }: ProjectTileProps): JSX.Element {
   const [busy, setBusy] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
 
   const isRunning = project.status === 'launched' || project.status === 'stopping';
   const isTransitioning = project.status === 'launching' || project.status === 'stopping';
@@ -257,6 +260,15 @@ export function ProjectTile({
           >
             <Sparkles className='h-3.5 w-3.5' /> Open in workbench
           </Button>
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-7 px-2 text-xs text-muted-foreground'
+            title='Files attached to this project (uploads + session transcripts)'
+            onClick={() => setFilesOpen(true)}
+          >
+            <Paperclip className='h-3.5 w-3.5' /> Files
+          </Button>
           {project.expected_port !== null && (
             <Button
               variant='ghost'
@@ -269,6 +281,25 @@ export function ProjectTile({
           )}
         </div>
       </div>
+
+      {filesOpen && (
+        <Modal
+          open
+          onClose={() => setFilesOpen(false)}
+          labelledBy={`files-modal-${project.id}`}
+          className='!max-w-3xl'
+        >
+          <h2 id={`files-modal-${project.id}`} className='text-lg font-semibold'>
+            Files — {project.name}
+          </h2>
+          <p className='text-sm text-muted-foreground'>
+            Uploads + workbench transcripts. AI sessions launched in a
+            workbench see these under{' '}
+            <code className='font-mono text-xs'>$SYNAPSE_FILES</code>.
+          </p>
+          <FilesPanel projectId={project.id} />
+        </Modal>
+      )}
     </Card>
   );
 }

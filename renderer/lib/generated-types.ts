@@ -413,6 +413,48 @@ export interface MarketplaceResponse {
   cached: boolean;
 }
 
+// ── Project files (ADR-0003 Phase A · v0.1.30/31) ────────────────────────
+
+export type ProjectFileSource = 'upload' | 'transcript' | 'chatgpt-import';
+export type ScanResult = 'clean' | 'blocked' | 'unavailable' | null;
+
+export interface ProjectFile {
+  id: string;
+  project_id: string | null;
+  original_name: string;
+  on_disk_name: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string;
+  source: ProjectFileSource;
+  source_session: string | null;
+  uploaded_at: string;
+  deleted_at: string | null;
+  scan_result: ScanResult;
+  scan_engine: string | null;
+  duplicate_of: string | null;
+}
+
+export interface ProjectFilesListResponse {
+  files: ProjectFile[];
+}
+
+export interface UploadFileResult {
+  ok: boolean;
+  id?: string;
+  original_name: string;
+  size_bytes?: number;
+  mime?: string;
+  sha256?: string;
+  scan_result?: ScanResult;
+  duplicate_of?: string | null;
+  reason?: string;
+}
+
+export interface UploadFilesResponse {
+  files: UploadFileResult[];
+}
+
 // Re-export ErrorEnvelope for ergonomics. (It's defined in error-types.ts
 // because it's referenced before the generator runs.)
 export type { ErrorEnvelope };
