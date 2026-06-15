@@ -164,8 +164,10 @@ def build_app(
 
     # ── PTY sessions (v0.1.25 · ADR-0002 Phase A) ──────────────────────
     # The manager is attached to the bus so the pty.spawn tool primitive
-    # can find it without an import cycle.
-    pty_manager = PtySessionManager(bus)
+    # can find it without an import cycle. Storage is passed in so
+    # workbench-tagged sessions can persist their scrollback as a
+    # transcript file on exit (ADR-0003 Phase D).
+    pty_manager = PtySessionManager(bus, storage=storage)
     bus._pty_manager = pty_manager  # type: ignore[attr-defined]
     app.state.pty_manager = pty_manager
     app.include_router(

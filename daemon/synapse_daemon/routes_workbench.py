@@ -63,11 +63,14 @@ def build_workbench_router(storage: Storage, manager: PtySessionManager) -> APIR
             raise invalid("workbench", "argv must be non-empty.")
 
         try:
+            # project_id tags the session so the manager persists its
+            # scrollback to a transcript file row on exit (ADR-0003 Phase D).
             session = await manager.spawn(
                 argv=argv,
                 cwd=project.path,
                 rows=body.rows,
                 cols=body.cols,
+                project_id=project_id,
             )
         except FileNotFoundError as exc:
             raise invalid("workbench", str(exc))

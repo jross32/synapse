@@ -20,9 +20,25 @@ from typing import Any
 from fastapi import APIRouter
 
 from . import projects as projects_module
+from .files_storage import list_for_project
 from .storage import Storage
 from .pty_sessions import PtySessionManager
 from .tools_registry import ToolRegistry
+
+#: Cap inlined files per project so the AI context payload stays small.
+#: A Claude session can hit /api/v1/projects/{id}/files for the full list.
+_INLINE_FILE_CAP = 25
+
+
+def _file_to_inline(row) -> dict[str, Any]:  # noqa: ANN001
+    return {
+        "id": row.id,
+        "original_name": row.original_name,
+        "size_bytes": row.size_bytes,
+        "mime": row.mime,
+        "source": row.source,
+        "uploaded_at": row.uploaded_at,
+    }
 
 
 def build_ai_router(
@@ -34,23 +50,30 @@ def build_ai_router(
 
     @router.get("/context", response_model=None)
     async def context() -> dict[str, Any]:
-        projects = [
-            {
-                "id": p.id,
-                "name": p.name,
-                "path": p.path,
-                "kind": p.kind.value,
-                "status": p.status.value,
-                "launch_cmd": p.launch_cmd,
-                "expected_port": p.expected_port,
-                "group": p.group,
-                "tags": p.tags,
-                "pinned": p.pinned,
-                "description": p.description,
-                "current_health": p.current_health.value,
-            }
-            for p in projects_module.list_projects(storage.conn)
-        ]
+        projects = []
+        for p in projects_module.list_projects(storage.conn):
+            files = list_for_project(storage.conn, p.id)[:_INLINE_FILE_CAP]
+            projects.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "path": p.path,
+                    "kind": p.kind.value,
+                    "status": p.status.value,
+                    "launch_cmd": p.launch_cmd,
+                    "expected_port": p.expected_port,
+                    "group": p.group,
+                    "tags": p.tags,
+                    "pinned": p.pinned,
+                    "description": p.description,
+                    "current_health": p.current_health.value,
+                    # Phase A + D inline: files (uploads, transcripts,
+                    # ChatGPT imports) and the count if it ran past the cap.
+                    "files": [_file_to_inline(f) for f in files],
+                    "files_count": len(files),
+                }
+            )
+        shared_files = list_for_project(storage.conn, None)[:_INLINE_FILE_CAP]
 
         tools = [
             {
@@ -109,6 +132,7 @@ def build_ai_router(
             "projects": projects,
             "tools": tools,
             "sessions": sessions,
+            "shared_files": [_file_to_inline(f) for f in shared_files],
             "audit_tail": audit_tail,
             "endpoints_for_ai": [
                 {

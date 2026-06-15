@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import logging
 import os
 import secrets
@@ -43,11 +44,18 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from .api_versions import event_name
 from .time_utils import to_iso, utc_now
 from .ws import EventBus
+
+if TYPE_CHECKING:
+    from .storage import Storage
+
+# Callback shape used by PtySessionManager to persist a session's transcript.
+_PersistCallback = Callable[["PtySession"], Awaitable[None]]
 
 log = logging.getLogger(__name__)
 
@@ -249,6 +257,8 @@ class PtySession:
         cols: int,
         bus: EventBus,
         loop: asyncio.AbstractEventLoop,
+        project_id: str | None = None,
+        on_exit_persist: "_PersistCallback | None" = None,
     ) -> None:
         self.session_id = session_id
         self.argv = list(argv)
@@ -257,6 +267,11 @@ class PtySession:
         self.cols = cols
         self.started_at: datetime = utc_now()
         self.exit_code: int | None = None
+        # Workbench-tagged sessions persist their scrollback to a transcript
+        # file (source='transcript') on exit -- ADR-0003 Phase D.
+        self.project_id = project_id
+        self._on_exit_persist = on_exit_persist
+        self._persisted = False
         self._bus = bus
         self._loop = loop
         self._backend = _make_backend()
@@ -320,6 +335,7 @@ class PtySession:
                 event_name("pty", "session_exited"),
                 {"session_id": self.session_id, "exit_code": self.exit_code},
             )
+            await self._maybe_persist_transcript()
 
     # ── I/O ─────────────────────────────────────────────────────────────
 
@@ -389,6 +405,22 @@ class PtySession:
             event_name("pty", "session_exited"),
             {"session_id": self.session_id, "exit_code": self.exit_code},
         )
+        await self._maybe_persist_transcript()
+
+    async def _maybe_persist_transcript(self) -> None:
+        """ADR-0003 Phase D -- write scrollback to a transcript file row.
+
+        Only runs for workbench-tagged sessions (``project_id`` set) and
+        the manager wired a persistence callback. Idempotent across both
+        exit paths (clean shutdown + EOF)."""
+
+        if self._persisted or self.project_id is None or self._on_exit_persist is None:
+            return
+        self._persisted = True
+        try:
+            await self._on_exit_persist(self)
+        except Exception:  # pragma: no cover -- never let transcript I/O kill a session
+            log.exception("Failed to persist transcript for session %s", self.session_id)
 
     # ── summary ─────────────────────────────────────────────────────────
 
@@ -410,8 +442,11 @@ class PtySession:
 class PtySessionManager:
     """Track every open PTY session for the daemon lifetime."""
 
-    def __init__(self, bus: EventBus) -> None:
+    def __init__(self, bus: EventBus, storage: "Storage | None" = None) -> None:
         self._bus = bus
+        # When set, workbench-tagged sessions persist scrollback through
+        # files_storage on exit (ADR-0003 Phase D).
+        self._storage = storage
         self._sessions: dict[str, PtySession] = {}
 
     async def spawn(
@@ -421,6 +456,7 @@ class PtySessionManager:
         env: dict[str, str] | None = None,
         rows: int = 24,
         cols: int = 80,
+        project_id: str | None = None,
     ) -> PtySession:
         if not argv:
             raise ValueError("spawn requires a non-empty argv")
@@ -446,10 +482,68 @@ class PtySessionManager:
             cols=cols,
             bus=self._bus,
             loop=asyncio.get_running_loop(),
+            project_id=project_id,
+            on_exit_persist=self._persist_transcript if self._storage is not None else None,
         )
         await session.start()
         self._sessions[session_id] = session
         return session
+
+    async def _persist_transcript(self, session: PtySession) -> None:
+        """Write the session's scrollback as a project_files row tagged
+        ``source='transcript'``. Imported lazily so PtySessionManager stays
+        importable without the migration applied."""
+
+        from . import files_storage as _fs
+
+        if self._storage is None or session.project_id is None:
+            return
+        scrollback = session.scrollback_bytes()
+        if not scrollback:
+            return  # no point storing an empty file
+
+        name = (
+            f"transcript-{Path(session.argv[0]).name}-"
+            f"{to_iso(session.started_at).replace(':', '-')}.log"
+        )
+        try:
+            blob = _fs.write_streaming_with_hash(
+                io.BytesIO(scrollback),
+                original_name=name,
+                data_dir=self._storage.data_dir,
+                max_bytes=_fs.DEFAULT_MAX_FILE_BYTES,
+            )
+        except _fs.FileTooLargeError:
+            log.warning("Transcript for %s exceeded max size; dropped.", session.session_id)
+            return
+
+        with self._storage.transaction() as conn:
+            _fs.insert_file_row(
+                conn,
+                file_id=blob.file_id,
+                project_id=session.project_id,
+                original_name=name,
+                on_disk_name=blob.on_disk_name,
+                mime="text/plain",
+                size_bytes=blob.size_bytes,
+                sha256=blob.sha256,
+                source="transcript",
+                source_session=session.session_id,
+            )
+            canonical = _fs.find_existing_duplicate(
+                conn,
+                sha256=blob.sha256,
+                project_id=session.project_id,
+                exclude_id=blob.file_id,
+            )
+            if canonical is not None:
+                _fs.drop_quarantined(blob)
+                conn.execute(
+                    "UPDATE project_files SET duplicate_of = ? WHERE id = ?",
+                    (canonical, blob.file_id),
+                )
+            else:
+                _fs.finalize_after_scan(blob, self._storage.data_dir, project_id=session.project_id)
 
     def get(self, session_id: str) -> PtySession | None:
         return self._sessions.get(session_id)

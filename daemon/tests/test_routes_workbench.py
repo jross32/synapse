@@ -67,3 +67,36 @@ def test_workbench_requires_auth(tmp_path: Path) -> None:
     app = build_app(storage, EventBus())
     unauthed = TestClient(app)
     assert unauthed.post("/api/v1/projects/x/workbench").status_code == 401
+
+
+@posix_only
+def test_workbench_session_persists_transcript_on_exit(tmp_path: Path) -> None:
+    """ADR-0003 Phase D -- workbench-tagged sessions write scrollback to
+    project_files with source='transcript' when they exit."""
+
+    client = _harness(tmp_path)
+    with client as c:
+        # echo prints + exits cleanly; the scrollback is captured.
+        spawn = c.post(
+            "/api/v1/projects/ws-demo/workbench",
+            json={"argv": ["/bin/echo", "transcript-smoke"]},
+        )
+        assert spawn.status_code == 200
+        sid = spawn.json()["session_id"]
+
+        # Wait for the session to exit (echo is fast).
+        import time
+
+        for _ in range(40):
+            if c.get(f"/api/v1/pty/{sid}").status_code == 404:
+                break
+            time.sleep(0.1)
+
+        files = c.get("/api/v1/projects/ws-demo/files").json()["files"]
+        transcripts = [f for f in files if f["source"] == "transcript"]
+        assert transcripts, "expected at least one transcript file"
+        assert transcripts[0]["source_session"] == sid
+        # Pull the bytes back and confirm the echo output round-tripped.
+        dl = c.get(f"/api/v1/projects/ws-demo/files/{transcripts[0]['id']}")
+        assert dl.status_code == 200
+        assert b"transcript-smoke" in dl.content

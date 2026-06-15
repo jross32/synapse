@@ -53,3 +53,31 @@ def test_ai_context_requires_auth(tmp_path: Path) -> None:
     app = build_app(storage, EventBus())
     unauthed = TestClient(app)
     assert unauthed.get("/api/v1/ai/context").status_code == 401
+
+
+def test_ai_context_inlines_files_per_project(tmp_path: Path) -> None:
+    """ADR-0003 Phase A + D -- the context payload exposes uploaded files
+    by project so a Claude session can orient on prompt 1."""
+
+    import io as _io
+
+    client = _harness(tmp_path)
+    with client as c:
+        res = c.post(
+            "/api/v1/projects/demo/files",
+            files=[("files", ("ai-context.md", _io.BytesIO(b"hello AI"), "text/markdown"))],
+        )
+        assert res.status_code == 200
+
+        body = c.get("/api/v1/ai/context").json()
+        demo = next(p for p in body["projects"] if p["id"] == "demo")
+        assert demo["files_count"] == 1
+        assert demo["files"][0]["original_name"] == "ai-context.md"
+
+        # Shared scope shows up too.
+        c.post(
+            "/api/v1/files",
+            files=[("files", ("shared.md", _io.BytesIO(b"global"), "text/markdown"))],
+        )
+        body = c.get("/api/v1/ai/context").json()
+        assert any(f["original_name"] == "shared.md" for f in body["shared_files"])
