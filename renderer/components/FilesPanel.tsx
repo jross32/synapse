@@ -28,6 +28,7 @@ import {
 import { cn } from '@shared/utils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { UploadPreviewDialog } from './UploadPreviewDialog';
 
 export interface FilesPanelProps {
   /** Pass null for the shared workspace. */
@@ -61,6 +62,8 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  // Phase B: picked files sit here until the user confirms in the preview dialog.
+  const [previewing, setPreviewing] = useState<File[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function refresh(): Promise<void> {
@@ -128,7 +131,7 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
           e.preventDefault();
           setDragOver(false);
           const dropped = Array.from(e.dataTransfer.files);
-          if (dropped.length > 0) void handleUpload(dropped);
+          if (dropped.length > 0) setPreviewing(dropped);
         }}
         className={cn(
           'flex cursor-pointer items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-sm transition-colors',
@@ -159,7 +162,7 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
           className='hidden'
           onChange={(e) => {
             const picked = Array.from(e.target.files ?? []);
-            if (picked.length > 0) void handleUpload(picked);
+            if (picked.length > 0) setPreviewing(picked);
             e.target.value = ''; // allow re-picking the same file
           }}
         />
@@ -226,6 +229,18 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
           ))}
         </ul>
       )}
+
+      {/* Phase B: pre-upload inspection. Drives the actual POST only after
+          the user confirms in the dialog. */}
+      <UploadPreviewDialog
+        open={previewing !== null}
+        pickedFiles={previewing ?? []}
+        onCancel={() => setPreviewing(null)}
+        onConfirm={(confirmed) => {
+          setPreviewing(null);
+          void handleUpload(confirmed);
+        }}
+      />
     </div>
   );
 }
