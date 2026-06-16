@@ -1,0 +1,8 @@
+{
+  "id": "new-mcp-server",
+  "name": "New MCP server",
+  "description": "Scaffold a Model Context Protocol server using the official SDK.",
+  "icon": "server",
+  "prompt": "I want to build a new MCP (Model Context Protocol) server. Help me scaffold it from scratch using the official @modelcontextprotocol/sdk:\n\n1. Initialise a Node.js project in the current working directory (`npm init -y`) and add `@modelcontextprotocol/sdk` as a dependency.\n2. Create an `index.js` (or `index.ts`) that opens a stdio MCP server, registers at least one example tool (input schema + handler), and prints a friendly hello on startup so I know it's alive.\n3. Add a short README.md that explains how I (or another AI) would: run the server locally; add it to my Claude / Synapse MCP client config; add a new tool.\n4. Walk me through testing the example tool from the command line before we move on.\n\nIf I tell you what the server should DO, fold that into the scaffolding before generating the tool registry. Otherwise pick a small useful example (an `echo` tool) so the scaffold actually runs.\n\nThis project's environment has `SYNAPSE_FILES`, `SYNAPSE_SHARED_FILES`, `SYNAPSE_API`, `SYNAPSE_TOKEN`, and `SYNAPSE_PROJECT_ID` set -- you can `ls $SYNAPSE_FILES` to find any reference material I uploaded.",
+  "default_argv": ["claude"]
+}

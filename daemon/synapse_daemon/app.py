@@ -38,6 +38,7 @@ from .routes_audit import build_audit_router
 from .routes_files import build_files_router
 from .routes_imports import build_imports_router
 from .routes_marketplace import build_marketplace_router
+from .routes_quick_actions import build_quick_actions_router
 from .routes_pty import build_pty_router
 from .routes_workbench import build_workbench_router
 from .routes_auth import build_auth_router
@@ -191,6 +192,12 @@ def build_app(
     # ADR-0003 Phase E (v0.1.33): ChatGPT export.zip import.
     app.include_router(
         build_imports_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # ADR-0003 Phase F (v0.1.34): AI quick-action templates.
+    app.include_router(
+        build_quick_actions_router(storage, pty_manager),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
