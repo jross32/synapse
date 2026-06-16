@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def _utcnow() -> datetime:
@@ -65,6 +65,21 @@ class BaseEntity(BaseModel):
         default_factory=_utcnow,
         description="When the status field last changed. Drives the UI history strip.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coalesce_default_timestamps(cls, values: Any) -> Any:
+        # When a brand-new entity is instantiated with no explicit timestamps,
+        # ``created_at == updated_at == last_transition_at`` is part of the
+        # Contract #2 invariant ("nothing has changed yet"). Three independent
+        # ``default_factory`` calls drift by a few microseconds on faster
+        # clocks and break that invariant, so coalesce them here.
+        if not isinstance(values, dict):
+            return values
+        now = _utcnow()
+        for key in ("created_at", "updated_at", "last_transition_at"):
+            values.setdefault(key, now)
+        return values
 
 
 class ErrorRef(BaseModel):

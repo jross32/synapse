@@ -205,7 +205,8 @@ def build_app(
 
     # Serve the mobile Web UI (Milestone H). Static files are open — a phone
     # must load the page before it can pair. Mounted only if the folder ships.
-    mobile_dir = Path("mobile")
+    # Resolve from the package location so the path holds no matter the CWD.
+    mobile_dir = Path(__file__).resolve().parent.parent.parent / "mobile"
     if (mobile_dir / "index.html").exists():
         app.mount(
             "/mobile",

@@ -34,7 +34,12 @@ log = logging.getLogger(__name__)
 _REGISTRY_ENV = "SYNAPSE_TOOL_REGISTRY_URL"
 _CACHE_TTL_SECONDS = 60.0
 _FETCH_TIMEOUT_SECONDS = 10.0
-_BUNDLED_SAMPLE = Path("docs") / "marketplace-sample.json"
+# The sample registry ships at <repo>/docs/marketplace-sample.json. Tests run
+# pytest from daemon/, so a cwd-relative path can't find it -- resolve from
+# the package location instead. ``synapse_daemon/`` -> repo root is two ups.
+_BUNDLED_SAMPLE = (
+    Path(__file__).resolve().parent.parent.parent / "docs" / "marketplace-sample.json"
+)
 
 
 class _Cache:
