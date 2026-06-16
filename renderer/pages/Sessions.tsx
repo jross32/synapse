@@ -31,6 +31,11 @@ import {
 import { useDaemon } from '@shared/daemon-context';
 import { openExternal } from '@shared/electron-bridge';
 import { cn } from '@shared/utils';
+import {
+  launchQuickAction,
+  listQuickActions,
+  type QuickAction,
+} from '../lib/quick-actions-client';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -196,11 +201,21 @@ export function SessionsPage({
     | (InstallRecipe & { quickLaunchId: string; original_argv: string[] })
     | null
   >(null);
+  // Quick-actions rail (v0.1.34). Loaded once on mount; the daemon reads
+  // templates/quick-actions/*.json so adding one doesn't need a restart.
+  const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
+  const [launchingActionId, setLaunchingActionId] = useState<string | null>(null);
 
   // Bring the existing session list in on mount so a refresh doesn't lose
   // sessions started from elsewhere (curl / a previous tab).
   useEffect(() => {
     void listSessions().then(setRegistry).catch(() => undefined);
+  }, []);
+
+  // Quick-action templates (v0.1.34). A bare daemon without any user
+  // templates ships two defaults; an empty list just hides the rail.
+  useEffect(() => {
+    void listQuickActions().then(setQuickActions).catch(() => undefined);
   }, []);
 
   // Deep link from Tools → "Open in Sessions" (v0.1.27). Look up the session
@@ -306,6 +321,23 @@ export function SessionsPage({
     }
   }
 
+  /** Fire a quick-action: the daemon spawns a workbench session in the
+   *  scratch project with the templated prompt pre-loaded as PROMPT.md and
+   *  ``SYNAPSE_QUICK_ACTION_PROMPT``. The session lands in a tab just like
+   *  any other PTY. */
+  async function launchAction(action: QuickAction): Promise<void> {
+    setLaunchingActionId(action.id);
+    setError(null);
+    try {
+      const launched = await launchQuickAction(action.id);
+      await openTab(launched.session_id, launched.argv);
+    } catch (err) {
+      setError((err as Error).message || 'Quick-action launch failed.');
+    } finally {
+      setLaunchingActionId(null);
+    }
+  }
+
   /** Run the recipe's install command as a Synapse session so the user can
    *  watch the output in xterm. After it finishes (they close the tab or it
    *  exits) they click the quick-launch again to use the installed binary. */
@@ -386,6 +418,51 @@ export function SessionsPage({
             )}
           </Button>
         </div>
+        {quickActions.length > 0 && (
+          <div className='flex flex-col gap-2 border-t border-border pt-3'>
+            <div className='flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground'>
+              <Sparkles className='h-3.5 w-3.5' />
+              <span>AI Quick-actions</span>
+              <span
+                className='font-normal normal-case tracking-normal text-muted-foreground/80'
+                title='Each one opens a Claude session in the scratch project with a templated prompt pre-loaded.'
+              >
+                — one click; the AI does the work.
+              </span>
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              {quickActions.map((qa) => {
+                const isLaunching = launchingActionId === qa.id;
+                return (
+                  <button
+                    key={qa.id}
+                    type='button'
+                    disabled={launchingActionId !== null}
+                    onClick={() => void launchAction(qa)}
+                    title={qa.description}
+                    className={cn(
+                      'group flex max-w-xs flex-col items-start gap-1 rounded-md border border-border bg-secondary/30 px-3 py-2 text-left transition-colors',
+                      'hover:border-primary hover:bg-secondary/60',
+                      'disabled:cursor-not-allowed disabled:opacity-50'
+                    )}
+                  >
+                    <div className='flex w-full items-center gap-1.5 text-sm font-medium'>
+                      {isLaunching ? (
+                        <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                      ) : (
+                        <Sparkles className='h-3.5 w-3.5 text-primary' />
+                      )}
+                      <span>{qa.name}</span>
+                    </div>
+                    <p className='line-clamp-2 text-xs text-muted-foreground'>
+                      {qa.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <form
           className='flex flex-wrap items-center gap-2'
           onSubmit={(e) => {
