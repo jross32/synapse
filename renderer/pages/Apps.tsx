@@ -3,14 +3,19 @@
 // Reads everything from the shared DaemonProvider context: projects, live
 // resource snapshots, refresh. No own WebSocket.
 
-import { useMemo, useState } from 'react';
-import { FolderSearch, Plus, Search, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Download, FolderSearch, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
 import { useDaemon } from '@shared/daemon-context';
 import { KIND_META, KIND_ORDER, kindMeta } from '@shared/project-kinds';
 import { cn } from '@shared/utils';
+import {
+  importChatgpt,
+  type ChatgptImportResponse,
+} from '../lib/imports-client';
+import { SynapseApiError } from '../lib/api-client';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -58,6 +63,29 @@ export function AppsPage(): JSX.Element {
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<ProjectKind | 'all'>('all');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ChatgptImportResponse | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleImportFile(file: File): Promise<void> {
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const result = await importChatgpt(file);
+      setImportResult(result);
+      await refreshProjects();
+    } catch (err) {
+      const msg =
+        err instanceof SynapseApiError
+          ? err.envelope.message
+          : (err as Error).message || 'Import failed';
+      setImportError(msg);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   // Pinned projects float to the top, then alphabetical.
   const sorted = useMemo(
@@ -107,15 +135,85 @@ export function AppsPage(): JSX.Element {
         subtitle="Launchable projects under Synapse's management. Click a tile to start it."
         action={
           <div className='flex gap-2'>
+            <Button
+              variant='outline'
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              title='Upload a ChatGPT Settings → Data Controls → Export Data zip'
+            >
+              <Download className='h-4 w-4' />
+              {importing ? 'Importing…' : 'Import ChatGPT export'}
+            </Button>
             <Button variant='outline' onClick={() => setDiscoveryOpen(true)}>
               <FolderSearch className='h-4 w-4' /> Scan for projects
             </Button>
             <Button onClick={() => setForm({ mode: 'create' })}>
               <Plus className='h-4 w-4' /> Add Project
             </Button>
+            <input
+              ref={importInputRef}
+              type='file'
+              accept='.zip,application/zip'
+              className='hidden'
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void handleImportFile(file);
+              }}
+            />
           </div>
         }
       />
+
+      {(importResult || importError) && (
+        <Card
+          role={importError ? 'alert' : 'status'}
+          className={cn(
+            'flex items-start justify-between gap-3 p-4 text-sm',
+            importError
+              ? 'border-destructive/40 bg-destructive/5 text-destructive'
+              : 'border-emerald-500/30 bg-emerald-500/5'
+          )}
+        >
+          <div className='space-y-1'>
+            {importError ? (
+              <p>
+                <strong>ChatGPT import failed:</strong> {importError}
+              </p>
+            ) : importResult ? (
+              <>
+                <p>
+                  <strong>Imported {importResult.imported} conversation
+                  {importResult.imported === 1 ? '' : 's'}</strong> into the{' '}
+                  <code className='font-mono'>{importResult.project_id}</code> project.
+                </p>
+                {(importResult.duplicates > 0 || importResult.skipped_empty > 0) && (
+                  <p className='text-xs text-muted-foreground'>
+                    {importResult.duplicates > 0 &&
+                      `${importResult.duplicates} duplicate${importResult.duplicates === 1 ? '' : 's'} skipped. `}
+                    {importResult.skipped_empty > 0 &&
+                      `${importResult.skipped_empty} empty chat${importResult.skipped_empty === 1 ? '' : 's'} skipped.`}
+                  </p>
+                )}
+                {importResult.note && (
+                  <p className='text-xs text-muted-foreground'>{importResult.note}</p>
+                )}
+              </>
+            ) : null}
+          </div>
+          <button
+            type='button'
+            aria-label='Dismiss'
+            onClick={() => {
+              setImportResult(null);
+              setImportError(null);
+            }}
+            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground'
+          >
+            <X className='h-4 w-4' />
+          </button>
+        </Card>
+      )}
 
       {actionError && (
         <p role='alert' className='text-sm text-destructive'>
