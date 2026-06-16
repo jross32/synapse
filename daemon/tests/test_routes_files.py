@@ -184,3 +184,97 @@ def test_files_requires_auth(tmp_path: Path) -> None:
     unauthed = TestClient(app)
     assert unauthed.get("/api/v1/files").status_code == 401
     assert unauthed.post("/api/v1/projects/demo/files").status_code == 401
+
+
+# ── ADR-0003 Phase C: AV scan integration ────────────────────────────────
+
+
+def test_av_blocked_upload_does_not_land_on_disk(tmp_path: Path, monkeypatch) -> None:
+    """A blocked scan must:
+       * leave the row hidden (deleted_at set so list doesn't include it)
+       * never finalise the bytes
+       * return ok=false with a meaningful reason
+       * audit as file.upload_blocked
+    """
+
+    from synapse_daemon import files_av, routes_files
+
+    async def _block(_path):  # noqa: ANN001
+        return files_av.ScanResult(
+            result=files_av.SCAN_BLOCKED,
+            engine=files_av.ENGINE_DEFENDER,
+            threat_name="Test:EICAR/Demo",
+        )
+
+    monkeypatch.setattr(routes_files, "scan_file", _block)
+
+    client, storage = _harness(tmp_path)
+    with client as c:
+        res = _post(
+            c,
+            "/api/v1/projects/demo/files",
+            ("evil.bin", b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-DEMO", "application/octet-stream"),
+        )
+        assert res.status_code == 200
+        body = res.json()["files"][0]
+        assert body["ok"] is False
+        assert "defender" in body["reason"].lower() or "av" in body["reason"].lower()
+        assert body["scan_result"] == "blocked"
+        assert body["threat_name"] == "Test:EICAR/Demo"
+
+        listed = c.get("/api/v1/projects/demo/files").json()
+        assert all(f["original_name"] != "evil.bin" for f in listed["files"])
+
+    # Audit row recorded with the threat name in details.
+    audit_row = storage.conn.execute(
+        "SELECT action, error_code, details_json FROM audit_log WHERE action = 'file.upload_blocked'"
+    ).fetchone()
+    assert audit_row is not None
+    assert audit_row["error_code"] == "files.av_blocked"
+    import json
+
+    details = json.loads(audit_row["details_json"])
+    assert details["threat_name"] == "Test:EICAR/Demo"
+
+
+def test_av_unavailable_still_uploads_with_banner_metadata(tmp_path: Path, monkeypatch) -> None:
+    """Scanning unavailable must NOT block uploads -- it just records the
+    state so the UI can show "scanning unavailable"."""
+
+    from synapse_daemon import files_av, routes_files
+
+    async def _unavail(_path):  # noqa: ANN001
+        return files_av.ScanResult(result=files_av.SCAN_UNAVAILABLE, engine=None)
+
+    monkeypatch.setattr(routes_files, "scan_file", _unavail)
+
+    client, _ = _harness(tmp_path)
+    with client as c:
+        res = _post(c, "/api/v1/projects/demo/files", ("notes.md", b"hello", "text/markdown"))
+        assert res.status_code == 200
+        body = res.json()["files"][0]
+        assert body["ok"] is True
+        assert body["scan_result"] == "unavailable"
+        assert body["scan_engine"] is None
+
+        listed = c.get("/api/v1/projects/demo/files").json()["files"]
+        match = next(f for f in listed if f["original_name"] == "notes.md")
+        assert match["scan_result"] == "unavailable"
+
+
+def test_av_clean_records_engine_name_on_row(tmp_path: Path) -> None:
+    """The default conftest mock returns clean+defender -- a clean upload
+    should persist the engine name so the UI can show it."""
+
+    client, _ = _harness(tmp_path)
+    with client as c:
+        res = _post(c, "/api/v1/projects/demo/files", ("doc.md", b"safe", "text/markdown"))
+        body = res.json()["files"][0]
+        assert body["ok"] is True
+        assert body["scan_result"] == "clean"
+        assert body["scan_engine"] == "defender"
+
+        listed = c.get("/api/v1/projects/demo/files").json()["files"]
+        match = next(f for f in listed if f["original_name"] == "doc.md")
+        assert match["scan_result"] == "clean"
+        assert match["scan_engine"] == "defender"

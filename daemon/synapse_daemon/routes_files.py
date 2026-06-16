@@ -30,6 +30,7 @@ from fastapi.responses import FileResponse
 from . import projects as projects_module
 from .audit import AuditRecord, audit
 from .errors import invalid, not_found
+from .files_av import SCAN_BLOCKED, SCAN_UNAVAILABLE, scan_file
 from .files_storage import (
     DEFAULT_MAX_FILE_BYTES,
     FileTooLargeError,
@@ -107,6 +108,66 @@ async def _store_one_file(
 
     mime = _guess_mime(name)
 
+    # Phase C: scan the quarantined bytes BEFORE moving them to final. The
+    # ADR locked an always-on policy; unavailable engines record a banner.
+    scan = await scan_file(blob.quarantine_path)
+
+    # Blocked -> never promote to final, log the row so the user sees the
+    # rejection in the audit log + downloads list. The on-disk bytes get
+    # vapourised in either case (we own quarantine).
+    if scan.result == SCAN_BLOCKED:
+        drop_quarantined(blob)
+        with storage.transaction() as conn:
+            insert_file_row(
+                conn,
+                file_id=blob.file_id,
+                project_id=project_id,
+                original_name=name,
+                on_disk_name=blob.on_disk_name,
+                mime=mime,
+                size_bytes=blob.size_bytes,
+                sha256=blob.sha256,
+                source="upload",
+                scan_result=SCAN_BLOCKED,
+                scan_engine=scan.engine,
+            )
+            # Mark the row deleted right away -- the bytes are gone and we
+            # don't want it appearing in list / download surfaces.
+            conn.execute(
+                "UPDATE project_files SET deleted_at = ? WHERE id = ?",
+                (to_iso_now(), blob.file_id),
+            )
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="project" if project_id else "file",
+                    entity_id=project_id or blob.file_id,
+                    action="file.upload_blocked",
+                    source=source_label,
+                    result="error",
+                    error_code="files.av_blocked",
+                    details={
+                        "file_id": blob.file_id,
+                        "original_name": name,
+                        "size_bytes": blob.size_bytes,
+                        "sha256": blob.sha256,
+                        "scan_engine": scan.engine,
+                        "threat_name": scan.threat_name,
+                    },
+                ),
+            )
+        return {
+            "ok": False,
+            "original_name": name,
+            "reason": (
+                f"Rejected by {scan.engine or 'AV'}"
+                + (f" ({scan.threat_name})" if scan.threat_name else "")
+            ),
+            "scan_result": SCAN_BLOCKED,
+            "scan_engine": scan.engine,
+            "threat_name": scan.threat_name,
+        }
+
     # Insert + dedup reconciliation under one transaction (test pass issue #2).
     with storage.transaction() as conn:
         insert_file_row(
@@ -119,6 +180,8 @@ async def _store_one_file(
             size_bytes=blob.size_bytes,
             sha256=blob.sha256,
             source="upload",
+            scan_result=scan.result,         # clean or unavailable
+            scan_engine=scan.engine,
         )
         canonical = find_existing_duplicate(
             conn,
@@ -152,6 +215,8 @@ async def _store_one_file(
                     "size_bytes": blob.size_bytes,
                     "sha256": blob.sha256,
                     "duplicate_of": canonical,
+                    "scan_result": scan.result,
+                    "scan_engine": scan.engine,
                 },
             ),
         )
@@ -163,9 +228,18 @@ async def _store_one_file(
         "size_bytes": blob.size_bytes,
         "mime": mime,
         "sha256": blob.sha256,
-        "scan_result": None,         # Phase C will fill this
+        "scan_result": scan.result,
+        "scan_engine": scan.engine,
         "duplicate_of": canonical,
     }
+
+
+def to_iso_now() -> str:
+    """Local helper to keep the import surface in this file tight."""
+
+    from .time_utils import to_iso, utc_now
+
+    return to_iso(utc_now())
 
 
 def _serialise_row(row) -> dict[str, Any]:  # noqa: ANN001 -- dataclass
