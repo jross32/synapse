@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.29`
+`0.1.34`
 
 ## Current milestone
 
-**ADR-0002 Phase A + B complete.** Milestones A–I done. v0.1.24 closed the marketplace install loop; v0.1.25 / v0.1.26 / v0.1.27 shipped Phase A (PTY foundation + xterm.js + Claude/Codex marketplace bundles). v0.1.28 = install dialog + Help panel + `/pty/probe`. **v0.1.29 = Phase B**: Apps tiles get *Open in workbench* (spawns a PTY pre-`cd`'d into the project's cwd, picks Claude → Codex → shell automatically), plus `/ai/context` digest endpoint and a "Built for AI agents too" callout on Home. 297 tests pass. Next: ADR-0003 (file upload + transcripts + ChatGPT migration etc.) when given the go.
+**ADR-0003 Phases A–F complete.** Milestones A–I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. The complete set: Phase A project files (v0.1.30 + .31), Phase D workbench transcripts (v0.1.30.5), Phase B pre-upload inspection (v0.1.31.5), Phase C always-on AV scanning via Defender / ClamAV (v0.1.32), Phase E ChatGPT export.zip import (v0.1.33), Phase F AI quick-action templates (v0.1.34). 368 tests pass + 9 skipped. Phase G is OAuth and lives in ADR-0004; deferred until the user gives the go.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -53,6 +53,13 @@
 | `0.1.27` | Marketplace ships Claude + Codex + Tools → Sessions deep link (ADR-0002 Phase A complete) | ✅ done |
 | `0.1.28` | Sessions install dialog + Help panel + `/pty/probe` | ✅ done |
 | `0.1.29` | Apps tile "Open in workbench" + `/ai/context` digest + "Built for AI" Home callout (ADR-0002 Phase B) | ✅ done |
+| `0.1.30` | Project files REST surface + migration 006 (ADR-0003 Phase A) | ✅ done |
+| `0.1.30.5` | Workbench transcripts + `/ai/context` files inline (ADR-0003 Phase D + step 6) | ✅ done |
+| `0.1.31` | Renderer `<FilesPanel>` + `files-client` (ADR-0003 Phase A complete) | ✅ done |
+| `0.1.31.5` | Pre-upload inspection dialog with magic-byte detection (ADR-0003 Phase B) | ✅ done |
+| `0.1.32` | Always-on AV scanning via Defender (Windows) / ClamAV (POSIX) (ADR-0003 Phase C) | ✅ done |
+| `0.1.33` | ChatGPT export.zip importer + auto-created `imported-chatgpt` project (ADR-0003 Phase E) | ✅ done |
+| `0.1.34` | AI quick-action templates + Sessions rail (ADR-0003 Phase F) | ✅ done |
 
 ## What's done
 
@@ -194,7 +201,22 @@
 - Renderer: `StartupPanel` in Settings (start-with-Windows toggle; degrades to "Desktop app only" in a browser).
 - 231 tests pass; typecheck green; E2E — Electron rebooted clean, attached to the running daemon (one `:7878` holder), Startup toggle present, 0 console errors.
 
+### v0.1.30 → v0.1.34 — ADR-0003 (workbench expansion)
+
+A single coherent arc. The `project_files` table generalises: file uploads, transcripts, ChatGPT-import conversations, and quick-action prompt records all share one storage / audit / download surface.
+
+- **v0.1.30** -- migration 006 (`project_files` with `scan_result` / `scan_engine` / `duplicate_of`), `files_storage.py` (write / move / soft-delete / hash; pure functions), `routes_files.py` (multipart POST, list, download, delete; per-project AND shared via `project_id IS NULL`; 100 files / req and 256 MiB / file caps via env; after-write dedup reconciliation under transaction).
+- **v0.1.30.5** -- workbench-tagged PTY exits persist scrollback to `project_files` (`source='transcript'`); `/api/v1/projects/{id}/transcripts` lists them; `/api/v1/ai/context` inlines the current project's files (and shared scope).
+- **v0.1.31** -- `lib/files-client.ts` (multipart, list, download, soft-delete; XHR for progress); `<FilesPanel>` in the workbench (drag-drop, multi-file picker, per-row metadata, delete confirm).
+- **v0.1.31.5** -- Phase B pre-upload inspection: in-browser magic-byte detection (`application/pdf`, plain text, common images, JSON, ZIP, PE / ELF / Mach-O); the executable red banner; bulk-select review dialog.
+- **v0.1.32** -- Phase C AV scanning. `files_av.py` with Defender (`MpCmdRun.exe`; stdout `Threat :` regex because exit codes drift) + ClamAV (`clamscan`; stable exit codes); 30s timeout; RTP-vanished-file fall-through. Upload pipeline scans quarantine bytes BEFORE finalize; blocked uploads insert a row with `scan_result='blocked'` + `deleted_at=now` for the audit trail.
+- **v0.1.33** -- Phase E ChatGPT import. `chatgpt_import.py` walks each conversation's `mapping` tree from root to `current_node` so forked retries render the branch the user kept. `routes_imports.py` POST takes a multipart zip, lazy-creates the `imported-chatgpt` project, writes one Markdown file per conversation tagged `source='chatgpt-import'`. Honest scope (Contract #15): the official export, not browser scraping, not a live API.
+- **v0.1.34** -- Phase F AI quick-actions. `quick_actions.py` loads `templates/quick-actions/*.json`; `routes_quick_actions.py` lazy-creates the `scratch` project, writes the templated prompt to `PROMPT.md` + `PROMPT-<id>.md` inside its cwd, spawns the workbench PTY with `SYNAPSE_QUICK_ACTION_{ID,PROMPT,PROMPT_FILE}` injected so the Claude / Codex session sees the prompt on prompt 1. Two bundled templates ship: `new-mcp-server`, `new-synapse-tool`. The button ships the shortcut; the AI does the work.
+- **368 tests pass + 9 skipped.** Suite hygiene during v0.1.33: fixed `_BUNDLED_SAMPLE` + mobile-UI cwd-relative paths and the `BaseEntity` `default_factory` timestamp drift.
+
 ## What's next (immediate)
+
+**ADR-0003 closed.** ADR-0003 Phase G is OAuth (Sign in with Apple / Google), which has always lived in its own ADR-0004 -- deferred until the user gives the go (real OAuth client provisioning, redirect URIs, JWKS, device-migration plan).
 
 **Milestone J — packaging.** Milestones A–I are done.
 - PyInstaller bundles the daemon → `synapsed.exe`
