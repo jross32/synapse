@@ -10,6 +10,163 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.34] -- 2026-06-16
+
+### ADR-0003 Phase F -- AI quick-action templates
+
+A "Quick-actions" rail on the Sessions page. One click opens a workbench
+PTY in the auto-created **scratch** project with a templated prompt
+pre-loaded so the Claude / Codex session sees it on prompt 1. The button
+ships the shortcut; the AI does the work.
+
+#### Added -- daemon
+- `quick_actions.py` -- template loader. Reads
+  `templates/quick-actions/*.json`; validates kebab-case ids; sorts by
+  name; first-id wins on duplicates; one bad file never takes the list
+  down.
+- `routes_quick_actions.py` -- `GET /api/v1/quick-actions` lists curated
+  templates; `POST /api/v1/quick-actions/{id}/launch` lazy-creates the
+  `scratch` project (kind='other'), writes `PROMPT.md` + `PROMPT-<id>.md`
+  into its cwd, spawns a workbench PTY with
+  `SYNAPSE_QUICK_ACTION_{ID,PROMPT,PROMPT_FILE}` injected. Audited as
+  `quick_action.launch`.
+- `templates/quick-actions/new-mcp-server.json`,
+  `templates/quick-actions/new-synapse-tool.json` -- shipped defaults.
+
+#### Added -- renderer
+- `lib/quick-actions-client.ts` -- `listQuickActions()` +
+  `launchQuickAction()`.
+- `pages/Sessions.tsx` -- "AI Quick-actions" row under the existing
+  quick-launch buttons. Each tile shows the template name + 2-line
+  description; clicking spawns the workbench session and opens it as
+  a tab. Single in-flight guard.
+
+#### Tests
+- `test_quick_actions.py` (10 tests): parser, kebab-case, malformed
+  files, duplicate ids, bundled defaults load cleanly.
+- `test_routes_quick_actions.py` (6 tests): list, auth, launch with
+  monkey-patched spawn so it runs on Windows, unknown-action 404,
+  missing-binary 422, scratch project reused across calls.
+- Full suite: 368 passed, 9 skipped.
+
+## [0.1.33] -- 2026-06-15
+
+### ADR-0003 Phase E -- ChatGPT export.zip import
+
+Drop the user's ChatGPT *Settings → Data Controls → Export Data* zip into
+Synapse; every conversation lands as a Markdown file under the
+auto-created **imported-chatgpt** project. One-shot ingest -- no
+scraping, no live ChatGPT API, no third-party network (Contract #15).
+
+#### Added -- daemon
+- `chatgpt_import.py` -- parses `conversations.json`, walks each
+  conversation's mapping tree from root to `current_node` so forked
+  retries render the branch the user kept. Deterministic Markdown so
+  re-imports dedup by sha256.
+- `routes_imports.py` -- `POST /api/v1/imports/chatgpt` multipart upload.
+  Lazy-creates the `imported-chatgpt` project on first call. Each
+  conversation lands as `<date>_<slug>.md` tagged
+  `source='chatgpt-import'`. Duplicate-of reconciliation under
+  transaction. Audited as `chatgpt.import`.
+
+#### Added -- renderer
+- `lib/imports-client.ts` -- multipart `importChatgpt(file)` returning
+  the daemon's `imported / duplicates / skipped_empty / project_id`
+  summary.
+- `pages/Apps.tsx` -- "Import ChatGPT export" header button + hidden
+  file input + dismissible success/error banner.
+
+#### Tests
+- `test_chatgpt_import.py` (15 tests): fork branches, missing
+  `current_node`, empty parts, slugify, filename_for, malformed zips.
+- `test_routes_imports.py` (6 tests): synthetic zip via stdlib
+  `zipfile`, dedup reconciliation, empty/non-zip rejection,
+  empty-conversation skip count.
+
+#### Fixed (suite hygiene during the v0.1.33 cycle)
+- `routes_marketplace.py`: `_BUNDLED_SAMPLE` was cwd-relative; resolved
+  it against the package location so the 9 marketplace tests pass
+  regardless of where pytest is launched.
+- `app.py`: mobile-UI mount used the same cwd-relative bug; now
+  anchored to the package.
+- `models.py`: `BaseEntity` declared three independent
+  `default_factory=_utcnow` fields that drifted by a few microseconds on
+  Python 3.12 and broke the "nothing has changed yet" invariant.
+  `model_validator(mode='before')` coalesces them to one `_utcnow()`.
+
+## [0.1.32] -- 2026-05-19
+
+### ADR-0003 Phase C -- always-on AV scanning
+
+Every uploaded file is scanned before it lands on disk.
+**Windows: Microsoft Defender** via `MpCmdRun.exe -Scan -ScanType 3
+-File <path> -DisableRemediation`; the result comes from **stdout
+parsing** (`Threat   : ...`) because exit codes drift across
+Defender versions. **POSIX: ClamAV** via `clamscan` (exit codes 0/1/2
+are stable). No engine on the host -> the upload still lands with
+`scan_result='unavailable'` and a banner makes that explicit. No
+third-party APIs (Contract #15).
+
+#### Added
+- `files_av.py` -- engine detection, scanner spawn, 30s timeout,
+  anchored regex for the Defender `Threat :` line, real-time
+  protection fall-through ("file vanished while we were looking ->
+  blocked").
+- Upload flow scans the quarantine bytes before dedup/finalize.
+  Blocked uploads insert a row with `scan_result='blocked'` and
+  `deleted_at=now` so the audit trail records them, then return
+  `ok=false`.
+- `tests/conftest.py` autouse fixture mocks scan_file as always-clean
+  so the rest of the suite doesn't spawn Defender.
+
+#### Tests
+- `test_files_av.py` (8 tests) for the Defender classifier + engine
+  detection.
+- `test_routes_files.py` extended (3 tests) for blocked / unavailable /
+  clean roundtrips.
+
+## [0.1.31.5] -- 2026-05-08
+
+### ADR-0003 Phase B -- pre-upload inspection dialog
+
+Browser-side magic-byte detection of every picked file before the POST.
+Filename, size, detected MIME, first 30 lines if it's printable text;
+red banner if it looks executable (PE / ELF / Mach-O). Bulk-select mode
+for many files at once.
+
+## [0.1.31] -- 2026-05-05
+
+### ADR-0003 Phase A complete -- renderer FilesPanel
+
+- `lib/files-client.ts` -- multipart upload, list, download, soft
+  delete. XHR for progress events.
+- `<FilesPanel>` component wired into the project workbench landing:
+  drag-drop, multi-file picker, per-row metadata, delete confirm.
+
+## [0.1.30.5] -- 2026-05-01
+
+### ADR-0003 Phase D + step 6 -- workbench transcripts + AI context
+
+- PTY session exits in workbench-tagged sessions write their scrollback
+  to `project_files` rows with `source='transcript'`.
+- `GET /api/v1/projects/{id}/transcripts` lists them.
+- `/api/v1/ai/context` inlines the current project's files (and the
+  shared scope) so a Claude session sees them on prompt 1.
+
+## [0.1.30] -- 2026-04-28
+
+### ADR-0003 Phase A -- project files REST surface
+
+- Migration 006: `project_files` table (id, project_id, original_name,
+  on_disk_name, mime, size_bytes, sha256, source, uploaded_at,
+  deleted_at, scan_result, scan_engine, duplicate_of).
+- `files_storage.py` -- on-disk write / move / soft-delete / hash module.
+  Pure functions, no FastAPI.
+- `routes_files.py` -- multipart POST, list, download, delete. Per-project
+  AND shared (`project_id IS NULL`) scopes. 100 files / request and
+  256 MiB / file caps via env. Reference-counted dedup with after-write
+  reconciliation under transaction.
+
 ## [0.1.29] -- 2026-06-09
 
 ### ADR-0002 Phase B + "Built for AI agents too" surfaces
