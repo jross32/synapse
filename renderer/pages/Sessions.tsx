@@ -117,6 +117,26 @@ interface QuickLaunch {
 const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
 const isWindows = typeof navigator !== 'undefined' && /win/i.test(navigator.platform);
 
+/**
+ * Friendly label for an argv (tab title, restart/close aria-label,
+ * orphan re-attach button). The daemon resolves the binary via
+ * shutil.which, which on Windows returns a full path like
+ * `C:\Users\justi\AppData\Roaming\npm\claude.CMD`. Rendering that
+ * verbatim makes the tab strip useless and gives the impression
+ * the session didn't really start. Strip down to the basename + drop
+ * the .exe / .cmd / .bat extensions so the user sees `claude` /
+ * `codex` / `powershell`.
+ */
+function friendlyArgvLabel(argv: string[], fallback: string): string {
+  const head = argv[0];
+  if (!head) return fallback;
+  // Last path segment regardless of separator (Windows uses \, POSIX /).
+  const base = head.split(/[\\/]/).pop() ?? head;
+  // Drop a trailing executable extension; preserve case otherwise.
+  const stripped = base.replace(/\.(exe|cmd|bat|com)$/i, '');
+  return stripped || head;
+}
+
 const QUICK_LAUNCH: QuickLaunch[] = [
   { id: 'claude', label: 'Claude', icon: Sparkles, argv: ['claude'] },
   { id: 'codex', label: 'Codex', icon: Bot, argv: ['codex'] },
@@ -548,7 +568,7 @@ export function SessionsPage({
                 className='h-7 px-2 font-mono text-xs'
                 onClick={() => void openTab(o.session_id, o.argv)}
               >
-                {o.argv.slice(-1).pop() ?? o.session_id}
+                {friendlyArgvLabel(o.argv, o.session_id)}
               </Button>
             ))}
           </div>
@@ -609,6 +629,7 @@ export function SessionsPage({
         <div role='tablist' aria-label='Open sessions' className='flex flex-wrap items-center gap-1'>
           {tabs.map((t) => {
             const isActive = t.sessionId === active;
+            const label = friendlyArgvLabel(t.argv, t.sessionId);
             return (
               <div
                 key={t.sessionId}
@@ -625,15 +646,16 @@ export function SessionsPage({
                   type='button'
                   onClick={() => setActive(t.sessionId)}
                   className='flex items-center gap-1.5 font-mono'
+                  title={t.argv.join(' ')}
                 >
-                  <TerminalIcon className='h-3 w-3' />
-                  {t.argv[0] ?? t.sessionId}
+                  <TerminalIcon className='h-3 w-3' aria-hidden='true' />
+                  {label}
                 </button>
                 <button
                   type='button'
                   onClick={() => void restartTab(t.sessionId)}
                   className='rounded p-0.5 opacity-60 hover:bg-accent hover:opacity-100'
-                  aria-label={`Restart session ${t.argv[0] ?? t.sessionId}`}
+                  aria-label={`Restart session ${label}`}
                   title='Restart this session (close + respawn with the same argv)'
                 >
                   <RotateCcw className='h-3 w-3' aria-hidden='true' />
@@ -642,7 +664,7 @@ export function SessionsPage({
                   type='button'
                   onClick={() => void closeTab(t.sessionId)}
                   className='rounded p-0.5 opacity-60 hover:bg-accent hover:opacity-100'
-                  aria-label={`Close session ${t.argv[0] ?? t.sessionId}`}
+                  aria-label={`Close session ${label}`}
                 >
                   <X className='h-3 w-3' aria-hidden='true' />
                 </button>
