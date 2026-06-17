@@ -11,6 +11,7 @@ import {
   Download,
   ExternalLink,
   FolderSearch,
+  Globe,
   Home,
   Plus,
   Search,
@@ -167,6 +168,21 @@ function buildCommands(args: {
         }
       },
     });
+    // Bonus entry when the project is running AND has an expected_port --
+    // saves the user a trip to the Apps tile just to click "Open in
+    // browser". Hidden when the project isn't running so the palette
+    // never offers something that would 404.
+    if (p.status === 'launched' && p.expected_port !== null) {
+      const url = `http://localhost:${p.expected_port}`;
+      list.push({
+        id: `project-open:${p.id}`,
+        label: `Open ${p.name} in browser`,
+        hint: `${url} · Project`,
+        icon: Globe,
+        searchString: `${p.name} ${p.id} open browser web localhost ${p.expected_port}`,
+        run: () => void openExternal(url),
+      });
+    }
   }
 
   return list;
