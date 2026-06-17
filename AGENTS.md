@@ -474,6 +474,12 @@ are operating inside the app:
   `POST /api/v1/projects/{id}/workbench` to spawn a coder session
   pre-`cd`'d into a project's working directory. If you don't pass an
   `argv`, the daemon picks claude → codex → shell based on what's on PATH.
+- **PTY default cwd (v0.1.35)** — when `POST /api/v1/pty` is called
+  with no `cwd`, the daemon defaults to the user's home directory.
+  This pins quick-launch claude/codex sessions to `~` so each launch
+  reuses the CLI's OAuth cache (`~/.claude`, `~/.config/codex`) and
+  per-project state. Workbench callers pass an explicit project cwd
+  and are unaffected.
 - **Project files (ADR-0003 Phase A)** — list / upload / download / delete
   at `/api/v1/projects/{id}/files`. Shared scope at `/api/v1/files`
   (rows with `project_id IS NULL`). When you're inside a workbench-spawned

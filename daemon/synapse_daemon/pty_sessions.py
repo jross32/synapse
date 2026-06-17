@@ -466,6 +466,18 @@ class PtySessionManager:
         if resolved is None:
             raise FileNotFoundError(f"command not found on PATH: {argv[0]!r}")
 
+        # Default cwd to the user's home directory (v0.1.35). Why: the
+        # major AI CLIs we ship in the marketplace (claude, codex) cache
+        # their OAuth state in ~/.claude / ~/.config/codex and ALSO key
+        # their per-project session state by the cwd they were started
+        # in. If we let cwd=None fall through to "wherever the daemon
+        # happened to chdir last", every quick-launch lands in a
+        # different folder and the CLI re-shows its setup wizard each
+        # time. Pinning to ~ means the user goes through Claude/Codex
+        # first-run once and then never again.
+        if cwd is None:
+            cwd = str(Path.home())
+
         merged_env = dict(os.environ)
         if env:
             merged_env.update(env)

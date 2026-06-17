@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -143,3 +145,44 @@ def test_pty_session_manager_imports_on_any_platform() -> None:
 
     bus = EventBus()
     assert PtySessionManager(bus) is not None
+
+
+async def test_spawn_defaults_cwd_to_user_home() -> None:
+    """The marketplace ships claude / codex with NO cwd in their argv;
+    the daemon must pin them to the user's home directory so the CLIs'
+    OAuth caches (~/.claude, ~/.config/codex) and per-cwd project state
+    are consistent across launches. Without this, every quick-launch
+    would land in whatever cwd the daemon happened to be in and Claude
+    would re-show its setup wizard each time."""
+
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+    # Pick a binary every platform has.
+    argv = ["powershell.exe" if sys.platform == "win32" else "sh"]
+    session = await manager.spawn(argv=argv)
+    try:
+        assert session.cwd == str(Path.home()), (
+            f"expected cwd={Path.home()!s}, got {session.cwd!r}"
+        )
+    finally:
+        await manager.close(session.session_id)
+
+
+async def test_spawn_explicit_cwd_is_not_overridden() -> None:
+    """If the caller passes a cwd (e.g. the workbench, which pins to a
+    project's path), the default-to-home logic must NOT clobber it."""
+
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+    argv = ["powershell.exe" if sys.platform == "win32" else "sh"]
+    custom = str(Path.home())  # any real dir; we just check the field is preserved
+    # Use a different real directory than home to make the assertion
+    # actually meaningful.
+    custom = os.path.dirname(custom)
+    session = await manager.spawn(argv=argv, cwd=custom)
+    try:
+        assert session.cwd == custom, (
+            f"explicit cwd={custom!r} was clobbered to {session.cwd!r}"
+        )
+    finally:
+        await manager.close(session.session_id)
