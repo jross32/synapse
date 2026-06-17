@@ -10,6 +10,7 @@ import { DEFAULT_PAGE, type PageId } from '@shared/nav';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { Sidebar } from './components/Sidebar';
 import { CommandPalette } from './components/CommandPalette';
+import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { HomePage } from './pages/Home';
 import { AppsPage } from './pages/Apps';
 import { ToolsPage } from './pages/Tools';
@@ -38,16 +39,38 @@ export default function App(): JSX.Element {
 function Shell(): JSX.Element {
   const [page, setPage] = useState<PageId>(DEFAULT_PAGE);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Set by ToolCard "Open in Sessions" → SessionsPage reads it on mount and
   // auto-attaches a tab so the user doesn't have to know the session id.
   const [pendingSession, setPendingSession] = useState<string | null>(null);
 
   // Global Ctrl+K / Cmd+K — the universal command palette (Contract #21).
+  // Global `?` — the keyboard shortcuts help modal. We skip the binding
+  // when the event target is an input / textarea / contenteditable so a
+  // user typing "?" into the palette filter doesn't trigger it.
   useEffect(() => {
+    function isTypingTarget(target: EventTarget | null): boolean {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return true;
+      if (target.isContentEditable) return true;
+      return false;
+    }
     function onKey(e: KeyboardEvent): void {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen((open) => !open);
+        return;
+      }
+      if (
+        e.key === '?' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !isTypingTarget(e.target)
+      ) {
+        e.preventDefault();
+        setShortcutsOpen((open) => !open);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -91,6 +114,7 @@ function Shell(): JSX.Element {
         onClose={() => setPaletteOpen(false)}
         onNavigate={(p) => setPage(p)}
       />
+      <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

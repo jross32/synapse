@@ -96,8 +96,10 @@ These live under `tools/<id>/manifest.json` and use the existing
   button + `ToolCard` copy-URL button labelled. Remaining icon-only
   buttons to audit: `FilesPanel` rows, `DiscoveryDialog`,
   `MarketplaceBrowser`.
-- **Keyboard shortcut help** (S) — `?` opens a modal listing the
-  shortcuts. Currently they're only in the `Ctrl+K` palette.
+- ~~Keyboard shortcut help~~ — **shipped 2026-06-16.** `?` from
+  anywhere outside an input opens the ShortcutsHelp modal. Grouped
+  by scope (Global / Palette / Sessions). Single SHORTCUTS source
+  of truth so listings can't drift.
 
 ## AI-session improvements
 

@@ -213,8 +213,9 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
                 className='h-7 px-2 text-xs'
                 onClick={() => void downloadFile(projectId, f.id, f.original_name)}
                 title='Download'
+                aria-label={`Download ${f.original_name}`}
               >
-                <ArrowDownToLine className='h-3.5 w-3.5' />
+                <ArrowDownToLine className='h-3.5 w-3.5' aria-hidden='true' />
               </Button>
               <Button
                 variant='ghost'
@@ -222,8 +223,9 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
                 className='h-7 px-2 text-xs text-destructive hover:bg-destructive/10'
                 onClick={() => void handleDelete(f)}
                 title='Delete'
+                aria-label={`Delete ${f.original_name}`}
               >
-                <Trash2 className='h-3.5 w-3.5' />
+                <Trash2 className='h-3.5 w-3.5' aria-hidden='true' />
               </Button>
             </li>
           ))}
