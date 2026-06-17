@@ -5,7 +5,7 @@
 // straight from the hero.
 
 import { useMemo, useState } from 'react';
-import { Activity, Boxes, CircleAlert, CirclePlay } from 'lucide-react';
+import { Activity, Boxes, CircleAlert, CirclePlay, CircleStop, Loader2 } from 'lucide-react';
 
 import { useDaemon } from '@shared/daemon-context';
 import { launchProject } from '@shared/projects-client';
@@ -29,9 +29,16 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
   const [launchBusyId, setLaunchBusyId] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
+  // Status breakdown -- Contract #2's six states. Idle and stopped are
+  // distinct ("never started" vs "was running, now exited"); show them
+  // separately so the HUD matches the StatusLegend on the Apps page.
   const running = projects.filter((p) => p.status === 'launched').length;
   const errored = projects.filter((p) => p.status === 'error').length;
-  const idle = projects.length - running - errored;
+  const idleCount = projects.filter((p) => p.status === 'idle').length;
+  const stoppedCount = projects.filter((p) => p.status === 'stopped').length;
+  const transitioning = projects.filter(
+    (p) => p.status === 'launching' || p.status === 'stopping'
+  ).length;
 
   // Featured = pinned projects first, then the most-recently-active ones.
   const featured = useMemo(() => {
@@ -91,12 +98,47 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
         </p>
       )}
 
-      {/* Heartbeat HUD */}
+      {/* Heartbeat HUD -- one tile per Contract #2 status.
+          Idle = "never started", Stopped = "ran, now exited". Transitioning
+          only appears while it's > 0 so the row doesn't grow into noise. */}
       <div className='grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4'>
-        <StatCard icon={<CirclePlay className='h-5 w-5 text-status-launched' />} label='Running' value={running} />
-        <StatCard icon={<Boxes className='h-5 w-5 text-status-idle' />} label='Idle / stopped' value={idle} />
-        <StatCard icon={<CircleAlert className='h-5 w-5 text-status-error' />} label='Errored' value={errored} />
-        <StatCard icon={<Activity className='h-5 w-5 text-primary' />} label='Total projects' value={projects.length} />
+        <StatCard
+          icon={<CirclePlay className='h-5 w-5 text-status-launched' />}
+          label='Running'
+          value={running}
+          title='launched -- heartbeat OK, ports answering.'
+        />
+        <StatCard
+          icon={<Boxes className='h-5 w-5 text-status-idle' />}
+          label='Idle'
+          value={idleCount}
+          title='Never started this session.'
+        />
+        <StatCard
+          icon={<CircleStop className='h-5 w-5 text-status-stopped' />}
+          label='Stopped'
+          value={stoppedCount}
+          title='Was running; has exited (clean shutdown or via Stop).'
+        />
+        {transitioning > 0 && (
+          <StatCard
+            icon={<Loader2 className='h-5 w-5 animate-spin text-status-launching' />}
+            label='Transitioning'
+            value={transitioning}
+            title='launching or stopping -- mid-state, will settle soon.'
+          />
+        )}
+        <StatCard
+          icon={<CircleAlert className='h-5 w-5 text-status-error' />}
+          label='Errored'
+          value={errored}
+          title='Crashed, restart policy gave up, or launch failed.'
+        />
+        <StatCard
+          icon={<Activity className='h-5 w-5 text-primary' />}
+          label='Total projects'
+          value={projects.length}
+        />
       </div>
 
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]'>
@@ -167,9 +209,19 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
   );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }): JSX.Element {
+function StatCard({
+  icon,
+  label,
+  value,
+  title,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  title?: string;
+}): JSX.Element {
   return (
-    <Card className='flex items-center gap-4 p-5'>
+    <Card className='flex items-center gap-4 p-5' title={title}>
       <div className='flex h-11 w-11 items-center justify-center rounded-md bg-secondary'>{icon}</div>
       <div>
         <div className='text-2xl font-semibold leading-none'>{value}</div>

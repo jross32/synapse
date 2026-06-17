@@ -25,6 +25,7 @@ import { LogViewer } from '../components/LogViewer';
 import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFormDialog';
 import { ProjectTile } from '../components/ProjectTile';
 import { PageHeader } from '../components/PageHeader';
+import { StatusLegend } from '../components/StatusLegend';
 
 function matchesQuery(p: Project, q: string): boolean {
   if (!q) return true;
@@ -268,7 +269,9 @@ export function AppsPage(): JSX.Element {
           </div>
 
           {/* Kind filter chips (v0.1.19). Only non-empty kinds are shown so
-              the row stays tight while a registry has a narrow mix. */}
+              the row stays tight while a registry has a narrow mix. The
+              status legend (v0.1.35) sits at the end so users can decode
+              idle vs stopped at a glance. */}
           <div className='flex flex-wrap items-center gap-1.5'>
             <KindChip
               label='All'
@@ -286,6 +289,9 @@ export function AppsPage(): JSX.Element {
                 icon={KIND_META[k].icon}
               />
             ))}
+            <span className='ml-auto'>
+              <StatusLegend />
+            </span>
           </div>
 
           {visible.length === 0 ? (

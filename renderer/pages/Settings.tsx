@@ -81,8 +81,9 @@ export function SettingsPage(): JSX.Element {
       <Card className='flex flex-col gap-2 border-dashed p-6'>
         <h2 className='text-lg font-semibold'>Coming soon</h2>
         <p className='text-sm text-muted-foreground'>
-          LAN exposure controls for the mobile UI and per-project health probes land in
-          upcoming versions as their daemon settings are wired.
+          LAN exposure controls for the mobile UI -- choose between loopback-only
+          and 0.0.0.0 so phones on the same Wi-Fi can pair. (Per-project health
+          probes already shipped in v0.1.2; edit them on a project's edit dialog.)
         </p>
       </Card>
     </div>
