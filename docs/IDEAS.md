@@ -74,10 +74,12 @@ These live under `tools/<id>/manifest.json` and use the existing
 - **Sessions: terminal search overlay** (M) —
   `@xterm/addon-search`. `Ctrl+F` opens a small input that highlights
   the next match.
-- **Sessions: "restart this session"** (S) — close + spawn-with-same-argv;
-  the user keeps the tab.
-- **Audit log search** (S) — `?query=` filter on the existing
-  AuditLogPanel.
+- ~~Sessions: "restart this session"~~ — **shipped 2026-06-16.** Each
+  tab strip has a Restart button (rotate icon) next to the close X.
+  Closes the existing PTY then spawns a new one with the same argv;
+  the tab's position in the strip is preserved.
+- ~~Audit log search~~ — **already shipped.** AuditLogPanel.tsx has
+  multi-word filter on entity, action, source, error code.
 - **Settings: LAN exposure toggle** (M) — flip the daemon's bind host
   between loopback and 0.0.0.0 from the UI rather than env vars.
 - **Mobile: QR code pairing** (M) — render the 6-digit code as a QR

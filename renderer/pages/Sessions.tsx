@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Loader2,
   Plus,
+  RotateCcw,
   Sparkles,
   Terminal as TerminalIcon,
   TerminalSquare,
@@ -364,6 +365,35 @@ export function SessionsPage({
     }
   }
 
+  /** Restart a session in place: close the existing PTY, spawn a new
+   *  one with the same argv, swap the tab to point at the new id. The
+   *  position in the tab strip is preserved. Useful when a coder
+   *  freezes but you don't want to lose your spot. */
+  async function restartTab(sessionId: string): Promise<void> {
+    const tab = tabs.find((t) => t.sessionId === sessionId);
+    if (!tab) return;
+    setError(null);
+    try {
+      await closeSession(sessionId).catch(() => undefined);
+      const fresh = await spawnSession({ argv: tab.argv });
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.sessionId === sessionId
+            ? {
+                sessionId: fresh.session_id,
+                argv: fresh.argv,
+                scrollback: null,
+                scrollbackLoaded: true,
+              }
+            : t
+        )
+      );
+      if (active === sessionId) setActive(fresh.session_id);
+    } catch (err) {
+      setError((err as Error).message || 'Restart failed.');
+    }
+  }
+
   // Sessions already running on the daemon that the user hasn't opened a
   // tab for. Lets them re-attach to a curl-spawned session etc.
   const orphans = useMemo(
@@ -585,11 +615,20 @@ export function SessionsPage({
                 </button>
                 <button
                   type='button'
+                  onClick={() => void restartTab(t.sessionId)}
+                  className='rounded p-0.5 opacity-60 hover:bg-accent hover:opacity-100'
+                  aria-label={`Restart session ${t.argv[0] ?? t.sessionId}`}
+                  title='Restart this session (close + respawn with the same argv)'
+                >
+                  <RotateCcw className='h-3 w-3' aria-hidden='true' />
+                </button>
+                <button
+                  type='button'
                   onClick={() => void closeTab(t.sessionId)}
                   className='rounded p-0.5 opacity-60 hover:bg-accent hover:opacity-100'
-                  aria-label={`Close session ${t.sessionId}`}
+                  aria-label={`Close session ${t.argv[0] ?? t.sessionId}`}
                 >
-                  <X className='h-3 w-3' />
+                  <X className='h-3 w-3' aria-hidden='true' />
                 </button>
               </div>
             );
