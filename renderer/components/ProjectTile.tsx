@@ -113,13 +113,14 @@ export function ProjectTile({
             type='button'
             onClick={togglePinned}
             title={project.pinned ? 'Unpin' : 'Pin to top'}
+            aria-label={project.pinned ? `Unpin ${project.name}` : `Pin ${project.name} to top`}
             aria-pressed={project.pinned}
             className={cn(
               'rounded-md p-1 transition-colors hover:bg-accent',
               project.pinned ? 'text-primary' : 'text-muted-foreground'
             )}
           >
-            <Pin className={cn('h-4 w-4', project.pinned && 'fill-current')} />
+            <Pin className={cn('h-4 w-4', project.pinned && 'fill-current')} aria-hidden='true' />
           </button>
           <StatusBadge status={project.status} />
         </div>

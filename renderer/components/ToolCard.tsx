@@ -68,8 +68,19 @@ function PublicUrl({ url }: { url: string }): JSX.Element {
         <ExternalLink className='h-3.5 w-3.5 shrink-0' />
         <span className='truncate'>{url}</span>
       </button>
-      <Button variant='ghost' size='sm' className='h-7 shrink-0 px-2' onClick={copy}>
-        {copied ? <Check className='h-3.5 w-3.5' /> : <Copy className='h-3.5 w-3.5' />}
+      <Button
+        variant='ghost'
+        size='sm'
+        className='h-7 shrink-0 px-2'
+        onClick={copy}
+        aria-label={copied ? 'Copied to clipboard' : 'Copy URL to clipboard'}
+        title={copied ? 'Copied!' : 'Copy URL'}
+      >
+        {copied ? (
+          <Check className='h-3.5 w-3.5' aria-hidden='true' />
+        ) : (
+          <Copy className='h-3.5 w-3.5' aria-hidden='true' />
+        )}
       </Button>
     </div>
   );
