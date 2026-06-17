@@ -459,7 +459,7 @@ seeded from `daemon/synapse_daemon/seed.py`. wbscrper is the seed example.
 
 ---
 
-## AI-facing surfaces (v0.1.29+)
+## AI-facing surfaces (v0.1.34+)
 
 Synapse is built so a Claude / Codex session **running inside a Sessions
 tab** can drive it just as well as a human at the mouse. When you (the AI)
@@ -467,12 +467,37 @@ are operating inside the app:
 
 - Start by `GET /api/v1/ai/context` for a compact orientation digest:
   projects (with kind, path, status), installed tools (and whether
-  they're runnable), live PTY sessions, recent audit tail, and a list of
-  the REST endpoints meant for you.
+  they're runnable), live PTY sessions, recent audit tail, **the current
+  project's files (v0.1.30.5)**, and a list of the REST endpoints meant
+  for you.
 - Use the per-project workbench launcher at
   `POST /api/v1/projects/{id}/workbench` to spawn a coder session
   pre-`cd`'d into a project's working directory. If you don't pass an
   `argv`, the daemon picks claude → codex → shell based on what's on PATH.
+- **Project files (ADR-0003 Phase A)** — list / upload / download / delete
+  at `/api/v1/projects/{id}/files`. Shared scope at `/api/v1/files`
+  (rows with `project_id IS NULL`). When you're inside a workbench-spawned
+  PTY, `$SYNAPSE_FILES` / `$SYNAPSE_SHARED_FILES` / `$SYNAPSE_PROJECT_ID`
+  / `$SYNAPSE_API` / `$SYNAPSE_TOKEN` are set so `ls $SYNAPSE_FILES` and
+  `curl $SYNAPSE_API/...` work straight from the prompt.
+- **Workbench transcripts (ADR-0003 Phase D)** — PTY sessions opened via
+  the workbench persist their scrollback to `project_files` rows tagged
+  `source='transcript'` on exit. `GET /api/v1/projects/{id}/transcripts`
+  lists them.
+- **AV scan results (ADR-0003 Phase C)** — every file carries
+  `scan_result` (`clean` / `blocked` / `unavailable`) and `scan_engine`
+  (`defender` / `clamav`). Blocked uploads are recorded but never land
+  on disk for download.
+- **ChatGPT export import (ADR-0003 Phase E)** —
+  `POST /api/v1/imports/chatgpt` accepts the user's official ChatGPT
+  export.zip; conversations land as deterministic Markdown under the
+  auto-created `imported-chatgpt` project (kind=`other`).
+- **AI quick-actions (ADR-0003 Phase F)** — `GET /api/v1/quick-actions`
+  lists curated templates from `templates/quick-actions/*.json`;
+  `POST /api/v1/quick-actions/{id}/launch` spawns a workbench session
+  in the auto-created `scratch` project with the templated prompt
+  pre-loaded as `PROMPT.md` and `$SYNAPSE_QUICK_ACTION_PROMPT`. The
+  button ships the shortcut; **you** do the work.
 - Install a new tool from the marketplace with
   `POST /api/v1/marketplace/install/{id}` -- the manifest lands in
   `tools/<id>/manifest.json`, hot reload picks it up within ~250 ms, and
@@ -490,8 +515,8 @@ are operating inside the app:
 
 Things that are NOT yet AI-callable (planned, see ADRs):
 
-- File upload to projects (planned: v0.1.30+).
-- Per-project transcript history (planned: v0.1.30+).
+- Sign in with Apple / Google (deferred to ADR-0004; pairing-codes still
+  the only path).
 - Workflow / multi-step recipes ("when user clicks X, run sequence Y").
 
 If you find yourself wanting one of these and it'd unblock a real task,

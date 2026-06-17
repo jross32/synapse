@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.24` — **Marketplace loop closed: one-click install / uninstall.** Browse the registry on Tools → Browse, hit **Install**, the daemon writes `tools/<id>/manifest.json`, the v0.1.21 watchdog hot-reloads it, the v0.1.22 declarative primitives make its actions runnable — *all without touching daemon code or restarting anything*. Uninstall is one click back. A third party can now ship a tool as a single JSON file. Every project carries a **kind** (App / UI / Service / **MCP server** / Library / Script / Other); the Apps page filter chips. Plus the polish: `Ctrl+K` palette, Apps text filter, Open-in-VS Code, Open-in-Terminal, audit log, light/dark theme, responsive sidebar. Windows auto-start, token-authenticated mobile Web UI at `/mobile`, Home featured slideshow, multi-tunnel **Cloudtap**, JSON snapshot/restore, richer tray menu — all still there. Double-click `synapse.cmd` to launch — no PowerShell needed. **285 tests passing.** Next: Install-from-URL for private / unlisted manifests. See [`PROGRESS.md`](./PROGRESS.md).
+> **Status:** `v0.1.34` — **ADR-0003 workbench expansion complete (Phases A–F).** Every project has a **Files** surface: drag-drop or pick, browser-side magic-byte inspection before upload, always-on AV via Windows Defender (POSIX: ClamAV) before the bytes land for real. Workbench PTY exits persist their scrollback as transcripts. **ChatGPT export.zip → markdown**: drop the official OpenAI export into the Apps page header button; each conversation lands as a deterministic `.md` under the auto-created `imported-chatgpt` project, deduped by sha256. **AI Quick-actions** rail on Sessions: one click opens a Claude session in the `scratch` project with the templated prompt pre-loaded as `PROMPT.md` + `SYNAPSE_QUICK_ACTION_PROMPT`. Two bundled templates ship (`new-mcp-server`, `new-synapse-tool`); user templates drop into `templates/quick-actions/*.json` without a restart. The earlier marketplace loop (v0.1.24), workbench (v0.1.29), `/api/v1/ai/context` AI digest, mobile Web UI, multi-tunnel Cloudtap, JSON snapshot/restore, light/dark theme, `Ctrl+K` palette — all still in. Double-click `synapse.cmd` to launch. **368 tests pass + 9 skipped.** Next: ADR-0004 (Sign in with Apple / Google) when given the go; Milestone J packaging after that. See [`PROGRESS.md`](./PROGRESS.md) and [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## What it is
 
@@ -126,6 +126,10 @@ See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps
 | G | Cloudtap tool (port → tunnel URL) | ✅ done (`v0.1.9`) |
 | H | Mobile Web UI (responsive, served by daemon on LAN) | ✅ done (`v0.1.11` device auth · `v0.1.12` mobile UI) |
 | I | Auto-start + tray polish (login items, daemon attach-or-spawn, full tray menu) | ✅ done (`v0.1.13`) |
+| ⌁ | Polish wave (`Ctrl+K` palette, Apps filter, Open-in-VS-Code / Terminal, audit log, theming, responsive sidebar) | ✅ done (`v0.1.14`–`v0.1.20`) |
+| ⌁ | ADR-0001 tool marketplace (hot reload + primitives + Browse + install / uninstall) | ✅ done (`v0.1.21`–`v0.1.24`) |
+| ⌁ | ADR-0002 AI workbench (PTY foundation, xterm.js, Claude/Codex bundles, install dialog, *Open in workbench*, `/ai/context`) | ✅ done (`v0.1.25`–`v0.1.29`) |
+| ⌁ | ADR-0003 workbench expansion (project files, transcripts, inspection, AV scan, ChatGPT import, AI quick-actions) | ✅ done (`v0.1.30`–`v0.1.34`) |
 | J | Packaging (PyInstaller + electron-builder + NSIS installer) | ⚪ pending |
 | K | `v0.1.0` release (tag, GitHub release, README screenshots, desktop shortcut) | ⚪ pending |
 
