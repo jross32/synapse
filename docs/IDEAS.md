@@ -61,8 +61,9 @@ These live under `tools/<id>/manifest.json` and use the existing
 
 ## Quality-of-life improvements
 
-- **Persist sidebar collapsed state** (S) — localStorage key. Today it
-  resets every reload.
+- ~~Persist sidebar collapsed state~~ — **N/A.** The sidebar uses
+  responsive CSS (56px under `sm`, 84px above) with no user toggle.
+  No state to persist.
 - **Cmd palette: project shortcuts** (S) — `Ctrl+K` already lists
   projects; add direct-launch via `enter` rather than navigation.
 - **Cloudtap one-click URL copy** (S) — current UX is two clicks.
@@ -84,11 +85,15 @@ These live under `tools/<id>/manifest.json` and use the existing
 
 ## Accessibility / polish
 
-- **Reduced-motion media query** (S) — wrap `synapse-pulse` and similar
-  in `@media (prefers-reduced-motion: no-preference)`.
+- ~~Reduced-motion media query~~ — **shipped 2026-06-16.** styles.css
+  wraps `.animate-synapse-pulse` / `.animate-spin` / `.animate-pulse`
+  + a global animation+transition clamp under `prefers-reduced-motion`.
 - **Focus trap on every modal / popover** (M) — `StatusLegend`,
   `Modal`, `ConfirmDialog`. One shared `useFocusTrap` hook.
-- **`aria-label` sweep** (S) — every icon-only button.
+- ~~`aria-label` sweep~~ — **partial 2026-06-16.** `ProjectTile` pin
+  button + `ToolCard` copy-URL button labelled. Remaining icon-only
+  buttons to audit: `FilesPanel` rows, `DiscoveryDialog`,
+  `MarketplaceBrowser`.
 - **Keyboard shortcut help** (S) — `?` opens a modal listing the
   shortcuts. Currently they're only in the `Ctrl+K` palette.
 
@@ -98,11 +103,10 @@ These live under `tools/<id>/manifest.json` and use the existing
   `<FilesPanel>` open with selected files, expose the selection in
   `/ai/context` so a Claude session can `cat` what's on the user's
   screen.
-- **AI quick-action: "explain this project"** (S) — pre-loads a prompt
-  that introspects the current cwd and writes an `ABOUT.md`.
-- **AI quick-action: "diagnose the failing test"** (S) — pre-loads a
-  prompt that runs the test suite, captures the failure, and walks
-  through the fix.
+- ~~AI quick-action: "explain this project"~~ — **shipped 2026-06-16**
+  as `templates/quick-actions/explain-this-project.json`.
+- ~~AI quick-action: "diagnose the failing test"~~ — **shipped
+  2026-06-16** as `templates/quick-actions/diagnose-failing-test.json`.
 - **Per-project "AI memory"** (M) — let a session write to a known
   scratch file (`$SYNAPSE_FILES/.ai-notes.md`) that future sessions
   read on prompt 1.

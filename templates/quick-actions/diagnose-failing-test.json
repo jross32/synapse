@@ -1,0 +1,8 @@
+{
+  "id": "diagnose-failing-test",
+  "name": "Diagnose a failing test",
+  "description": "Run the test suite, find what's broken, propose (and apply with my OK) a fix.",
+  "icon": "bug",
+  "prompt": "Diagnose a failing test in the current project end to end.\n\nDo this carefully:\n\n1. Detect the test runner. Look at package.json (`scripts.test`), pyproject.toml ([tool.pytest.ini_options] / [project.scripts]), Cargo.toml, Makefile -- pick the one that's actually wired up. Do not guess.\n2. Run the suite once verbatim. Capture the full output. Do not retry on flake yet -- one signal is enough.\n3. If everything passes, stop and tell me so. Don't invent a failure.\n4. If something fails:\n   a. Quote the failing test name(s) and the assertion / exception line(s) exactly.\n   b. Read the test file at the cited line, then read every source file the test imports / references in the failing path.\n   c. Form one hypothesis at a time. State it in chat (`I think X because Y`). Only then propose a fix.\n   d. Walk me through the smallest possible patch. Do NOT apply it until I confirm.\n   e. Once I confirm, apply the patch, re-run only the previously-failing test(s), then re-run the full suite to confirm nothing else regressed.\n5. If the failure is a real flake (load-bearing example: a sleep, a network call, a clock), call it out explicitly rather than masking it.\n\nKeep narration short. The user is watching the terminal output; you don't need to restate what they can see scrolling. Quote line numbers when you reference code (`scraper.py:142`).",
+  "default_argv": ["claude"]
+}
