@@ -92,8 +92,10 @@ These live under `tools/<id>/manifest.json` and use the existing
 - ~~Reduced-motion media query~~ — **shipped 2026-06-16.** styles.css
   wraps `.animate-synapse-pulse` / `.animate-spin` / `.animate-pulse`
   + a global animation+transition clamp under `prefers-reduced-motion`.
-- **Focus trap on every modal / popover** (M) — `StatusLegend`,
-  `Modal`, `ConfirmDialog`. One shared `useFocusTrap` hook.
+- ~~Focus trap on Modal~~ — **shipped 2026-06-16.** Modal now cycles
+  Tab inside the panel (and Shift+Tab in reverse), restores focus to
+  the previously-focused element on close. ConfirmDialog inherits via
+  Modal. Standalone popovers like StatusLegend still TODO.
 - ~~`aria-label` sweep~~ — **partial 2026-06-16.** `ProjectTile` pin
   button + `ToolCard` copy-URL button labelled. Remaining icon-only
   buttons to audit: `FilesPanel` rows, `DiscoveryDialog`,
