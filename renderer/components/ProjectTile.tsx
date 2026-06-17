@@ -275,9 +275,16 @@ export function ProjectTile({
               variant='ghost'
               size='sm'
               className='h-7 px-2 text-xs text-muted-foreground'
+              disabled={project.status !== 'launched'}
+              title={
+                project.status === 'launched'
+                  ? `Open http://localhost:${project.expected_port}`
+                  : `Launch ${project.name} first to open it in your browser`
+              }
+              aria-label={`Open ${project.name} in browser at localhost:${project.expected_port}`}
               onClick={() => void openExternal(`http://localhost:${project.expected_port}`)}
             >
-              <Globe className='h-3.5 w-3.5' /> Open in browser
+              <Globe className='h-3.5 w-3.5' aria-hidden='true' /> Open in browser
             </Button>
           )}
         </div>
