@@ -28,6 +28,7 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
 
   const [launchBusyId, setLaunchBusyId] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   // Status breakdown -- Contract #2's six states. Idle and stopped are
   // distinct ("never started" vs "was running, now exited"); show them
@@ -142,22 +143,39 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
       </div>
 
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]'>
-        {/* Recent activity */}
+        {/* Recent activity -- collapsed shows 10; expanded shows up to 50.
+            The DaemonProvider's ring buffer caps the source list, so even
+            "expanded" stays bounded. */}
         <Card className='flex flex-col gap-3 p-6'>
-          <h2 className='text-lg font-semibold'>Recent activity</h2>
+          <div className='flex items-baseline justify-between gap-2'>
+            <h2 className='text-lg font-semibold'>Recent activity</h2>
+            {recentEvents.length > 10 && (
+              <button
+                type='button'
+                onClick={() => setActivityExpanded((v) => !v)}
+                className='text-xs text-muted-foreground hover:text-foreground'
+              >
+                {activityExpanded
+                  ? 'Show 10'
+                  : `Show all (${Math.min(recentEvents.length, 50)})`}
+              </button>
+            )}
+          </div>
           {recentEvents.length === 0 ? (
             <p className='text-sm text-muted-foreground'>
               No events yet. Daemon and project events will stream here live.
             </p>
           ) : (
             <ul className='flex flex-col gap-1.5'>
-              {recentEvents.slice(0, 10).map((evt) => (
-                <li key={evt.id} className='flex items-baseline gap-2 font-mono text-xs'>
-                  <span className='text-primary'>#{evt.id}</span>
-                  <span className='flex-1 truncate text-foreground'>{evt.name}</span>
-                  <span className='text-muted-foreground'>{formatLocal(evt.timestamp_utc, 'time')}</span>
-                </li>
-              ))}
+              {recentEvents
+                .slice(0, activityExpanded ? 50 : 10)
+                .map((evt) => (
+                  <li key={evt.id} className='flex items-baseline gap-2 font-mono text-xs'>
+                    <span className='text-primary'>#{evt.id}</span>
+                    <span className='flex-1 truncate text-foreground'>{evt.name}</span>
+                    <span className='text-muted-foreground'>{formatLocal(evt.timestamp_utc, 'time')}</span>
+                  </li>
+                ))}
             </ul>
           )}
         </Card>
