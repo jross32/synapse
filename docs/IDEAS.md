@@ -64,8 +64,8 @@ These live under `tools/<id>/manifest.json` and use the existing
 - ~~Persist sidebar collapsed state~~ — **N/A.** The sidebar uses
   responsive CSS (56px under `sm`, 84px above) with no user toggle.
   No state to persist.
-- **Cmd palette: project shortcuts** (S) — `Ctrl+K` already lists
-  projects; add direct-launch via `enter` rather than navigation.
+- ~~Cmd palette: project shortcuts~~ — **already shipped.** CommandPalette
+  has `Launch <name>` / `Stop <name>` entries; Enter runs them directly.
 - **Cloudtap one-click URL copy** (S) — current UX is two clicks.
 - **Apps page: bulk launch / stop** (M) — selection mode + a small
   toolbar that appears when 1+ tile is selected.

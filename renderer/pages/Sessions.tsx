@@ -29,6 +29,7 @@ import {
   probeCommand,
   spawnSession,
 } from '@shared/pty-client';
+import { SynapseApiError } from '@shared/api-client';
 import { useDaemon } from '@shared/daemon-context';
 import { openExternal } from '@shared/electron-bridge';
 import { cn } from '@shared/utils';
@@ -353,11 +354,26 @@ export function SessionsPage({
   }
 
   async function closeTab(sessionId: string): Promise<void> {
+    let dropTab = true;
     try {
       await closeSession(sessionId);
-    } catch {
-      /* if it's already gone, just drop the tab */
+    } catch (err) {
+      // 404: the daemon already lost the session -- a tab pointing at
+      // it is dead weight; drop silently. Anything else (network blip,
+      // 5xx) might mean the session is still running on the daemon
+      // side, so surface a warning AND keep the tab visible so the
+      // user can retry or attach a fresh terminal.
+      const status =
+        err instanceof SynapseApiError ? err.status : undefined;
+      if (status !== 404) {
+        const msg = (err as Error).message || 'Close failed.';
+        setError(
+          `Couldn't close session ${sessionId}: ${msg}. The PTY may still be running; check 'Re-attach to' below.`
+        );
+        dropTab = false;
+      }
     }
+    if (!dropTab) return;
     setTabs((prev) => prev.filter((t) => t.sessionId !== sessionId));
     if (active === sessionId) {
       const remaining = tabs.filter((t) => t.sessionId !== sessionId);
