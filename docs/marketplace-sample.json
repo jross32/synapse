@@ -127,6 +127,168 @@
           }
         ]
       }
+    },
+    {
+      "id": "open-folder",
+      "name": "Open folder",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Reveal any folder in Explorer (Windows) -- one click instead of cd, ls, alt-tab.",
+      "homepage": null,
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "open-folder",
+        "name": "Open folder",
+        "icon": "wrench",
+        "description": "Open the given folder in your OS file browser.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+        ],
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open in Explorer",
+            "primary": true,
+            "primitive": "process.spawn",
+            "params": {
+              "argv": ["explorer.exe", "{path}"],
+              "timeout": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "tail-log",
+      "name": "Tail a log file",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Live-tail any text file in a Sessions tab -- last 30 lines, then streams new writes as they happen.",
+      "homepage": null,
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "tail-log",
+        "name": "Tail a log file",
+        "icon": "terminal",
+        "description": "powershell.exe Get-Content -Wait -Tail 30, attached to a real PTY so colours and scrolling work.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Log file", "required": true, "placeholder": "C:\\path\\to\\app.log"}
+        ],
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open tail session",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {
+              "argv": ["powershell.exe", "-NoLogo", "-Command", "Get-Content -Path '{path}' -Wait -Tail 30"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "npm-install",
+      "name": "npm install (live)",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Run `npm install` in any folder under a PTY so you can watch the progress bar instead of staring at a frozen terminal.",
+      "homepage": null,
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "npm-install",
+        "name": "npm install (live)",
+        "icon": "wrench",
+        "description": "Spawns `npm install` in the given folder under a PTY so output streams live.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Project folder", "required": true, "placeholder": "C:\\path\\to\\project"}
+        ],
+        "actions": [
+          {
+            "id": "run",
+            "label": "Run npm install",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {
+              "argv": ["powershell.exe", "-NoLogo", "-Command", "Set-Location -LiteralPath '{path}'; npm install"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "docker-compose-up",
+      "name": "docker compose up (live)",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Bring up a docker-compose stack and watch the streaming logs in a Sessions tab. Ctrl+C to stop.",
+      "homepage": null,
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "docker-compose-up",
+        "name": "docker compose up (live)",
+        "icon": "terminal",
+        "description": "Runs `docker compose up` in the given folder under a PTY so logs stream live.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Compose folder", "required": true, "placeholder": "C:\\path\\to\\compose"}
+        ],
+        "actions": [
+          {
+            "id": "run",
+            "label": "docker compose up",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {
+              "argv": ["powershell.exe", "-NoLogo", "-Command", "Set-Location -LiteralPath '{path}'; docker compose up"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "git-log-recent",
+      "name": "Git log (recent)",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Print the last 15 commits of any repo, one-line each. Useful for quickly catching up before a session.",
+      "homepage": null,
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "git-log-recent",
+        "name": "Git log (recent)",
+        "icon": "terminal",
+        "description": "Run `git log --oneline -15` against any folder.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Repo folder", "required": true, "placeholder": "C:\\path\\to\\repo"}
+        ],
+        "actions": [
+          {
+            "id": "run",
+            "label": "Show last 15 commits",
+            "primary": true,
+            "primitive": "process.spawn",
+            "params": {
+              "argv": ["git", "-C", "{path}", "log", "--oneline", "-15"],
+              "timeout": 10
+            }
+          }
+        ]
+      }
     }
   ]
 }
