@@ -73,9 +73,10 @@ These live under `tools/<id>/manifest.json` and use the existing
   toolbar that appears when 1+ tile is selected.
 - **Processes page: filter by status chip** (S) — mirror the Apps
   page filter chips.
-- **Sessions: terminal search overlay** (M) —
-  `@xterm/addon-search`. `Ctrl+F` opens a small input that highlights
-  the next match.
+- ~~Sessions: terminal search overlay~~ — **shipped 2026-06-17.**
+  `Ctrl/Cmd+F` while focus is in a Sessions terminal opens a search
+  input with Prev/Next/Close buttons; Enter / Shift+Enter cycles
+  matches; Esc dismisses. Built on `@xterm/addon-search`.
 - ~~Sessions: "restart this session"~~ — **shipped 2026-06-16.** Each
   tab strip has a Restart button (rotate icon) next to the close X.
   Closes the existing PTY then spawns a new one with the same argv;

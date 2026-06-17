@@ -7,9 +7,11 @@
 // - Resize : FitAddon recomputes size on container resize; we POST to
 //            /pty/{id}/resize so the child sees a fresh TIOCSWINSZ.
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 
 import { useDaemon } from '@shared/daemon-context';
@@ -39,9 +41,18 @@ export function SessionTerminal({
 }: SessionTerminalProps): JSX.Element {
   const { subscribeRaw } = useDaemon();
   const hostRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
   const exitedRef = useRef(false);
+
+  // Ctrl+F search overlay (v0.1.35 · IDEAS). Open with Ctrl/Cmd+F while
+  // focus is inside this terminal; Esc closes; Enter/Shift+Enter finds
+  // next/prev. xterm SearchAddon highlights inline -- we just feed it.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Keep the latest onExit callback reachable without rebuilding the
   // terminal each time the parent re-renders.
@@ -66,10 +77,13 @@ export function SessionTerminal({
       },
     });
     const fit = new FitAddon();
+    const search = new SearchAddon();
     term.loadAddon(fit);
+    term.loadAddon(search);
     term.open(hostRef.current);
     termRef.current = term;
     fitRef.current = fit;
+    searchRef.current = search;
 
     // Deferred fit -- xterm's Viewport only finishes its internal setup on the
     // next animation frame, so calling fit() synchronously here can race the
@@ -162,6 +176,7 @@ export function SessionTerminal({
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
     };
     // Intentionally NOT depending on initialScrollback / onExit -- those would
     // tear the terminal down and rebuild it mid-stream. Scrollback is read
@@ -183,16 +198,118 @@ export function SessionTerminal({
     }
   }, [initialScrollback]);
 
+  // Ctrl/Cmd+F to open the search overlay; only when this terminal has
+  // focus (or the event fires inside its container). xterm steals most
+  // keystrokes, so we capture on the container before xterm sees them.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSearchOpen(true);
+        // Defer focus so React commits the input first.
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+      }
+    }
+    container.addEventListener('keydown', onKey, true);
+    return () => container.removeEventListener('keydown', onKey, true);
+  }, []);
+
+  const findNext = useCallback((q: string) => {
+    if (!searchRef.current) return;
+    if (!q) return;
+    searchRef.current.findNext(q);
+  }, []);
+
+  const findPrev = useCallback((q: string) => {
+    if (!searchRef.current) return;
+    if (!q) return;
+    searchRef.current.findPrevious(q);
+  }, []);
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchQuery('');
+    searchRef.current?.clearDecorations();
+    termRef.current?.focus();
+  }
+
   return (
     <div
-      ref={hostRef}
-      role='application'
-      aria-label={`Terminal session ${sessionId}`}
+      ref={containerRef}
       className={cn(
-        'h-full w-full overflow-hidden rounded-md border border-border bg-[#0b0f17] p-2',
+        'relative h-full w-full overflow-hidden rounded-md border border-border bg-[#0b0f17]',
         className
       )}
-    />
+    >
+      <div
+        ref={hostRef}
+        role='application'
+        aria-label={`Terminal session ${sessionId}`}
+        className='h-full w-full p-2'
+      />
+      {searchOpen && (
+        <div
+          role='search'
+          aria-label='Search terminal scrollback'
+          className='absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border border-border bg-card/95 p-1 shadow-lg backdrop-blur'
+        >
+          <input
+            ref={searchInputRef}
+            type='text'
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              findNext(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                closeSearch();
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) findPrev(searchQuery);
+                else findNext(searchQuery);
+              }
+            }}
+            placeholder='Find in scrollback…'
+            aria-label='Search query'
+            className='h-7 w-48 rounded bg-background px-2 font-mono text-xs outline-none ring-0 placeholder:text-muted-foreground focus:ring-1 focus:ring-primary'
+          />
+          <button
+            type='button'
+            onClick={() => findPrev(searchQuery)}
+            disabled={!searchQuery}
+            aria-label='Previous match'
+            title='Previous match (Shift+Enter)'
+            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+          >
+            <ChevronUp className='h-3.5 w-3.5' aria-hidden='true' />
+          </button>
+          <button
+            type='button'
+            onClick={() => findNext(searchQuery)}
+            disabled={!searchQuery}
+            aria-label='Next match'
+            title='Next match (Enter)'
+            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+          >
+            <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />
+          </button>
+          <button
+            type='button'
+            onClick={closeSearch}
+            aria-label='Close search'
+            title='Close (Esc)'
+            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground'
+          >
+            <X className='h-3.5 w-3.5' aria-hidden='true' />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

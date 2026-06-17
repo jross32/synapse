@@ -31,6 +31,7 @@ const SHORTCUTS: Shortcut[] = [
   // ── Sessions ───────────────────────────────────────────────────────
   { keys: ['Ctrl', 'C'], description: 'Interrupt the running command inside the active terminal', scope: 'sessions' },
   // xterm.js inherits its own bindings; this is a heads-up not a binding.
+  { keys: [MOD, 'F'], description: 'Open the in-terminal search overlay (Enter / Shift+Enter cycles matches; Esc closes)', scope: 'sessions' },
 ];
 
 const SCOPE_LABEL: Record<Shortcut['scope'], string> = {
