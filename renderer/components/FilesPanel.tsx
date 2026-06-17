@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDownToLine,
+  Eye,
   FileText,
   Loader2,
   Plus,
@@ -28,6 +29,7 @@ import {
 import { cn } from '@shared/utils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { FilePreviewDialog, isPreviewable } from './FilePreviewDialog';
 import { UploadPreviewDialog } from './UploadPreviewDialog';
 
 export interface FilesPanelProps {
@@ -64,6 +66,9 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   // Phase B: picked files sit here until the user confirms in the preview dialog.
   const [previewing, setPreviewing] = useState<File[] | null>(null);
+  // Inline file preview (v0.1.35). Set to the row whose Preview button
+  // was clicked; null = dialog closed.
+  const [openPreview, setOpenPreview] = useState<ProjectFile | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function refresh(): Promise<void> {
@@ -207,6 +212,18 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
                   {fmtDate(f.uploaded_at)}
                 </div>
               </div>
+              {isPreviewable(f) && (
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  className='h-7 px-2 text-xs'
+                  onClick={() => setOpenPreview(f)}
+                  title='Preview in-app'
+                  aria-label={`Preview ${f.original_name}`}
+                >
+                  <Eye className='h-3.5 w-3.5' aria-hidden='true' />
+                </Button>
+              )}
               <Button
                 variant='ghost'
                 size='sm'
@@ -242,6 +259,13 @@ export function FilesPanel({ projectId }: FilesPanelProps): JSX.Element {
           setPreviewing(null);
           void handleUpload(confirmed);
         }}
+      />
+
+      <FilePreviewDialog
+        open={openPreview !== null}
+        file={openPreview}
+        projectId={projectId}
+        onClose={() => setOpenPreview(null)}
       />
     </div>
   );
