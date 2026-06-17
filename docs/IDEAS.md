@@ -66,7 +66,9 @@ These live under `tools/<id>/manifest.json` and use the existing
   No state to persist.
 - ~~Cmd palette: project shortcuts~~ — **already shipped.** CommandPalette
   has `Launch <name>` / `Stop <name>` entries; Enter runs them directly.
-- **Cloudtap one-click URL copy** (S) — current UX is two clicks.
+- ~~Cloudtap one-click URL copy~~ — **already shipped.** ToolCard
+  PublicUrl has a dedicated Copy button (1 click) alongside the
+  open-in-browser link.
 - **Apps page: bulk launch / stop** (M) — selection mode + a small
   toolbar that appears when 1+ tile is selected.
 - **Processes page: filter by status chip** (S) — mirror the Apps

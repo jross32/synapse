@@ -97,14 +97,38 @@ def test_to_dict_round_trips_fields(tmp_path: Path) -> None:
     assert d["icon"] == "wand"
 
 
+_EXPECTED_BUNDLED = {
+    "new-mcp-server",
+    "new-synapse-tool",
+    "explain-this-project",
+    "diagnose-failing-test",
+}
+
+
 def test_bundled_templates_load_cleanly() -> None:
-    """The repo ships two templates -- make sure they parse without errors."""
+    """Every template that ships in the repo must load + have a non-trivial
+    prompt + a non-empty default_argv. Otherwise a future template can
+    silently break the quick-actions rail in the renderer."""
 
     out = load_templates()
     ids = [a.id for a in out]
-    # Both bundled templates exist (or the templates dir doesn't exist in a
-    # bare checkout, in which case skip silently).
     if not ids:
         pytest.skip("no bundled templates available in this checkout")
-    assert "new-mcp-server" in ids
-    assert "new-synapse-tool" in ids
+    # Every expected template must be present. Adding a new bundled
+    # template? Add its id to _EXPECTED_BUNDLED above.
+    missing = _EXPECTED_BUNDLED - set(ids)
+    assert not missing, f"expected bundled templates missing from load: {missing}"
+    # Each one must have content the renderer can show.
+    for action in out:
+        if action.id not in _EXPECTED_BUNDLED:
+            continue
+        assert action.name, f"{action.id}: empty name"
+        assert action.description, f"{action.id}: empty description"
+        assert len(action.prompt) > 100, (
+            f"{action.id}: prompt is suspiciously short "
+            f"({len(action.prompt)} chars) -- did the template lose its body?"
+        )
+        assert action.default_argv, f"{action.id}: missing default_argv"
+        assert action.default_argv[0] == "claude", (
+            f"{action.id}: bundled templates target Claude by default"
+        )

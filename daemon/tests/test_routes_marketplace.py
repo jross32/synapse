@@ -60,6 +60,57 @@ def test_marketplace_returns_bundled_sample(tmp_path: Path, monkeypatch) -> None
         assert "cloudtap" in ids
 
 
+def test_marketplace_bundled_handlers_load_with_valid_shape(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Every tool in the bundled sample must round-trip through the
+    registry's manifest validator. Catches a malformed JSON edit before
+    it reaches Tools -> Browse in the UI."""
+
+    client, _, _ = _harness(tmp_path, monkeypatch=monkeypatch)
+    with client as c:
+        body = c.get("/api/v1/marketplace").json()
+    tools = body["registry"]["tools"]
+    # The 5 declarative tools shipped 2026-06-16 must remain present
+    # until they're explicitly removed in a separate commit. Add to
+    # this set when you bundle a new tool.
+    must_include = {
+        "cloudtap",
+        "claude",
+        "codex",
+        "open-folder",
+        "tail-log",
+        "npm-install",
+        "docker-compose-up",
+        "git-log-recent",
+    }
+    seen = {t["id"] for t in tools}
+    missing = must_include - seen
+    assert not missing, f"bundled tools missing from registry: {missing}"
+    # Every declarative entry needs a `manifest_inline` or `manifest_url`
+    # the install route can use.
+    for t in tools:
+        if t.get("tier") != "declarative":
+            continue
+        has_inline = isinstance(t.get("manifest_inline"), dict)
+        has_url = isinstance(t.get("manifest_url"), str) and t["manifest_url"]
+        assert has_inline or has_url, (
+            f"declarative tool {t['id']} has neither manifest_inline nor manifest_url"
+        )
+        if has_inline:
+            inline = t["manifest_inline"]
+            assert inline.get("id") == t["id"], (
+                f"{t['id']}: inline manifest id mismatch"
+            )
+            assert inline.get("actions"), f"{t['id']}: no actions"
+            for action in inline["actions"]:
+                assert action.get("primitive") in {
+                    "url.open",
+                    "process.spawn",
+                    "pty.spawn",
+                }, f"{t['id']}: unknown primitive {action.get('primitive')!r}"
+
+
 def test_marketplace_marks_installed_ids(tmp_path: Path, monkeypatch) -> None:
     client, registry, tools_dir = _harness(tmp_path, monkeypatch=monkeypatch)
     _seed_installed(tools_dir, "cloudtap")
