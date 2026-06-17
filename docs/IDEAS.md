@@ -95,7 +95,11 @@ These live under `tools/<id>/manifest.json` and use the existing
 - ~~Focus trap on Modal~~ — **shipped 2026-06-16.** Modal now cycles
   Tab inside the panel (and Shift+Tab in reverse), restores focus to
   the previously-focused element on close. ConfirmDialog inherits via
-  Modal. Standalone popovers like StatusLegend still TODO.
+  Modal.
+- ~~Focus restore on StatusLegend popover~~ — **shipped 2026-06-17.**
+  Focus jumps inside the dialog body on open, returns to the trigger
+  on close. Only popover-style component that wasn't already inside
+  Modal.
 - ~~`aria-label` sweep~~ — **partial 2026-06-16.** `ProjectTile` pin
   button + `ToolCard` copy-URL button labelled. Remaining icon-only
   buttons to audit: `FilesPanel` rows, `DiscoveryDialog`,

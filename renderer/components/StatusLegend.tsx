@@ -42,8 +42,12 @@ const LABEL: Record<EntityStatus, string> = {
 export function StatusLegend(): JSX.Element {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   // Close on click-outside and on Escape so it behaves like a real popover.
+  // Also restore focus to the trigger when the popover dismisses, so a
+  // keyboard user lands back where they started.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
@@ -54,15 +58,30 @@ export function StatusLegend(): JSX.Element {
     }
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
+    // Focus the dialog body on open so screen readers + keyboard land
+    // inside the popover rather than staying on the toggle.
+    const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
+      window.clearTimeout(focusTimer);
+      // Return focus to the trigger so Tab continues from the right
+      // place. Only when focus is still inside the popover -- otherwise
+      // the user has clicked away and we should respect that.
+      if (
+        document.activeElement &&
+        ref.current?.contains(document.activeElement) &&
+        triggerRef.current
+      ) {
+        triggerRef.current.focus();
+      }
     };
   }, [open]);
 
   return (
     <div ref={ref} className='relative inline-flex'>
       <button
+        ref={triggerRef}
         type='button'
         aria-expanded={open}
         aria-haspopup='dialog'
@@ -73,15 +92,17 @@ export function StatusLegend(): JSX.Element {
           'text-muted-foreground transition-colors hover:border-primary hover:text-foreground'
         )}
       >
-        <HelpCircle className='h-3.5 w-3.5' />
+        <HelpCircle className='h-3.5 w-3.5' aria-hidden='true' />
         <span>What do these statuses mean?</span>
       </button>
       {open && (
         <div
+          ref={dialogRef}
           role='dialog'
           aria-label='Status legend'
+          tabIndex={-1}
           className={cn(
-            'absolute right-0 top-full z-30 mt-2 w-80 rounded-md border border-border bg-card p-3 shadow-lg',
+            'absolute right-0 top-full z-30 mt-2 w-80 rounded-md border border-border bg-card p-3 shadow-lg outline-none',
             'text-xs'
           )}
         >
