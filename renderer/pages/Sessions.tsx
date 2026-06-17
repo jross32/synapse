@@ -373,6 +373,29 @@ export function SessionsPage({
     }
   }
 
+  /** Close every orphan in one shot. Runs the closes in parallel and
+   *  ignores 404s (already-gone sessions). After the batch, refresh the
+   *  registry so the "Re-attach to" row shrinks immediately. */
+  async function closeAllOrphans(): Promise<void> {
+    if (orphans.length === 0) return;
+    setError(null);
+    const ids = orphans.map((o) => o.session_id);
+    const results = await Promise.allSettled(
+      ids.map((id) => closeSession(id))
+    );
+    const failures = results.filter((r) => r.status === 'rejected');
+    if (failures.length > 0 && failures.length === ids.length) {
+      setError(
+        `Couldn't close any of the ${failures.length} orphan session${failures.length === 1 ? '' : 's'} -- check the daemon log.`
+      );
+    } else if (failures.length > 0) {
+      setError(
+        `Closed ${ids.length - failures.length} of ${ids.length}; ${failures.length} resisted (re-attach + close manually).`
+      );
+    }
+    void listSessions().then(setRegistry).catch(() => undefined);
+  }
+
   async function closeTab(sessionId: string): Promise<void> {
     let dropTab = true;
     try {
@@ -559,7 +582,10 @@ export function SessionsPage({
         )}
         {orphans.length > 0 && (
           <div className='flex flex-wrap items-center gap-2 border-t border-border pt-3'>
-            <span className='text-xs text-muted-foreground'>Re-attach to:</span>
+            <span className='text-xs text-muted-foreground'>
+              Re-attach to{' '}
+              <span className='font-mono'>({orphans.length})</span>:
+            </span>
             {orphans.map((o) => (
               <Button
                 key={o.session_id}
@@ -567,10 +593,23 @@ export function SessionsPage({
                 size='sm'
                 className='h-7 px-2 font-mono text-xs'
                 onClick={() => void openTab(o.session_id, o.argv)}
+                title={`Session ${o.session_id} · ${o.argv.join(' ')}`}
               >
                 {friendlyArgvLabel(o.argv, o.session_id)}
               </Button>
             ))}
+            {orphans.length > 1 && (
+              <Button
+                variant='ghost'
+                size='sm'
+                className='ml-auto h-7 px-2 text-xs text-muted-foreground hover:text-destructive'
+                onClick={() => void closeAllOrphans()}
+                title='Close every session not currently open in a tab'
+              >
+                <X className='h-3 w-3' aria-hidden='true' />
+                Close all
+              </Button>
+            )}
           </div>
         )}
       </Card>
