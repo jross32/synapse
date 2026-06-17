@@ -1,0 +1,218 @@
+// Network bind panel (v0.1.35 · Settings).
+//
+// Surfaces the daemon's current listen interface, the LAN IPs the
+// mobile UI can be reached on, and the persisted bind_lan preference.
+// Toggling the preference writes to the boot-config file; the daemon
+// has to restart for the new bind to take effect (uvicorn doesn't
+// rebind live).
+//
+// For off-LAN access we point the user at Cloudtap rather than
+// trying to ship a second tunneling story.
+
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Cloud, Copy, Loader2, Wifi, WifiOff } from 'lucide-react';
+
+import {
+  getNetworkStatus,
+  patchNetworkBindLan,
+  type NetworkStatus,
+} from '../lib/system-client';
+import { cn } from '@shared/utils';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
+
+export function NetworkPanel(): JSX.Element {
+  const [status, setStatus] = useState<NetworkStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [justCopied, setJustCopied] = useState<string | null>(null);
+
+  async function refresh(): Promise<void> {
+    setError(null);
+    try {
+      setStatus(await getNetworkStatus());
+    } catch (err) {
+      setError((err as Error).message || 'Failed to load network status');
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  async function toggle(bindLan: boolean): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await patchNetworkBindLan(bindLan);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message || 'Failed to update');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      setJustCopied(text);
+      setTimeout(() => setJustCopied(null), 1500);
+    } catch {
+      /* clipboard blocked -- ignore */
+    }
+  }
+
+  const isLan = status?.bound_host === '0.0.0.0';
+
+  return (
+    <Card className='flex flex-col gap-4 p-6'>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h2 className='text-lg font-semibold'>Network &amp; phone access</h2>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            Same-Wi-Fi pairing + a one-click guide for opening Synapse from
+            outside your network.
+          </p>
+        </div>
+        {status &&
+          (isLan ? (
+            <span
+              className='inline-flex items-center gap-1.5 rounded-full bg-status-launched/15 px-2.5 py-0.5 font-mono text-xs text-status-launched'
+              title='Bound to 0.0.0.0 -- LAN devices can reach the daemon.'
+            >
+              <Wifi className='h-3.5 w-3.5' aria-hidden='true' />
+              LAN open
+            </span>
+          ) : (
+            <span
+              className='inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 font-mono text-xs text-muted-foreground'
+              title='Bound to 127.0.0.1 -- this computer only.'
+            >
+              <WifiOff className='h-3.5 w-3.5' aria-hidden='true' />
+              Loopback only
+            </span>
+          ))}
+      </div>
+
+      {error && (
+        <p role='alert' className='text-sm text-destructive'>
+          {error}
+        </p>
+      )}
+
+      {!status && !error && (
+        <div className='flex items-center gap-2 py-2 text-sm text-muted-foreground'>
+          <Loader2 className='h-4 w-4 animate-spin' /> Loading…
+        </div>
+      )}
+
+      {status && (
+        <>
+          {/* LAN exposure toggle */}
+          <div className='flex flex-col gap-2 rounded-md border border-border bg-secondary/30 p-3'>
+            <div className='flex items-center justify-between gap-3'>
+              <div>
+                <p className='text-sm font-medium'>Allow LAN access</p>
+                <p className='text-xs text-muted-foreground'>
+                  When on, the daemon binds <code className='font-mono'>0.0.0.0</code>
+                  {' '}so other devices on this Wi-Fi can reach it. Off (default):
+                  loopback only.
+                </p>
+              </div>
+              <button
+                type='button'
+                role='switch'
+                aria-checked={status.bind_lan_persisted}
+                disabled={busy}
+                onClick={() => void toggle(!status.bind_lan_persisted)}
+                className={cn(
+                  'relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50',
+                  status.bind_lan_persisted ? 'bg-primary' : 'bg-secondary'
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-1 h-4 w-4 rounded-full bg-card transition-all',
+                    status.bind_lan_persisted ? 'left-6' : 'left-1'
+                  )}
+                />
+              </button>
+            </div>
+            {status.restart_required && (
+              <div className='flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200'>
+                <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+                <span>
+                  Daemon restart required to apply. Right-click the tray icon →
+                  Quit, then relaunch Synapse.
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Phone URLs */}
+          <div className='flex flex-col gap-2'>
+            <h3 className='text-sm font-semibold'>Open from a phone</h3>
+            {isLan ? (
+              status.mobile_urls.length > 0 ? (
+                <ul className='flex flex-col gap-1.5'>
+                  {status.mobile_urls.map((url) => (
+                    <li
+                      key={url}
+                      className='flex items-center justify-between gap-2 rounded border border-border bg-secondary/30 px-3 py-1.5 font-mono text-xs'
+                    >
+                      <span className='truncate text-foreground'>{url}</span>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs'
+                        onClick={() => void copy(url)}
+                        aria-label={`Copy ${url} to clipboard`}
+                        title='Copy URL'
+                      >
+                        <Copy className='h-3 w-3' aria-hidden='true' />
+                        {justCopied === url ? 'Copied' : 'Copy'}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className='text-xs text-muted-foreground'>
+                  LAN bind is on, but the daemon couldn't detect any LAN IPs.
+                  Open Settings → Pair a device and enter the 6-digit code on
+                  your phone after it reaches{' '}
+                  <code className='font-mono'>http://&lt;your-LAN-IP&gt;:{status.bound_port}/mobile</code>.
+                </p>
+              )
+            ) : (
+              <p className='text-xs text-muted-foreground'>
+                LAN bind is off. Toggle "Allow LAN access" above and restart
+                the daemon. Then a phone on the same Wi-Fi opens one of the
+                URLs we'll list here.
+              </p>
+            )}
+          </div>
+
+          {/* Off-LAN */}
+          <div className='flex flex-col gap-2 border-t border-border pt-3'>
+            <h3 className='flex items-center gap-2 text-sm font-semibold'>
+              <Cloud className='h-3.5 w-3.5 text-primary' aria-hidden='true' />
+              Open from outside your network
+            </h3>
+            <p className='text-xs text-muted-foreground'>
+              The fastest path is the existing Cloudtap tool: open Tools →
+              Cloudtap, enter port <code className='font-mono'>{status.bound_port}</code>,
+              and tunnel. You get a public{' '}
+              <code className='font-mono'>*.trycloudflare.com</code> URL that
+              forwards to the mobile UI -- works from any cellular connection.
+              <br />
+              <strong className='text-foreground'>Security:</strong> the tunnel
+              is read-only without the device token. Pair the phone over LAN
+              first, then the same token works over the tunnel.
+            </p>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}

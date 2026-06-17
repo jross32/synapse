@@ -83,8 +83,11 @@ These live under `tools/<id>/manifest.json` and use the existing
   the tab's position in the strip is preserved.
 - ~~Audit log search~~ — **already shipped.** AuditLogPanel.tsx has
   multi-word filter on entity, action, source, error code.
-- **Settings: LAN exposure toggle** (M) — flip the daemon's bind host
-  between loopback and 0.0.0.0 from the UI rather than env vars.
+- ~~Settings: LAN exposure toggle~~ — **shipped 2026-06-17.**
+  Settings → Network &amp; phone access has a switch for "Allow LAN
+  access" backed by a JSON boot-config; the daemon reads it on
+  start. Restart-required banner; live LAN IP list + copy-to-
+  clipboard mobile URLs; an off-LAN section pointing at Cloudtap.
 - **Mobile: QR code pairing** (M) — render the 6-digit code as a QR
   next to it; phone scans, autofills.
 

@@ -13,6 +13,7 @@ import { SnapshotPanel } from '../components/SnapshotPanel';
 import { PairedDevicesPanel } from '../components/PairedDevicesPanel';
 import { StartupPanel } from '../components/StartupPanel';
 import { AuditLogPanel } from '../components/AuditLogPanel';
+import { NetworkPanel } from '../components/NetworkPanel';
 import { ThemePanel } from '../components/ThemePanel';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
@@ -72,20 +73,13 @@ export function SettingsPage(): JSX.Element {
 
       <StartupPanel />
 
+      <NetworkPanel />
+
       <PairedDevicesPanel />
 
       <SnapshotPanel />
 
       <AuditLogPanel />
-
-      <Card className='flex flex-col gap-2 border-dashed p-6'>
-        <h2 className='text-lg font-semibold'>Coming soon</h2>
-        <p className='text-sm text-muted-foreground'>
-          LAN exposure controls for the mobile UI -- choose between loopback-only
-          and 0.0.0.0 so phones on the same Wi-Fi can pair. (Per-project health
-          probes already shipped in v0.1.2; edit them on a project's edit dialog.)
-        </p>
-      </Card>
     </div>
   );
 }

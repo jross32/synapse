@@ -39,6 +39,7 @@ from .routes_files import build_files_router
 from .routes_imports import build_imports_router
 from .routes_marketplace import build_marketplace_router
 from .routes_quick_actions import build_quick_actions_router
+from .routes_system import build_system_router
 from .routes_pty import build_pty_router
 from .routes_workbench import build_workbench_router
 from .routes_auth import build_auth_router
@@ -198,6 +199,12 @@ def build_app(
     # ADR-0003 Phase F (v0.1.34): AI quick-action templates.
     app.include_router(
         build_quick_actions_router(storage, pty_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # System network controls (v0.1.35): LAN exposure toggle.
+    app.include_router(
+        build_system_router(storage, storage.data_dir),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

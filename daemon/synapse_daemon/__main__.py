@@ -27,7 +27,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 
-from . import __version__
+from . import __version__, boot_config
 from .app import boot_publish_daemon_started, boot_publish_reconciliation, build_app
 from .auth import AuthManager, ensure_local_token
 from .orphan_reconciler import reconcile, reconcile_project_statuses
@@ -160,7 +160,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     assert_not_admin(allow_admin=args.allow_admin)
 
-    host = LAN_HOST if args.bind_lan else args.host
+    # Read the persisted boot config -- the Settings → Network panel
+    # writes this; if the user toggled "Allow LAN" in the UI we honour
+    # it on the next start. CLI --bind-lan still wins so a one-off
+    # debug session doesn't get blocked by the persisted preference.
+    boot_cfg = boot_config.load(args.data_dir)
+    host = args.host
+    if args.bind_lan or boot_cfg.bind_lan:
+        host = LAN_HOST
+    log.info(
+        "Listening on %s:%d (bind_lan=%s, source=%s)",
+        host,
+        args.port,
+        host == LAN_HOST,
+        "cli" if args.bind_lan else ("config" if boot_cfg.bind_lan else "default"),
+    )
 
     storage = Storage(args.data_dir)
     storage.open()
@@ -180,6 +194,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         storage, bus, process_manager=pm, tool_registry=registry, auth=auth
     )
     app.state.bound_port = args.port
+    app.state.bound_host = host
+    app.state.data_dir = args.data_dir
     app.router.lifespan_context = _build_lifespan(storage, bus, pm, registry)
 
     try:
