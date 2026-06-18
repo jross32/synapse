@@ -133,7 +133,7 @@ export function AppsPage(): JSX.Element {
     <div className='flex flex-col gap-6'>
       <PageHeader
         title='Apps'
-        subtitle="Launchable projects under Synapse's management. Click a tile to start it."
+        subtitle="Your registered projects. Each tile is a folder Synapse manages. Installable plugins live in Tools."
         action={
           <div className='flex gap-2'>
             <Button

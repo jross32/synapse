@@ -54,7 +54,17 @@ export function SettingsPage(): JSX.Element {
             <Row label='Uptime'>{formatUptime(health.started_at)}</Row>
           </>
         )}
-        <Row label='Base URL'>{daemonBaseUrl}</Row>
+        <Row label='Daemon URL'>{daemonBaseUrl}</Row>
+        <p className='-mt-2 text-xs text-muted-foreground'>
+          The only port Synapse cares about is{' '}
+          <code className='font-mono text-foreground'>7878</code>. If you
+          tunnel from your phone or open a Cloudtap tunnel, point it at this
+          URL.{' '}
+          <code className='font-mono'>5173</code> only exists while
+          <code className='font-mono'> npm run dev </code>
+          is running -- it's the Vite dev server for the renderer, not
+          something users connect to.
+        </p>
       </Card>
 
       <Card className='flex flex-col gap-4 p-6'>

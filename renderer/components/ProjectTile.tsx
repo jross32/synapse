@@ -4,10 +4,10 @@
 // cpu/ram line while running, and the Launch/Stop + Edit/Delete actions.
 // A "more actions" row exposes quick OS actions (open folder / browser).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Code2, FolderOpen, Globe, Paperclip, Pin, Sparkles, TerminalSquare } from 'lucide-react';
 
-import { launchProject, patchProject, stopProject } from '@shared/projects-client';
+import { getProjectDiskUsage, launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import {
@@ -26,6 +26,14 @@ import { Card } from './ui/card';
 import { Modal } from './ui/modal';
 import { FilesPanel } from './FilesPanel';
 import { StatusBadge } from './StatusBadge';
+
+/** Tile-sized byte formatter. 1 KB / 12 MB / 1.4 GB. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
 
 export interface ProjectTileProps {
   project: Project;
@@ -48,6 +56,27 @@ export function ProjectTile({
 }: ProjectTileProps): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  // Disk-usage badge (v0.1.36 A5). Lazy-fetched once per mount;
+  // route-side cache keeps re-renders cheap. Empty string = haven't
+  // received yet; null = call failed (older daemon or skipped).
+  const [diskUsageLabel, setDiskUsageLabel] = useState<string | null>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void getProjectDiskUsage(project.id)
+      .then((usage) => {
+        if (cancelled) return;
+        setDiskUsageLabel(formatBytes(usage.bytes) + (usage.truncated ? '+' : ''));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Pre-v0.1.36 daemon won't have the route. Hide the row silently.
+        setDiskUsageLabel(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id]);
 
   const isRunning = project.status === 'launched' || project.status === 'stopping';
   const isTransitioning = project.status === 'launching' || project.status === 'stopping';
@@ -167,6 +196,12 @@ export function ProjectTile({
           <>
             <dt className='font-mono text-muted-foreground'>port</dt>
             <dd className='font-mono text-secondary-foreground'>{project.expected_port}</dd>
+          </>
+        )}
+        {diskUsageLabel && (
+          <>
+            <dt className='font-mono text-muted-foreground'>size</dt>
+            <dd className='font-mono text-secondary-foreground'>{diskUsageLabel}</dd>
           </>
         )}
         <dt className='font-mono text-muted-foreground'>updated</dt>

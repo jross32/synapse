@@ -5,7 +5,7 @@
 // straight from the hero.
 
 import { useMemo, useState } from 'react';
-import { Activity, Boxes, CircleAlert, CirclePlay, CircleStop, Loader2 } from 'lucide-react';
+import { Activity, CircleAlert, CirclePlay, CircleStop, Loader2 } from 'lucide-react';
 
 import { useDaemon } from '@shared/daemon-context';
 import { launchProject } from '@shared/projects-client';
@@ -30,13 +30,16 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [activityExpanded, setActivityExpanded] = useState(false);
 
-  // Status breakdown -- Contract #2's six states. Idle and stopped are
-  // distinct ("never started" vs "was running, now exited"); show them
-  // separately so the HUD matches the StatusLegend on the Apps page.
+  // Status breakdown -- Contract #2's six states. Per v0.1.36 A3 we
+  // collapse idle + stopped into a single "Not running" tile because
+  // the distinction wasn't load-bearing in the HUD. transitioning
+  // (launching / stopping) stays separate since "mid-flight" is
+  // visually distinct.
   const running = projects.filter((p) => p.status === 'launched').length;
   const errored = projects.filter((p) => p.status === 'error').length;
-  const idleCount = projects.filter((p) => p.status === 'idle').length;
-  const stoppedCount = projects.filter((p) => p.status === 'stopped').length;
+  const notRunning = projects.filter(
+    (p) => p.status === 'idle' || p.status === 'stopped'
+  ).length;
   const transitioning = projects.filter(
     (p) => p.status === 'launching' || p.status === 'stopping'
   ).length;
@@ -110,16 +113,10 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           title='launched -- heartbeat OK, ports answering.'
         />
         <StatCard
-          icon={<Boxes className='h-5 w-5 text-status-idle' />}
-          label='Idle'
-          value={idleCount}
-          title='Never started this session.'
-        />
-        <StatCard
           icon={<CircleStop className='h-5 w-5 text-status-stopped' />}
-          label='Stopped'
-          value={stoppedCount}
-          title='Was running; has exited (clean shutdown or via Stop).'
+          label='Not running'
+          value={notRunning}
+          title="Synapse isn't managing this project right now -- either it was never started this install or it exited."
         />
         {transitioning > 0 && (
           <StatCard

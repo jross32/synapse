@@ -78,6 +78,7 @@ def test_marketplace_bundled_handlers_load_with_valid_shape(
         "cloudtap",
         "claude",
         "codex",
+        "copilot",
         "open-folder",
         "tail-log",
         "npm-install",

@@ -4,12 +4,17 @@
 import { cn } from '@shared/utils';
 import type { EntityStatus } from '@shared/generated-types';
 
+// v0.1.36 A3: idle + stopped collapse into one user-facing label.
+// Contract #2's six-status enum is preserved on the daemon side; the
+// audit log + last_transition_at still distinguish them. The user
+// just sees "not running" for both because the distinction wasn't
+// load-bearing in the UI.
 const LABEL: Record<EntityStatus, string> = {
-  idle: 'idle',
+  idle: 'not running',
   launching: 'launching',
   launched: 'running',
   stopping: 'stopping',
-  stopped: 'stopped',
+  stopped: 'not running',
   error: 'error',
 };
 
@@ -20,11 +25,11 @@ const LABEL: Record<EntityStatus, string> = {
  * popover.
  */
 export const STATUS_MEANING: Record<EntityStatus, string> = {
-  idle: 'Never started this session -- nothing has been attempted yet.',
+  idle: 'Not running. Synapse has never started this project this install.',
   launching: 'Spawn in flight -- waiting for the process to come up.',
   launched: 'Running -- heartbeat OK and ports answering.',
   stopping: 'Stop signal sent -- waiting for the process to exit.',
-  stopped: 'Was running; has now exited (clean shutdown or via Stop).',
+  stopped: 'Not running. Was running earlier; exited cleanly or via Stop.',
   error: 'Crashed, restart policy gave up, or launch failed. See last_error.',
 };
 

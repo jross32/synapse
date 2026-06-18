@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bot,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Download,
   ExternalLink,
@@ -140,6 +141,7 @@ function friendlyArgvLabel(argv: string[], fallback: string): string {
 const QUICK_LAUNCH: QuickLaunch[] = [
   { id: 'claude', label: 'Claude', icon: Sparkles, argv: ['claude'] },
   { id: 'codex', label: 'Codex', icon: Bot, argv: ['codex'] },
+  { id: 'copilot', label: 'Copilot', icon: Bot, argv: ['copilot'] },
   {
     id: 'python',
     label: 'Python REPL',
@@ -189,6 +191,14 @@ const INSTALL_RECIPES: Record<string, InstallRecipe> = {
     notes:
       'Uses your existing ChatGPT login on first run. Synapse just spawns the CLI -- no API keys to hand it.',
   },
+  copilot: {
+    label: 'GitHub Copilot CLI',
+    install_argv: ['npm', 'install', '-g', '@github/copilot'],
+    needs: 'npm + the gh CLI signed in (gh auth login)',
+    docs: 'https://docs.github.com/en/copilot/github-copilot-in-the-cli',
+    notes:
+      'Run `gh auth login` once before launching so Copilot CLI picks up your GitHub session. Otherwise the first launch will prompt you to authenticate in a browser.',
+  },
 };
 
 interface OpenTab {
@@ -227,6 +237,25 @@ export function SessionsPage({
   // templates/quick-actions/*.json so adding one doesn't need a restart.
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
   const [launchingActionId, setLaunchingActionId] = useState<string | null>(null);
+  // Collapsible state for the AI Quick-actions rail (v0.1.36 A1). Starts
+  // collapsed on first visit (user's ask). Persisted in localStorage so
+  // a tab refresh doesn't reset the user's preference.
+  const [qaCollapsed, setQaCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const raw = window.localStorage.getItem('synapse.sessions.qa-collapsed');
+    return raw === null ? true : raw === '1';
+  });
+  function toggleQa(): void {
+    setQaCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem('synapse.sessions.qa-collapsed', next ? '1' : '0');
+      } catch {
+        /* private-mode storage blocked -- ignore */
+      }
+      return next;
+    });
+  }
 
   // Bring the existing session list in on mount so a refresh doesn't lose
   // sessions started from elsewhere (curl / a previous tab).
@@ -509,47 +538,64 @@ export function SessionsPage({
         </div>
         {quickActions.length > 0 && (
           <div className='flex flex-col gap-2 border-t border-border pt-3'>
-            <div className='flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground'>
-              <Sparkles className='h-3.5 w-3.5' />
-              <span>AI Quick-actions</span>
-              <span
-                className='font-normal normal-case tracking-normal text-muted-foreground/80'
-                title='Each one opens a Claude session in the scratch project with a templated prompt pre-loaded.'
-              >
+            {/* Collapsible header (v0.1.36 A1). Click anywhere on the row
+                toggles. Chevron rotates 90° via Tailwind transform. */}
+            <button
+              type='button'
+              onClick={toggleQa}
+              aria-expanded={!qaCollapsed}
+              aria-controls='qa-rail-body'
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md text-left text-xs font-medium uppercase tracking-wide text-muted-foreground',
+                'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+              )}
+            >
+              <ChevronRight
+                aria-hidden='true'
+                className={cn(
+                  'h-3.5 w-3.5 transition-transform',
+                  qaCollapsed ? 'rotate-0' : 'rotate-90'
+                )}
+              />
+              <Sparkles className='h-3.5 w-3.5' aria-hidden='true' />
+              <span>AI Quick-actions ({quickActions.length})</span>
+              <span className='font-normal normal-case tracking-normal text-muted-foreground/80'>
                 — one click; the AI does the work.
               </span>
-            </div>
-            <div className='flex flex-wrap gap-2'>
-              {quickActions.map((qa) => {
-                const isLaunching = launchingActionId === qa.id;
-                return (
-                  <button
-                    key={qa.id}
-                    type='button'
-                    disabled={launchingActionId !== null}
-                    onClick={() => void launchAction(qa)}
-                    title={qa.description}
-                    className={cn(
-                      'group flex max-w-xs flex-col items-start gap-1 rounded-md border border-border bg-secondary/30 px-3 py-2 text-left transition-colors',
-                      'hover:border-primary hover:bg-secondary/60',
-                      'disabled:cursor-not-allowed disabled:opacity-50'
-                    )}
-                  >
-                    <div className='flex w-full items-center gap-1.5 text-sm font-medium'>
-                      {isLaunching ? (
-                        <Loader2 className='h-3.5 w-3.5 animate-spin' />
-                      ) : (
-                        <Sparkles className='h-3.5 w-3.5 text-primary' />
+            </button>
+            {!qaCollapsed && (
+              <div id='qa-rail-body' className='flex flex-wrap gap-2'>
+                {quickActions.map((qa) => {
+                  const isLaunching = launchingActionId === qa.id;
+                  return (
+                    <button
+                      key={qa.id}
+                      type='button'
+                      disabled={launchingActionId !== null}
+                      onClick={() => void launchAction(qa)}
+                      title={qa.description}
+                      className={cn(
+                        'group flex max-w-xs flex-col items-start gap-1 rounded-md border border-border bg-secondary/30 px-3 py-2 text-left transition-colors',
+                        'hover:border-primary hover:bg-secondary/60',
+                        'disabled:cursor-not-allowed disabled:opacity-50'
                       )}
-                      <span>{qa.name}</span>
-                    </div>
-                    <p className='line-clamp-2 text-xs text-muted-foreground'>
-                      {qa.description}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+                    >
+                      <div className='flex w-full items-center gap-1.5 text-sm font-medium'>
+                        {isLaunching ? (
+                          <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                        ) : (
+                          <Sparkles className='h-3.5 w-3.5 text-primary' />
+                        )}
+                        <span>{qa.name}</span>
+                      </div>
+                      <p className='line-clamp-2 text-xs text-muted-foreground'>
+                        {qa.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
         <form
@@ -612,6 +658,26 @@ export function SessionsPage({
             )}
           </div>
         )}
+      </Card>
+
+      {/* Phase B preview (v0.1.36 A7). Signals where Sessions is
+          headed without committing schema or shipping the
+          implementation yet. */}
+      <Card className='flex items-start gap-3 border-dashed p-4 text-sm'>
+        <Sparkles className='mt-0.5 h-4 w-4 shrink-0 text-primary' aria-hidden='true' />
+        <div className='flex flex-col gap-1'>
+          <p className='font-medium'>
+            Coming next: project objectives + cross-AI continuity
+          </p>
+          <p className='text-xs text-muted-foreground'>
+            A per-project objectives tree lets you "click a task and resume" --
+            the right CLI launches in the right folder with prior context.
+            Claude and Codex will share a per-project NOTES file so switching
+            between them keeps the thread alive. ADR-0006 is being written;
+            you'll see it under <code className='font-mono'>docs/adr/</code>{' '}
+            before code lands.
+          </p>
+        </div>
       </Card>
 
       {/* Tab strip */}

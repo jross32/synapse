@@ -4,11 +4,17 @@
 // mark on top, one icon+label button per destination, a live connection dot
 // at the bottom. Active page is owned by App.tsx and passed down.
 
-import { Search, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, Settings as SettingsIcon, Wifi, WifiOff } from 'lucide-react';
 
 import { cn } from '@shared/utils';
 import { useDaemon } from '@shared/daemon-context';
-import { NAV_ITEMS, type PageId } from '@shared/nav';
+import {
+  applySidebarLayout,
+  loadSidebarLayout,
+  type PageId,
+} from '@shared/nav';
+import { SidebarSettings } from './SidebarSettings';
 
 export interface SidebarProps {
   active: PageId;
@@ -21,6 +27,21 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
   const online = connState === 'open';
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const shortcutKey = isMac ? '⌘K' : 'Ctrl+K';
+
+  const [navItems, setNavItems] = useState(() => applySidebarLayout(loadSidebarLayout()));
+  const [customizing, setCustomizing] = useState(false);
+  // Re-read layout whenever the modal commits a change.
+  function refreshNavItems(): void {
+    setNavItems(applySidebarLayout(loadSidebarLayout()));
+  }
+  // Cross-tab sync: another window edits the layout -> propagate here.
+  useEffect(() => {
+    function onStorage(e: StorageEvent): void {
+      if (e.key === 'synapse.sidebar.layout') refreshNavItems();
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   return (
     <nav
@@ -36,7 +57,7 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
 
       {/* Destinations */}
       <div className='flex flex-1 flex-col items-stretch gap-1 self-stretch px-1.5 sm:px-2'>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.id === active;
           return (
@@ -77,6 +98,23 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
           <span className='sr-only font-mono sm:not-sr-only'>{shortcutKey}</span>
         </button>
       )}
+
+      {/* Customize sidebar trigger (v0.1.36 A6) */}
+      <button
+        type='button'
+        onClick={() => setCustomizing(true)}
+        title='Customize sidebar (reorder + hide tabs)'
+        aria-label='Customize sidebar'
+        className='mt-1 flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground'
+      >
+        <SettingsIcon className='h-4 w-4' aria-hidden='true' />
+        <span className='sr-only sm:not-sr-only'>Customize</span>
+      </button>
+      <SidebarSettings
+        open={customizing}
+        onClose={() => setCustomizing(false)}
+        onChange={refreshNavItems}
+      />
 
       {/* Connection indicator */}
       <div

@@ -167,3 +167,66 @@ def test_delete_returns_204(tmp_path: Path) -> None:
             assert get_res.status_code == 404
     finally:
         storage.close()
+
+
+# ── v0.1.36 A5: GET /projects/{id}/disk-usage ──────────────────────
+
+
+def test_disk_usage_returns_byte_count(tmp_path: Path) -> None:
+    """The route walks the project's path and returns total bytes."""
+
+    from synapse_daemon.routes_projects import _disk_cache
+
+    _disk_cache.clear()
+    client, storage, *_ = _harness(tmp_path)
+    try:
+        # _seed_probe always uses tmp_path/probe-project as the project's
+        # path; populate THAT directory with known contents.
+        _seed_probe(storage, tmp_path)
+        project_dir = tmp_path / "probe-project"
+        (project_dir / "a.txt").write_bytes(b"x" * 100)
+        (project_dir / "b.txt").write_bytes(b"y" * 200)
+        nested = project_dir / "nested"
+        nested.mkdir()
+        (nested / "c.txt").write_bytes(b"z" * 300)
+        with client as c:
+            res = c.get("/api/v1/projects/probe/disk-usage")
+            assert res.status_code == 200, res.text
+            body = res.json()
+            assert body["bytes"] == 600
+            assert body["file_count"] == 3
+            assert body["truncated"] is False
+            assert body["cached"] is False
+    finally:
+        storage.close()
+
+
+def test_disk_usage_is_cached(tmp_path: Path) -> None:
+    """A second call within the TTL is served from cache."""
+
+    from synapse_daemon.routes_projects import _disk_cache
+
+    _disk_cache.clear()
+    client, storage, *_ = _harness(tmp_path)
+    try:
+        _seed_probe(storage, tmp_path)
+        (tmp_path / "probe-project" / "a.txt").write_bytes(b"x" * 42)
+        with client as c:
+            first = c.get("/api/v1/projects/probe/disk-usage").json()
+            second = c.get("/api/v1/projects/probe/disk-usage").json()
+            assert first["bytes"] == 42
+            assert second["bytes"] == 42
+            assert first["cached"] is False
+            assert second["cached"] is True
+    finally:
+        storage.close()
+
+
+def test_disk_usage_unknown_project_404(tmp_path: Path) -> None:
+    client, storage, *_ = _harness(tmp_path)
+    try:
+        with client as c:
+            res = c.get("/api/v1/projects/never-heard-of/disk-usage")
+            assert res.status_code == 404
+    finally:
+        storage.close()

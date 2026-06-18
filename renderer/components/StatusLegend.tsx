@@ -10,34 +10,50 @@ import { HelpCircle } from 'lucide-react';
 
 import type { EntityStatus } from '@shared/generated-types';
 import { cn } from '@shared/utils';
-import { STATUS_MEANING } from './StatusBadge';
 
-const ORDER: EntityStatus[] = [
-  'idle',
-  'launching',
-  'launched',
-  'stopping',
-  'stopped',
-  'error',
+// v0.1.36 A3: idle + stopped are presented to the user as a single
+// "not running" row. The daemon still emits both internally; only the
+// legend collapses them.
+type LegendRow = {
+  key: string;
+  dot: string;
+  label: string;
+  meaning: string;
+};
+
+const ROWS: LegendRow[] = [
+  {
+    key: 'not-running',
+    dot: 'bg-status-stopped',
+    label: 'not running',
+    meaning:
+      "Synapse isn't managing this project right now. Either it's never started this install, or it was running and has since exited.",
+  },
+  {
+    key: 'launching',
+    dot: 'bg-status-launching',
+    label: 'launching',
+    meaning: 'Spawn in flight -- waiting for the process to come up.',
+  },
+  {
+    key: 'launched',
+    dot: 'bg-status-launched',
+    label: 'running',
+    meaning: 'Running -- heartbeat OK and ports answering.',
+  },
+  {
+    key: 'stopping',
+    dot: 'bg-status-stopping',
+    label: 'stopping',
+    meaning: 'Stop signal sent -- waiting for the process to exit.',
+  },
+  {
+    key: 'error',
+    dot: 'bg-status-error',
+    label: 'error',
+    meaning: 'Crashed, restart policy gave up, or launch failed. See last_error.',
+  },
 ];
-
-const DOT: Record<EntityStatus, string> = {
-  idle: 'bg-status-idle',
-  launching: 'bg-status-launching',
-  launched: 'bg-status-launched',
-  stopping: 'bg-status-stopping',
-  stopped: 'bg-status-stopped',
-  error: 'bg-status-error',
-};
-
-const LABEL: Record<EntityStatus, string> = {
-  idle: 'idle',
-  launching: 'launching',
-  launched: 'running',
-  stopping: 'stopping',
-  stopped: 'stopped',
-  error: 'error',
-};
 
 export function StatusLegend(): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -108,18 +124,18 @@ export function StatusLegend(): JSX.Element {
         >
           <p className='mb-2 font-semibold text-foreground'>What the status pills mean</p>
           <ul className='space-y-2'>
-            {ORDER.map((s) => (
-              <li key={s} className='flex items-start gap-2'>
+            {ROWS.map((row) => (
+              <li key={row.key} className='flex items-start gap-2'>
                 <span
                   className={cn(
                     'mt-1 h-2 w-2 shrink-0 rounded-full',
-                    DOT[s]
+                    row.dot
                   )}
                   aria-hidden='true'
                 />
                 <div>
-                  <span className='font-mono text-foreground'>{LABEL[s]}</span>
-                  <p className='text-muted-foreground'>{STATUS_MEANING[s]}</p>
+                  <span className='font-mono text-foreground'>{row.label}</span>
+                  <p className='text-muted-foreground'>{row.meaning}</p>
                 </div>
               </li>
             ))}

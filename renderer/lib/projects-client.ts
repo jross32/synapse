@@ -55,6 +55,21 @@ export async function getProjectLogs(id: string, lines = 200): Promise<ProjectLo
   });
 }
 
+/** Disk usage for a project's folder (v0.1.36 A5). Server caches for 60s. */
+export interface ProjectDiskUsage {
+  bytes: number;
+  file_count: number;
+  truncated: boolean;
+  cached: boolean;
+  missing?: boolean;
+}
+
+export async function getProjectDiskUsage(id: string): Promise<ProjectDiskUsage> {
+  return apiFetch<ProjectDiskUsage>(`/projects/${encodeURIComponent(id)}/disk-usage`, {
+    method: 'GET',
+  });
+}
+
 export async function patchProject(id: string, patch: ProjectUpdate): Promise<Project> {
   return apiFetch<Project>(`/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',

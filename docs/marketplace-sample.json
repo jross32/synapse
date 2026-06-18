@@ -96,6 +96,33 @@
       }
     },
     {
+      "id": "copilot",
+      "name": "GitHub Copilot CLI",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Run GitHub Copilot CLI as a Synapse session tab. Inherits your gh CLI sign-in. Requires `copilot` on PATH and `gh auth login` completed once.",
+      "homepage": "https://docs.github.com/en/copilot/github-copilot-in-the-cli",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "copilot",
+        "name": "GitHub Copilot CLI",
+        "icon": "wrench",
+        "description": "Live Copilot CLI session under a real PTY.",
+        "version": "1.0.0",
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open Copilot session",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {"argv": ["copilot"]}
+          }
+        ]
+      }
+    },
+    {
       "id": "git-status",
       "name": "Git status",
       "publisher": "Community",
