@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Cloud, Copy, Loader2, Wifi, WifiOff } from 'lucide-react';
 
+import { SynapseApiError } from '@shared/api-client';
 import {
   getNetworkStatus,
   patchNetworkBindLan,
@@ -24,15 +25,24 @@ import { Card } from './ui/card';
 export function NetworkPanel(): JSX.Element {
   const [status, setStatus] = useState<NetworkStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
   const [busy, setBusy] = useState(false);
   const [justCopied, setJustCopied] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
     setError(null);
+    setUnsupported(false);
     try {
       setStatus(await getNetworkStatus());
     } catch (err) {
-      setError((err as Error).message || 'Failed to load network status');
+      // A 404 means we're talking to a pre-v0.1.35 daemon that doesn't
+      // ship the /system/network route. Show a friendly upgrade hint
+      // instead of the raw envelope message.
+      if (err instanceof SynapseApiError && err.status === 404) {
+        setUnsupported(true);
+      } else {
+        setError((err as Error).message || 'Failed to load network status');
+      }
     }
   }
 
@@ -101,7 +111,22 @@ export function NetworkPanel(): JSX.Element {
         </p>
       )}
 
-      {!status && !error && (
+      {unsupported && (
+        <div className='flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200'>
+          <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+          <div>
+            <p className='font-semibold'>Daemon too old</p>
+            <p>
+              This panel needs daemon <code className='font-mono'>v0.1.35</code>{' '}
+              or newer. Restart Synapse — the bundled daemon will upgrade
+              automatically. Until then the existing <code className='font-mono'>--bind-lan</code>{' '}
+              CLI flag still works.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!status && !error && !unsupported && (
         <div className='flex items-center gap-2 py-2 text-sm text-muted-foreground'>
           <Loader2 className='h-4 w-4 animate-spin' /> Loading…
         </div>
