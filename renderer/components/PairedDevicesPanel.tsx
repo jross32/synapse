@@ -5,6 +5,7 @@
 // in v0.1.12; this is the desktop half of the flow.
 
 import { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import { Loader2, Smartphone, Trash2 } from 'lucide-react';
 
 import type { PairedDevice, PairingCode } from '@shared/pairing-client';
@@ -13,6 +14,8 @@ import {
   listPairedDevices,
   revokePairedDevice,
 } from '@shared/pairing-client';
+import { getNetworkStatus } from '@shared/system-client';
+import { SynapseApiError } from '@shared/api-client';
 import { formatLocal } from '@shared/format-time';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -28,6 +31,12 @@ export function PairedDevicesPanel(): JSX.Element {
   const [remaining, setRemaining] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // QR data: the mobile URL the phone should open. Only available when
+  // the daemon is bound to LAN (otherwise the phone can't reach this
+  // computer at all). Null = either pre-v0.1.35 daemon, loopback only,
+  // or no LAN IP detectable.
+  const [mobileUrl, setMobileUrl] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function refresh(): void {
@@ -35,6 +44,55 @@ export function PairedDevicesPanel(): JSX.Element {
       .then(setDevices)
       .catch((err: Error) => setError(err.message || 'Failed to load devices'));
   }
+
+  // Pull the LAN-binding state on mount + remember the first LAN URL
+  // the daemon reports. Quietly skip on older daemons (404).
+  useEffect(() => {
+    let cancelled = false;
+    void getNetworkStatus()
+      .then((s) => {
+        if (cancelled) return;
+        setMobileUrl(s.mobile_urls[0] ?? null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (!(err instanceof SynapseApiError && err.status === 404)) {
+          // Anything other than "daemon too old to know about LAN" --
+          // log, but don't error-out the whole panel; pairing without
+          // a QR still works.
+          console.warn('Network status fetch failed in PairedDevicesPanel:', err);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Re-render the QR whenever the mobile URL changes.
+  useEffect(() => {
+    if (!mobileUrl) {
+      setQrDataUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void QRCode.toDataURL(mobileUrl, {
+      width: 220,
+      margin: 1,
+      color: { dark: '#0b0f17', light: '#ffffff' },
+    })
+      .then((dataUrl) => {
+        if (cancelled) return;
+        setQrDataUrl(dataUrl);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        console.warn('QR encode failed:', err);
+        setQrDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mobileUrl]);
 
   useEffect(() => {
     refresh();
@@ -89,12 +147,38 @@ export function PairedDevicesPanel(): JSX.Element {
       </div>
 
       {code ? (
-        <div className='flex flex-col items-center gap-1 rounded-md border border-border bg-secondary/50 p-4'>
-          <span className='text-xs font-medium text-muted-foreground'>Pairing code</span>
-          <span className='font-mono text-3xl font-semibold tracking-[0.3em]'>{code.code}</span>
-          <span className='text-xs text-muted-foreground'>
-            Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
-          </span>
+        <div className='flex flex-col gap-4 rounded-md border border-border bg-secondary/50 p-4 sm:flex-row sm:items-center'>
+          <div className='flex flex-1 flex-col items-center gap-1'>
+            <span className='text-xs font-medium text-muted-foreground'>Pairing code</span>
+            <span className='font-mono text-3xl font-semibold tracking-[0.3em]'>{code.code}</span>
+            <span className='text-xs text-muted-foreground'>
+              Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
+            </span>
+          </div>
+          {qrDataUrl ? (
+            <div className='flex flex-col items-center gap-1'>
+              <img
+                src={qrDataUrl}
+                alt='QR code linking to the Synapse mobile pairing page'
+                className='rounded-md border border-border bg-white p-1'
+                width={140}
+                height={140}
+              />
+              <span className='text-xs text-muted-foreground'>Scan to open on phone</span>
+              {mobileUrl && (
+                <code className='break-all text-center font-mono text-[10px] text-muted-foreground'>
+                  {mobileUrl}
+                </code>
+              )}
+            </div>
+          ) : mobileUrl === null ? (
+            <div className='max-w-xs text-xs text-muted-foreground'>
+              <strong className='text-foreground'>To enable QR scan-to-pair:</strong>{' '}
+              turn on "Allow LAN access" in the Network panel above and restart
+              Synapse. Without LAN binding the phone can't reach this computer
+              at all -- 6-digit code is the only path.
+            </div>
+          ) : null}
         </div>
       ) : (
         <Button variant='outline' className='w-fit' disabled={busy} onClick={() => void handleGenerate()}>

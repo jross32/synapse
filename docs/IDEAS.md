@@ -88,8 +88,11 @@ These live under `tools/<id>/manifest.json` and use the existing
   access" backed by a JSON boot-config; the daemon reads it on
   start. Restart-required banner; live LAN IP list + copy-to-
   clipboard mobile URLs; an off-LAN section pointing at Cloudtap.
-- **Mobile: QR code pairing** (M) — render the 6-digit code as a QR
-  next to it; phone scans, autofills.
+- ~~Mobile: QR code pairing~~ — **shipped 2026-06-17.** PairedDevicesPanel
+  now renders a QR encoding the LAN mobile URL alongside the 6-digit
+  code (when daemon is bound to LAN). Phone camera scans -> opens the
+  pair page directly. Falls back to copy-text instructions on loopback
+  binds or pre-v0.1.35 daemons.
 
 ## Accessibility / polish
 
