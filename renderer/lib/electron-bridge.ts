@@ -13,6 +13,8 @@ interface SynapseBridge {
   openInTerminal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   getAutostart?: () => Promise<boolean>;
   setAutostart?: (enabled: boolean) => Promise<boolean>;
+  restart?: () => Promise<boolean>;
+  exit?: () => Promise<boolean>;
 }
 
 function bridge(): SynapseBridge | null {
@@ -72,6 +74,26 @@ export async function getAutostart(): Promise<boolean | null> {
 export async function setAutostart(enabled: boolean): Promise<boolean | null> {
   const b = bridge();
   return b?.setAutostart ? b.setAutostart(enabled) : null;
+}
+
+/** True if the build can restart itself (Electron only). */
+export function canRestart(): boolean {
+  return typeof bridge()?.restart === 'function';
+}
+
+/** Restart the whole Synapse app (kills daemon, re-launches Electron).
+ *  Returns false outside Electron / when the bridge isn't loaded. */
+export async function restartApp(): Promise<boolean> {
+  const b = bridge();
+  if (!b?.restart) return false;
+  return b.restart();
+}
+
+/** Exit the Synapse app cleanly. Same effect as Tray → Exit Synapse. */
+export async function exitApp(): Promise<boolean> {
+  const b = bridge();
+  if (!b?.exit) return false;
+  return b.exit();
 }
 
 /**

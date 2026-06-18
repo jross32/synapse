@@ -281,13 +281,30 @@ function buildTrayMenu(): Electron.Menu {
     },
     { type: 'separator' },
     {
-      label: 'Quit Synapse',
+      label: 'Restart Synapse',
+      click: () => restartApp(),
+    },
+    {
+      label: 'Exit Synapse',
       click: () => {
         isQuitting = true;
         app.quit();
       },
     },
   ]);
+}
+
+/**
+ * Clean restart: signal we're quitting (so will-quit kills the daemon child),
+ * schedule a relaunch, then exit. The relaunched process picks up any
+ * boot-config changes (e.g. the LAN-exposure toggle the user just flipped in
+ * Settings → Network).
+ */
+function restartApp(): void {
+  console.log('[synapse] restarting from tray menu');
+  isQuitting = true;
+  app.relaunch();
+  app.exit(0);
 }
 
 // A tray project click: launch it if idle, otherwise just surface the window.
@@ -440,6 +457,15 @@ ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
 
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
+ipcMain.handle('synapse:restart', () => {
+  restartApp();
+  return true;
+});
+ipcMain.handle('synapse:exit', () => {
+  isQuitting = true;
+  app.quit();
+  return true;
+});
 
 ipcMain.handle('synapse:set-autostart', (_event, enabled: unknown) => {
   setAutostart(enabled === true);

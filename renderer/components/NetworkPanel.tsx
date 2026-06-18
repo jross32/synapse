@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Cloud, Copy, Loader2, Wifi, WifiOff } from 'lucide-react';
 
 import { SynapseApiError } from '@shared/api-client';
+import { canRestart, restartApp } from '@shared/electron-bridge';
 import {
   getNetworkStatus,
   patchNetworkBindLan,
@@ -165,12 +166,27 @@ export function NetworkPanel(): JSX.Element {
               </button>
             </div>
             {status.restart_required && (
-              <div className='flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200'>
-                <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-                <span>
-                  Daemon restart required to apply. Right-click the tray icon →
-                  Quit, then relaunch Synapse.
-                </span>
+              <div className='flex items-start justify-between gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200'>
+                <div className='flex items-start gap-2'>
+                  <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+                  <span>
+                    Restart required to apply.{' '}
+                    {canRestart()
+                      ? 'Click Restart now or use Tray → Restart Synapse.'
+                      : 'Right-click the tray icon → Restart Synapse (or Exit Synapse and relaunch).'}
+                  </span>
+                </div>
+                {canRestart() && (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    className='h-7 shrink-0 px-2 text-xs'
+                    onClick={() => void restartApp()}
+                    aria-label='Restart Synapse now'
+                  >
+                    Restart now
+                  </Button>
+                )}
               </div>
             )}
           </div>

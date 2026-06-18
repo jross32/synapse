@@ -44,6 +44,13 @@ contextBridge.exposeInMainWorld('synapse', {
   /** Enable/disable start-at-login; resolves to the resulting state. */
   setAutostart: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke('synapse:set-autostart', enabled),
+
+  /** Restart the whole app (kills the daemon child, re-launches Electron).
+   *  Used by Settings → Network after the LAN-exposure toggle changes. */
+  restart: (): Promise<boolean> => ipcRenderer.invoke('synapse:restart'),
+
+  /** Exit cleanly (same as Tray → Exit Synapse). */
+  exit: (): Promise<boolean> => ipcRenderer.invoke('synapse:exit'),
 });
 
 declare global {
@@ -58,6 +65,8 @@ declare global {
       openInTerminal: (target: string) => Promise<{ ok: boolean; error?: string }>;
       getAutostart: () => Promise<boolean>;
       setAutostart: (enabled: boolean) => Promise<boolean>;
+      restart: () => Promise<boolean>;
+      exit: () => Promise<boolean>;
     };
   }
 }
