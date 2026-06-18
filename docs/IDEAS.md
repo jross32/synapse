@@ -70,7 +70,12 @@ These live under `tools/<id>/manifest.json` and use the existing
   PublicUrl has a dedicated Copy button (1 click) alongside the
   open-in-browser link.
 - **Apps page: bulk launch / stop** (M) — selection mode + a small
-  toolbar that appears when 1+ tile is selected.
+  toolbar that appears when 1+ tile is selected. Partial: see "Stop
+  all running" below.
+- ~~Processes: "Stop all running"~~ — **shipped 2026-06-17.** Single
+  button in the page header with a confirm dialog listing every
+  running project; uses Promise.allSettled so a single failure
+  doesn't take the whole batch down.
 - **Processes page: filter by status chip** (S) — mirror the Apps
   page filter chips.
 - ~~Sessions: terminal search overlay~~ — **shipped 2026-06-17.**
