@@ -4,7 +4,7 @@
 // resource snapshots, refresh. No own WebSocket.
 
 import { useMemo, useRef, useState } from 'react';
-import { Download, FolderSearch, Plus, Search, X } from 'lucide-react';
+import { Download, FolderSearch, HelpCircle, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
@@ -20,6 +20,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ChatgptImportHelp } from '../components/ChatgptImportHelp';
 import { DiscoveryDialog } from '../components/DiscoveryDialog';
 import { LogViewer } from '../components/LogViewer';
 import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFormDialog';
@@ -65,6 +66,7 @@ export function AppsPage(): JSX.Element {
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<ProjectKind | 'all'>('all');
   const [importing, setImporting] = useState(false);
+  const [importHelpOpen, setImportHelpOpen] = useState(false);
   const [importResult, setImportResult] = useState<ChatgptImportResponse | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -136,15 +138,26 @@ export function AppsPage(): JSX.Element {
         subtitle="Your registered projects. Each tile is a folder Synapse manages. Installable plugins live in Tools."
         action={
           <div className='flex gap-2'>
-            <Button
-              variant='outline'
-              onClick={() => importInputRef.current?.click()}
-              disabled={importing}
-              title='Upload a ChatGPT Settings → Data Controls → Export Data zip'
-            >
-              <Download className='h-4 w-4' />
-              {importing ? 'Importing…' : 'Import ChatGPT export'}
-            </Button>
+            <div className='flex items-stretch gap-1'>
+              <Button
+                variant='outline'
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+                title='Upload a ChatGPT Settings → Data Controls → Export Data zip'
+              >
+                <Download className='h-4 w-4' />
+                {importing ? 'Importing…' : 'Import ChatGPT export'}
+              </Button>
+              <button
+                type='button'
+                onClick={() => setImportHelpOpen(true)}
+                aria-label='How does ChatGPT export import work?'
+                title='How does this work?'
+                className='inline-flex items-center justify-center rounded-md border border-input px-2 text-muted-foreground transition-colors hover:border-primary hover:text-foreground'
+              >
+                <HelpCircle className='h-4 w-4' aria-hidden='true' />
+              </button>
+            </div>
             <Button variant='outline' onClick={() => setDiscoveryOpen(true)}>
               <FolderSearch className='h-4 w-4' /> Scan for projects
             </Button>
@@ -369,6 +382,11 @@ export function AppsPage(): JSX.Element {
           setDiscoveryOpen(false);
           void refreshProjects();
         }}
+      />
+
+      <ChatgptImportHelp
+        open={importHelpOpen}
+        onClose={() => setImportHelpOpen(false)}
       />
     </div>
   );

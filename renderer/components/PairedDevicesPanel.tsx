@@ -174,9 +174,33 @@ export function PairedDevicesPanel(): JSX.Element {
           ) : mobileUrl === null ? (
             <div className='max-w-xs text-xs text-muted-foreground'>
               <strong className='text-foreground'>To enable QR scan-to-pair:</strong>{' '}
-              turn on "Allow LAN access" in the Network panel above and restart
-              Synapse. Without LAN binding the phone can't reach this computer
-              at all -- 6-digit code is the only path.
+              <button
+                type='button'
+                onClick={() => {
+                  // Scroll the Network panel into view + briefly
+                  // highlight the LAN-access toggle so the user can
+                  // see exactly where to click.
+                  const target =
+                    document.querySelector<HTMLElement>(
+                      'button[role="switch"][aria-checked="false"]'
+                    );
+                  if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.focus();
+                    target.classList.add('ring-2', 'ring-primary');
+                    setTimeout(
+                      () => target.classList.remove('ring-2', 'ring-primary'),
+                      2000
+                    );
+                  }
+                }}
+                className='underline decoration-dotted underline-offset-2 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary'
+              >
+                turn on "Allow LAN access"
+              </button>{' '}
+              in the Network panel above and restart Synapse. Without LAN
+              binding the phone can't reach this computer at all -- 6-digit
+              code is the only path.
             </div>
           ) : null}
         </div>

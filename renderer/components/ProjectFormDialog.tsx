@@ -160,10 +160,15 @@ export function ProjectFormDialog({
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as ProjectKind)}
-            className='h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            // colorScheme: 'dark' tells Windows + macOS to render the
+            // native dropdown panel in its dark variant (light otherwise).
+            // The <option> elements are OS-painted; CSS classes don't
+            // reach them.
+            style={{ colorScheme: 'dark' }}
+            className='h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
           >
             {KIND_ORDER.map((k) => (
-              <option key={k} value={k}>
+              <option key={k} value={k} className='bg-card text-foreground'>
                 {KIND_META[k].label}
               </option>
             ))}

@@ -88,7 +88,13 @@
     color: hsl(var(--foreground));
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* Force the browser to render native widgets (scrollbars, OS-painted
+       <option> popups, date pickers, etc.) in the dark variant so they
+       don't flash white over our dark UI. Light theme overrides this in
+       theme.ts when applied. */
+    color-scheme: dark;
   }
+  html.theme-light body { color-scheme: light; }
 }
 
 /* Shared keyframes used by status badges (Contract #2).
