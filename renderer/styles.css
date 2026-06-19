@@ -42,7 +42,9 @@
   }
 
   /* Light theme (Contract #14) -- inverted shadcn palette, toggled via
-   * `<html class="light">`. Synapse stays dark by default. */
+   * `<html class="theme-light">` (or legacy `class="light"`). Synapse
+   * stays dark by default. */
+  html.theme-light,
   html.light {
     --background: 210 40% 98%;
     --foreground: 222 47% 11%;
@@ -70,6 +72,68 @@
     --status-stopping: 33 95% 42%;
     --status-stopped: 215 14% 50%;
     --status-error: 0 76% 48%;
+  }
+
+  /* Hacker green (v0.1.36) -- mono-spaced terminal vibes with neon
+   * green accents on near-black surfaces. */
+  html.theme-hacker {
+    --background: 145 25% 4%;
+    --foreground: 142 80% 78%;
+    --card: 145 25% 7%;
+    --card-foreground: 142 70% 84%;
+    --popover: 145 25% 10%;
+    --popover-foreground: 142 70% 84%;
+    --primary: 142 80% 50%;
+    --primary-foreground: 145 25% 4%;
+    --secondary: 145 20% 14%;
+    --secondary-foreground: 142 70% 80%;
+    --muted: 145 18% 16%;
+    --muted-foreground: 142 30% 60%;
+    --accent: 145 20% 20%;
+    --accent-foreground: 142 70% 84%;
+    --destructive: 0 95% 65%;
+    --destructive-foreground: 145 25% 4%;
+    --border: 145 25% 22%;
+    --input: 145 25% 22%;
+    --ring: 142 80% 50%;
+
+    --status-idle: 145 12% 45%;
+    --status-launching: 50 90% 55%;
+    --status-launched: 142 80% 50%;
+    --status-stopping: 30 90% 55%;
+    --status-stopped: 145 14% 35%;
+    --status-error: 0 95% 65%;
+  }
+
+  /* Surfer blue (v0.1.36) -- bright ocean blues + warm sand accents
+   * over a deep navy. Lighter feel than the default dark theme. */
+  html.theme-surfer {
+    --background: 215 60% 9%;
+    --foreground: 200 80% 95%;
+    --card: 215 50% 13%;
+    --card-foreground: 200 70% 96%;
+    --popover: 215 45% 17%;
+    --popover-foreground: 200 70% 96%;
+    --primary: 198 90% 60%;
+    --primary-foreground: 215 60% 9%;
+    --secondary: 215 40% 20%;
+    --secondary-foreground: 200 70% 92%;
+    --muted: 215 38% 20%;
+    --muted-foreground: 200 25% 70%;
+    --accent: 215 40% 26%;
+    --accent-foreground: 200 70% 96%;
+    --destructive: 0 85% 65%;
+    --destructive-foreground: 215 60% 9%;
+    --border: 215 30% 26%;
+    --input: 215 30% 26%;
+    --ring: 198 90% 60%;
+
+    --status-idle: 215 18% 55%;
+    --status-launching: 38 92% 65%;
+    --status-launched: 152 65% 58%;
+    --status-stopping: 33 95% 60%;
+    --status-stopped: 215 15% 45%;
+    --status-error: 0 85% 65%;
   }
 
   * {
