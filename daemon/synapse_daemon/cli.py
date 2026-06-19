@@ -4,70 +4,169 @@ A thin client over the daemon's REST API. Same commands, same data, same
 audit log — no direct DB access. Commands map 1-to-1 with REST endpoints
 defined in ``docs/api-changes.md``.
 
-This module ships in v0.1.2 with command parsing + help text only; HTTP
-plumbing lives in :mod:`synapse_daemon.cli_http` (Milestone B) once a daemon
-is actually reachable.
+History:
+- v0.1.2 shipped argparse plumbing + placeholder prints.
+- v0.1.36 wired every command to the real daemon via
+  :mod:`synapse_daemon.cli_http`. ``doctor`` is the only command that
+  still runs without the daemon (it's the diagnostic that tells you
+  *why* the daemon isn't answering).
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import platform
 import sys
+import time
 from collections.abc import Sequence
 from typing import Callable
 
 from . import __version__
+from .cli_http import SynapseCliError, daemon_base, discover_token, print_json, request
 
 
-# ── command handlers (placeholders for v0.1.2) ────────────────────────────
+# ── command handlers ─────────────────────────────────────────────────────
 
 
-def _cmd_status(args: argparse.Namespace) -> int:
-    print(f"synapse {__version__} — daemon HTTP client not wired yet (Milestone B).")
+def _cmd_status(_args: argparse.Namespace) -> int:
+    try:
+        health = request("GET", "/health")
+    except SynapseCliError as exc:
+        print(f"synapse status: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"synapse {__version__} · daemon v{health.get('version', '?')} "
+        f"· started {health.get('started_at', '?')} · "
+        f"{len(health.get('contracts', []))} contracts honoured"
+    )
     return 0
 
 
-def _cmd_list(args: argparse.Namespace) -> int:
-    print("synapse list — will GET /api/v1/projects when daemon is wired.")
+def _cmd_list(_args: argparse.Namespace) -> int:
+    try:
+        body = request("GET", "/projects")
+    except SynapseCliError as exc:
+        print(f"synapse list: {exc}", file=sys.stderr)
+        return 1
+    projects = body.get("projects", [])
+    if not projects:
+        print("(no projects registered)")
+        return 0
+    width = max(len(p["id"]) for p in projects)
+    for p in projects:
+        kind = p.get("kind", "app")
+        port = p.get("expected_port")
+        port_str = f":{port}" if port else ""
+        print(
+            f"  {p['id']:<{width}}  {p['status']:<10}  {kind:<10}  "
+            f"{p.get('name', '')}{port_str}"
+        )
     return 0
 
 
 def _cmd_start(args: argparse.Namespace) -> int:
-    print(f"synapse start {args.project_id} — will POST /api/v1/projects/{args.project_id}/launch.")
+    try:
+        result = request(
+            "POST",
+            f"/projects/{args.project_id}/launch",
+            body={"source": "cli"},
+        )
+    except SynapseCliError as exc:
+        print(f"synapse start: {exc}", file=sys.stderr)
+        return 1
+    print(f"{result['id']} -> {result['status']}")
     return 0
 
 
 def _cmd_stop(args: argparse.Namespace) -> int:
-    print(f"synapse stop {args.project_id} — will POST /api/v1/projects/{args.project_id}/stop.")
+    try:
+        result = request(
+            "POST",
+            f"/projects/{args.project_id}/stop",
+            body={"source": "cli"},
+        )
+    except SynapseCliError as exc:
+        print(f"synapse stop: {exc}", file=sys.stderr)
+        return 1
+    print(f"{result['id']} -> {result['status']}")
     return 0
 
 
 def _cmd_logs(args: argparse.Namespace) -> int:
-    follow = " (follow)" if args.follow else ""
-    print(f"synapse logs {args.project_id}{follow} — will GET /api/v1/projects/{args.project_id}/logs.")
+    try:
+        seen = 0
+        while True:
+            payload = request(
+                "GET",
+                f"/projects/{args.project_id}/logs?lines={args.lines}",
+            )
+            lines = payload.get("lines", [])
+            for line in lines[seen:]:
+                print(line, end="" if line.endswith("\n") else "\n")
+            seen = len(lines)
+            if not args.follow:
+                break
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        return 0
+    except SynapseCliError as exc:
+        print(f"synapse logs: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
 def _cmd_snapshot(args: argparse.Namespace) -> int:
-    print(f"synapse snapshot → {args.output} — will POST /api/v1/snapshot.")
+    try:
+        body = request("GET", "/snapshot/export")
+    except SynapseCliError as exc:
+        print(f"synapse snapshot: {exc}", file=sys.stderr)
+        return 1
+    output_path = args.output
+    with open(output_path, "w", encoding="utf-8") as fp:
+        json.dump(body, fp, indent=2, default=str)
+    print(f"Wrote {output_path}")
     return 0
 
 
 def _cmd_restore(args: argparse.Namespace) -> int:
-    print(f"synapse restore {args.input} — will POST /api/v1/restore.")
+    try:
+        with open(args.input, "r", encoding="utf-8") as fp:
+            snapshot = json.load(fp)
+    except OSError as exc:
+        print(f"synapse restore: could not read {args.input}: {exc}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"synapse restore: {args.input} is not valid JSON: {exc}", file=sys.stderr)
+        return 1
+    try:
+        result = request("POST", "/snapshot/import", body=snapshot)
+    except SynapseCliError as exc:
+        print(f"synapse restore: {exc}", file=sys.stderr)
+        return 1
+    print(f"Restored {result.get('imported', '?')} entities.")
     return 0
 
 
-def _cmd_doctor(args: argparse.Namespace) -> int:
-    """Local diagnostics — runs without the daemon."""
-
-    import platform
+def _cmd_doctor(_args: argparse.Namespace) -> int:
+    """Local diagnostics. Designed to run when the daemon is down so
+    the user can figure out *why*."""
 
     print(f"synapse-doctor — {__version__}")
     print(f"  python   : {sys.version.split()[0]}")
     print(f"  platform : {platform.system()} {platform.release()}")
-    print("  daemon   : (probe lands in Milestone B)")
-    print("  config   : (probe lands in Milestone B)")
+    print(f"  daemon   : {daemon_base()}")
+    token = discover_token()
+    if token is None:
+        print("  token    : (not found -- set SYNAPSE_TOKEN or run from data dir)")
+    else:
+        print(f"  token    : {token[:8]}... ({len(token)} chars)")
+    try:
+        health = request("GET", "/health", timeout=5.0)
+        version = health.get("version", "?")
+        print(f"  reach    : ok (daemon v{version})")
+    except SynapseCliError as exc:
+        print(f"  reach    : FAIL ({exc})")
     return 0
 
 
@@ -83,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=False)
 
-    sub.add_parser("status", help="Show daemon + project status").set_defaults(func=_cmd_status)
+    sub.add_parser("status", help="Show daemon health").set_defaults(func=_cmd_status)
     sub.add_parser("list", help="List managed projects").set_defaults(func=_cmd_list)
 
     p_start = sub.add_parser("start", help="Launch a project")
@@ -97,6 +196,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs = sub.add_parser("logs", help="Show project logs")
     p_logs.add_argument("project_id")
     p_logs.add_argument("-f", "--follow", action="store_true", help="Stream live")
+    p_logs.add_argument(
+        "-n", "--lines", type=int, default=200, help="Lines to fetch (default 200)"
+    )
+    p_logs.add_argument(
+        "--interval", type=float, default=2.0,
+        help="Seconds between polls when following (default 2.0)",
+    )
     p_logs.set_defaults(func=_cmd_logs)
 
     p_snap = sub.add_parser("snapshot", help="Export daemon state to JSON (Contract #28)")
@@ -107,9 +213,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_rest.add_argument("input")
     p_rest.set_defaults(func=_cmd_restore)
 
-    sub.add_parser("doctor", help="Local diagnostics (no daemon required)").set_defaults(
-        func=_cmd_doctor
-    )
+    sub.add_parser(
+        "doctor",
+        help="Local diagnostics (works without the daemon -- run this first when something is wrong)",
+    ).set_defaults(func=_cmd_doctor)
 
     return parser
 
