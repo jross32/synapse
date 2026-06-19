@@ -6,11 +6,11 @@
 
 ## Current version
 
-`0.1.34`
+`0.1.36-dev`
 
 ## Current milestone
 
-**ADR-0003 Phases A–F complete.** Milestones A–I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. The complete set: Phase A project files (v0.1.30 + .31), Phase D workbench transcripts (v0.1.30.5), Phase B pre-upload inspection (v0.1.31.5), Phase C always-on AV scanning via Defender / ClamAV (v0.1.32), Phase E ChatGPT export.zip import (v0.1.33), Phase F AI quick-action templates (v0.1.34). 368 tests pass + 9 skipped. Phase G is OAuth and lives in ADR-0004; deferred until the user gives the go.
+**v0.1.36 Phase A polish wave shipped + Phase B/C/D ADRs drafted.** Milestones A–I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. v0.1.35–0.1.36 ship a wave of UX wins: status simplification, port clarification, disk-size badge, editable sidebar, GitHub Copilot quick-launch, collapsible AI Quick-actions, clickable project + tool detail modals, WAN exposure via Cloudtap, color themes (hacker green + surfer blue), dark native dropdowns, Phase B preview card, plus the new daemon route `GET /projects/{id}/disk-usage`. 5 ADRs in flight: 0004 OAuth (deferred), 0005 wbscrper tab, 0006 project objectives + cross-AI continuity, 0007 AI-improves-Synapse REST endpoints, 0008 marketplace reorg + sidebar promotion. Each gated on user "go". 379 tests pass + 9 skipped. 15 bundled marketplace tools.
 
 | Version | Phase | Status |
 |---|---|---|
@@ -60,6 +60,8 @@
 | `0.1.32` | Always-on AV scanning via Defender (Windows) / ClamAV (POSIX) (ADR-0003 Phase C) | ✅ done |
 | `0.1.33` | ChatGPT export.zip importer + auto-created `imported-chatgpt` project (ADR-0003 Phase E) | ✅ done |
 | `0.1.34` | AI quick-action templates + Sessions rail (ADR-0003 Phase F) | ✅ done |
+| `0.1.35` | Polish + LAN exposure: status legend, port doc, sidebar editable, tray Exit/Restart, mobile QR, file preview, terminal search, PTY default cwd → ~, Modal/StatusLegend focus traps, Stop-all on Processes, NetworkPanel | ✅ done |
+| `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped → not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, 4 more bundled tools, ADRs 0006/0007/0008 drafted | ⏳ in progress |
 
 ## What's done
 
