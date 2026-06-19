@@ -25,6 +25,7 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Modal } from './ui/modal';
 import { FilesPanel } from './FilesPanel';
+import { ProjectDetailModal } from './ProjectDetailModal';
 import { StatusBadge } from './StatusBadge';
 
 /** Tile-sized byte formatter. 1 KB / 12 MB / 1.4 GB. */
@@ -56,6 +57,7 @@ export function ProjectTile({
 }: ProjectTileProps): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   // Disk-usage badge (v0.1.36 A5). Lazy-fetched once per mount;
   // route-side cache keeps re-renders cheap. Empty string = haven't
   // received yet; null = call failed (older daemon or skipped).
@@ -131,7 +133,19 @@ export function ProjectTile({
   }
 
   return (
-    <Card className='flex min-h-[200px] flex-col gap-4 p-6'>
+    <Card
+      className='group flex min-h-[200px] cursor-pointer flex-col gap-4 p-6 transition-colors hover:border-primary'
+      role='button'
+      tabIndex={0}
+      onClick={() => setDetailOpen(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setDetailOpen(true);
+        }
+      }}
+      aria-label={`Open ${project.name} details`}
+    >
       <header className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
           <h3 className='truncate text-lg font-semibold tracking-tight'>{project.name}</h3>
@@ -140,7 +154,10 @@ export function ProjectTile({
         <div className='flex items-center gap-1.5'>
           <button
             type='button'
-            onClick={togglePinned}
+            onClick={(e) => {
+              e.stopPropagation();
+              void togglePinned();
+            }}
             title={project.pinned ? 'Unpin' : 'Pin to top'}
             aria-label={project.pinned ? `Unpin ${project.name}` : `Pin ${project.name} to top`}
             aria-pressed={project.pinned}
@@ -229,7 +246,11 @@ export function ProjectTile({
         </p>
       )}
 
-      <div className='mt-auto flex flex-col gap-2'>
+      <div
+        className='mt-auto flex flex-col gap-2'
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         <div className='flex flex-wrap gap-2'>
           {isRunning ? (
             <Button variant='destructive' size='sm' disabled={busy || isTransitioning} onClick={() => run(() => stopProject(project.id))}>
@@ -343,6 +364,13 @@ export function ProjectTile({
           <FilesPanel projectId={project.id} />
         </Modal>
       )}
+
+      <ProjectDetailModal
+        open={detailOpen}
+        project={detailOpen ? project : null}
+        resources={resources}
+        onClose={() => setDetailOpen(false)}
+      />
     </Card>
   );
 }

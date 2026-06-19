@@ -12,6 +12,7 @@ import {
   Cloud,
   Copy,
   ExternalLink,
+  Info,
   Loader2,
   TerminalSquare,
   Wrench,
@@ -30,6 +31,7 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { StatusBadge } from './StatusBadge';
+import { ToolDetailModal } from './ToolDetailModal';
 
 const ICONS: Record<string, typeof Wrench> = {
   cloud: Cloud,
@@ -96,6 +98,7 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
   const [fields, setFields] = useState<Record<string, string>>(() => initialFields(initial));
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const { manifest, state } = entry;
   const Icon = ICONS[manifest.icon] ?? Wrench;
@@ -209,7 +212,18 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
             <p className='font-mono text-xs text-muted-foreground'>v{manifest.version}</p>
           </div>
         </div>
-        <StatusBadge status={state.status} />
+        <div className='flex items-center gap-1.5'>
+          <button
+            type='button'
+            onClick={() => setDetailOpen(true)}
+            title='Tool details'
+            aria-label={`Open ${manifest.name} details`}
+            className='rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+          >
+            <Info className='h-4 w-4' aria-hidden='true' />
+          </button>
+          <StatusBadge status={state.status} />
+        </div>
       </header>
 
       <p className='text-sm text-muted-foreground'>{manifest.description}</p>
@@ -314,6 +328,12 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
           )
         )}
       </div>
+
+      <ToolDetailModal
+        open={detailOpen}
+        entry={detailOpen ? entry : null}
+        onClose={() => setDetailOpen(false)}
+      />
     </Card>
   );
 }
