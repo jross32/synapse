@@ -10,6 +10,92 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36-dev] -- 2026-06-18..19
+
+A two-day UX wave responding to a long generative user wishlist.
+Phase A polish ships in this release; Phases B / C / D each get
+their own ADR + gate.
+
+### Phase A — UX polish (no ADR)
+
+- **A1**: Sessions AI Quick-actions rail becomes a collapsible
+  disclosure. Chevron rotates; click anywhere on the header toggles;
+  starts collapsed by default; state in localStorage
+  (`synapse.sessions.qa-collapsed`).
+- **A2**: GitHub Copilot CLI joins Claude + Codex as a quick-launch.
+  Install recipe + marketplace entry (declarative tier, pty.spawn).
+  Bundled marketplace: 10 -> 11.
+- **A3**: `idle` and `stopped` collapse to "not running" in UI labels +
+  the Home HUD. Contract #2's six-status enum is unchanged on the
+  daemon side; audit log still records both.
+- **A4**: Settings clarifies that port 7878 is the only port users
+  need; 5173 is the Vite dev server, only present during
+  `npm run dev`. Renamed "Base URL" -> "Daemon URL".
+- **A5**: Apps tiles show a "size on disk" badge driven by the new
+  `GET /api/v1/projects/{id}/disk-usage` route (60s cache). Walk
+  caps at 100k files. Apps subtitle clarifies projects vs Tools.
+- **A6**: Editable sidebar -- drag-to-reorder + per-item hide/show.
+  Home + Settings are locked. Layout persists in
+  `localStorage('synapse.sidebar.layout')`. New gear icon at the
+  bottom opens the customize modal.
+- **A7**: Phase B preview Card on Sessions signals project
+  objectives + cross-AI continuity (ADR-0006 forthcoming).
+
+### UX wishlist follow-ups
+
+- **Dark native dropdowns**: `body { color-scheme: dark }` makes
+  Windows + macOS render `<option>` panels, scrollbars, and date
+  pickers in the dark variant.
+- **Project + Tool detail modals**: clicking anywhere on a project
+  tile opens a `ProjectDetailModal` (3-col meta grid, AI-lens
+  callout, raw JSON disclosure). Click the info icon on a tool tile
+  to open `ToolDetailModal` (per-action primitive hints).
+- **WAN exposure via Cloudtap**: new "Expose to WAN via Cloudtap"
+  button on the Network panel. Active/Inactive status badge; copy
+  / refresh / close buttons on the live tunnel. Security note about
+  the device token still gating access.
+- **Color themes**: `theme-hacker` (near-black + neon green) and
+  `theme-surfer` (deep navy + bright sky blue) join Dark / Light /
+  System. ThemePanel becomes a 2-column swatch grid driven by
+  `THEME_OPTIONS`.
+- **PairedDevices**: "Allow LAN access" copy is now a real button
+  that scrolls + flashes the Network panel toggle so users can find
+  it.
+
+### Marketplace
+
+15 bundled tools (was 11). Added: open-vscode-insiders, open-cursor,
+open-zed, pip-install-dev. `must_include` set in
+`test_routes_marketplace.py` updated.
+
+### Tray + IPC (carried from v0.1.35)
+
+- New tray entries: "Restart Synapse" and "Exit Synapse".
+  `synapse:restart` + `synapse:exit` IPC channels.
+- Settings → Network → "Restart now" button when running in
+  Electron (feature-detected via the preload bridge).
+
+### Daemon
+
+- `GET /api/v1/projects/{id}/disk-usage` (A5).
+- Status enum unchanged; UI merge only.
+
+### ADRs drafted (implementation gated on user "go")
+
+- **ADR-0006** -- Project objectives table (migration 007) +
+  per-project `.synapse-ai-context.md` NOTES file for cross-AI
+  continuity + Saved tasks rail on Sessions. Four sub-phases.
+- **ADR-0007** -- AI-improves-Synapse REST endpoints (`/api/v1/
+  synapse-dev/test/full`, `/commit`, `/pr`) + `/api/v1/ai/health-
+  report`. Token-guarded + env-gated + audited.
+- **ADR-0008** -- Tools marketplace reorg (categories +
+  filters) + Quick-actions catalogue under Tools + sidebar item
+  promotion (`promoted` array in workspace layout).
+
+### Tests
+
+- 376 -> 379 passed (+3 disk-usage tests).
+
 ## [0.1.34] -- 2026-06-16
 
 ### ADR-0003 Phase F -- AI quick-action templates
