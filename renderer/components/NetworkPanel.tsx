@@ -10,10 +10,23 @@
 // trying to ship a second tunneling story.
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Cloud, Copy, Loader2, Wifi, WifiOff } from 'lucide-react';
+import {
+  AlertTriangle,
+  Cloud,
+  Copy,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Trash2,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
 
 import { SynapseApiError } from '@shared/api-client';
 import { canRestart, restartApp } from '@shared/electron-bridge';
+import { getTool, runToolAction } from '@shared/tools-client';
+import { openExternal } from '@shared/electron-bridge';
+import type { ToolEntry } from '@shared/generated-types';
 import {
   getNetworkStatus,
   patchNetworkBindLan,
@@ -29,6 +42,83 @@ export function NetworkPanel(): JSX.Element {
   const [unsupported, setUnsupported] = useState(false);
   const [busy, setBusy] = useState(false);
   const [justCopied, setJustCopied] = useState<string | null>(null);
+  // WAN via Cloudtap (v0.1.36). We look up the cloudtap tool's state
+  // on mount + on every change to find the tunnel whose port == the
+  // daemon's bound port. The tool is the source of truth; we just
+  // surface a focused button up here so users don't have to navigate
+  // to Tools → Cloudtap.
+  const [cloudtap, setCloudtap] = useState<ToolEntry | null>(null);
+  const [tunnelBusy, setTunnelBusy] = useState(false);
+  const [tunnelError, setTunnelError] = useState<string | null>(null);
+
+  async function refreshCloudtap(): Promise<void> {
+    try {
+      setCloudtap(await getTool('cloudtap'));
+    } catch {
+      // Pre-v0.1.9 daemon won't have cloudtap loaded; quietly null out.
+      setCloudtap(null);
+    }
+  }
+
+  useEffect(() => {
+    void refreshCloudtap();
+  }, []);
+
+  // The active tunnel for the daemon port (if any).
+  const daemonPort = status?.bound_port ?? 7878;
+  const daemonTunnel = cloudtap?.state.items.find(
+    (item) => (item.result.local_port as number | undefined) === daemonPort
+  );
+  const daemonTunnelUrl =
+    typeof daemonTunnel?.result.public_url === 'string'
+      ? (daemonTunnel.result.public_url as string)
+      : null;
+
+  async function openTunnel(): Promise<void> {
+    setTunnelBusy(true);
+    setTunnelError(null);
+    try {
+      const next = await runToolAction('cloudtap', 'tunnel', {
+        port: status?.bound_port ?? 7878,
+      });
+      setCloudtap(next);
+    } catch (err) {
+      setTunnelError((err as Error).message || 'Could not open tunnel.');
+    } finally {
+      setTunnelBusy(false);
+    }
+  }
+
+  async function closeTunnel(itemId: string): Promise<void> {
+    setTunnelBusy(true);
+    setTunnelError(null);
+    try {
+      const next = await runToolAction('cloudtap', 'close', {}, itemId);
+      setCloudtap(next);
+    } catch (err) {
+      setTunnelError((err as Error).message || 'Could not close tunnel.');
+    } finally {
+      setTunnelBusy(false);
+    }
+  }
+
+  async function refreshTunnel(itemId: string): Promise<void> {
+    // Close + reopen so the user gets a fresh URL if the previous
+    // session expired or got blocked.
+    setTunnelBusy(true);
+    setTunnelError(null);
+    try {
+      await runToolAction('cloudtap', 'close', {}, itemId);
+      const next = await runToolAction('cloudtap', 'tunnel', {
+        port: status?.bound_port ?? 7878,
+      });
+      setCloudtap(next);
+    } catch (err) {
+      setTunnelError((err as Error).message || 'Could not refresh tunnel.');
+    } finally {
+      setTunnelBusy(false);
+    }
+  }
 
   async function refresh(): Promise<void> {
     setError(null);
@@ -234,23 +324,133 @@ export function NetworkPanel(): JSX.Element {
             )}
           </div>
 
-          {/* Off-LAN */}
+          {/* Off-LAN via Cloudtap (v0.1.36) */}
           <div className='flex flex-col gap-2 border-t border-border pt-3'>
-            <h3 className='flex items-center gap-2 text-sm font-semibold'>
-              <Cloud className='h-3.5 w-3.5 text-primary' aria-hidden='true' />
-              Open from outside your network
-            </h3>
-            <p className='text-xs text-muted-foreground'>
-              The fastest path is the existing Cloudtap tool: open Tools →
-              Cloudtap, enter port <code className='font-mono'>{status.bound_port}</code>,
-              and tunnel. You get a public{' '}
-              <code className='font-mono'>*.trycloudflare.com</code> URL that
-              forwards to the mobile UI -- works from any cellular connection.
-              <br />
-              <strong className='text-foreground'>Security:</strong> the tunnel
-              is read-only without the device token. Pair the phone over LAN
-              first, then the same token works over the tunnel.
-            </p>
+            <div className='flex items-start justify-between gap-3'>
+              <div>
+                <h3 className='flex items-center gap-2 text-sm font-semibold'>
+                  <Cloud className='h-3.5 w-3.5 text-primary' aria-hidden='true' />
+                  Open from outside your network
+                </h3>
+                <p className='mt-0.5 text-xs text-muted-foreground'>
+                  One click opens a public{' '}
+                  <code className='font-mono'>*.trycloudflare.com</code> URL
+                  forwarding to port{' '}
+                  <code className='font-mono'>{status.bound_port}</code>. Works
+                  from cellular / any network. Tunnel auto-expires in 24 h
+                  unless you refresh it.
+                </p>
+              </div>
+              {daemonTunnel ? (
+                <span
+                  className='inline-flex shrink-0 items-center gap-1.5 rounded-full bg-status-launched/15 px-2.5 py-0.5 font-mono text-xs text-status-launched'
+                  title='Tunnel is active'
+                >
+                  <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-status-launched' />
+                  Active
+                </span>
+              ) : (
+                <span className='inline-flex shrink-0 items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 font-mono text-xs text-muted-foreground'>
+                  <span className='h-1.5 w-1.5 rounded-full bg-muted-foreground' />
+                  Inactive
+                </span>
+              )}
+            </div>
+            {tunnelError && (
+              <p role='alert' className='text-xs text-destructive'>
+                {tunnelError}
+              </p>
+            )}
+            {!cloudtap && (
+              <p className='text-xs text-muted-foreground'>
+                Cloudtap isn't loaded. Install it from{' '}
+                <strong className='text-foreground'>Tools → Browse</strong>{' '}
+                and reload this panel.
+              </p>
+            )}
+            {cloudtap && !daemonTunnel && (
+              <Button
+                variant='outline'
+                size='sm'
+                className='w-fit'
+                disabled={tunnelBusy}
+                onClick={() => void openTunnel()}
+              >
+                {tunnelBusy ? (
+                  <Loader2 className='h-4 w-4 animate-spin' aria-hidden='true' />
+                ) : (
+                  <Cloud className='h-4 w-4' aria-hidden='true' />
+                )}
+                Expose to WAN via Cloudtap
+              </Button>
+            )}
+            {cloudtap && daemonTunnel && (
+              <div className='flex flex-col gap-2 rounded-md border border-border bg-secondary/30 p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <button
+                    type='button'
+                    onClick={() =>
+                      daemonTunnelUrl &&
+                      void openExternal(daemonTunnelUrl)
+                    }
+                    className='flex min-w-0 items-center gap-1.5 font-mono text-xs text-primary hover:underline'
+                    title='Open in browser'
+                  >
+                    <ExternalLink className='h-3 w-3 shrink-0' aria-hidden='true' />
+                    <span className='truncate'>
+                      {daemonTunnelUrl ?? 'opening…'}
+                    </span>
+                  </button>
+                  <div className='flex shrink-0 items-center gap-1'>
+                    {daemonTunnelUrl && (
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs'
+                        onClick={() => void copy(daemonTunnelUrl ?? '')}
+                        aria-label='Copy tunnel URL to clipboard'
+                        title='Copy URL'
+                      >
+                        {justCopied === daemonTunnelUrl ? (
+                          <span className='text-xs'>Copied</span>
+                        ) : (
+                          <Copy className='h-3 w-3' aria-hidden='true' />
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 px-2 text-xs'
+                      onClick={() => void refreshTunnel(daemonTunnel.id)}
+                      disabled={tunnelBusy}
+                      aria-label='Refresh tunnel (close + reopen with a new URL)'
+                      title='Close + reopen with a new URL'
+                    >
+                      <RefreshCw className='h-3 w-3' aria-hidden='true' />
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 px-2 text-xs text-destructive hover:bg-destructive/10'
+                      onClick={() => void closeTunnel(daemonTunnel.id)}
+                      disabled={tunnelBusy}
+                      aria-label='Close tunnel'
+                      title='Close tunnel'
+                    >
+                      <Trash2 className='h-3 w-3' aria-hidden='true' />
+                    </Button>
+                  </div>
+                </div>
+                <p className='text-[11px] text-muted-foreground'>
+                  <strong className='text-foreground'>Security:</strong> the
+                  tunnel is read-only without a device token. Pair the phone
+                  over LAN first; the same token then works over the tunnel.
+                  Cloudflare quick tunnels live ~24 h; use the refresh button
+                  for a fresh URL after that.
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}
