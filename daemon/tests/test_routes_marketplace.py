@@ -80,8 +80,12 @@ def test_marketplace_bundled_handlers_load_with_valid_shape(
         "codex",
         "copilot",
         "open-folder",
+        "open-vscode-insiders",
+        "open-cursor",
+        "open-zed",
         "tail-log",
         "npm-install",
+        "pip-install-dev",
         "docker-compose-up",
         "git-log-recent",
     }

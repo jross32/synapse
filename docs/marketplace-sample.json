@@ -156,6 +156,137 @@
       }
     },
     {
+      "id": "open-vscode-insiders",
+      "name": "Open in VS Code Insiders",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Companion to the existing `open-in-vscode` tile: launch the Insiders build on any folder you pick.",
+      "homepage": "https://code.visualstudio.com/insiders/",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "open-vscode-insiders",
+        "name": "Open in VS Code Insiders",
+        "icon": "wrench",
+        "description": "Run `code-insiders .` against any folder.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+        ],
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open in Insiders",
+            "primary": true,
+            "primitive": "process.spawn",
+            "params": {
+              "argv": ["code-insiders", "{path}"],
+              "timeout": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "open-cursor",
+      "name": "Open in Cursor",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Launch Cursor (the AI-first VS Code fork) on a folder of your choice. Requires `cursor` on PATH.",
+      "homepage": "https://cursor.sh/",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "open-cursor",
+        "name": "Open in Cursor",
+        "icon": "wrench",
+        "description": "Run `cursor .` against any folder.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+        ],
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open in Cursor",
+            "primary": true,
+            "primitive": "process.spawn",
+            "params": {
+              "argv": ["cursor", "{path}"],
+              "timeout": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "open-zed",
+      "name": "Open in Zed",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Launch the Zed editor on a folder of your choice. Requires `zed` on PATH.",
+      "homepage": "https://zed.dev/",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "open-zed",
+        "name": "Open in Zed",
+        "icon": "wrench",
+        "description": "Run `zed .` against any folder.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+        ],
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open in Zed",
+            "primary": true,
+            "primitive": "process.spawn",
+            "params": {
+              "argv": ["zed", "{path}"],
+              "timeout": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "pip-install-dev",
+      "name": "pip install -e .[dev] (live)",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "version": "1.0.0",
+      "description": "Run `pip install -e \".[dev]\"` in a Python project under a PTY so you can watch wheels build live.",
+      "homepage": null,
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "pip-install-dev",
+        "name": "pip install -e .[dev] (live)",
+        "icon": "terminal",
+        "description": "Spawns `pip install -e .[dev]` in the given folder under a PTY so output streams live.",
+        "version": "1.0.0",
+        "fields": [
+          {"key": "path", "type": "path", "label": "Project folder", "required": true, "placeholder": "C:\\path\\to\\project"}
+        ],
+        "actions": [
+          {
+            "id": "run",
+            "label": "Run pip install -e .[dev]",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {
+              "argv": ["powershell.exe", "-NoLogo", "-Command", "Set-Location -LiteralPath '{path}'; pip install -e \".[dev]\""]
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "open-folder",
       "name": "Open folder",
       "publisher": "The WhatIf Company",
