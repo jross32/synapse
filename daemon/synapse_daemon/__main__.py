@@ -36,6 +36,7 @@ from .security import assert_not_admin
 from .seed import seed_default_projects
 from .storage import Storage
 from .tools_registry import ToolRegistry
+from .windows_asyncio import install_accept_reset_workaround
 from .ws import EventBus
 
 log = logging.getLogger("synapse")
@@ -158,6 +159,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _build_argparser().parse_args(argv)
     _configure_logging(args.log_level)
 
+    if install_accept_reset_workaround():
+        log.info("Installed Windows asyncio accept-reset workaround for WinError 64.")
+
     assert_not_admin(allow_admin=args.allow_admin)
 
     # Read the persisted boot config -- the Settings → Network panel
@@ -175,6 +179,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         host == LAN_HOST,
         "cli" if args.bind_lan else ("config" if boot_cfg.bind_lan else "default"),
     )
+
+    # Tools dir resolution (v0.1.36 -- ships cloudtap). The CLI default
+    # is the relative path "tools/" so Python resolves it against the
+    # daemon's cwd. When Electron spawns us, cwd is electron/ (one up
+    # from electron/dist) and there's no tools/ folder there -- so we
+    # silently load zero tools, the marketplace + NetworkPanel both
+    # say "Cloudtap isn't loaded", and the user can't open WAN tunnels.
+    # If the user didn't pass an explicit --tools-dir, also try a path
+    # relative to the package: <repo>/tools/. Falls back to the CLI
+    # value when neither works.
+    if args.tools_dir == DEFAULT_TOOLS_DIR:
+        repo_tools = Path(__file__).resolve().parent.parent.parent / "tools"
+        if repo_tools.is_dir():
+            args.tools_dir = repo_tools
+            log.info("Resolved tools_dir to repo path %s (default cwd lookup would have missed it)", repo_tools)
+        elif not args.tools_dir.is_dir():
+            log.warning(
+                "tools_dir %s does not exist (cwd=%s); no plugin tools will load. "
+                "Pass --tools-dir to override.",
+                args.tools_dir.resolve(),
+                Path.cwd(),
+            )
 
     storage = Storage(args.data_dir)
     storage.open()

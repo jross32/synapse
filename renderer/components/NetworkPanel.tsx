@@ -362,11 +362,30 @@ export function NetworkPanel(): JSX.Element {
               </p>
             )}
             {!cloudtap && (
-              <p className='text-xs text-muted-foreground'>
-                Cloudtap isn't loaded. Install it from{' '}
-                <strong className='text-foreground'>Tools → Browse</strong>{' '}
-                and reload this panel.
-              </p>
+              <div className='flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200'>
+                <p>
+                  <strong className='text-foreground'>Cloudtap isn't loaded.</strong>{' '}
+                  It's the tunnel handler that opens the public URL. Install
+                  it once and Synapse can route phones over WAN from this
+                  panel directly.
+                </p>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  className='w-fit'
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('synapse:navigate', {
+                        detail: { page: 'tools', tab: 'browse', focusId: 'cloudtap' },
+                      })
+                    );
+                  }}
+                  aria-label='Go to Tools to install Cloudtap'
+                >
+                  <ExternalLink className='h-3.5 w-3.5' aria-hidden='true' />
+                  Install Cloudtap in Tools
+                </Button>
+              </div>
             )}
             {cloudtap && !daemonTunnel && (
               <Button
@@ -445,9 +464,11 @@ export function NetworkPanel(): JSX.Element {
                 <p className='text-[11px] text-muted-foreground'>
                   <strong className='text-foreground'>Security:</strong> the
                   tunnel is read-only without a device token. Pair the phone
-                  over LAN first; the same token then works over the tunnel.
-                  Cloudflare quick tunnels live ~24 h; use the refresh button
-                  for a fresh URL after that.
+                  over LAN first, then tap <strong className='text-foreground'>Use on this phone</strong>{' '}
+                  in the mobile Cloudtap card to carry that token into the
+                  tunnel origin. You can also pair directly on the tunnel URL
+                  with a fresh 6-digit code. Cloudflare quick tunnels live ~24 h;
+                  use the refresh button for a fresh URL after that.
                 </p>
               </div>
             )}

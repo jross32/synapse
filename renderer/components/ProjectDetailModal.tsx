@@ -28,6 +28,7 @@ import {
   type ProjectDiskUsage,
   getProjectDiskUsage,
 } from '@shared/projects-client';
+import { projectBrowserUrl } from '@shared/browser-runtime';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import { openExternal } from '@shared/electron-bridge';
@@ -78,6 +79,7 @@ export function ProjectDetailModal({
 
   const km = kindMeta(project.kind);
   const KindIcon = km.icon;
+  const browserUrl = projectBrowserUrl(project.expected_port);
 
   return (
     <Modal
@@ -124,23 +126,28 @@ export function ProjectDetailModal({
         >
           <div className='font-mono text-xs'>{project.launch_cmd}</div>
           {project.expected_port !== null && (
-            <button
-              type='button'
-              onClick={() =>
-                project.status === 'launched' &&
-                void openExternal(`http://localhost:${project.expected_port}`)
-              }
-              disabled={project.status !== 'launched'}
-              className={cn(
-                'mt-1 flex items-center gap-1 font-mono text-xs',
-                project.status === 'launched'
-                  ? 'text-primary hover:underline'
-                  : 'text-muted-foreground'
+            <div className='mt-1'>
+              {browserUrl ? (
+                <button
+                  type='button'
+                  onClick={() => project.status === 'launched' && void openExternal(browserUrl)}
+                  disabled={project.status !== 'launched'}
+                  className={cn(
+                    'flex items-center gap-1 font-mono text-xs',
+                    project.status === 'launched'
+                      ? 'text-primary hover:underline'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  <ExternalLink className='h-3 w-3' aria-hidden='true' />
+                  {browserUrl.replace(/^https?:\/\//, '')}
+                </button>
+              ) : (
+                <div className='font-mono text-xs text-muted-foreground'>
+                  WAN needs tunnel for port {project.expected_port}
+                </div>
               )}
-            >
-              <ExternalLink className='h-3 w-3' aria-hidden='true' />
-              localhost:{project.expected_port}
-            </button>
+            </div>
           )}
         </DetailColumn>
 

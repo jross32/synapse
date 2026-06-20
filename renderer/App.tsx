@@ -6,10 +6,18 @@
 import { useEffect, useState } from 'react';
 
 import { DaemonProvider } from '@shared/daemon-context';
-import { DEFAULT_PAGE, type PageId } from '@shared/nav';
+import {
+  bootstrapRuntimeAuth,
+  forgetDeviceToken,
+  isMobileRoute,
+  type RuntimeAuthMode,
+} from '@shared/browser-runtime';
+import { DEFAULT_PAGE, NAV_ITEMS, type PageId } from '@shared/nav';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
+import { cn } from '@shared/utils';
 import { Sidebar } from './components/Sidebar';
 import { CommandPalette } from './components/CommandPalette';
+import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { HomePage } from './pages/Home';
 import { AppsPage } from './pages/Apps';
@@ -22,6 +30,9 @@ export default function App(): JSX.Element {
   // Apply the stored theme as early as possible to avoid a flash of dark
   // when the user is on light. Also re-apply if the OS preference flips
   // while we're in 'system' mode (Contract #14).
+  const mobileRoute = isMobileRoute();
+  const [authMode, setAuthMode] = useState<RuntimeAuthMode | 'booting'>('booting');
+
   useEffect(() => {
     applyTheme(getStoredTheme());
     return watchOsTheme(() => {
@@ -29,14 +40,70 @@ export default function App(): JSX.Element {
     });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void bootstrapRuntimeAuth()
+      .then((mode) => {
+        if (!cancelled) setAuthMode(mode);
+      })
+      .catch(() => {
+        if (!cancelled) setAuthMode(mobileRoute ? 'pair-required' : 'local');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mobileRoute]);
+
+  useEffect(() => {
+    function onUnauthorized(): void {
+      if (!mobileRoute) return;
+      forgetDeviceToken();
+      setAuthMode('pair-required');
+    }
+    window.addEventListener('synapse:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('synapse:unauthorized', onUnauthorized);
+  }, [mobileRoute]);
+
+  if (authMode === 'booting') return <BootSplash />;
+  if (mobileRoute && authMode === 'pair-required') {
+    return <MobilePairingScreen onPaired={() => setAuthMode('paired-device')} />;
+  }
+
   return (
     <DaemonProvider>
-      <Shell />
+      <Shell
+        mobileRoute={mobileRoute}
+        onForgetDevice={() => {
+          forgetDeviceToken();
+          setAuthMode('pair-required');
+        }}
+      />
     </DaemonProvider>
   );
 }
 
-function Shell(): JSX.Element {
+function BootSplash(): JSX.Element {
+  return (
+    <div className='flex min-h-screen items-center justify-center bg-background text-foreground'>
+      <div className='flex flex-col items-center gap-3 text-center'>
+        <div className='flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-lg font-semibold text-primary'>
+          S
+        </div>
+        <div>
+          <h1 className='text-xl font-semibold tracking-tight'>Synapse</h1>
+          <p className='text-sm text-muted-foreground'>Preparing the app shell...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ShellProps {
+  mobileRoute: boolean;
+  onForgetDevice: () => void;
+}
+
+function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const [page, setPage] = useState<PageId>(DEFAULT_PAGE);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -91,24 +158,110 @@ function Shell(): JSX.Element {
     return () => window.removeEventListener('synapse:open-session', onOpenSession);
   }, []);
 
+  // Generic page-navigation event (v0.1.36) -- any deep surface can
+  // fire it to jump to another page without holding a ref to setPage.
+  // Today: NetworkPanel "Install Cloudtap" CTA fires this with
+  // { page: 'tools' }. Future surfaces can layer `tab` / `focusId`.
+  useEffect(() => {
+    function onNavigate(event: Event): void {
+      const detail = (event as CustomEvent<{ page?: PageId }>).detail;
+      if (!detail?.page) return;
+      const allowed = NAV_ITEMS.find((n) => n.id === detail.page);
+      if (allowed) setPage(detail.page);
+    }
+    window.addEventListener('synapse:navigate', onNavigate);
+    return () => window.removeEventListener('synapse:navigate', onNavigate);
+  }, []);
+
+  const activeNav = NAV_ITEMS.find((item) => item.id === page) ?? NAV_ITEMS[0];
+
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
-      <Sidebar active={page} onNavigate={setPage} onOpenPalette={() => setPaletteOpen(true)} />
-      <main className='flex-1 overflow-y-auto'>
-        <div className='mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8'>
-          {page === 'home' && <HomePage onNavigate={setPage} />}
-          {page === 'apps' && <AppsPage />}
-          {page === 'tools' && <ToolsPage />}
-          {page === 'sessions' && (
-            <SessionsPage
-              initialSessionId={pendingSession}
-              onConsumedInitial={() => setPendingSession(null)}
-            />
-          )}
-          {page === 'processes' && <ProcessesPage />}
-          {page === 'settings' && <SettingsPage />}
-        </div>
-      </main>
+      {!mobileRoute && (
+        <Sidebar active={page} onNavigate={setPage} onOpenPalette={() => setPaletteOpen(true)} />
+      )}
+      <div className='flex min-w-0 flex-1 flex-col'>
+        {mobileRoute && (
+          <header className='border-b border-border bg-card/95 backdrop-blur'>
+            <div className='mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 pb-3 pt-4'>
+              <div className='flex min-w-0 items-center gap-3'>
+                <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-base font-semibold text-primary'>
+                  S
+                </div>
+                <div className='min-w-0'>
+                  <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90'>
+                    Synapse Mobile
+                  </p>
+                  <h1 className='truncate text-lg font-semibold tracking-tight'>
+                    {activeNav.label}
+                  </h1>
+                </div>
+              </div>
+              <button
+                type='button'
+                onClick={() => setPaletteOpen(true)}
+                className='rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground'
+              >
+                Search
+              </button>
+            </div>
+          </header>
+        )}
+        <main className='flex-1 overflow-y-auto'>
+          <div
+            className={cn(
+              'mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8',
+              mobileRoute && 'pb-44'
+            )}
+          >
+            {page === 'home' && <HomePage onNavigate={setPage} />}
+            {page === 'apps' && <AppsPage />}
+            {page === 'tools' && <ToolsPage />}
+            {page === 'sessions' && (
+              <SessionsPage
+                initialSessionId={pendingSession}
+                onConsumedInitial={() => setPendingSession(null)}
+              />
+            )}
+            {page === 'processes' && <ProcessesPage />}
+            {page === 'settings' && (
+              <SettingsPage mobileRoute={mobileRoute} onForgetDevice={onForgetDevice} />
+            )}
+          </div>
+        </main>
+        {mobileRoute && (
+          <nav className='border-t border-border bg-card/95 backdrop-blur'>
+            <div className='mx-auto max-w-[1400px] px-3 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3'>
+              <div className='grid grid-cols-3 gap-2'>
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const active = item.id === page;
+                return (
+                  <button
+                    key={item.id}
+                    type='button'
+                    onClick={() => setPage(item.id)}
+                    className={cn(
+                      'flex min-h-[68px] w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-2 text-[11px] font-medium transition-colors',
+                      active
+                        ? 'border-primary/35 bg-accent text-foreground'
+                        : 'border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                    )}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <Icon
+                      className={cn('h-4 w-4', active ? 'text-primary' : 'text-current')}
+                      aria-hidden='true'
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+              </div>
+            </div>
+          </nav>
+        )}
+      </div>
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
