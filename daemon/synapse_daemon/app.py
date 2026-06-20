@@ -85,7 +85,14 @@ def build_app(
     if process_manager is None:
         process_manager = ProcessManager(storage, bus)
     if tool_registry is None:
-        tool_registry = ToolRegistry(Path("tools"), bus, storage)
+        # Mirror the __main__.py fallback: when no explicit tools dir is
+        # supplied, try the repo's bundled tools/ first (cwd-independent),
+        # otherwise fall back to a relative "tools" lookup. Without this,
+        # tests run from daemon/ cwd silently load zero tools and any
+        # cloudtap-dependent route fails the wrong way.
+        repo_tools = Path(__file__).resolve().parent.parent.parent / "tools"
+        tools_dir = repo_tools if repo_tools.is_dir() else Path("tools")
+        tool_registry = ToolRegistry(tools_dir, bus, storage)
         tool_registry.load()
     if auth is None:
         auth = AuthManager(storage, ensure_local_token(storage.data_dir))
@@ -217,14 +224,17 @@ def build_app(
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
 
-    # Serve the mobile Web UI (Milestone H). Static files are open — a phone
-    # must load the page before it can pair. Mounted only if the folder ships.
-    # Resolve from the package location so the path holds no matter the CWD.
+    # Serve the phone-facing Web UI. Prefer the built React renderer (the
+    # full app shell, now mobile-aware); fall back to the legacy standalone
+    # mobile page if the repo hasn't been built yet. Static files stay open —
+    # a phone must load the page before it can pair.
     mobile_dir = Path(__file__).resolve().parent.parent.parent / "mobile"
-    if (mobile_dir / "index.html").exists():
+    dist_dir = Path(__file__).resolve().parent.parent.parent / "dist"
+    mobile_static_dir = dist_dir if (dist_dir / "index.html").exists() else mobile_dir
+    if (mobile_static_dir / "index.html").exists():
         app.mount(
             "/mobile",
-            StaticFiles(directory=mobile_dir, html=True),
+            StaticFiles(directory=mobile_static_dir, html=True),
             name="mobile",
         )
 
