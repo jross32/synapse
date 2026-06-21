@@ -2,6 +2,12 @@
 
 Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`PROGRESS.md`](./PROGRESS.md) first to know where the project is.
 
+> **More than one AI works this repo, sometimes concurrently.** If another
+> agent may be editing right now, read [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md)
+> — concurrent-edit protocol, commit-race avoidance, migration/version
+> collision rules, and scratch-file hygiene. It supersedes Rule #1's
+> per-commit version bump during `-dev` waves.
+
 ---
 
 ## Golden rule
