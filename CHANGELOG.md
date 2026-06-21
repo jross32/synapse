@@ -10,6 +10,56 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36-dev] -- 2026-06-20..21
+
+Phone-parity + multi-AI workflow wave (authored primarily by the Codex
+AI coder, verified + committed by Claude). All gates green: renderer +
+electron tsc clean, 406 daemon tests pass.
+
+### Remote access + phone parity
+- `GET /api/v1/remote-access` aggregate: computer name, network bind,
+  pairing code, paired devices, and live Cloudtap WAN verification
+  (health + mobile probes; failure codes `cloudtap.wrong_port` /
+  `.no_public_url` / `.unavailable`).
+- `/mobile` now serves the full React shell with paired-device
+  in-browser auth, stale-token recovery, and a 2-row touch nav grid
+  for 390px phones. Same session carries LAN -> Cloudtap WAN via
+  durable paired-device identity + short-lived handoff claims
+  (migration `007_pairing_claims.sql`).
+- Settings `Phone Access` hub merges LAN, pairing, reconnect, WAN
+  verification, and diagnostics.
+- WS hub resume-timeout widened to stop false `1008` closes over
+  Cloudflare; desktop auth self-heals (REST retries after refreshing
+  `/auth/local-token`; WS retries after a 1008 close).
+- Windows-only asyncio accept-reset workaround for transient WinError
+  64 socket drops on port 7878.
+
+### Agent Squads (Sessions)
+- Durable role templates (planner / implementer / reviewer /
+  researcher), squad + work-item tables (migration
+  `008_agent_squads.sql`), handoff capture appended to
+  `.synapse-ai-context.md`, PTY launches tagged with
+  `SYNAPSE_SQUAD_ID` / `SYNAPSE_WORK_ITEM_ID` / `SYNAPSE_ROLE_PROMPT_FILE`,
+  three-pane Sessions cockpit.
+
+### Profile hub
+- `/api/v1/profile*` + migration `009_profile_state.sql`: local-first
+  profile, optional Supabase sign-in (email/password, Google, GitHub),
+  connected-service readiness, synced catalog favorites/history/host
+  inventory, viewport-safe Discover category rail.
+
+### Packaging bootstrap
+- `installer/build-daemon.ps1` -> `synapse-daemon.exe`; Electron spawns
+  the bundled daemon; daemon resolves bundled tools/templates/docs/
+  mobile from packaged resources (`runtime_paths.py`).
+
+### Tooling / infra
+- `tools_dir` now resolves to the repo's bundled `tools/` when launched
+  from any cwd (fixes "Cloudtap isn't loaded" when Electron spawns the
+  daemon from `electron/`). Applied in both `__main__.py` and
+  `build_app()`.
+- ADR-0009 drafted: professional launcher splash + error-code catalogue.
+
 ## [0.1.36-dev] -- 2026-06-18..19
 
 A two-day UX wave responding to a long generative user wishlist.
