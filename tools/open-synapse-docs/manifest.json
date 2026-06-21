@@ -1,0 +1,18 @@
+{
+  "id": "open-synapse-docs",
+  "name": "Open Synapse docs",
+  "icon": "wrench",
+  "description": "One-tap link to the Synapse README on GitHub.",
+  "version": "1.0.0",
+  "actions": [
+    {
+      "id": "open",
+      "label": "Open docs",
+      "primary": true,
+      "primitive": "url.open",
+      "params": {
+        "url": "https://github.com/jross32/synapse#readme"
+      }
+    }
+  ]
+}

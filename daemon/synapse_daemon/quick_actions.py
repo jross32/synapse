@@ -31,12 +31,12 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .runtime_paths import bundled_quick_actions_dir
+
 log = logging.getLogger(__name__)
 
 # Bundled templates ship in this repo path. Tests may point elsewhere.
-_DEFAULT_TEMPLATES_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "templates" / "quick-actions"
-)
+_DEFAULT_TEMPLATES_DIR = bundled_quick_actions_dir()
 
 # Same ID alphabet as projects (Contract #10).
 _ID_RE = re.compile(r"^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$")
@@ -55,6 +55,8 @@ class QuickAction:
     description: str
     prompt: str
     icon: str | None = None
+    category: str | None = None
+    tags: list[str] = field(default_factory=list)
     default_argv: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
@@ -64,8 +66,26 @@ class QuickAction:
             "description": self.description,
             "prompt": self.prompt,
             "icon": self.icon,
+            "category": self.category,
+            "tags": list(self.tags),
             "default_argv": list(self.default_argv),
         }
+
+
+def _normalize_tags(raw: object) -> list[str]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or any(not isinstance(tag, str) for tag in raw):
+        raise QuickActionError("tags must be a list of strings.")
+    seen: set[str] = set()
+    out: list[str] = []
+    for tag in raw:
+        normalized = tag.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
 
 
 def _parse(raw: object, source: str) -> QuickAction:
@@ -83,12 +103,17 @@ def _parse(raw: object, source: str) -> QuickAction:
     default_argv = raw.get("default_argv") or []
     if not isinstance(default_argv, list) or any(not isinstance(p, str) for p in default_argv):
         raise QuickActionError(f"{source}: default_argv must be a list of strings.")
+    category = raw.get("category")
+    if category is not None and not isinstance(category, str):
+        raise QuickActionError(f"{source}: category must be a string when set.")
     return QuickAction(
         id=action_id,
         name=str(raw["name"]).strip(),
         description=str(raw["description"]).strip(),
         prompt=str(raw["prompt"]),
         icon=(str(raw["icon"]).strip() if raw.get("icon") else None),
+        category=(category.strip().lower() if isinstance(category, str) and category.strip() else None),
+        tags=_normalize_tags(raw.get("tags")),
         default_argv=[str(p) for p in default_argv],
     )
 

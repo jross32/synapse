@@ -59,3 +59,41 @@ Every entry below must include: the date, the new version added, what changed, a
 |---|---|---|
 | `GET /api/v1/search?q=...` | F | Universal search (Contract #21) |
 | `POST /api/v1/snapshot` / `POST /api/v1/restore` | later | Disaster recovery (Contract #28) |
+
+### Shipped in v0.1.36-dev (Sessions-centric AI squads)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-06-20 | `GET /api/v1/agent-role-templates` | additive | Lists the daemon-owned role templates used by Agent Squads (`planner`, `implementer`, `reviewer`, `researcher` by default). |
+| 2026-06-20 | `POST /api/v1/agent-role-templates` | additive | Creates a role template with `preferred_runtimes`, `default_visibility`, `context_mode`, delegation rules, and prompt preamble markdown. |
+| 2026-06-20 | `PATCH /api/v1/agent-role-templates/{id}` / `DELETE /api/v1/agent-role-templates/{id}` | additive | Updates or removes a role template. Existing squads keep stored role ids; clients should handle missing templates defensively. |
+| 2026-06-20 | `GET /api/v1/agent-squads` | additive | Returns the durable squad list ordered by `last_activity_at DESC`. |
+| 2026-06-20 | `POST /api/v1/agent-squads` | additive | Creates a new squad for a real project. Body: `{project_id, name, goal_md?, status?, lead_role_id?}`. |
+| 2026-06-20 | `GET /api/v1/agent-squads/{id}` | additive | Returns `AgentSquadDetail` (`squad`, `role_templates`, `work_items`) for the Sessions cockpit. |
+| 2026-06-20 | `PATCH /api/v1/agent-squads/{id}` / `DELETE /api/v1/agent-squads/{id}` | additive | Updates squad metadata/status or deletes the squad tree. |
+| 2026-06-20 | `POST /api/v1/agent-squads/{id}/work-items` | additive | Creates a queued work item. Body: `{title, instructions_md?, assigned_role_id?, preferred_runtime?, parent_id?}`. |
+| 2026-06-20 | `POST /api/v1/agent-work-items/{id}/launch` | additive | Launches a work item as a normal PTY session in the project cwd. Response includes PTY summary fields plus `squad_id`, `work_item_id`, `role_id`, `runtime`, `role_prompt_file`, `project_id`, and `project_name`. Injects `SYNAPSE_SQUAD_ID`, `SYNAPSE_WORK_ITEM_ID`, `SYNAPSE_ROLE_ID`, `SYNAPSE_LEAD_SESSION_ID`, `SYNAPSE_ROLE_PROMPT_FILE`, `SYNAPSE_AI_CONTEXT`, and `SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT` into the PTY env. |
+| 2026-06-20 | `POST /api/v1/agent-work-items/{id}/delegate` | additive | Creates a child work item linked by `parent_id`, preserving the existing Sessions model of “helpers are real PTYs, not hidden jobs.” |
+| 2026-06-20 | `POST /api/v1/agent-work-items/{id}/handoff` | additive | Explicit handoff capture. Body: `{status, summary_md, blockers_md?, files_touched[], suggested_next_role?}`. Also appends a structured entry to `data/projects/<project_id>/.synapse-ai-context.md`. |
+| 2026-06-20 | `POST /api/v1/agent-work-items/{id}/status` | additive | Lightweight status transition helper for the cockpit. Body: `{status}`. |
+| 2026-06-20 | `v1.agent_squad.created` / `v1.agent_squad.updated` | additive | Broadcast when squads are created or updated so the Sessions cockpit refreshes without polling. |
+| 2026-06-20 | `v1.agent_work_item.created` / `v1.agent_work_item.updated` / `v1.agent_work_item.handoff` | additive | Broadcast when work items are created, updated, or handed off. |
+| 2026-06-20 | `v1.agent_run.started` / `v1.agent_run.ended` | additive | Broadcast when a squad work item enters/exits a PTY session. `v1.agent_run.ended` fires after transcript persistence so clients can safely rely on `transcript_file_id` when present. |
+| 2026-06-20 | `GET /api/v1/ai/context` (extended) | additive | Gains per-project `ai_context` metadata plus top-level `agent_squads` and `agent_role_templates` so an AI session can inspect squad/work-item state before taking action. |
+
+### Shipped in v0.1.36-dev (Profile hub + synced catalog state)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-06-21 | `GET /api/v1/profile` | additive | Returns the local-first `ProfileSummary`: account sign-in state, Supabase config readiness, sync status, primary provider identities, and the current host record. |
+| 2026-06-21 | `PATCH /api/v1/profile` | additive | Updates the local Profile hub config (`supabase_url`, `supabase_anon_key`, `sync_enabled`). Changing the Supabase backend clears any prior signed-in session so tokens cannot drift across projects. |
+| 2026-06-21 | `POST /api/v1/profile/signup` / `POST /api/v1/profile/signin` / `POST /api/v1/profile/signout` | additive | Email/password account lifecycle for the optional Synapse account. Signup may return a `notice` when the Supabase project requires email confirmation before a session is issued. |
+| 2026-06-21 | `POST /api/v1/profile/auth/start/{provider}` / `GET /api/v1/profile/auth/callback` | additive | OAuth start + callback for `google` and `github`, implemented as a daemon-owned PKCE handoff through Supabase Auth. The callback returns an HTML completion page so the browser tab can close cleanly after sign-in. |
+| 2026-06-21 | `GET /api/v1/profile/catalog-state` | additive | Returns `CatalogPreferenceState`: synced favorites/history/install-memory for Discover and Installed views, keyed by `tool:<id>` and `quick-action:<id>`. |
+| 2026-06-21 | `POST /api/v1/profile/favorites/{kind}/{id}` | additive | Sets or toggles the favorite flag for a tool or quick action. `kind` is `tool` or `quick-action`. |
+| 2026-06-21 | `GET /api/v1/profile/service-connections` | additive | Returns `ServiceConnection[]` for portable official connections (GitHub/Google account identities) plus local-detected runtimes such as Claude Code, Codex, ChatGPT/OpenAI session cache, and Copilot CLI. |
+| 2026-06-21 | `POST /api/v1/profile/service-connections/{provider}/connect` / `POST /api/v1/profile/service-connections/{provider}/verify` / `DELETE /api/v1/profile/service-connections/{id}` | additive | Creates or refreshes a saved service-connection status record, or clears the stored status. Local-detected providers are re-scanned on each verify. |
+| 2026-06-21 | `GET /api/v1/profile/hosts` | additive | Returns the host inventory Synapse tracks for this profile, including the current machine and the last-seen timestamps used by the Profile hub. |
+| 2026-06-21 | `v1.profile.updated` | additive | Broadcast when profile/account or catalog state changes so the shell can refresh account badges and Profile hub data without a hard reload. |
+| 2026-06-21 | `v1.profile.sync.updated` | additive | Broadcast when the daemon's account sync status changes. Payload includes `signed_in`, `sync_status`, `last_sync_at`, and `last_sync_error`. |
+| 2026-06-21 | `v1.service_connection.updated` | additive | Broadcast when a connected-service record changes so Sessions and the Profile hub can refresh their readiness cards. |

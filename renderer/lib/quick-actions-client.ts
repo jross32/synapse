@@ -12,6 +12,8 @@ export interface QuickAction {
   description: string;
   prompt: string;
   icon: string | null;
+  category: string | null;
+  tags: string[];
   default_argv: string[];
 }
 

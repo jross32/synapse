@@ -45,6 +45,8 @@ def test_list_quick_actions_returns_bundled_templates(tmp_path: Path) -> None:
     # Each action exposes the prompt directly so the renderer can preview it.
     for a in body["actions"]:
         assert a["prompt"].strip()
+        assert isinstance(a["category"], str) and a["category"]
+        assert isinstance(a["tags"], list) and a["tags"]
 
 
 def test_list_quick_actions_requires_auth(tmp_path: Path) -> None:

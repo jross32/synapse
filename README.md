@@ -2,14 +2,16 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.34` — **ADR-0003 workbench expansion complete (Phases A–F).** Every project has a **Files** surface: drag-drop or pick, browser-side magic-byte inspection before upload, always-on AV via Windows Defender (POSIX: ClamAV) before the bytes land for real. Workbench PTY exits persist their scrollback as transcripts. **ChatGPT export.zip → markdown**: drop the official OpenAI export into the Apps page header button; each conversation lands as a deterministic `.md` under the auto-created `imported-chatgpt` project, deduped by sha256. **AI Quick-actions** rail on Sessions: one click opens a Claude session in the `scratch` project with the templated prompt pre-loaded as `PROMPT.md` + `SYNAPSE_QUICK_ACTION_PROMPT`. Two bundled templates ship (`new-mcp-server`, `new-synapse-tool`); user templates drop into `templates/quick-actions/*.json` without a restart. The earlier marketplace loop (v0.1.24), workbench (v0.1.29), `/api/v1/ai/context` AI digest, mobile Web UI, multi-tunnel Cloudtap, JSON snapshot/restore, light/dark theme, `Ctrl+K` palette — all still in. Double-click `synapse.cmd` to launch. **368 tests pass + 9 skipped.** Next: ADR-0004 (Sign in with Apple / Google) when given the go; Milestone J packaging after that. See [`PROGRESS.md`](./PROGRESS.md) and [`CHANGELOG.md`](./CHANGELOG.md).
+> **Status:** `v0.1.36-dev` — **ADR-0003 workbench expansion complete (Phases A–F) + mobile parity / WAN follow-up verified + Profile hub groundwork landed.** Every project has a **Files** surface: drag-drop or pick, browser-side magic-byte inspection before upload, always-on AV via Windows Defender (POSIX: ClamAV) before the bytes land for real. Workbench PTY exits persist their scrollback as transcripts. **ChatGPT export.zip -> markdown**: drop the official OpenAI export into the Apps page header button; each conversation lands as a deterministic `.md` under the auto-created `imported-chatgpt` project, deduped by sha256. **AI Quick-actions** rail on Sessions: one click opens a Claude session in the `scratch` project with the templated prompt pre-loaded as `PROMPT.md` + `SYNAPSE_QUICK_ACTION_PROMPT`. Sessions now also includes a first-pass **Agent Squads** mode: durable planner / implementer / reviewer / researcher templates, explicit handoffs that append to `.synapse-ai-context.md`, and helper workers that stay real PTY sessions instead of hidden background jobs. `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), with paired-device auth, a touch-friendly two-row nav, and a one-click LAN -> Cloudtap WAN handoff via **Use on this phone**. Tools → **Discover** now has a viewport-safe category rail with profile-backed favorites/history, and the shell now exposes an optional **Profile hub** for Supabase-backed Synapse account sign-in, connected-service readiness, host inventory, and synced catalog preferences. `synapse.cmd` now owns full dev restarts end to end, the desktop app self-heals local-token drift instead of sticking on 401s, the packaged daemon now builds into `installer/daemon-dist`, and the daemon resolves bundled tools/templates/mobile assets cleanly from packaged resources. Double-click `synapse.cmd` to launch. **405 tests pass + 11 skipped.** Next: ADR-0004 (Sign in with Apple / Google) when given the go; Milestone J packaging polish after that. See [`PROGRESS.md`](./PROGRESS.md) and [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## What it is
 
 Synapse is the **nucleus** of your dev environment. Instead of juggling terminals to start `wbscrper`, an Ollama chat server, a Cloudflare tunnel, and whatever else, you launch Synapse once at boot and everything is one click away — from your desktop or your phone on the same Wi-Fi.
 
 - **Desktop app** (Electron + React + TypeScript) — primary workstation UI with a system tray icon.
-- **Mobile Web UI** — responsive page served by the daemon over LAN; mirrors desktop state in real time.
+- **Mobile Web UI** — full renderer-backed phone shell served by the daemon at `/mobile`; mirrors desktop pages in real time and works over LAN or a Cloudtap tunnel.
+- **Optional Synapse account hub** — bottom-rail profile surface for Supabase-backed sign-in, connected-service readiness, host inventory, and synced favorites/history without making Synapse cloud-only.
+- **Sessions-centric agent squads** — one visible lead plus helper PTY workers, explicit handoffs, shared project AI memory, and runtime preference routing across Claude / Codex / Copilot-style CLIs.
 - **Decoupled Execution Layer** — a Python (FastAPI) daemon owns every spawned process. Close the desktop window, lose your phone connection: everything keeps running.
 - **Plugin layout** — new tools drop in as a folder + a `manifest.json`. No UI surgery required.
 - **Editable from the UI** — every project, tool, env var, icon, and setting has an in-app editor. No "edit the JSON file by hand" UX anywhere.
@@ -26,7 +28,7 @@ The Python daemon (port `7878`) is the only stateful actor. It registers project
 - Nucleus + Synapses UI (center workspace + peripheral tool cards)
 - Featured slideshow on Home (Microsoft-Store-inspired)
 - **Cloudtap** — first built-in tool: enter a port, get a Cloudflare tunnel URL
-- Mobile Web UI accessible at `http://<pc-lan-ip>:7878/mobile`
+- Mobile Web UI accessible at `http://<pc-lan-ip>:7878/mobile` with direct pairing or LAN -> WAN handoff through Cloudtap
 - Universal `Ctrl+K` search palette
 - Auto-start on Windows login, hide-to-tray, right-click → Quit
 - `synapse` CLI for shell users (mirrors REST 1-to-1)
@@ -65,7 +67,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 279 tests pass (1 platform-conditional skip)
+python -m pytest -q                  # 399 tests pass + 11 skipped
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd

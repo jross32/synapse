@@ -8,7 +8,9 @@ import { useEffect, useState } from 'react';
 import { DaemonProvider } from '@shared/daemon-context';
 import {
   bootstrapRuntimeAuth,
+  clearDeviceToken,
   forgetDeviceToken,
+  getStoredDeviceIdentity,
   isMobileRoute,
   type RuntimeAuthMode,
 } from '@shared/browser-runtime';
@@ -18,6 +20,7 @@ import { cn } from '@shared/utils';
 import { Sidebar } from './components/Sidebar';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
+import { ProfileHub } from './components/ProfileHub';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { HomePage } from './pages/Home';
 import { AppsPage } from './pages/Apps';
@@ -57,16 +60,25 @@ export default function App(): JSX.Element {
   useEffect(() => {
     function onUnauthorized(): void {
       if (!mobileRoute) return;
-      forgetDeviceToken();
-      setAuthMode('pair-required');
+      clearDeviceToken();
+      setAuthMode(getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required');
     }
     window.addEventListener('synapse:unauthorized', onUnauthorized);
     return () => window.removeEventListener('synapse:unauthorized', onUnauthorized);
   }, [mobileRoute]);
 
   if (authMode === 'booting') return <BootSplash />;
-  if (mobileRoute && authMode === 'pair-required') {
-    return <MobilePairingScreen onPaired={() => setAuthMode('paired-device')} />;
+  if (mobileRoute && authMode !== 'paired-device' && authMode !== 'local') {
+    return (
+      <MobilePairingScreen
+        mode={authMode}
+        onPaired={() => setAuthMode('paired-device')}
+        onRequireFullReset={() => {
+          forgetDeviceToken();
+          setAuthMode('pair-required');
+        }}
+      />
+    );
   }
 
   return (
@@ -106,7 +118,13 @@ interface ShellProps {
 function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const [page, setPage] = useState<PageId>(DEFAULT_PAGE);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [toolsIntent, setToolsIntent] = useState<{
+    tab?: 'installed' | 'discover';
+    focusId?: string;
+    nonce: number;
+  } | null>(null);
   // Set by ToolCard "Open in Sessions" → SessionsPage reads it on mount and
   // auto-attaches a tab so the user doesn't have to know the session id.
   const [pendingSession, setPendingSession] = useState<string | null>(null);
@@ -161,13 +179,25 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   // Generic page-navigation event (v0.1.36) -- any deep surface can
   // fire it to jump to another page without holding a ref to setPage.
   // Today: NetworkPanel "Install Cloudtap" CTA fires this with
-  // { page: 'tools' }. Future surfaces can layer `tab` / `focusId`.
+  // { page: 'tools', tab: 'discover', focusId: 'cloudtap' }.
   useEffect(() => {
     function onNavigate(event: Event): void {
-      const detail = (event as CustomEvent<{ page?: PageId }>).detail;
+      const detail = (event as CustomEvent<{
+        page?: PageId;
+        tab?: 'installed' | 'discover';
+        focusId?: string;
+      }>).detail;
       if (!detail?.page) return;
       const allowed = NAV_ITEMS.find((n) => n.id === detail.page);
-      if (allowed) setPage(detail.page);
+      if (!allowed) return;
+      setPage(detail.page);
+      if (detail.page === 'tools') {
+        setToolsIntent({
+          tab: detail.tab,
+          focusId: detail.focusId,
+          nonce: Date.now(),
+        });
+      }
     }
     window.addEventListener('synapse:navigate', onNavigate);
     return () => window.removeEventListener('synapse:navigate', onNavigate);
@@ -178,7 +208,12 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
       {!mobileRoute && (
-        <Sidebar active={page} onNavigate={setPage} onOpenPalette={() => setPaletteOpen(true)} />
+        <Sidebar
+          active={page}
+          onNavigate={setPage}
+          onOpenPalette={() => setPaletteOpen(true)}
+          onOpenProfile={() => setProfileOpen(true)}
+        />
       )}
       <div className='flex min-w-0 flex-1 flex-col'>
         {mobileRoute && (
@@ -197,13 +232,22 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
                   </h1>
                 </div>
               </div>
-              <button
-                type='button'
-                onClick={() => setPaletteOpen(true)}
-                className='rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground'
-              >
-                Search
-              </button>
+              <div className='flex items-center gap-2'>
+                <button
+                  type='button'
+                  onClick={() => setPaletteOpen(true)}
+                  className='rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground'
+                >
+                  Search
+                </button>
+                <button
+                  type='button'
+                  onClick={() => setProfileOpen(true)}
+                  className='rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground'
+                >
+                  Profile
+                </button>
+              </div>
             </div>
           </header>
         )}
@@ -216,7 +260,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
           >
             {page === 'home' && <HomePage onNavigate={setPage} />}
             {page === 'apps' && <AppsPage />}
-            {page === 'tools' && <ToolsPage />}
+            {page === 'tools' && <ToolsPage intent={toolsIntent} />}
             {page === 'sessions' && (
               <SessionsPage
                 initialSessionId={pendingSession}
@@ -266,7 +310,9 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onNavigate={(p) => setPage(p)}
+        onOpenProfile={() => setProfileOpen(true)}
       />
+      <ProfileHub open={profileOpen} onClose={() => setProfileOpen(false)} mobileRoute={mobileRoute} />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );

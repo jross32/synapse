@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from synapse_daemon import boot_config
 from synapse_daemon.app import build_app
+from synapse_daemon.models import EntityStatus, ToolItem, ToolState
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
@@ -85,3 +86,95 @@ def test_get_network_requires_auth(tmp_path: Path) -> None:
     unauthed = TestClient(app)
     res = unauthed.get("/api/v1/system/network")
     assert res.status_code == 401
+
+
+def test_remote_access_reports_pairing_code_and_inactive_wan(tmp_path: Path) -> None:
+    client, _ = _harness(tmp_path)
+    with client as c:
+        code = c.post("/api/v1/pair/code").json()
+        res = c.get("/api/v1/remote-access")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["computer_name"]
+    assert body["pairing_code"]["active"] is True
+    assert body["pairing_code"]["code"] == code["code"]
+    assert body["wan"]["verification"]["status"] == "inactive"
+
+
+def test_remote_access_reports_verified_wan_when_daemon_tunnel_matches_port(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client, storage = _harness(tmp_path)
+    app = client.app
+
+    async def _fake_verify(public_url: str):
+        from synapse_daemon.routes_system import RemoteAccessWanVerification
+
+        return RemoteAccessWanVerification(
+            status="ready",
+            checked_at="2026-06-20T00:00:00+00:00",
+            health_url=f"{public_url}/api/v1/health",
+            mobile_url=f"{public_url}/mobile",
+            health_ok=True,
+            mobile_ok=True,
+        )
+
+    monkeypatch.setattr("synapse_daemon.routes_system._verify_public_tunnel", _fake_verify)
+
+    def _fake_state(_tool_id: str):
+        return ToolState(
+            tool_id="cloudtap",
+            status=EntityStatus.LAUNCHED,
+            items=[
+                ToolItem(
+                    id="t1",
+                    label="Synapse",
+                    status=EntityStatus.LAUNCHED,
+                    result={
+                        "local_port": 7878,
+                        "public_url": "https://demo-tunnel.trycloudflare.com",
+                    },
+                )
+            ],
+        )
+
+    monkeypatch.setattr(app.state.tool_registry, "get_state", _fake_state)
+    with client as c:
+        res = c.get("/api/v1/remote-access")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["wan"]["active"] is True
+    assert body["wan"]["public_url"] == "https://demo-tunnel.trycloudflare.com"
+    assert body["wan"]["verification"]["status"] == "ready"
+
+
+def test_remote_access_reports_wrong_port_when_cloudtap_points_elsewhere(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client, _ = _harness(tmp_path)
+    app = client.app
+
+    def _fake_state(_tool_id: str):
+        return ToolState(
+            tool_id="cloudtap",
+            status=EntityStatus.LAUNCHED,
+            items=[
+                ToolItem(
+                    id="t1",
+                    label="Other app",
+                    status=EntityStatus.LAUNCHED,
+                    result={
+                        "local_port": 9999,
+                        "public_url": "https://other.trycloudflare.com",
+                    },
+                )
+            ],
+        )
+
+    monkeypatch.setattr(app.state.tool_registry, "get_state", _fake_state)
+    with client as c:
+        res = c.get("/api/v1/remote-access")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["wan"]["verification"]["status"] == "error"
+    assert body["wan"]["verification"]["failure_code"] == "cloudtap.wrong_port"

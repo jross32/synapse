@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from .audit import AuditRecord, audit
 from .models import AuditSource
+from .profile import ProfileManager
 from .storage import Storage
 from .tools_registry import ToolRegistry
 
@@ -38,7 +39,11 @@ class ActionRequest(BaseModel):
     source: AuditSource = AuditSource.DESKTOP
 
 
-def build_tools_router(storage: Storage, registry: ToolRegistry) -> APIRouter:
+def build_tools_router(
+    storage: Storage,
+    registry: ToolRegistry,
+    profile_manager: ProfileManager | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/tools", tags=["tools"])
 
     def _entry(tool_id: str) -> dict:
@@ -82,6 +87,8 @@ def build_tools_router(storage: Storage, registry: ToolRegistry) -> APIRouter:
                     },
                 ),
             )
+        if profile_manager is not None and state.last_error is None:
+            profile_manager.record_catalog_use(kind="tool", item_id=tool_id)
 
         return {
             "manifest": registry.get_manifest(tool_id).model_dump(mode="json"),

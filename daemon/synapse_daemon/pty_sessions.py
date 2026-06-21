@@ -336,6 +336,10 @@ class PtySession:
                 {"session_id": self.session_id, "exit_code": self.exit_code},
             )
             await self._maybe_persist_transcript()
+            await self._bus.publish(
+                event_name("pty", "session_finalized"),
+                {"session_id": self.session_id, "exit_code": self.exit_code},
+            )
 
     # ── I/O ─────────────────────────────────────────────────────────────
 
@@ -406,6 +410,10 @@ class PtySession:
             {"session_id": self.session_id, "exit_code": self.exit_code},
         )
         await self._maybe_persist_transcript()
+        await self._bus.publish(
+            event_name("pty", "session_finalized"),
+            {"session_id": self.session_id, "exit_code": self.exit_code},
+        )
 
     async def _maybe_persist_transcript(self) -> None:
         """ADR-0003 Phase D -- write scrollback to a transcript file row.
@@ -457,6 +465,7 @@ class PtySessionManager:
         rows: int = 24,
         cols: int = 80,
         project_id: str | None = None,
+        session_id: str | None = None,
     ) -> PtySession:
         if not argv:
             raise ValueError("spawn requires a non-empty argv")
@@ -484,7 +493,7 @@ class PtySessionManager:
         # TERM matters: xterm.js renders xterm-256color cleanly.
         merged_env.setdefault("TERM", "xterm-256color")
 
-        session_id = secrets.token_hex(6)
+        session_id = session_id or secrets.token_hex(6)
         session = PtySession(
             session_id=session_id,
             argv=[resolved, *argv[1:]],

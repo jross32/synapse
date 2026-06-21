@@ -3,6 +3,8 @@
   "name": "New Synapse tool",
   "description": "Add a new declarative tool to this Synapse install (URL or process).",
   "icon": "wrench",
+  "category": "workflows",
+  "tags": ["synapse", "tooling", "manifest"],
   "prompt": "I want to add a new tool to my local Synapse install. Synapse tools live under `tools/<id>/manifest.json` in the Synapse repo (not this scratch project). Walk me through it:\n\n1. Ask me what the tool should do at a high level. Then suggest whether it should use the `url.open` tier (just opens a URL in the user's browser) or the `process.spawn` tier (launches a local command). Most tools start with `url.open`.\n2. Pick a kebab-case id and create `tools/<id>/manifest.json` in the Synapse repo with the shape:\n   {\n     \"id\": \"<id>\",\n     \"name\": \"<Display name>\",\n     \"description\": \"...\",\n     \"actions\": [{\n       \"id\": \"open\",\n       \"name\": \"Open\",\n       \"primitive\": \"url.open\" | \"process.spawn\",\n       \"args\": { ... }\n     }]\n   }\n3. Hot-reload triggers automatically when the file lands; tell me what to look for in the Tools page of the dashboard to confirm it appeared.\n4. Walk me through firing the action once, end-to-end.\n\nKey environment variables exposed here: `SYNAPSE_API` for talking to the daemon, `SYNAPSE_TOKEN` for the auth header, `SYNAPSE_PROJECT_ID` for context. You can `curl $SYNAPSE_API/tools` with `-H \"X-Synapse-Token: $SYNAPSE_TOKEN\"` to inspect what's already there.",
   "default_argv": ["claude"]
 }

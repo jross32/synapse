@@ -61,6 +61,56 @@ their own ADR + gate.
 - **PairedDevices**: "Allow LAN access" copy is now a real button
   that scrolls + flashes the Network panel toggle so users can find
   it.
+- **Phone parity + WAN handoff**: `/mobile` now serves the full React
+  shell instead of the old standalone page when `dist/` is present.
+  Paired-device auth works inside the browser, stale mobile tokens
+  bounce back to the pair screen, `ToolCard` exposes **Use on this
+  phone** for the daemon tunnel on port `7878`, and the phone shell
+  now exposes Home / Apps / Tools / Sessions / Processes / Settings
+  with dedicated mobile chrome. Verified on both LAN and
+  `*.trycloudflare.com` with a real PTY launch from the WAN Sessions
+  page.
+- **Phone dock + launcher hardening**: the mobile bottom nav is now a
+  2-row touch grid so all six core tabs stay visible on narrow
+  screens, `synapse.cmd` / `scripts/dev.ps1` clear
+  `ELECTRON_RUN_AS_NODE` before `npx electron .`, and Electron's
+  daemon-log forwarding now ignores broken stdout/stderr pipes instead
+  of throwing `EPIPE` in the main process.
+- **Windows LAN/WAN stability**: the daemon installs a Windows-only
+  asyncio Proactor accept-reset workaround so transient WinError 64
+  socket drops no longer kill fresh accepts on port `7878`. Verified
+  live by re-opening LAN and Cloudtap WAN sessions after mobile PTY
+  traffic and by connecting directly to `wss://.../api/v1/ws` with a
+  paired-device token.
+- **Desktop auth recovery**: if the desktop app's local daemon token
+  drifts after a restart / attach, renderer REST calls now retry once
+  after refreshing `/auth/local-token`, the desktop WS client retries
+  after a `1008` auth close, the Tools page clears stale 401 banners
+  on a later success, and Electron main-process daemon requests
+  bootstrap the token from the attached daemon instead of reading
+  `data/auth-token` directly.
+- **Dev restart ownership fixed**: `synapse.cmd` now delegates to
+  `scripts/dev.ps1`, the wrapper owns only Synapse's own daemon/Vite/
+  Electron children, and in-app restart exits Electron with a dedicated
+  wrapper restart code so the full stack gets recycled instead of only
+  relaunching Electron.
+- **Wrapper child-process hardening**: the wrapper now launches Vite
+  through `node node_modules/vite/bin/vite.js` and Electron through
+  `node node_modules/electron/cli.js`, which keeps process ownership
+  tied to the real long-lived children instead of short-lived launch
+  stubs.
+- **Packaged daemon bootstrap**: `installer/build-daemon.ps1` now
+  produces `installer/daemon-dist/synapse-daemon.exe`; Electron knows
+  how to spawn that bundled daemon in packaged mode; and the daemon now
+  resolves bundled tools, templates, docs, and mobile assets from
+  packaged resources instead of source-tree-only paths.
+- **Version-surface cleanup**: `package.json` now reports `0.1.36-dev`,
+  Python packaging uses `0.1.36.dev0`, and the renderer normalizes the
+  PEP 440 daemon version back to the friendly `-dev` label in the UI
+  instead of falling back to a stale hardcoded `0.1.8`.
+- **TypeScript config cleanup**: removed the deprecated top-level
+  `baseUrl` usage from `tsconfig.json` and moved Electron to
+  `moduleResolution: "Node16"` / `module: "Node16"`.
 
 ### Marketplace
 
@@ -94,7 +144,10 @@ open-zed, pip-install-dev. `must_include` set in
 
 ### Tests
 
-- 376 -> 379 passed (+3 disk-usage tests).
+- 376 -> 396 passed (+20 since the original v0.1.36-dev wave).
+- Verified `npm run build`, `npm run build:daemon`, and a live wrapper
+  restart triggered from the real Electron app via
+  `window.synapse.restart()`.
 
 ## [0.1.34] -- 2026-06-16
 

@@ -34,6 +34,7 @@ export function daemonBase(): string {
 
 const TOKEN_HEADER = 'X-Synapse-Token';
 let authToken: string | null = null;
+let localTokenRefresh: Promise<string> | null = null;
 
 export function setAuthToken(token: string | null): void {
   authToken = token;
@@ -43,13 +44,41 @@ export function getAuthToken(): string | null {
   return authToken;
 }
 
+function canAttemptLocalTokenBootstrap(base: string): boolean {
+  try {
+    const url = new URL(base);
+    const host = url.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Fetch the daemon's local token (works from this machine only) and remember
  * it for every later request. Call once at startup before any protected call.
  */
 export async function bootstrapLocalToken(): Promise<void> {
-  const res = await apiFetch<{ token: string }>('/auth/local-token', { method: 'GET' });
-  authToken = res.token;
+  if (!canAttemptLocalTokenBootstrap(baseUrl)) {
+    throw new Error('The local auth token is only available on this computer.');
+  }
+  authToken = await fetchLocalToken(baseUrl);
+}
+
+/**
+ * Best-effort token refresh for desktop / trusted-local callers.
+ *
+ * Returns false when the current origin is not allowed to read the local token
+ * (for example a paired phone over LAN/WAN) or when the daemon is unavailable.
+ */
+export async function tryRefreshLocalToken(base: string = baseUrl): Promise<boolean> {
+  if (!canAttemptLocalTokenBootstrap(base)) return false;
+  try {
+    authToken = await fetchLocalToken(base);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export class SynapseApiError extends Error {
@@ -73,6 +102,14 @@ export async function apiFetch<T = unknown>(
   path: string,
   options: ApiFetchOptions = {}
 ): Promise<T> {
+  return apiFetchInternal(path, options, true);
+}
+
+async function apiFetchInternal<T = unknown>(
+  path: string,
+  options: ApiFetchOptions,
+  allowLocalRefresh: boolean
+): Promise<T> {
   const { body, base, headers, ...rest } = options;
   const url = `${base ?? baseUrl}${API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`;
 
@@ -92,6 +129,17 @@ export async function apiFetch<T = unknown>(
   const parsed = text ? safeJson(text) : null;
 
   if (!res.ok) {
+    if (res.status === 401 && allowLocalRefresh && path !== '/auth/local-token') {
+      const refreshed = await tryRefreshLocalToken(base ?? baseUrl);
+      if (refreshed) {
+        return apiFetchInternal<T>(path, options, false);
+      }
+    }
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('synapse:unauthorized', { detail: { status: res.status } })
+      );
+    }
     if (isErrorEnvelope(parsed)) {
       throw new SynapseApiError(parsed, res.status);
     }
@@ -107,6 +155,51 @@ export async function apiFetch<T = unknown>(
   }
 
   return parsed as T;
+}
+
+async function fetchLocalToken(base: string): Promise<string> {
+  if (localTokenRefresh) return localTokenRefresh;
+
+  localTokenRefresh = (async () => {
+    const res = await fetch(`${base}${API_PREFIX}/auth/local-token`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const text = await res.text();
+    const parsed = text ? safeJson(text) : null;
+
+    if (!res.ok) {
+      if (isErrorEnvelope(parsed)) {
+        throw new SynapseApiError(parsed, res.status);
+      }
+      throw new SynapseApiError(
+        {
+          code: 'http.unexpected',
+          message: `HTTP ${res.status} ${res.statusText}`,
+          details: parsed === null ? undefined : { body: parsed },
+          retryable: res.status >= 500,
+        },
+        res.status
+      );
+    }
+
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof (parsed as { token?: unknown }).token !== 'string' ||
+      !(parsed as { token: string }).token
+    ) {
+      throw new Error('The daemon did not return a local auth token.');
+    }
+
+    return (parsed as { token: string }).token;
+  })();
+
+  try {
+    return await localTokenRefresh;
+  } finally {
+    localTokenRefresh = null;
+  }
 }
 
 function safeJson(text: string): unknown {

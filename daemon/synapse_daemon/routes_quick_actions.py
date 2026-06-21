@@ -35,6 +35,7 @@ from . import projects as projects_module
 from .audit import AuditRecord, audit
 from .errors import invalid, not_found
 from .models import AuditSource
+from .profile import ProfileManager
 from .projects import Project, ProjectKind
 from .pty_sessions import PtySessionManager
 from .quick_actions import find_template, load_templates
@@ -101,7 +102,9 @@ def _write_prompt_file(project_path: Path, action_id: str, prompt: str) -> Path:
 
 
 def build_quick_actions_router(
-    storage: Storage, manager: PtySessionManager
+    storage: Storage,
+    manager: PtySessionManager,
+    profile_manager: ProfileManager | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/quick-actions", tags=["quick-actions"])
 
@@ -162,6 +165,8 @@ def build_quick_actions_router(
                     },
                 ),
             )
+        if profile_manager is not None:
+            profile_manager.record_catalog_use(kind="quick-action", item_id=template.id)
 
         summary = session.summary()
         return {

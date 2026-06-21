@@ -10,7 +10,7 @@
 
 ## Current milestone
 
-**v0.1.36 Phase A polish wave shipped + Phase B/C/D ADRs drafted.** Milestones A–I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. v0.1.35–0.1.36 ship a wave of UX wins: status simplification, port clarification, disk-size badge, editable sidebar, GitHub Copilot quick-launch, collapsible AI Quick-actions, clickable project + tool detail modals, WAN exposure via Cloudtap, color themes (hacker green + surfer blue), dark native dropdowns, Phase B preview card, plus the new daemon route `GET /projects/{id}/disk-usage`. 5 ADRs in flight: 0004 OAuth (deferred), 0005 wbscrper tab, 0006 project objectives + cross-AI continuity, 0007 AI-improves-Synapse REST endpoints, 0008 marketplace reorg + sidebar promotion. Each gated on user "go". 379 tests pass + 9 skipped. 15 bundled marketplace tools.
+**v0.1.36 Phase A polish wave shipped + phone parity / WAN reliability follow-up verified + Profile hub groundwork landed.** Milestones A–I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. v0.1.35–0.1.36 ship a wave of UX wins: status simplification, port clarification, disk-size badge, editable sidebar, GitHub Copilot quick-launch, collapsible AI Quick-actions, clickable project + tool detail modals, WAN exposure via Cloudtap, color themes (hacker green + surfer blue), dark native dropdowns, Phase B preview card, plus the new daemon route `GET /projects/{id}/disk-usage`. Follow-up on 2026-06-19..20: `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), supports paired-device auth in-browser, recovers cleanly from stale mobile tokens, and carries the same phone session from LAN -> Cloudtap WAN via durable paired-device identity, short-lived handoff claims, and the new daemon-owned `GET /api/v1/remote-access` aggregate. Settings now hosts a merged `Phone Access` hub with LAN, pairing, paired-device reconnect, WAN verification, and diagnostics in one place. Mobile nav is now a 2-row touch grid so all tabs stay visible on a 390px-wide phone. `synapse.cmd` / `scripts/dev.ps1` now clear `ELECTRON_RUN_AS_NODE` before launching Electron, avoid `EPIPE` main-process popups, launch Vite/Electron through directly owned child processes, and honor in-app restart by cycling the full daemon + Vite + Electron dev stack instead of only relaunching Electron. The daemon also installs a Windows-only asyncio accept-reset workaround so transient WinError 64 socket drops do not silently kill new LAN/WAN accepts on port 7878. Desktop auth now self-heals after daemon/token drift: renderer REST calls retry once after refreshing `/auth/local-token`, the desktop WS client retries after a 1008 auth close, the Tools page clears stale 401 banners after a later success, and Electron main-process tray requests bootstrap the token from the daemon instead of reading `data/auth-token` directly. On 2026-06-20 the remaining WAN reconnect bug was traced to the WS hub's 0.5 s resume-frame timeout, which caused false `1008` closes over Cloudflare and made the phone shell wipe its token a few seconds after a successful handoff; the timeout is now widened, remote/mobile shells no longer attempt desktop-only local-token bootstrap, and live Playwright retesting confirmed the phone stays inside the full shell over both LAN and Cloudtap WAN after a full Synapse restart. Packaging bootstrap is also now wired end to end: `installer/build-daemon.ps1` produces `installer/daemon-dist/synapse-daemon.exe`, Electron knows how to spawn the bundled daemon, and the daemon resolves bundled tools/templates/docs/mobile assets from packaged resources instead of source-tree-only paths. Sessions now also has a first-pass **Agent Squads** mode: durable role templates (`planner`, `implementer`, `reviewer`, `researcher`), daemon-owned squad/work-item tables via migration `008_agent_squads.sql`, explicit handoff capture that appends to `.synapse-ai-context.md`, PTY launches tagged with `SYNAPSE_SQUAD_ID` / `SYNAPSE_WORK_ITEM_ID` / `SYNAPSE_ROLE_PROMPT_FILE`, and a three-pane Sessions cockpit that keeps helper workers as real reopenable PTY sessions instead of hidden background jobs. On 2026-06-21 the daemon also gained a local-first **Profile hub** surface: new `/api/v1/profile*` endpoints backed by migration `009_profile_state.sql`, optional Supabase account sign-in (email/password, Google, GitHub), connected-service readiness records, synced catalog favorites/history/host inventory, Sessions runtime-readiness surfacing, and a viewport-safe Discover category rail so desktop Browse by category never cuts off lower sections like `Data`. 405 tests pass + 11 skipped. 15 bundled marketplace tools. 5 ADRs in flight: 0004 OAuth (deferred), 0005 wbscrper tab, 0006 project objectives + cross-AI continuity, 0007 AI-improves-Synapse REST endpoints, 0008 marketplace reorg + sidebar promotion. Each gated on user "go".
 
 | Version | Phase | Status |
 |---|---|---|
@@ -61,7 +61,7 @@
 | `0.1.33` | ChatGPT export.zip importer + auto-created `imported-chatgpt` project (ADR-0003 Phase E) | ✅ done |
 | `0.1.34` | AI quick-action templates + Sessions rail (ADR-0003 Phase F) | ✅ done |
 | `0.1.35` | Polish + LAN exposure: status legend, port doc, sidebar editable, tray Exit/Restart, mobile QR, file preview, terminal search, PTY default cwd → ~, Modal/StatusLegend focus traps, Stop-all on Processes, NetworkPanel | ✅ done |
-| `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped → not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, 4 more bundled tools, ADRs 0006/0007/0008 drafted | ⏳ in progress |
+| `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped -> not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, full mobile shell parity + LAN/WAN handoff, Sessions-centric Agent Squads mode, ADRs 0006/0007/0008 drafted | ⏳ in progress |
 
 ## What's done
 
@@ -216,12 +216,52 @@ A single coherent arc. The `project_files` table generalises: file uploads, tran
 - **v0.1.34** -- Phase F AI quick-actions. `quick_actions.py` loads `templates/quick-actions/*.json`; `routes_quick_actions.py` lazy-creates the `scratch` project, writes the templated prompt to `PROMPT.md` + `PROMPT-<id>.md` inside its cwd, spawns the workbench PTY with `SYNAPSE_QUICK_ACTION_{ID,PROMPT,PROMPT_FILE}` injected so the Claude / Codex session sees the prompt on prompt 1. Two bundled templates ship: `new-mcp-server`, `new-synapse-tool`. The button ships the shortcut; the AI does the work.
 - **368 tests pass + 9 skipped.** Suite hygiene during v0.1.33: fixed `_BUNDLED_SAMPLE` + mobile-UI cwd-relative paths and the `BaseEntity` `default_factory` timestamp drift.
 
+### v0.1.36-dev — Mobile parity + WAN handoff follow-up
+- `/mobile` now prefers the built React renderer instead of the older standalone HTML page, while still falling back to `mobile/index.html` if `dist/` is absent.
+- New renderer runtime bootstrap path:
+  - paired-device token in `localStorage` for phone/browser sessions
+  - local daemon token for Electron + same-machine browser sessions
+  - stale/expired mobile token auto-clears back to the pair screen instead of leaving the phone in an empty shell
+- Mobile shell now exposes the same primary pages as desktop: `Home`, `Apps`, `Tools`, `Sessions`, `Processes`, `Settings`, with dedicated phone chrome (`Synapse Mobile` header + bottom nav).
+- Browser/mobile cleanup:
+  - project browser links use the current LAN host instead of hardcoded `localhost`
+  - tunnel-origin project links no longer pretend `localhost:<port>` is reachable over WAN
+  - desktop-only quick actions (open folder, VS Code, terminal) stay out of the phone browser path
+  - `Settings` adds a browser-local "Forget this device" action for clearing the saved mobile token
+- Cloudtap/mobile integration:
+  - `ToolCard` now exposes `Use on this phone` for the daemon tunnel on port `7878`
+  - `Use on this phone` moves the current paired-device token from LAN origin storage into the Cloudflare tunnel origin via a one-click handoff URL
+- Dev bootstrap + restart hardening:
+  - `synapse.cmd` now delegates to `scripts/dev.ps1` so one wrapper owns the daemon, Vite, and Electron child lifetimes
+  - the wrapper launches Vite through `node node_modules/vite/bin/vite.js` and Electron through `node node_modules/electron/cli.js`, which keeps restart ownership tied to the real long-lived processes
+  - in-app restart now exits Electron with a dedicated wrapper restart code, letting the wrapper recycle the full stack instead of only relaunching Electron
+- Packaging bootstrap:
+  - `installer/build-daemon.ps1` now builds `installer/daemon-dist/synapse-daemon.exe`
+  - Electron knows how to spawn the bundled daemon in packaged mode
+  - the daemon now resolves bundled `tools/`, `templates/`, `docs/marketplace-sample.json`, `dist/`, and `mobile/` from packaged resources instead of assuming a source checkout
+- Live E2E verified with Playwright at a 390x844 phone viewport:
+  - paired on LAN at `http://192.168.1.143:7878/mobile`
+  - opened Cloudtap for port `7878` from the phone `Tools` page
+  - followed `Use on this phone` into `https://advisor-triumph-memorial-anti.trycloudflare.com/mobile`
+  - launched a real PowerShell PTY session from the WAN phone `Sessions` page
+  - cleared the token in-browser and paired directly on the Cloudflare URL with a fresh 6-digit code
+- Live dev-wrapper restart verified on 2026-06-20:
+  - launched `synapse.cmd` with renderer inspection enabled
+  - verified the desktop renderer at `http://127.0.0.1:5173/` with Playwright
+  - attached to the real Electron window via `scripts/inspect-electron.js`
+  - triggered `window.synapse.restart()` from the live app
+  - confirmed the wrapper stopped and restarted Vite + daemon, relaunched Electron, and came back on the real Synapse page instead of a dead renderer
+- `npm run build` ✅
+- `npm run typecheck` ✅
+- `npm run build:daemon` ✅
+- `pytest` -> **405 passed, 11 skipped**
+
 ## What's next (immediate)
 
 **ADR-0003 closed.** ADR-0003 Phase G is OAuth (Sign in with Apple / Google), which has always lived in its own ADR-0004 -- deferred until the user gives the go (real OAuth client provisioning, redirect URIs, JWKS, device-migration plan).
 
 **Milestone J — packaging.** Milestones A–I are done.
-- PyInstaller bundles the daemon → `synapsed.exe`
+- PyInstaller bundled-daemon bootstrap is now wired (`installer/daemon-dist/synapse-daemon.exe`)
 - electron-builder + an NSIS installer → one double-click install
 - First-run wizard creates a desktop shortcut
 - Then Milestone K — `v0.1.0` release (tag, GitHub release, screenshots)
@@ -290,4 +330,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by Milestone A scaffolding._
+_Last updated by the v0.1.36 mobile parity follow-up._

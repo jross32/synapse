@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 
 # Contract #5 — buffer 1 000 events.
 RING_BUFFER_SIZE = 1000
+RESUME_FRAME_TIMEOUT_SECONDS = 5.0
 
 
 class Event(BaseModel):
@@ -225,7 +226,12 @@ class WsHub:
         """Return ``(since, token)`` from the optional resume frame."""
 
         try:
-            data = await asyncio.wait_for(websocket.receive_json(), timeout=0.5)
+            # WAN / tunnel hops can delay the very first client frame enough
+            # that a sub-second auth timeout causes false 1008 closes.
+            data = await asyncio.wait_for(
+                websocket.receive_json(),
+                timeout=RESUME_FRAME_TIMEOUT_SECONDS,
+            )
         except (TimeoutError, Exception):
             return 0, None
         try:

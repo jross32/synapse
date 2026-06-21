@@ -267,8 +267,10 @@ def model_registry() -> dict[str, type[BaseModel]]:
     """
 
     from . import errors as _errors
+    from . import agent_squads as _agents
     from . import health as _health
     from . import notifications as _notif
+    from . import profile as _profile
     from . import resources as _res
     from . import restart_policy as _restart
     from . import secrets as _secrets
@@ -295,6 +297,22 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "EnvVar": _secrets.EnvVar,
         "SnapshotPayload": _snap.SnapshotPayload,
         "RestoreReport": _snap.RestoreReport,
+        # Sessions-centric AI squads (v0.1.36-dev)
+        "AgentVisibility": _agents.AgentVisibility,  # type: ignore[dict-item]
+        "AgentContextMode": _agents.AgentContextMode,  # type: ignore[dict-item]
+        "AgentSquadStatus": _agents.AgentSquadStatus,  # type: ignore[dict-item]
+        "AgentWorkItemStatus": _agents.AgentWorkItemStatus,  # type: ignore[dict-item]
+        "AgentRoleTemplate": _agents.AgentRoleTemplate,
+        "AgentSquad": _agents.AgentSquad,
+        "AgentWorkItem": _agents.AgentWorkItem,
+        "AgentSquadDetail": _agents.AgentSquadDetail,
+        # Profile hub + portable catalog state
+        "ProviderIdentity": _profile.ProviderIdentity,
+        "HostPresence": _profile.HostPresence,
+        "ServiceConnection": _profile.ServiceConnection,
+        "CatalogPreferenceItem": _profile.CatalogPreferenceItem,
+        "CatalogPreferenceState": _profile.CatalogPreferenceState,
+        "ProfileSummary": _profile.ProfileSummary,
         # Tool plugin system (v0.1.9 · multi-instance v0.1.9.5)
         "ToolFieldType": ToolFieldType,  # type: ignore[dict-item]
         "ToolField": ToolField,

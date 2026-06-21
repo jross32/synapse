@@ -10,7 +10,7 @@
 //
 // This file is wired to a real daemon WebSocket in Milestone C.
 
-import { daemonBase, getAuthToken } from './api-client';
+import { daemonBase, getAuthToken, tryRefreshLocalToken } from './api-client';
 
 export type ConnState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -101,9 +101,13 @@ export class SynapseWsClient {
       }
     });
 
-    sock.addEventListener('close', () => {
+    sock.addEventListener('close', (event) => {
       this.ws = null;
       if (this.stopped) return;
+      if (event.code === 1008) {
+        void this.recoverAuthThenReconnect();
+        return;
+      }
       this.scheduleReconnect();
     });
 
@@ -117,6 +121,16 @@ export class SynapseWsClient {
     this.retryIndex += 1;
     this.transition('reconnecting');
     this.retryTimer = setTimeout(() => this.open(), delay);
+  }
+
+  private async recoverAuthThenReconnect(): Promise<void> {
+    const refreshed = await tryRefreshLocalToken();
+    if (!refreshed && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('synapse:unauthorized', { detail: { status: 401, source: 'ws' } })
+      );
+    }
+    this.scheduleReconnect();
   }
 
   private transition(next: ConnState): void {

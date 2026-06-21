@@ -17,8 +17,15 @@ import {
   type ReactNode,
 } from 'react';
 
-import { apiFetch, bootstrapLocalToken, daemonBase, setDaemonBase } from './api-client';
-import type { HealthResponse, Project, ResourceSnapshot } from './generated-types';
+import {
+  apiFetch,
+  bootstrapLocalToken,
+  daemonBase,
+  getAuthToken,
+  setDaemonBase,
+} from './api-client';
+import type { HealthResponse, ProfileSummary, Project, ResourceSnapshot } from './generated-types';
+import { getProfile } from './profile-client';
 import { listProjects } from './projects-client';
 import { type ConnState, SynapseWsClient, type SynapseEvent } from './ws-client';
 
@@ -33,10 +40,18 @@ function getBridge(): SynapseBridge | null {
   return (window as unknown as { synapse?: SynapseBridge }).synapse ?? null;
 }
 
+function formatDisplayVersion(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return '';
+  return trimmed.replace(/\.dev0$/, '-dev').replace(/\.dev(\d+)$/, '-dev.$1');
+}
+
 export interface DaemonContextValue {
   connState: ConnState;
   health: HealthResponse | null;
   healthError: string | null;
+  profile: ProfileSummary | null;
+  profileError: string | null;
   projects: Project[];
   resourcesById: Record<string, ResourceSnapshot>;
   /** Most recent events, newest first (capped) -- handy for Home / debugging. */
@@ -52,6 +67,7 @@ export interface DaemonContextValue {
   daemonBaseUrl: string;
   refreshProjects: () => Promise<void>;
   refreshHealth: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   /** Optimistic local mutations so a page doesn't have to wait for a refetch. */
   upsertProjectLocal: (project: Project) => void;
   removeProjectLocal: (id: string) => void;
@@ -68,6 +84,8 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [connState, setConnState] = useState<ConnState>('idle');
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProfileSummary | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [resourcesById, setResourcesById] = useState<Record<string, ResourceSnapshot>>({});
   const [recentEvents, setRecentEvents] = useState<SynapseEvent[]>([]);
@@ -101,6 +119,15 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
       setHealthError(null);
     } catch (err) {
       setHealthError((err as Error).message || 'Failed to reach daemon');
+    }
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    try {
+      setProfile(await getProfile());
+      setProfileError(null);
+    } catch (err) {
+      setProfileError((err as Error).message || 'Failed to load profile');
     }
   }, []);
 
@@ -144,6 +171,14 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
       }
       if (event.name.startsWith('v1.project.')) {
         void refreshProjects();
+        return;
+      }
+      if (
+        event.name === 'v1.profile.updated' ||
+        event.name === 'v1.profile.sync.updated' ||
+        event.name === 'v1.service_connection.updated'
+      ) {
+        void refreshProfile();
       }
     });
 
@@ -151,13 +186,16 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
     // request or the WebSocket handshake. /health is open so it can go first.
     void (async () => {
       void refreshHealth();
-      try {
-        await bootstrapLocalToken();
-      } catch {
-        // Off-machine or daemon down — protected calls will surface the error.
+      if (!getAuthToken()) {
+        try {
+          await bootstrapLocalToken();
+        } catch {
+          // Off-machine or daemon down — protected calls will surface the error.
+        }
       }
       if (cancelled) return;
       void refreshProjects();
+      void refreshProfile();
       ws.start();
     })();
 
@@ -167,16 +205,20 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
       unsubEvent();
       ws.stop();
     };
-  }, [bridge, refreshHealth, refreshProjects]);
+  }, [bridge, refreshHealth, refreshProfile, refreshProjects]);
 
   // Prefer the Electron bundle version, fall back to whatever the live daemon
   // reports, and only then a neutral placeholder -- never a stale literal.
-  const uiVersion = bridge?.version() ?? health?.version ?? 'dev';
+  const bridgeVersion = formatDisplayVersion(bridge?.version());
+  const healthVersion = formatDisplayVersion(health?.version);
+  const uiVersion = bridgeVersion || healthVersion || 'dev';
 
   const value: DaemonContextValue = {
     connState,
     health,
     healthError,
+    profile,
+    profileError,
     projects,
     resourcesById,
     recentEvents,
@@ -186,6 +228,7 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
     daemonBaseUrl: bridge?.daemonBase() ?? daemonBase(),
     refreshProjects,
     refreshHealth,
+    refreshProfile,
     upsertProjectLocal,
     removeProjectLocal,
   };

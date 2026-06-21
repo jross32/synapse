@@ -13,6 +13,16 @@ from synapse_daemon.storage import Storage
 from synapse_daemon.tools_registry import ToolRegistry
 from synapse_daemon.ws import EventBus
 
+_DISCOVER_CATEGORIES = {
+    "ai-assistants",
+    "workflows",
+    "editors",
+    "remote",
+    "dev-tools",
+    "system",
+    "data",
+}
+
 
 def _harness(tmp_path: Path, *, registry_url: str | None = None, monkeypatch=None):
     storage = Storage(tmp_path / "data")
@@ -92,9 +102,17 @@ def test_marketplace_bundled_handlers_load_with_valid_shape(
     seen = {t["id"] for t in tools}
     missing = must_include - seen
     assert not missing, f"bundled tools missing from registry: {missing}"
-    # Every declarative entry needs a `manifest_inline` or `manifest_url`
-    # the install route can use.
     for t in tools:
+        category = t.get("category")
+        assert category in _DISCOVER_CATEGORIES, (
+            f"{t['id']}: invalid category {category!r}"
+        )
+        tags = t.get("tags")
+        assert isinstance(tags, list) and tags, f"{t['id']}: missing tags"
+        assert isinstance(t.get("featured"), bool), f"{t['id']}: featured must be bool"
+        assert isinstance(t.get("sort_rank"), int), f"{t['id']}: sort_rank must be int"
+        # Every declarative entry needs a `manifest_inline` or `manifest_url`
+        # the install route can use.
         if t.get("tier") != "declarative":
             continue
         has_inline = isinstance(t.get("manifest_inline"), dict)

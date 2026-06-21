@@ -20,6 +20,8 @@ from typing import Any
 from fastapi import APIRouter
 
 from . import projects as projects_module
+from . import agent_squads as agent_squads_module
+from .ai_context_memory import ai_context_metadata
 from .files_storage import list_for_project
 from .storage import Storage
 from .pty_sessions import PtySessionManager
@@ -67,6 +69,7 @@ def build_ai_router(
                     "pinned": p.pinned,
                     "description": p.description,
                     "current_health": p.current_health.value,
+                    "ai_context": ai_context_metadata(storage.data_dir, p.id),
                     # Phase A + D inline: files (uploads, transcripts,
                     # ChatGPT imports) and the count if it ran past the cap.
                     "files": [_file_to_inline(f) for f in files],
@@ -100,6 +103,26 @@ def build_ai_router(
             }
             for s in manager.list()
         ]
+        agent_squads = []
+        for squad in agent_squads_module.list_squads(storage.conn):
+            items = agent_squads_module.list_work_items(storage.conn, squad.id)
+            agent_squads.append(
+                {
+                    **squad.model_dump(mode="json"),
+                    "work_items": [
+                        {
+                            "id": item.id,
+                            "title": item.title,
+                            "status": item.status.value,
+                            "assigned_role_id": item.assigned_role_id,
+                            "preferred_runtime": item.preferred_runtime,
+                            "pty_session_id": item.pty_session_id,
+                            "updated_at": item.updated_at,
+                        }
+                        for item in items
+                    ],
+                }
+            )
 
         # Tail of audit so the AI can spot "what just happened" without
         # pulling the whole table.
@@ -132,6 +155,11 @@ def build_ai_router(
             "projects": projects,
             "tools": tools,
             "sessions": sessions,
+            "agent_squads": agent_squads,
+            "agent_role_templates": [
+                role.model_dump(mode="json")
+                for role in agent_squads_module.list_role_templates(storage.conn)
+            ],
             "shared_files": [_file_to_inline(f) for f in shared_files],
             "audit_tail": audit_tail,
             "endpoints_for_ai": [
@@ -169,6 +197,16 @@ def build_ai_router(
                     "purpose": "install a tool from the marketplace by id",
                     "method": "POST",
                     "path": "/api/v1/marketplace/install/{id}",
+                },
+                {
+                    "purpose": "list or create AI squads for a project",
+                    "method": "GET | POST",
+                    "path": "/api/v1/agent-squads",
+                },
+                {
+                    "purpose": "create, launch, hand off, or update agent work items",
+                    "method": "POST",
+                    "path": "/api/v1/agent-squads/{id}/work-items | /api/v1/agent-work-items/{id}/launch | /handoff | /status",
                 },
                 {
                     "purpose": "the full audit log (paginated)",

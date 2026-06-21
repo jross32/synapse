@@ -10,10 +10,9 @@ import { Button } from '../components/ui/button';
 import { StatusBadge } from '../components/StatusBadge';
 import { PageHeader } from '../components/PageHeader';
 import { SnapshotPanel } from '../components/SnapshotPanel';
-import { PairedDevicesPanel } from '../components/PairedDevicesPanel';
 import { StartupPanel } from '../components/StartupPanel';
 import { AuditLogPanel } from '../components/AuditLogPanel';
-import { NetworkPanel } from '../components/NetworkPanel';
+import { PhoneAccessPanel } from '../components/PhoneAccessPanel';
 import { ThemePanel } from '../components/ThemePanel';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
@@ -27,12 +26,37 @@ const CONN_LABEL: Record<string, string> = {
   closed: 'Disconnected',
 };
 
-export function SettingsPage(): JSX.Element {
+export interface SettingsPageProps {
+  mobileRoute?: boolean;
+  onForgetDevice?: () => void;
+}
+
+export function SettingsPage({
+  mobileRoute = false,
+  onForgetDevice,
+}: SettingsPageProps): JSX.Element {
   const { health, healthError, connState, uiVersion, platform, daemonBaseUrl } = useDaemon();
 
   return (
     <div className='flex flex-col gap-6'>
       <PageHeader title='Settings' subtitle='Daemon diagnostics, connection, and about.' />
+
+      {mobileRoute && onForgetDevice && (
+        <Card className='flex flex-col gap-4 p-6'>
+          <div>
+            <h2 className='text-lg font-semibold'>This browser</h2>
+            <p className='mt-1 text-sm text-muted-foreground'>
+              Clears the saved device token from this browser only. The device stays paired in
+              Synapse until you revoke it from the desktop app.
+            </p>
+          </div>
+          <div>
+            <Button variant='outline' onClick={onForgetDevice}>
+              Forget this device in this browser
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card className='flex flex-col gap-4 p-6'>
         <h2 className='text-lg font-semibold'>Daemon</h2>
@@ -83,9 +107,7 @@ export function SettingsPage(): JSX.Element {
 
       <StartupPanel />
 
-      <NetworkPanel />
-
-      <PairedDevicesPanel />
+      <PhoneAccessPanel />
 
       <SnapshotPanel />
 
@@ -96,7 +118,7 @@ export function SettingsPage(): JSX.Element {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
-    <div className='grid grid-cols-[180px_1fr] gap-4 text-sm'>
+    <div className='grid gap-1 text-sm sm:grid-cols-[180px_1fr] sm:gap-4'>
       <span className='text-muted-foreground'>{label}</span>
       <span className='font-mono text-foreground'>{children}</span>
     </div>

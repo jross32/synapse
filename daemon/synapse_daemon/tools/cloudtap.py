@@ -222,6 +222,10 @@ class CloudtapTool(ToolHandler):
                 "label": tunnel.label,
             },
         )
+        await self._bus.publish(
+            event_name("remote_access", "updated"),
+            {"reason": "cloudtap-tunnel-opened", "tunnel_id": tunnel.id},
+        )
         log.info(
             "Cloudtap: tunnel '%s' open %s -> localhost:%d (%s)",
             tunnel.id, tunnel.public_url, port, tunnel.label,
@@ -252,6 +256,10 @@ class CloudtapTool(ToolHandler):
         await self._bus.publish(
             event_name("tool", "tunnel_closed"),
             {"tool_id": self.tool_id, "tunnel_id": item_id, "public_url": closed_url},
+        )
+        await self._bus.publish(
+            event_name("remote_access", "updated"),
+            {"reason": "cloudtap-tunnel-closed", "tunnel_id": item_id},
         )
         log.info("Cloudtap: tunnel '%s' closed.", item_id)
         return self.state()
@@ -313,6 +321,10 @@ class CloudtapTool(ToolHandler):
                 "public_url": tunnel.public_url,
                 "reason": "dropped",
             },
+        )
+        await self._bus.publish(
+            event_name("remote_access", "updated"),
+            {"reason": "cloudtap-tunnel-dropped", "tunnel_id": tunnel.id},
         )
 
     # ── helpers ──────────────────────────────────────────────────────────

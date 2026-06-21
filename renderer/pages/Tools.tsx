@@ -7,30 +7,48 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Store, Wrench } from 'lucide-react';
 
-import type { ToolEntry } from '@shared/generated-types';
+import type { CatalogPreferenceItem, CatalogPreferenceState, ToolEntry } from '@shared/generated-types';
 import { listTools } from '@shared/tools-client';
 import { useDaemon } from '@shared/daemon-context';
+import { getCatalogState } from '@shared/profile-client';
 import { cn } from '@shared/utils';
 import { Card } from '../components/ui/card';
 import { MarketplaceBrowser } from '../components/MarketplaceBrowser';
 import { PageHeader } from '../components/PageHeader';
 import { ToolCard } from '../components/ToolCard';
 
-type ToolsTab = 'installed' | 'browse';
+type ToolsTab = 'installed' | 'discover';
 
-export function ToolsPage(): JSX.Element {
+export interface ToolsPageProps {
+  intent?: {
+    tab?: ToolsTab;
+    focusId?: string;
+    nonce: number;
+  } | null;
+}
+
+export function ToolsPage({ intent }: ToolsPageProps): JSX.Element {
   const { recentEvents } = useDaemon();
   const [tab, setTab] = useState<ToolsTab>('installed');
   const [tools, setTools] = useState<ToolEntry[] | null>(null);
+  const [catalogState, setCatalogState] = useState<CatalogPreferenceState | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Highest WS event id already accounted for -- so we only refetch on
   // genuinely new tool events, not the backlog present at mount.
   const seenEventId = useRef(0);
 
   function refresh(): void {
-    listTools()
-      .then(setTools)
-      .catch((err: Error) => setError(err.message || 'Failed to load tools'));
+    setError(null);
+    void Promise.allSettled([listTools(), getCatalogState()]).then(([toolsRes, catalogRes]) => {
+      if (toolsRes.status === 'fulfilled') {
+        setTools(toolsRes.value);
+      } else {
+        setError(toolsRes.reason instanceof Error ? toolsRes.reason.message : 'Failed to load tools');
+      }
+      if (catalogRes.status === 'fulfilled') {
+        setCatalogState(catalogRes.value);
+      }
+    });
   }
 
   useEffect(() => {
@@ -50,11 +68,36 @@ export function ToolsPage(): JSX.Element {
     refresh();
   }, [recentEvents]);
 
+  useEffect(() => {
+    const fresh = recentEvents.some(
+      (e) =>
+        e.name === 'v1.profile.updated' ||
+        e.name === 'v1.profile.sync.updated' ||
+        e.name === 'v1.service_connection.updated'
+    );
+    if (!fresh) return;
+    void getCatalogState().then(setCatalogState).catch(() => undefined);
+  }, [recentEvents]);
+
   function handleChanged(updated: ToolEntry): void {
     setTools((prev) =>
       prev ? prev.map((t) => (t.manifest.id === updated.manifest.id ? updated : t)) : prev
     );
   }
+
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.tab) setTab(intent.tab);
+  }, [intent]);
+
+  const toolPreferences = new Map(
+    (catalogState?.items ?? [])
+      .filter((item) => item.kind === 'tool')
+      .map((item) => [item.item_id, item])
+  );
+  const sortedTools = [...(tools ?? [])].sort((left, right) =>
+    compareToolEntries(left, right, toolPreferences)
+  );
 
   return (
     <div className='flex flex-col gap-6'>
@@ -63,7 +106,8 @@ export function ToolsPage(): JSX.Element {
         subtitle='Synapses — modular tools backed by manifest plugins. Drop a folder in, get a card.'
       />
 
-      {/* Installed / Browse tab toggle (v0.1.23). */}
+      {/* Installed / Discover tab toggle. Installed remains the operational
+          surface; Discover becomes the storefront for tools + quick actions. */}
       <div
         role='tablist'
         aria-label='Tools view'
@@ -77,10 +121,10 @@ export function ToolsPage(): JSX.Element {
           count={tools?.length}
         />
         <TabButton
-          active={tab === 'browse'}
-          onClick={() => setTab('browse')}
+          active={tab === 'discover'}
+          onClick={() => setTab('discover')}
           icon={Store}
-          label='Browse'
+          label='Discover'
         />
       </div>
 
@@ -114,17 +158,44 @@ export function ToolsPage(): JSX.Element {
 
           {tools !== null && tools.length > 0 && (
             <div className='grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-6'>
-              {tools.map((entry) => (
-                <ToolCard key={entry.manifest.id} entry={entry} onChanged={handleChanged} />
+              {sortedTools.map((entry) => (
+                <ToolCard
+                  key={entry.manifest.id}
+                  entry={entry}
+                  onChanged={handleChanged}
+                  catalogState={toolPreferences.get(entry.manifest.id) ?? null}
+                />
               ))}
             </div>
           )}
         </>
       )}
 
-      {tab === 'browse' && <MarketplaceBrowser />}
+      {tab === 'discover' && (
+        <MarketplaceBrowser
+          onManageInstalledTool={() => setTab('installed')}
+          focusToolId={intent?.focusId ?? null}
+          focusNonce={intent?.nonce ?? 0}
+        />
+      )}
     </div>
   );
+}
+
+function compareToolEntries(
+  left: ToolEntry,
+  right: ToolEntry,
+  preferences: Map<string, CatalogPreferenceItem>
+): number {
+  const leftPref = preferences.get(left.manifest.id);
+  const rightPref = preferences.get(right.manifest.id);
+  if (Boolean(leftPref?.favorite) !== Boolean(rightPref?.favorite)) {
+    return leftPref?.favorite ? -1 : 1;
+  }
+  const leftStamp = leftPref?.last_used_at ?? leftPref?.updated_at ?? '';
+  const rightStamp = rightPref?.last_used_at ?? rightPref?.updated_at ?? '';
+  if (leftStamp !== rightStamp) return rightStamp.localeCompare(leftStamp);
+  return left.manifest.name.localeCompare(right.manifest.name);
 }
 
 interface TabButtonProps {

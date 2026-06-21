@@ -31,53 +31,55 @@ export function ProcessMonitor({ projects, resourcesById, onActionError }: Proce
 
   return (
     <Card className='overflow-hidden'>
-      <table className='w-full border-collapse text-sm'>
-        <thead>
-          <tr className='border-b border-border'>
-            {['Project', 'Status', 'PID', 'Uptime', 'CPU', 'Memory', ''].map((h) => (
-              <th
-                key={h}
-                className='px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground'
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {running.map((p) => {
-            const res = resourcesById[p.id];
-            return (
-              <tr key={p.id} className='border-b border-border last:border-0'>
-                <td className='px-4 py-3 font-medium'>{p.name}</td>
-                <td className='px-4 py-3'>
-                  <StatusBadge status={p.status} />
-                </td>
-                <td className='px-4 py-3 font-mono text-muted-foreground'>{res ? res.pid : '—'}</td>
-                <td className='px-4 py-3 font-mono text-muted-foreground'>
-                  {p.status === 'launched' ? formatUptime(p.last_transition_at) : '—'}
-                </td>
-                <td className='px-4 py-3'>
-                  <CpuGauge value={res?.cpu_percent ?? 0} />
-                </td>
-                <td className='px-4 py-3 font-mono'>{res ? `${res.rss_mb.toFixed(0)} MB` : '—'}</td>
-                <td className='px-4 py-3 text-right'>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    disabled={p.status !== 'launched'}
-                    onClick={() => {
-                      stopProject(p.id).catch((err) => onActionError?.(p, err as Error));
-                    }}
-                  >
-                    Stop
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className='overflow-x-auto'>
+        <table className='min-w-[760px] w-full border-collapse text-sm'>
+          <thead>
+            <tr className='border-b border-border'>
+              {['Project', 'Status', 'PID', 'Uptime', 'CPU', 'Memory', ''].map((h) => (
+                <th
+                  key={h}
+                  className='px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {running.map((p) => {
+              const res = resourcesById[p.id];
+              return (
+                <tr key={p.id} className='border-b border-border last:border-0'>
+                  <td className='px-4 py-3 font-medium'>{p.name}</td>
+                  <td className='px-4 py-3'>
+                    <StatusBadge status={p.status} />
+                  </td>
+                  <td className='px-4 py-3 font-mono text-muted-foreground'>{res ? res.pid : '—'}</td>
+                  <td className='px-4 py-3 font-mono text-muted-foreground'>
+                    {p.status === 'launched' ? formatUptime(p.last_transition_at) : '—'}
+                  </td>
+                  <td className='px-4 py-3'>
+                    <CpuGauge value={res?.cpu_percent ?? 0} />
+                  </td>
+                  <td className='px-4 py-3 font-mono'>{res ? `${res.rss_mb.toFixed(0)} MB` : '—'}</td>
+                  <td className='px-4 py-3 text-right'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={p.status !== 'launched'}
+                      onClick={() => {
+                        stopProject(p.id).catch((err) => onActionError?.(p, err as Error));
+                      }}
+                    >
+                      Stop
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }

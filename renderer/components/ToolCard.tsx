@@ -19,11 +19,14 @@ import {
 } from 'lucide-react';
 
 import type {
+  CatalogPreferenceItem,
   ToolAction,
   ToolEntry,
   ToolField,
   ToolItem,
 } from '@shared/generated-types';
+import { isMobileRoute, mobileTunnelUrl } from '@shared/browser-runtime';
+import { createHandoffClaim } from '@shared/pairing-client';
 import { runToolAction } from '@shared/tools-client';
 import { openExternal } from '@shared/electron-bridge';
 import { Badge } from './ui/badge';
@@ -49,8 +52,16 @@ function initialFields(entry: ToolEntry): Record<string, string> {
 }
 
 /** Renders a `public_url` result value as an openable + copyable link. */
-function PublicUrl({ url }: { url: string }): JSX.Element {
+function PublicUrl({
+  url,
+  mobileUrl,
+}: {
+  url: string;
+  mobileUrl?: string | null;
+}): JSX.Element {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
   async function copy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(url);
@@ -60,40 +71,81 @@ function PublicUrl({ url }: { url: string }): JSX.Element {
       /* clipboard blocked -- ignore */
     }
   }
+
+  async function handoff(): Promise<void> {
+    if (!mobileUrl) return;
+    setBusy(true);
+    setHandoffError(null);
+    try {
+      const claim = await createHandoffClaim();
+      window.location.assign(
+        `${mobileUrl}?handoff=${Date.now()}#synapseClaim=${encodeURIComponent(claim.claim)}`
+      );
+    } catch (err) {
+      setHandoffError((err as Error).message || 'Could not reconnect this phone.');
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className='flex items-center gap-2'>
-      <button
-        type='button'
-        onClick={() => void openExternal(url)}
-        className='flex min-w-0 items-center gap-1.5 font-mono text-sm text-primary hover:underline'
-      >
-        <ExternalLink className='h-3.5 w-3.5 shrink-0' />
-        <span className='truncate'>{url}</span>
-      </button>
-      <Button
-        variant='ghost'
-        size='sm'
-        className='h-7 shrink-0 px-2'
-        onClick={copy}
-        aria-label={copied ? 'Copied to clipboard' : 'Copy URL to clipboard'}
-        title={copied ? 'Copied!' : 'Copy URL'}
-      >
-        {copied ? (
-          <Check className='h-3.5 w-3.5' aria-hidden='true' />
-        ) : (
-          <Copy className='h-3.5 w-3.5' aria-hidden='true' />
+    <div className='space-y-2'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <button
+          type='button'
+          onClick={() => void openExternal(url)}
+          className='flex min-w-0 items-center gap-1.5 font-mono text-sm text-primary hover:underline'
+        >
+          <ExternalLink className='h-3.5 w-3.5 shrink-0' />
+          <span className='truncate'>{url}</span>
+        </button>
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-7 shrink-0 px-2'
+          onClick={copy}
+          aria-label={copied ? 'Copied to clipboard' : 'Copy URL to clipboard'}
+          title={copied ? 'Copied!' : 'Copy URL'}
+        >
+          {copied ? (
+            <Check className='h-3.5 w-3.5' aria-hidden='true' />
+          ) : (
+            <Copy className='h-3.5 w-3.5' aria-hidden='true' />
+          )}
+        </Button>
+        {mobileUrl && (
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className='h-7 px-2 text-xs'
+            onClick={() => void handoff()}
+            disabled={busy}
+          >
+            {busy ? <Loader2 className='h-3.5 w-3.5 animate-spin' aria-hidden='true' /> : null}
+            Use on this phone
+          </Button>
         )}
-      </Button>
+      </div>
+      {handoffError && (
+        <p role='alert' className='text-xs text-destructive'>
+          {handoffError}
+        </p>
+      )}
     </div>
   );
 }
 
 export interface ToolCardProps {
   entry: ToolEntry;
+  catalogState?: CatalogPreferenceItem | null;
   onChanged?: (entry: ToolEntry) => void;
 }
 
-export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Element {
+export function ToolCard({
+  entry: initial,
+  catalogState = null,
+  onChanged,
+}: ToolCardProps): JSX.Element {
   const [entry, setEntry] = useState<ToolEntry>(initial);
   const [fields, setFields] = useState<Record<string, string>>(() => initialFields(initial));
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -157,6 +209,8 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
   function renderItem(item: ToolItem): JSX.Element {
     const url = typeof item.result.public_url === 'string' ? item.result.public_url : null;
     const port = item.result.local_port;
+    const targetMobileUrl =
+      isMobileRoute() && url ? mobileTunnelUrl(url, port as number | undefined) : null;
     return (
       <div
         key={item.id}
@@ -173,7 +227,7 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
           </div>
           <StatusBadge status={item.status} />
         </div>
-        {url && <PublicUrl url={url} />}
+        {url && <PublicUrl url={url} mobileUrl={targetMobileUrl} />}
         {item.message && !item.last_error && (
           <p className='text-xs text-muted-foreground'>{item.message}</p>
         )}
@@ -227,6 +281,26 @@ export function ToolCard({ entry: initial, onChanged }: ToolCardProps): JSX.Elem
       </header>
 
       <p className='text-sm text-muted-foreground'>{manifest.description}</p>
+
+      {(catalogState?.favorite || catalogState?.used_before || catalogState?.previously_installed) && (
+        <div className='flex flex-wrap gap-1.5 text-[10px]'>
+          {catalogState.favorite && (
+            <Badge variant='outline' className='rounded-full border-yellow-400/40 bg-yellow-400/10 text-yellow-200'>
+              Favorite
+            </Badge>
+          )}
+          {catalogState.used_before && (
+            <Badge variant='outline' className='rounded-full border-border/70 text-muted-foreground'>
+              Used before
+            </Badge>
+          )}
+          {catalogState.previously_installed && !catalogState.installed_here && (
+            <Badge variant='outline' className='rounded-full border-border/70 text-muted-foreground'>
+              Previously installed
+            </Badge>
+          )}
+        </div>
+      )}
 
       {!manifest.runnable && (
         <Badge variant='secondary' className='w-fit'>

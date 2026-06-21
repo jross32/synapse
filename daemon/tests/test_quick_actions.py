@@ -27,6 +27,8 @@ def _valid(action_id: str = "do-thing", **overrides) -> dict:
         "description": "Walk me through doing a thing.",
         "prompt": "Tell me about a thing.",
         "icon": "wand",
+        "category": "workflows",
+        "tags": ["demo", "setup"],
         "default_argv": ["claude"],
         **overrides,
     }
@@ -80,6 +82,23 @@ def test_load_templates_rejects_non_list_default_argv(tmp_path: Path) -> None:
     assert load_templates(tmp_path) == []
 
 
+def test_load_templates_normalizes_category_and_tags(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "ok.json",
+        _valid(category="  Dev-Tools  ", tags=[" Debugging ", "debugging", " Tests "]),
+    )
+    out = load_templates(tmp_path)
+    assert out[0].category == "dev-tools"
+    assert out[0].tags == ["debugging", "tests"]
+
+
+def test_load_templates_rejects_non_string_category_or_tags(tmp_path: Path) -> None:
+    _write(tmp_path, "bad-category.json", _valid(category=123))
+    _write(tmp_path, "bad-tags.json", _valid(action_id="other-thing", tags="not-a-list"))
+    assert load_templates(tmp_path) == []
+
+
 def test_find_template_picks_by_id(tmp_path: Path) -> None:
     _write(tmp_path, "a.json", _valid("alpha"))
     _write(tmp_path, "b.json", _valid("beta"))
@@ -95,6 +114,8 @@ def test_to_dict_round_trips_fields(tmp_path: Path) -> None:
     assert d["prompt"] == "Tell me about a thing."
     assert d["default_argv"] == ["claude"]
     assert d["icon"] == "wand"
+    assert d["category"] == "workflows"
+    assert d["tags"] == ["demo", "setup"]
 
 
 _EXPECTED_BUNDLED = {
@@ -124,6 +145,8 @@ def test_bundled_templates_load_cleanly() -> None:
             continue
         assert action.name, f"{action.id}: empty name"
         assert action.description, f"{action.id}: empty description"
+        assert action.category, f"{action.id}: missing category"
+        assert action.tags, f"{action.id}: missing tags"
         assert len(action.prompt) > 100, (
             f"{action.id}: prompt is suspiciously short "
             f"({len(action.prompt)} chars) -- did the template lose its body?"

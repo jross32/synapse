@@ -1,32 +1,31 @@
 # Synapse -- dev orchestration
 #
-# Starts the Python daemon, Vite (renderer), and Electron together.
-#
-# Behaviour:
-#   - daemon  -> runs in the foreground console window so you see boot output.
-#                Stops when this script is interrupted (Ctrl+C).
-#   - Vite + Electron -> launched as background jobs; cleaned up on exit.
-#
-# Flags:
-#   -DaemonOnly   Only start the daemon. Useful for backend work.
-#   -AppOnly      Only start Vite + Electron (assumes daemon is already up).
-#   -BindLan      Bind the daemon on 0.0.0.0:7878 instead of loopback so
-#                 the mobile UI on your phone can reach it.
+# Starts the Python daemon, Vite, and Electron together with PID ownership,
+# log tails, and a full restart loop when the app asks for one.
 #
 # NOTE: This file is intentionally pure ASCII. Windows PowerShell 5.1 reads
-# .ps1 files as Windows-1252 unless they start with a UTF-8 BOM, and the Write
-# tool the assistant uses does not emit a BOM. Keep arrows and box-drawing
-# characters as ASCII (-> not the unicode arrow, === not the unicode bar).
+# .ps1 files as Windows-1252 unless they start with a UTF-8 BOM, and the tool
+# used for edits here does not emit a BOM.
 
 param(
   [switch]$DaemonOnly,
   [switch]$AppOnly,
-  [switch]$BindLan
+  [switch]$BindLan,
+  [switch]$ShortcutMode,
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$ElectronArgs
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+$dataDir = Join-Path $root 'data'
+$daemonLog = Join-Path $dataDir 'daemon-runtime.log'
+$viteLog = Join-Path $dataDir 'vite-runtime.log'
+$restartExitCode = 75
+
+New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 Write-Host "======================================================="
 Write-Host "  Synapse -- by The WhatIf Company"
@@ -34,81 +33,206 @@ Write-Host "  Dev mode"
 Write-Host "======================================================="
 Write-Host ""
 
-$jobs = @()
+function Get-LogTail {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path,
+    [int]$Lines = 40
+  )
 
-function Stop-Jobs {
-  foreach ($j in $script:jobs) {
-    if ($j -and $j.State -eq 'Running') {
-      Stop-Job -Job $j -ErrorAction SilentlyContinue
-      Remove-Job -Job $j -Force -ErrorAction SilentlyContinue
+  if (-not (Test-Path $Path)) {
+    return '(no log output yet)'
+  }
+  $content = Get-Content -Path $Path -Tail $Lines -ErrorAction SilentlyContinue
+  if (-not $content) {
+    return '(log file is empty)'
+  }
+  return ($content -join [Environment]::NewLine)
+}
+
+function Stop-ProcessTree {
+  param(
+    [System.Diagnostics.Process]$Process,
+    [string]$Label
+  )
+
+  if (-not $Process) {
+    return
+  }
+  try {
+    if ($Process.HasExited) {
+      return
     }
-  }
-}
-
-trap {
-  Write-Host ""
-  Write-Host "-> Shutting down dev jobs..."
-  Stop-Jobs
-  break
-}
-
-if (-not $AppOnly) {
-  # Run daemon in the foreground if it's the only thing we're starting,
-  # otherwise as a background job whose stdout streams to the console.
-  $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
-  if ($BindLan) { $daemonArgs += '--bind-lan' }
-
-  if ($DaemonOnly) {
-    Write-Host "-> Starting daemon (foreground): python $($daemonArgs -join ' ')"
-    Write-Host ""
-    & python @daemonArgs
-    exit $LASTEXITCODE
+  } catch {
+    return
   }
 
-  Write-Host "-> Starting daemon: python $($daemonArgs -join ' ')"
-  $daemonJob = Start-Job -Name 'synapse-daemon' -ScriptBlock {
-    param($cwd, $args_)
-    Set-Location $cwd
-    & python @args_
-  } -ArgumentList $root, $daemonArgs
-  $jobs += $daemonJob
+  Write-Host "-> Stopping $Label (PID $($Process.Id))"
+  & taskkill /PID $Process.Id /T /F | Out-Null
+  Start-Sleep -Milliseconds 250
+}
 
-  # Briefly poll /api/v1/health so we don't race Vite past the daemon.
-  $ready = $false
-  for ($i = 0; $i -lt 40; $i++) {
+function Start-LoggedCmdProcess {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Label,
+    [Parameter(Mandatory = $true)]
+    [string]$Command,
+    [Parameter(Mandatory = $true)]
+    [string]$LogPath
+  )
+
+  if (Test-Path $LogPath) {
+    Remove-Item -Path $LogPath -Force -ErrorAction SilentlyContinue
+  }
+
+  $wrapped = "$Command >> `"$LogPath`" 2>&1"
+  Write-Host "-> Starting $Label"
+  $proc = Start-Process `
+    -FilePath 'cmd.exe' `
+    -ArgumentList @('/d', '/c', $wrapped) `
+    -WorkingDirectory $root `
+    -WindowStyle Hidden `
+    -PassThru
+  Write-Host "   PID $($proc.Id) | log: $LogPath"
+  return $proc
+}
+
+function Wait-HttpReady {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Label,
+    [Parameter(Mandatory = $true)]
+    [string[]]$Urls,
+    [Parameter(Mandatory = $true)]
+    [int]$TimeoutSeconds,
+    [System.Diagnostics.Process]$Process,
+    [Parameter(Mandatory = $true)]
+    [string]$LogPath,
+    [string]$ReadyPattern
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    if ($Process) {
+      try {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+          $tail = Get-LogTail -Path $LogPath
+          throw "$Label exited early with code $($Process.ExitCode).`n$tail"
+        }
+      } catch [System.Management.Automation.RuntimeException] {
+        throw
+      } catch {
+      }
+    }
+
+    $patternReady = $true
+    if ($ReadyPattern) {
+      $patternReady = Test-Path $LogPath
+      if ($patternReady) {
+        $patternReady = Select-String -Path $LogPath -Pattern $ReadyPattern -Quiet -ErrorAction SilentlyContinue
+      }
+    }
+
+    foreach ($url in $Urls) {
+      try {
+        $response = Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 -Uri $url
+        if ($response.StatusCode -eq 200 -and $patternReady) {
+          Write-Host "   $Label ready at $url"
+          return
+        }
+      } catch {
+      }
+    }
+
     Start-Sleep -Milliseconds 250
-    try {
-      $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 -Uri 'http://127.0.0.1:7878/api/v1/health'
-      if ($r.StatusCode -eq 200) { $ready = $true; break }
-    } catch { }
-  }
-  if ($ready) {
-    Write-Host "  Daemon ready on http://127.0.0.1:7878"
-  } else {
-    Write-Warning "  Daemon did not respond to /api/v1/health within 10s -- see logs above"
-  }
+  } while ((Get-Date) -lt $deadline)
+
+  $tail = Get-LogTail -Path $LogPath
+  throw "$Label did not become ready within ${TimeoutSeconds}s.`n$tail"
 }
 
-if (-not $DaemonOnly) {
-  Write-Host "-> Starting Vite dev server on http://127.0.0.1:5173"
-  $viteJob = Start-Job -Name 'synapse-vite' -ScriptBlock {
-    param($cwd)
-    Set-Location $cwd
-    & npx vite
-  } -ArgumentList $root
-  $jobs += $viteJob
-
-  Write-Host "-> Compiling Electron main -> dist-electron/"
-  & npm run build:electron
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "build:electron failed"
-    Stop-Jobs
-    exit 1
+function Start-DaemonOnly {
+  $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
+  if ($BindLan) {
+    $daemonArgs += '--bind-lan'
   }
-
-  Write-Host "-> Launching Electron"
-  & npx electron .
-  Write-Host "-> Electron exited; stopping background jobs"
+  Write-Host "-> Starting daemon (foreground): python $($daemonArgs -join ' ')"
+  Write-Host ""
+  & python @daemonArgs
+  exit $LASTEXITCODE
 }
 
-Stop-Jobs
+if ($DaemonOnly) {
+  Start-DaemonOnly
+}
+
+$env:SYNAPSE_DEV_WRAPPER = '1'
+$restartRequested = $false
+$electronExitCode = 0
+
+do {
+  $restartRequested = $false
+  $daemonProc = $null
+  $viteProc = $null
+
+  try {
+    if (-not $AppOnly) {
+      $daemonCommand = 'python -m synapse_daemon --port 7878 --data-dir data'
+      if ($BindLan) {
+        $daemonCommand += ' --bind-lan'
+      }
+      $daemonProc = Start-LoggedCmdProcess -Label 'daemon' -Command $daemonCommand -LogPath $daemonLog
+      Wait-HttpReady `
+        -Label 'Daemon' `
+        -Urls @('http://127.0.0.1:7878/api/v1/health') `
+        -TimeoutSeconds 30 `
+        -Process $daemonProc `
+        -LogPath $daemonLog
+    }
+
+    Write-Host "-> Compiling Electron main -> dist-electron/"
+    & npm run build:electron
+    if ($LASTEXITCODE -ne 0) {
+      throw 'build:electron failed'
+    }
+
+    $viteProc = Start-LoggedCmdProcess `
+      -Label 'Vite dev server' `
+      -Command 'node node_modules\vite\bin\vite.js' `
+      -LogPath $viteLog
+    Wait-HttpReady `
+      -Label 'Vite' `
+      -Urls @('http://127.0.0.1:5173', 'http://localhost:5173') `
+      -TimeoutSeconds 60 `
+      -Process $viteProc `
+      -LogPath $viteLog `
+      -ReadyPattern 'ready in'
+
+    Write-Host "-> Launching Electron"
+    Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+    $electronCli = Join-Path $root 'node_modules\electron\cli.js'
+    if (-not (Test-Path $electronCli)) {
+      throw "Electron CLI not found at $electronCli. Run npm install first."
+    }
+    & node $electronCli . @ElectronArgs
+    $electronExitCode = $LASTEXITCODE
+
+    if ($electronExitCode -eq $restartExitCode) {
+      Write-Host "-> Electron requested a full Synapse restart"
+      $restartRequested = $true
+    } elseif ($electronExitCode -ne 0) {
+      Write-Warning "Electron exited with code $electronExitCode"
+    }
+  } finally {
+    Stop-ProcessTree -Process $viteProc -Label 'Vite'
+    Stop-ProcessTree -Process $daemonProc -Label 'daemon'
+  }
+
+  if ($restartRequested) {
+    Start-Sleep -Milliseconds 500
+  }
+} while ($restartRequested)
+
+exit $electronExitCode

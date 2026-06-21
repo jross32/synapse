@@ -27,6 +27,8 @@ from fastapi import APIRouter
 
 from .errors import conflict, invalid, not_found
 from .models import ToolManifest
+from .profile import ProfileManager
+from .runtime_paths import bundled_marketplace_sample
 from .tools_registry import ToolRegistry
 
 log = logging.getLogger(__name__)
@@ -37,9 +39,7 @@ _FETCH_TIMEOUT_SECONDS = 10.0
 # The sample registry ships at <repo>/docs/marketplace-sample.json. Tests run
 # pytest from daemon/, so a cwd-relative path can't find it -- resolve from
 # the package location instead. ``synapse_daemon/`` -> repo root is two ups.
-_BUNDLED_SAMPLE = (
-    Path(__file__).resolve().parent.parent.parent / "docs" / "marketplace-sample.json"
-)
+_BUNDLED_SAMPLE = bundled_marketplace_sample()
 
 
 class _Cache:
@@ -167,7 +167,10 @@ async def _fetch_manifest_payload(entry: dict[str, Any]) -> dict[str, Any]:
         raise invalid("marketplace", f"Manifest response was not JSON: {exc}")
 
 
-def build_marketplace_router(registry: ToolRegistry) -> APIRouter:
+def build_marketplace_router(
+    registry: ToolRegistry,
+    profile_manager: ProfileManager | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/marketplace", tags=["marketplace"])
     tools_dir = registry._tools_dir  # the registry already validated this folder
 
@@ -262,6 +265,8 @@ def build_marketplace_router(registry: ToolRegistry) -> APIRouter:
         # Hot reload will fire on its own (~250 ms), but a synchronous reload
         # here means the response we return reflects the new state.
         report = await registry.reload()
+        if profile_manager is not None:
+            profile_manager.record_tool_install(tool_id=tool_id)
 
         return {
             "installed": tool_id,
@@ -294,6 +299,8 @@ def build_marketplace_router(registry: ToolRegistry) -> APIRouter:
             pass
 
         report = await registry.reload()
+        if profile_manager is not None:
+            profile_manager.record_tool_uninstall(tool_id=tool_id)
         return {"uninstalled": tool_id, "reload": report}
 
     return router

@@ -41,6 +41,10 @@ def test_ai_context_returns_versioned_digest(tmp_path: Path) -> None:
         # The demo project is in there.
         ids = [p["id"] for p in body["projects"]]
         assert "demo" in ids
+        demo = next(p for p in body["projects"] if p["id"] == "demo")
+        assert demo["ai_context"]["path"].endswith(".synapse-ai-context.md")
+        assert "agent_squads" in body
+        assert "agent_role_templates" in body
         # Endpoints list is non-empty -- this is the "how do I do X" pointer
         # for AI sessions.
         assert any(e["path"] == "/api/v1/projects" for e in body["endpoints_for_ai"])

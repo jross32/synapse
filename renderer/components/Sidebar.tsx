@@ -5,7 +5,7 @@
 // at the bottom. Active page is owned by App.tsx and passed down.
 
 import { useEffect, useState } from 'react';
-import { Search, Settings as SettingsIcon, Wifi, WifiOff } from 'lucide-react';
+import { Search, Settings as SettingsIcon, UserRound, Wifi, WifiOff } from 'lucide-react';
 
 import { cn } from '@shared/utils';
 import { useDaemon } from '@shared/daemon-context';
@@ -20,10 +20,11 @@ export interface SidebarProps {
   active: PageId;
   onNavigate: (page: PageId) => void;
   onOpenPalette?: () => void;
+  onOpenProfile?: () => void;
 }
 
-export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JSX.Element {
-  const { connState } = useDaemon();
+export function Sidebar({ active, onNavigate, onOpenPalette, onOpenProfile }: SidebarProps): JSX.Element {
+  const { connState, profile } = useDaemon();
   const online = connState === 'open';
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const shortcutKey = isMac ? '⌘K' : 'Ctrl+K';
@@ -96,6 +97,38 @@ export function Sidebar({ active, onNavigate, onOpenPalette }: SidebarProps): JS
         >
           <Search className='h-4 w-4' aria-hidden='true' />
           <span className='sr-only font-mono sm:not-sr-only'>{shortcutKey}</span>
+        </button>
+      )}
+
+      {onOpenProfile && (
+        <button
+          type='button'
+          onClick={onOpenProfile}
+          title={profile?.signed_in ? `Profile: ${profile.display_name || profile.email || 'Synapse account'}` : 'Open profile hub'}
+          className='mt-1 flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground'
+        >
+          <div className='relative'>
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt=''
+                className='h-5 w-5 rounded-full object-cover'
+              />
+            ) : (
+              <UserRound className='h-4 w-4' aria-hidden='true' />
+            )}
+            <span
+              className={cn(
+                'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-card',
+                profile?.sync_status === 'connected'
+                  ? 'bg-emerald-400'
+                  : profile?.signed_in
+                    ? 'bg-sky-400'
+                    : 'bg-muted'
+              )}
+            />
+          </div>
+          <span className='sr-only sm:not-sr-only'>Profile</span>
         </button>
       )}
 

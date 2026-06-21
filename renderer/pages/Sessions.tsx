@@ -16,13 +16,14 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
   Terminal as TerminalIcon,
   TerminalSquare,
   X,
 } from 'lucide-react';
 
-import type { PtySessionSummary } from '@shared/generated-types';
+import type { PtySessionSummary, ServiceConnection } from '@shared/generated-types';
 import {
   closeSession,
   getSession,
@@ -39,9 +40,11 @@ import {
   listQuickActions,
   type QuickAction,
 } from '../lib/quick-actions-client';
+import { getServiceConnections } from '../lib/profile-client';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { AgentSquadsView } from '../components/AgentSquadsView';
 import { Modal } from '../components/ui/modal';
 import { PageHeader } from '../components/PageHeader';
 import { SessionTerminal } from '../components/SessionTerminal';
@@ -221,6 +224,7 @@ export function SessionsPage({
   onConsumedInitial,
 }: SessionsPageProps = {}): JSX.Element {
   const { recentEvents } = useDaemon();
+  const [mode, setMode] = useState<'direct' | 'squads'>('direct');
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [registry, setRegistry] = useState<PtySessionSummary[]>([]);
@@ -237,6 +241,7 @@ export function SessionsPage({
   // templates/quick-actions/*.json so adding one doesn't need a restart.
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
   const [launchingActionId, setLaunchingActionId] = useState<string | null>(null);
+  const [serviceConnections, setServiceConnections] = useState<ServiceConnection[]>([]);
   // Collapsible state for the AI Quick-actions rail (v0.1.36 A1). Starts
   // collapsed on first visit (user's ask). Persisted in localStorage so
   // a tab refresh doesn't reset the user's preference.
@@ -267,6 +272,10 @@ export function SessionsPage({
   // templates ships two defaults; an empty list just hides the rail.
   useEffect(() => {
     void listQuickActions().then(setQuickActions).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void getServiceConnections().then(setServiceConnections).catch(() => undefined);
   }, []);
 
   // Deep link from Tools → "Open in Sessions" (v0.1.27). Look up the session
@@ -301,10 +310,38 @@ export function SessionsPage({
     if (fresh) void listSessions().then(setRegistry).catch(() => undefined);
   }, [recentEvents]);
 
-  async function openTab(sessionId: string, argv: string[]): Promise<void> {
+  useEffect(() => {
+    const fresh = recentEvents.some(
+      (e) =>
+        e.name === 'v1.profile.updated' ||
+        e.name === 'v1.profile.sync.updated' ||
+        e.name === 'v1.service_connection.updated'
+    );
+    if (fresh) void getServiceConnections().then(setServiceConnections).catch(() => undefined);
+  }, [recentEvents]);
+
+  async function openTab(sessionId: string, argv?: string[]): Promise<void> {
     // Already open? Just focus it.
     if (tabs.find((t) => t.sessionId === sessionId)) {
       setActive(sessionId);
+      return;
+    }
+    if (!argv) {
+      try {
+        const detail = await getSession(sessionId);
+        setTabs((prev) => [
+          ...prev,
+          {
+            sessionId,
+            argv: detail.argv,
+            scrollback: detail.scrollback,
+            scrollbackLoaded: true,
+          },
+        ]);
+        setActive(sessionId);
+      } catch {
+        setError(`Couldn't re-open session ${sessionId}. It may have already exited.`);
+      }
       return;
     }
     setTabs((prev) => [
@@ -493,13 +530,69 @@ export function SessionsPage({
   );
 
   const activeTab = tabs.find((t) => t.sessionId === active) ?? null;
+  const runtimeConnections = serviceConnections.filter((connection) =>
+    ['claude-code', 'openai-codex', 'github-copilot', 'github', 'google'].includes(
+      connection.provider
+    )
+  );
+  const modeToggle = (
+    <div className='inline-flex rounded-full border border-border bg-card p-1'>
+      <button
+        type='button'
+        onClick={() => setMode('direct')}
+        className={cn(
+          'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+          mode === 'direct'
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        Direct sessions
+      </button>
+      <button
+        type='button'
+        onClick={() => setMode('squads')}
+        className={cn(
+          'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+          mode === 'squads'
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        Agent squads
+      </button>
+    </div>
+  );
+
+  if (mode === 'squads') {
+    return (
+      <div className='flex h-full flex-col gap-4'>
+        <PageHeader
+          title='Sessions'
+          subtitle='Coordinate lead and helper AI workers inside the same PTY-based workspace. Every helper remains a real, reopenable terminal session.'
+          action={modeToggle}
+        />
+        <RuntimeReadinessCard connections={runtimeConnections} />
+        <AgentSquadsView
+          tabs={tabs}
+          activeSessionId={active}
+          onOpenTab={openTab}
+          onCloseTab={closeTab}
+          onRestartTab={restartTab}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className='flex h-full flex-col gap-4'>
       <PageHeader
         title='Sessions'
         subtitle='Live AI coders & shells — Claude, Codex, Python, anything on PATH. Each session runs under a real PTY so colours, line editing and Ctrl+C all behave.'
+        action={modeToggle}
       />
+
+      <RuntimeReadinessCard connections={runtimeConnections} />
 
       {/* Quick launch rail + custom argv */}
       <Card className='flex flex-col gap-3 p-4'>
@@ -802,5 +895,67 @@ export function SessionsPage({
         </Card>
       )}
     </div>
+  );
+}
+
+function RuntimeReadinessCard({
+  connections,
+}: {
+  connections: ServiceConnection[];
+}): JSX.Element {
+  if (connections.length === 0) {
+    return (
+      <Card className='flex items-start gap-3 border-dashed p-4 text-sm'>
+        <ShieldCheck className='mt-0.5 h-4 w-4 shrink-0 text-primary' aria-hidden='true' />
+        <div>
+          <p className='font-medium'>Runtime readiness</p>
+          <p className='mt-1 text-muted-foreground'>
+            Synapse will surface connected-service health here once the Profile hub has inspected
+            local runtimes and linked accounts.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card className='flex flex-col gap-3 p-4'>
+      <div>
+        <h2 className='text-sm font-semibold uppercase tracking-[0.16em] text-primary/85'>
+          Runtime readiness
+        </h2>
+        <p className='mt-1 text-sm text-muted-foreground'>
+          Portable official connections and local runtime sign-ins, visible from the same place you launch agents.
+        </p>
+      </div>
+      <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
+        {connections.map((connection) => (
+          <div
+            key={connection.id}
+            className='rounded-2xl border border-border/70 bg-secondary/20 px-4 py-3'
+          >
+            <div className='flex flex-wrap items-center gap-2'>
+              <p className='text-sm font-medium'>{connection.display_name}</p>
+              <span
+                className={cn(
+                  'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                  connection.status === 'ready'
+                    ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                    : connection.status === 'needs-attention'
+                      ? 'border-amber-500/30 bg-amber-500/15 text-amber-200'
+                      : connection.status === 'local-only'
+                        ? 'border-sky-500/30 bg-sky-500/15 text-sky-200'
+                        : 'border-border/70 bg-background/60 text-muted-foreground'
+                )}
+              >
+                {connection.status}
+              </span>
+            </div>
+            <p className='mt-2 text-xs text-muted-foreground'>
+              {String(connection.details.message ?? 'No runtime note yet.')}
+            </p>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }

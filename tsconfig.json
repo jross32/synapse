@@ -19,10 +19,9 @@
     "useDefineForClassFields": true,
     "allowImportingTsExtensions": false,
     "noEmit": true,
-    "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["renderer/*"],
-      "@shared/*": ["renderer/lib/*"]
+      "@renderer/*": ["./renderer/*"],
+      "@shared/*": ["./renderer/lib/*"]
     }
   },
   "include": ["renderer/**/*.ts", "renderer/**/*.tsx", "mobile/**/*.ts", "mobile/**/*.tsx"],

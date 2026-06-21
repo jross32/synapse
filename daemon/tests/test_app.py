@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -173,11 +174,33 @@ def test_websocket_ping_pong(harness) -> None:
         assert reply == {"type": "pong"}
 
 
+def test_websocket_accepts_slightly_delayed_resume_frame(harness) -> None:
+    c, app, *_ = harness
+    with c.websocket_connect("/api/v1/ws") as ws:
+        time.sleep(1.0)
+        ws.send_json({"type": "resume", "since": 0, "token": app.state.auth.local_token})
+        message = ws.receive_json()
+        assert message["type"] == "replay"
+
+
 def test_mobile_ui_is_served_without_a_token(harness) -> None:
-    """The mobile Web UI is static + open — a phone loads it, then pairs."""
+    """The phone Web UI is open-to-load — a device pairs after the page renders."""
 
     c, *_ = harness
     res = c.get("/mobile/")  # no X-Synapse-Token
     assert res.status_code == 200
     assert "text/html" in res.headers["content-type"]
     assert "Synapse" in res.text
+
+
+def test_root_redirects_to_mobile_shell(harness) -> None:
+    """A bare daemon URL should open the web shell instead of a JSON 404."""
+
+    c, *_ = harness
+    res = c.get("/", follow_redirects=False)
+    assert res.status_code == 307
+    assert res.headers["location"] == "/mobile"
+
+    head = c.head("/", follow_redirects=False)
+    assert head.status_code == 307
+    assert head.headers["location"] == "/mobile"

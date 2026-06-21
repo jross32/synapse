@@ -32,6 +32,7 @@ from .app import boot_publish_daemon_started, boot_publish_reconciliation, build
 from .auth import AuthManager, ensure_local_token
 from .orphan_reconciler import reconcile, reconcile_project_statuses
 from .process_manager import ProcessManager
+from .runtime_paths import bundled_tools_dir
 from .security import assert_not_admin
 from .seed import seed_default_projects
 from .storage import Storage
@@ -180,20 +181,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "cli" if args.bind_lan else ("config" if boot_cfg.bind_lan else "default"),
     )
 
-    # Tools dir resolution (v0.1.36 -- ships cloudtap). The CLI default
-    # is the relative path "tools/" so Python resolves it against the
-    # daemon's cwd. When Electron spawns us, cwd is electron/ (one up
-    # from electron/dist) and there's no tools/ folder there -- so we
-    # silently load zero tools, the marketplace + NetworkPanel both
-    # say "Cloudtap isn't loaded", and the user can't open WAN tunnels.
-    # If the user didn't pass an explicit --tools-dir, also try a path
-    # relative to the package: <repo>/tools/. Falls back to the CLI
-    # value when neither works.
+    # Resolve bundled tools in a cwd-independent way so source and packaged
+    # launches discover the same manifest set.
     if args.tools_dir == DEFAULT_TOOLS_DIR:
-        repo_tools = Path(__file__).resolve().parent.parent.parent / "tools"
-        if repo_tools.is_dir():
-            args.tools_dir = repo_tools
-            log.info("Resolved tools_dir to repo path %s (default cwd lookup would have missed it)", repo_tools)
+        resolved_tools = bundled_tools_dir()
+        if resolved_tools.is_dir():
+            args.tools_dir = resolved_tools
+            log.info(
+                "Resolved tools_dir to %s (default cwd lookup would have missed it)",
+                resolved_tools,
+            )
         elif not args.tools_dir.is_dir():
             log.warning(
                 "tools_dir %s does not exist (cwd=%s); no plugin tools will load. "

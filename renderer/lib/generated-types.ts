@@ -139,6 +139,83 @@ export interface RestoreReport {
   warnings: string[];
 }
 
+// ── Profile hub + portable catalog state (v0.1.36-dev) ─────────────────
+
+export interface ProviderIdentity {
+  provider: string;
+  email: string | null;
+  identity_id: string | null;
+}
+
+export interface HostPresence {
+  id: string;
+  name: string;
+  platform: string;
+  current_host: boolean;
+  last_seen_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceConnection {
+  id: string;
+  provider: string;
+  display_name: string;
+  mode: string;
+  portability: string;
+  status: string;
+  details: Record<string, unknown>;
+  last_verified_at: string | null;
+  last_host_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogPreferenceItem {
+  item_key: string;
+  kind: string;
+  item_id: string;
+  favorite: boolean;
+  last_used_at: string | null;
+  use_count: number;
+  last_installed_at: string | null;
+  installed_host_ids: string[];
+  installed_here: boolean;
+  previously_installed: boolean;
+  used_before: boolean;
+  updated_at: string;
+}
+
+export interface CatalogPreferenceState {
+  current_host_id: string;
+  items: CatalogPreferenceItem[];
+  favorite_keys: string[];
+  sync_enabled: boolean;
+  signed_in: boolean;
+  last_sync_at: string | null;
+  last_sync_error: string | null;
+}
+
+export interface ProfileSummary {
+  signed_in: boolean;
+  config_ready: boolean;
+  supabase_url: string | null;
+  has_anon_key: boolean;
+  sync_enabled: boolean;
+  sync_status: string;
+  user_id: string | null;
+  email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  provider: string | null;
+  provider_identities: ProviderIdentity[];
+  current_host: HostPresence;
+  portable_connection_count: number;
+  local_connection_count: number;
+  last_sync_at: string | null;
+  last_sync_error: string | null;
+}
+
 // ── Projects (Milestone D) ───────────────────────────────────────────────
 
 /** What a project IS (v0.1.19) -- drives the Apps page filter. */
@@ -349,6 +426,10 @@ export interface RegistryEntry {
   name: string;
   publisher: string;
   tier: ToolTier;
+  category?: string | null;
+  tags?: string[];
+  featured?: boolean;
+  sort_rank?: number;
   version: string;
   description: string;
   homepage: string | null;
@@ -369,6 +450,75 @@ export interface InstallReport {
 export interface UninstallReport {
   uninstalled: string;
   reload: { added: string[]; removed: string[]; kept: string[] };
+}
+
+// ── Sessions-centric AI squads (v0.1.36-dev) ────────────────────────────
+
+export type AgentVisibility = 'lead' | 'helper';
+
+export type AgentContextMode = 'full' | 'standard' | 'minimal';
+
+export type AgentSquadStatus = 'active' | 'paused' | 'completed';
+
+export type AgentWorkItemStatus =
+  | 'queued'
+  | 'running'
+  | 'handoff'
+  | 'blocked'
+  | 'completed';
+
+export interface AgentRoleTemplate {
+  id: string;
+  name: string;
+  description: string;
+  preferred_runtimes: string[];
+  default_visibility: AgentVisibility;
+  context_mode: AgentContextMode;
+  can_delegate: boolean;
+  prompt_preamble_md: string;
+  enabled: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentSquad {
+  id: string;
+  project_id: string;
+  name: string;
+  goal_md: string;
+  status: AgentSquadStatus;
+  lead_role_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_activity_at: string;
+}
+
+export interface AgentWorkItem {
+  id: string;
+  squad_id: string;
+  parent_id: string | null;
+  title: string;
+  instructions_md: string;
+  status: AgentWorkItemStatus;
+  assigned_role_id: string | null;
+  preferred_runtime: string | null;
+  pty_session_id: string | null;
+  summary_md: string | null;
+  blockers_md: string | null;
+  files_touched: string[];
+  suggested_next_role: string | null;
+  transcript_file_id: string | null;
+  opened_in_tab: boolean;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface AgentSquadDetail {
+  squad: AgentSquad;
+  role_templates: AgentRoleTemplate[];
+  work_items: AgentWorkItem[];
 }
 
 // ── PTY sessions (v0.1.25 / v0.1.26 · ADR-0002 Phase A) ──────────────────

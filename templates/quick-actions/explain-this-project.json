@@ -3,6 +3,8 @@
   "name": "Explain this project",
   "description": "Walk through the project the user is in, then write an ABOUT.md summarising it.",
   "icon": "book-open",
+  "category": "data",
+  "tags": ["docs", "analysis", "onboarding"],
   "prompt": "Introspect the project I'm in right now and produce an ABOUT.md that a new contributor (human or AI) could read in 5 minutes to understand the shape of the codebase.\n\nDo this carefully:\n\n1. `ls $SYNAPSE_FILES` first to see anything I've uploaded. If a README, PROGRESS, ARCHITECTURE, or AGENTS file exists there or in the repo root, start by reading those -- don't restate what they already say.\n2. Walk the top-level directory tree (limit depth ~3) and group folders by role (entry points, source modules, tests, docs, scripts, build artefacts).\n3. Identify the primary language(s), package manager(s), runtime(s), and how to build / run / test the project. Use the existing manifests (package.json, pyproject.toml, Cargo.toml, etc.) -- don't guess.\n4. Identify the public surfaces: HTTP endpoints, CLIs, library exports, MCP tools, anything a consumer would touch.\n5. Note anything fragile or interesting -- a custom build step, a database migration system, a code-generation step, a hot-reload watcher. Things a new contributor will trip on if they don't know.\n\nWrite the ABOUT.md to the current working directory. Keep it under 200 lines. Use H2 sections; lead each with the headline takeaway, not the explanation. Link to files with `file_path:line_number` syntax so a reader can click through.\n\nWhen you're done, summarise the 3 most surprising things you learned -- things that would be useful to call out to me in chat regardless of whether they ended up in ABOUT.md.",
   "default_argv": ["claude"]
 }

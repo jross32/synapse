@@ -4,6 +4,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  currentBrowserBaseUrl,
+  projectBrowserUrl,
+} from '@shared/browser-runtime';
+import {
   Activity,
   ArrowRight,
   Boxes,
@@ -20,6 +24,7 @@ import {
   Square,
   SunMoon,
   Triangle,
+  UserRound,
   Wrench,
 } from 'lucide-react';
 
@@ -57,11 +62,12 @@ function isRunning(p: Project): boolean {
 function buildCommands(args: {
   projects: Project[];
   navigate: (page: PageId) => void;
+  openProfile: () => void;
   onProjectLaunched: (p: Project) => void;
   onProjectStopped: (p: Project) => void;
   onError: (msg: string) => void;
 }): Command[] {
-  const { projects, navigate, onProjectLaunched, onProjectStopped, onError } = args;
+  const { projects, navigate, openProfile, onProjectLaunched, onProjectStopped, onError } = args;
   const list: Command[] = [];
 
   // Pages
@@ -69,6 +75,7 @@ function buildCommands(args: {
     { id: 'home', label: 'Home', icon: Home },
     { id: 'apps', label: 'Apps', icon: Boxes },
     { id: 'tools', label: 'Tools', icon: Wrench },
+    { id: 'sessions', label: 'Sessions', icon: Search },
     { id: 'processes', label: 'Processes', icon: Activity },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
@@ -135,7 +142,7 @@ function buildCommands(args: {
     hint: 'Action',
     icon: ExternalLink,
     searchString: 'mobile phone open browser web ui',
-    run: () => void openExternal('http://localhost:7878/mobile'),
+    run: () => void openExternal(`${currentBrowserBaseUrl()}/mobile`),
   });
   list.push({
     id: 'action:theme',
@@ -148,6 +155,14 @@ function buildCommands(args: {
       setStoredTheme(next);
       applyTheme(next);
     },
+  });
+  list.push({
+    id: 'action:profile',
+    label: 'Open profile hub',
+    hint: 'Action',
+    icon: UserRound,
+    searchString: 'profile account connected services sync host favorites',
+    run: () => openProfile(),
   });
 
   // Projects -- contextual action by status
@@ -173,15 +188,17 @@ function buildCommands(args: {
     // browser". Hidden when the project isn't running so the palette
     // never offers something that would 404.
     if (p.status === 'launched' && p.expected_port !== null) {
-      const url = `http://localhost:${p.expected_port}`;
-      list.push({
-        id: `project-open:${p.id}`,
-        label: `Open ${p.name} in browser`,
-        hint: `${url} · Project`,
-        icon: Globe,
-        searchString: `${p.name} ${p.id} open browser web localhost ${p.expected_port}`,
-        run: () => void openExternal(url),
-      });
+      const url = projectBrowserUrl(p.expected_port);
+      if (url) {
+        list.push({
+          id: `project-open:${p.id}`,
+          label: `Open ${p.name} in browser`,
+          hint: `${url} · Project`,
+          icon: Globe,
+          searchString: `${p.name} ${p.id} open browser web localhost ${p.expected_port}`,
+          run: () => void openExternal(url),
+        });
+      }
     }
   }
 
@@ -224,9 +241,10 @@ export interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
   onNavigate: (page: PageId) => void;
+  onOpenProfile: () => void;
 }
 
-export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProps): JSX.Element {
+export function CommandPalette({ open, onClose, onNavigate, onOpenProfile }: CommandPaletteProps): JSX.Element {
   const { projects, upsertProjectLocal } = useDaemon();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
@@ -252,6 +270,10 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
           onNavigate(p);
           onClose();
         },
+        openProfile: () => {
+          onOpenProfile();
+          onClose();
+        },
         onProjectLaunched: (p) => {
           upsertProjectLocal(p);
           onClose();
@@ -262,7 +284,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
         },
         onError: (msg) => setError(msg),
       }),
-    [projects, onNavigate, onClose, upsertProjectLocal]
+    [projects, onNavigate, onOpenProfile, onClose, upsertProjectLocal]
   );
 
   const filtered = useMemo(() => filterCommands(commands, query), [commands, query]);

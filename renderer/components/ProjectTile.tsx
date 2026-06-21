@@ -7,12 +7,14 @@
 import { useEffect, useState } from 'react';
 import { Code2, FolderOpen, Globe, Paperclip, Pin, Sparkles, TerminalSquare } from 'lucide-react';
 
+import { projectBrowserUrl } from '@shared/browser-runtime';
 import { getProjectDiskUsage, launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import {
   canOpenInTerminal,
   canOpenInVscode,
+  hasElectronBridge,
   openExternal,
   openInTerminal,
   openInVscode,
@@ -82,6 +84,8 @@ export function ProjectTile({
 
   const isRunning = project.status === 'launched' || project.status === 'stopping';
   const isTransitioning = project.status === 'launching' || project.status === 'stopping';
+  const browserUrl = projectBrowserUrl(project.expected_port);
+  const desktopBridge = hasElectronBridge();
 
   async function run(action: () => Promise<unknown>): Promise<void> {
     setBusy(true);
@@ -278,14 +282,16 @@ export function ProjectTile({
           </Button>
         </div>
         <div className='flex flex-wrap gap-1'>
-          <Button
-            variant='ghost'
-            size='sm'
-            className='h-7 px-2 text-xs text-muted-foreground'
-            onClick={() => void openExternal(project.path)}
-          >
-            <FolderOpen className='h-3.5 w-3.5' /> Open folder
-          </Button>
+          {desktopBridge && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              onClick={() => void openExternal(project.path)}
+            >
+              <FolderOpen className='h-3.5 w-3.5' /> Open folder
+            </Button>
+          )}
           {canOpenInVscode() && (
             <Button
               variant='ghost'
@@ -331,14 +337,16 @@ export function ProjectTile({
               variant='ghost'
               size='sm'
               className='h-7 px-2 text-xs text-muted-foreground'
-              disabled={project.status !== 'launched'}
+              disabled={project.status !== 'launched' || browserUrl === null}
               title={
-                project.status === 'launched'
-                  ? `Open http://localhost:${project.expected_port}`
-                  : `Launch ${project.name} first to open it in your browser`
+                project.status !== 'launched'
+                  ? `Launch ${project.name} first to open it in your browser`
+                  : browserUrl
+                    ? `Open ${browserUrl}`
+                    : 'Open a Cloudtap tunnel for this app port before using it over WAN.'
               }
-              aria-label={`Open ${project.name} in browser at localhost:${project.expected_port}`}
-              onClick={() => void openExternal(`http://localhost:${project.expected_port}`)}
+              aria-label={`Open ${project.name} in browser`}
+              onClick={() => browserUrl && void openExternal(browserUrl)}
             >
               <Globe className='h-3.5 w-3.5' aria-hidden='true' /> Open in browser
             </Button>

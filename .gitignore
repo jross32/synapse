@@ -62,3 +62,9 @@ Thumbs.db
 # Secrets / local
 *.local.json
 secrets/
+
+# Runtime artifacts (per-process, never committed)
+*.pid
+.playwright-mcp/
+installer/daemon-dist/
+*.exe

@@ -19,6 +19,7 @@ const isDev = !app.isPackaged;
 const daemonHost = '127.0.0.1';
 const daemonPort = 7878;
 const daemonUrl = `http://${daemonHost}:${daemonPort}`;
+const FULL_DEV_RESTART_EXIT_CODE = 75;
 
 const ALLOW_ADMIN = process.argv.includes('--allow-admin');
 
@@ -55,6 +56,11 @@ let spawnedDaemon = false;
 let trayRefreshTimer: ReturnType<typeof setInterval> | null = null;
 // Projects last fetched for the tray submenu.
 let trayProjects: Array<{ id: string; name: string; status: string }> = [];
+let daemonAuthToken: string | null = null;
+let daemonAuthTokenPromise: Promise<string> | null = null;
+let daemonOutputTail: string[] = [];
+let daemonLastExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+let restartInFlight = false;
 
 const repoRoot = path.resolve(__dirname, '..');
 
@@ -66,6 +72,39 @@ function resolveIconPath(): string {
   // In packaged builds, electron-builder copies electron/icons/ into resources/.
   return app.isPackaged ? iconPathPackaged : iconPath;
 }
+
+function isBrokenPipeError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as NodeJS.ErrnoException).code === 'EPIPE'
+  );
+}
+
+function protectConsolePipe(stream: NodeJS.WriteStream): void {
+  stream.on('error', (error) => {
+    if (isBrokenPipeError(error)) return;
+    console.error('[synapse] console stream failed:', error);
+  });
+}
+
+function forwardDaemonOutput(stream: NodeJS.WriteStream, prefix: string, chunk: Buffer): void {
+  const text = chunk.toString();
+  const lines = text.replace(/\r/g, '').split('\n').filter((line) => line.length > 0);
+  if (lines.length > 0) {
+    daemonOutputTail = [...daemonOutputTail, ...lines].slice(-40);
+  }
+  if (stream.destroyed || !stream.writable) return;
+  try {
+    stream.write(`${prefix}${text}`);
+  } catch (error) {
+    if (isBrokenPipeError(error)) return;
+    throw error;
+  }
+}
+
+protectConsolePipe(process.stdout);
+protectConsolePipe(process.stderr);
 
 // ── admin refusal (Contract #16) ──────────────────────────────────────────
 function refuseAdminIfNeeded(): void {
@@ -85,14 +124,54 @@ function refuseAdminIfNeeded(): void {
 }
 
 // ── daemon spawn + health wait ────────────────────────────────────────────
+function resolvePackagedDaemonPath(): string {
+  const candidates = [
+    path.join(process.resourcesPath, 'daemon', 'synapse-daemon.exe'),
+    path.join(process.resourcesPath, 'daemon', 'synapsed.exe'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `Bundled daemon executable not found. Checked: ${candidates.join(', ')}`
+  );
+}
+
+function buildDaemonLaunch(): { command: string; args: string[]; cwd: string } {
+  if (app.isPackaged) {
+    return {
+      command: resolvePackagedDaemonPath(),
+      args: [
+        '--port',
+        String(daemonPort),
+        '--data-dir',
+        path.join(app.getPath('userData'), 'data'),
+        '--tools-dir',
+        path.join(process.resourcesPath, 'tools'),
+      ],
+      cwd: process.resourcesPath,
+    };
+  }
+  return {
+    command: 'python',
+    args: ['-m', 'synapse_daemon', '--port', String(daemonPort), '--data-dir', 'data'],
+    cwd: repoRoot,
+  };
+}
+
 function spawnDaemon(): ChildProcess {
-  const cwd = path.resolve(__dirname, '..');
-  const args = ['-m', 'synapse_daemon', '--port', String(daemonPort), '--data-dir', 'data'];
+  const launch = buildDaemonLaunch();
+  daemonOutputTail = [];
+  daemonLastExit = null;
+  daemonAuthToken = null;
+  daemonAuthTokenPromise = null;
 
-  console.log(`[synapse] spawning daemon: python ${args.join(' ')}  (cwd=${cwd})`);
+  console.log(
+    `[synapse] spawning daemon: ${launch.command} ${launch.args.join(' ')}  (cwd=${launch.cwd})`
+  );
 
-  const proc = spawn('python', args, {
-    cwd,
+  const proc = spawn(launch.command, launch.args, {
+    cwd: launch.cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     // detached: false in dev so the daemon dies with us cleanly.
     // Milestone J flips this so the daemon survives UI death.
@@ -101,13 +180,14 @@ function spawnDaemon(): ChildProcess {
   });
 
   proc.stdout?.on('data', (chunk: Buffer) => {
-    process.stdout.write(`[daemon] ${chunk.toString()}`);
+    forwardDaemonOutput(process.stdout, '[daemon] ', chunk);
   });
   proc.stderr?.on('data', (chunk: Buffer) => {
-    process.stderr.write(`[daemon] ${chunk.toString()}`);
+    forwardDaemonOutput(process.stderr, '[daemon] ', chunk);
   });
   proc.on('exit', (code, signal) => {
     console.log(`[synapse] daemon exited (code=${code}, signal=${signal})`);
+    daemonLastExit = { code, signal };
     daemonProc = null;
     if (!isQuitting) {
       // The daemon should outlive the UI; if it died unexpectedly, surface
@@ -119,13 +199,30 @@ function spawnDaemon(): ChildProcess {
   return proc;
 }
 
+function formatDaemonStartupError(prefix: string): Error {
+  const exitInfo =
+    daemonLastExit !== null
+      ? ` Last exit: code=${daemonLastExit.code}, signal=${daemonLastExit.signal}.`
+      : '';
+  const tail =
+    daemonOutputTail.length > 0
+      ? `\nRecent daemon output:\n${daemonOutputTail.join('\n')}`
+      : '\nRecent daemon output: (none)';
+  return new Error(`${prefix}${exitInfo}${tail}`);
+}
+
 async function waitForDaemon(timeoutMs = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await probeHealth()) return;
+    if (spawnedDaemon && daemonLastExit !== null) {
+      throw formatDaemonStartupError('Daemon exited before /api/v1/health became ready.');
+    }
     await new Promise((r) => setTimeout(r, 250));
   }
-  throw new Error(`Daemon did not respond to ${daemonUrl}/api/v1/health within ${timeoutMs}ms`);
+  throw formatDaemonStartupError(
+    `Daemon did not respond to ${daemonUrl}/api/v1/health within ${timeoutMs}ms.`
+  );
 }
 
 function probeHealth(): Promise<boolean> {
@@ -146,46 +243,73 @@ function probeHealth(): Promise<boolean> {
   });
 }
 
-// ── authenticated daemon requests (Milestone H/I) ─────────────────────────
-// The daemon requires X-Synapse-Token on every data route. The main process
-// reads the local token straight off disk — it lives on the same machine.
-function readAuthToken(): string | null {
+function waitForChildExit(proc: ChildProcess, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Process ${proc.pid ?? 'unknown'} did not exit within ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      proc.removeListener('exit', onExit);
+    };
+
+    const onExit = (): void => {
+      cleanup();
+      resolve();
+    };
+
+    if (proc.exitCode !== null || proc.killed) {
+      cleanup();
+      resolve();
+      return;
+    }
+
+    proc.once('exit', onExit);
+  });
+}
+
+async function shutdownSpawnedDaemon(timeoutMs = 5_000): Promise<void> {
+  if (!spawnedDaemon || daemonProc === null) return;
+
+  const proc = daemonProc;
+  if (proc.exitCode !== null) return;
+
+  console.log('[synapse] terminating daemon child before restart/quit');
   try {
-    const token = fs.readFileSync(path.join(repoRoot, 'data', 'auth-token'), 'utf-8').trim();
-    return token || null;
-  } catch {
-    return null;
+    proc.kill();
+    await waitForChildExit(proc, timeoutMs);
+  } catch (error) {
+    console.error('[synapse] graceful daemon shutdown timed out, forcing kill:', error);
+    if (process.platform === 'win32' && proc.pid) {
+      spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true });
+      await waitForChildExit(proc, timeoutMs).catch(() => undefined);
+    }
   }
 }
 
-function daemonRequest<T = unknown>(
-  method: string,
-  apiPath: string
-): Promise<T> {
+// ── authenticated daemon requests (Milestone H/I) ─────────────────────────
+// The daemon requires X-Synapse-Token on every data route. The main process
+// now asks the daemon it's actually attached to for the trusted-local token
+// instead of assuming the repo's data/auth-token file still matches.
+function httpTextRequest(
+  url: string,
+  init: { method: string; timeout?: number; headers?: Record<string, string> }
+): Promise<{ statusCode: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const token = readAuthToken();
     const req = http.request(
-      `${daemonUrl}/api/v1${apiPath}`,
+      url,
       {
-        method,
-        timeout: 4000,
-        headers: token ? { 'X-Synapse-Token': token, Accept: 'application/json' } : {},
+        method: init.method,
+        timeout: init.timeout ?? 4000,
+        headers: init.headers,
       },
       (res) => {
         let body = '';
         res.setEncoding('utf-8');
         res.on('data', (c) => (body += c));
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 400) {
-            reject(new Error(`HTTP ${res.statusCode} on ${apiPath}`));
-            return;
-          }
-          try {
-            resolve(body ? (JSON.parse(body) as T) : (null as T));
-          } catch (err) {
-            reject(err instanceof Error ? err : new Error(String(err)));
-          }
-        });
+        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body }));
       }
     );
     req.on('error', reject);
@@ -195,6 +319,64 @@ function daemonRequest<T = unknown>(
     });
     req.end();
   });
+}
+
+async function fetchDaemonLocalToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && daemonAuthToken) return daemonAuthToken;
+  if (daemonAuthTokenPromise) return daemonAuthTokenPromise;
+
+  daemonAuthTokenPromise = (async () => {
+    const { statusCode, body } = await httpTextRequest(`${daemonUrl}/api/v1/auth/local-token`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (statusCode >= 400) {
+      throw new Error(`HTTP ${statusCode} on /auth/local-token`);
+    }
+    const parsed = body ? (JSON.parse(body) as { token?: unknown }) : {};
+    if (typeof parsed.token !== 'string' || !parsed.token) {
+      throw new Error('The daemon did not return a local auth token.');
+    }
+    daemonAuthToken = parsed.token;
+    return parsed.token;
+  })();
+
+  try {
+    return await daemonAuthTokenPromise;
+  } finally {
+    daemonAuthTokenPromise = null;
+  }
+}
+
+async function daemonRequest<T = unknown>(
+  method: string,
+  apiPath: string,
+  allowRefresh = true
+): Promise<T> {
+  let token: string | null = daemonAuthToken;
+  if (!token) {
+    try {
+      token = await fetchDaemonLocalToken();
+    } catch {
+      token = null;
+    }
+  }
+
+  const { statusCode, body } = await httpTextRequest(`${daemonUrl}/api/v1${apiPath}`, {
+    method,
+    headers: token ? { 'X-Synapse-Token': token, Accept: 'application/json' } : { Accept: 'application/json' },
+  });
+
+  if (statusCode === 401 && allowRefresh) {
+    daemonAuthToken = null;
+    await fetchDaemonLocalToken(true);
+    return daemonRequest<T>(method, apiPath, false);
+  }
+  if (statusCode >= 400) {
+    throw new Error(`HTTP ${statusCode} on ${apiPath}`);
+  }
+
+  return body ? (JSON.parse(body) as T) : (null as T);
 }
 
 // ── window + tray ─────────────────────────────────────────────────────────
@@ -301,10 +483,28 @@ function buildTrayMenu(): Electron.Menu {
  * Settings → Network).
  */
 function restartApp(): void {
-  console.log('[synapse] restarting from tray menu');
+  if (restartInFlight) return;
+  restartInFlight = true;
+
+  if (isDev && process.env.SYNAPSE_DEV_WRAPPER === '1') {
+    console.log('[synapse] requesting full wrapper restart');
+    isQuitting = true;
+    app.exit(FULL_DEV_RESTART_EXIT_CODE);
+    return;
+  }
+
+  console.log('[synapse] restarting app');
   isQuitting = true;
-  app.relaunch();
-  app.exit(0);
+  void (async () => {
+    try {
+      await shutdownSpawnedDaemon();
+      app.relaunch();
+      app.exit(0);
+    } catch (error) {
+      console.error('[synapse] restart failed:', error);
+      app.exit(1);
+    }
+  })();
 }
 
 // A tray project click: launch it if idle, otherwise just surface the window.
@@ -482,6 +682,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   refuseAdminIfNeeded();
+  let daemonBootError: Error | null = null;
 
   // Attach to a daemon that's already running (e.g. one that survived an
   // Electron crash, or was launched by synapse.cmd); otherwise spawn our own.
@@ -489,12 +690,20 @@ app.whenReady().then(async () => {
     console.log('[synapse] a daemon is already running — attaching to it');
     spawnedDaemon = false;
   } else {
-    daemonProc = spawnDaemon();
-    spawnedDaemon = true;
+    try {
+      daemonProc = spawnDaemon();
+      spawnedDaemon = true;
+    } catch (error) {
+      daemonBootError = error instanceof Error ? error : new Error(String(error));
+      console.error('[synapse] daemon failed to spawn:', daemonBootError);
+    }
   }
   createTray();
 
   try {
+    if (daemonBootError) {
+      throw daemonBootError;
+    }
     await waitForDaemon();
     console.log('[synapse] daemon ready');
     // Populate the tray's Projects submenu + keep it fresh.

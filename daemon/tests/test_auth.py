@@ -92,6 +92,26 @@ def test_revoke_kills_the_device_token(tmp_path: Path) -> None:
     assert auth.list_devices() == []
 
 
+def test_claim_redeem_mints_a_new_working_session(tmp_path: Path) -> None:
+    auth = AuthManager(_storage(tmp_path), "local")
+    paired = auth.redeem(auth.issue_code()["code"], "Phone")
+    claim = auth.issue_claim(paired["device"]["id"])
+
+    reconnected = auth.redeem_claim(claim["claim"])
+    assert reconnected["device"]["id"] == paired["device"]["id"]
+    assert auth.verify(reconnected["token"]) is True
+
+
+def test_claim_is_single_use(tmp_path: Path) -> None:
+    auth = AuthManager(_storage(tmp_path), "local")
+    paired = auth.redeem(auth.issue_code()["code"], "Phone")
+    claim = auth.issue_claim(paired["device"]["id"])
+    auth.redeem_claim(claim["claim"])
+
+    with pytest.raises(SynapseError):
+        auth.redeem_claim(claim["claim"])
+
+
 # ── REST surface ─────────────────────────────────────────────────────────
 
 
@@ -151,6 +171,7 @@ def test_full_pairing_flow_over_rest(tmp_path: Path) -> None:
     )
     assert paired.status_code == 200
     device_token = paired.json()["token"]
+    assert paired.json()["computer_name"]
 
     # The device token now authenticates a protected route.
     phone_authed = TestClient(app, headers={"X-Synapse-Token": device_token})
@@ -164,3 +185,49 @@ def test_full_pairing_flow_over_rest(tmp_path: Path) -> None:
     device_id = devices[0]["id"]
     assert desktop.delete(f"/api/v1/pair/devices/{device_id}").status_code == 204
     assert phone_authed.get("/api/v1/projects").status_code == 401
+
+
+def test_handoff_claim_reconnects_without_new_pair_code(tmp_path: Path) -> None:
+    app, _ = _app(tmp_path)
+    local = app.state.auth.local_token
+    desktop = TestClient(app, headers={"X-Synapse-Token": local})
+
+    code = desktop.post("/api/v1/pair/code").json()["code"]
+    paired = TestClient(app).post(
+        "/api/v1/pair", json={"code": code, "device_name": "Pixel"}
+    ).json()
+    device_id = paired["device"]["id"]
+    original_phone = TestClient(app, headers={"X-Synapse-Token": paired["token"]})
+
+    handoff = desktop.post("/api/v1/pair/handoff", json={"device_id": device_id})
+    assert handoff.status_code == 200
+    claim = handoff.json()["claim"]
+
+    reconnected = TestClient(app).post("/api/v1/pair/claim", json={"claim": claim})
+    assert reconnected.status_code == 200
+    second_token = reconnected.json()["token"]
+    second_phone = TestClient(app, headers={"X-Synapse-Token": second_token})
+
+    assert original_phone.get("/api/v1/projects").status_code == 200
+    assert second_phone.get("/api/v1/projects").status_code == 200
+
+
+def test_revoking_device_invalidates_all_sessions_and_claims(tmp_path: Path) -> None:
+    app, _ = _app(tmp_path)
+    local = app.state.auth.local_token
+    desktop = TestClient(app, headers={"X-Synapse-Token": local})
+
+    code = desktop.post("/api/v1/pair/code").json()["code"]
+    paired = TestClient(app).post(
+        "/api/v1/pair", json={"code": code, "device_name": "Pixel"}
+    ).json()
+    device_id = paired["device"]["id"]
+
+    claim = desktop.post("/api/v1/pair/handoff", json={"device_id": device_id}).json()["claim"]
+    reconnected = TestClient(app).post("/api/v1/pair/claim", json={"claim": claim}).json()
+    phone_a = TestClient(app, headers={"X-Synapse-Token": paired["token"]})
+    phone_b = TestClient(app, headers={"X-Synapse-Token": reconnected["token"]})
+
+    assert desktop.delete(f"/api/v1/pair/devices/{device_id}").status_code == 204
+    assert phone_a.get("/api/v1/projects").status_code == 401
+    assert phone_b.get("/api/v1/projects").status_code == 401

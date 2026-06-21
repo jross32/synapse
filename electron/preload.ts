@@ -12,7 +12,7 @@ const DAEMON_BASE = 'http://localhost:7878';
 
 contextBridge.exposeInMainWorld('synapse', {
   /** UI version string baked into the Electron bundle. */
-  version: (): string => process.env.npm_package_version ?? '0.1.8',
+  version: (): string => process.env.npm_package_version ?? '',
 
   /** Base URL of the local daemon. The renderer's api-client uses this. */
   daemonBase: (): string => DAEMON_BASE,
