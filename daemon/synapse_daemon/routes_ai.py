@@ -209,6 +209,21 @@ def build_ai_router(
                     "path": "/api/v1/agent-squads/{id}/work-items | /api/v1/agent-work-items/{id}/launch | /handoff | /status",
                 },
                 {
+                    "purpose": "read a project's ADRs, backlog, and version history",
+                    "method": "GET",
+                    "path": "/api/v1/projects/{id}/records",
+                },
+                {
+                    "purpose": "capture a quick idea/ADR on a project, then promote it to a numbered ADR",
+                    "method": "POST",
+                    "path": "/api/v1/projects/{id}/adrs | /api/v1/project-adrs/{adr_id}/promote",
+                },
+                {
+                    "purpose": "add backlog items or version-history entries to a project",
+                    "method": "POST",
+                    "path": "/api/v1/projects/{id}/backlog | /api/v1/projects/{id}/versions",
+                },
+                {
                     "purpose": "the full audit log (paginated)",
                     "method": "GET",
                     "path": "/api/v1/audit",

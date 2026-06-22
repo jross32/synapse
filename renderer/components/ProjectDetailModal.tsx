@@ -38,6 +38,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Modal } from './ui/modal';
 import { StatusBadge } from './StatusBadge';
+import { ProjectRecordsSection } from './ProjectRecordsSection';
 
 export interface ProjectDetailModalProps {
   open: boolean;
@@ -216,6 +217,9 @@ export function ProjectDetailModal({
           <p className='text-sm'>{project.description}</p>
         </div>
       )}
+
+      {/* Decision records, backlog + version history (ADR-0011) */}
+      <ProjectRecordsSection projectId={project.id} />
 
       {/* AI lens */}
       <div className='rounded-md border border-dashed border-border bg-secondary/30 p-3 text-xs text-muted-foreground'>

@@ -18,6 +18,17 @@ electron tsc clean, 420 daemon tests pass / 11 skipped. Daemon changes
 re-verified live against an isolated daemon.
 
 ### Added
+- **Per-project decision records (ADR-0011)**: every managed project now
+  carries its own **ADRs**, **backlog**, and **version history**. ADRs have a
+  quick-idea -> promote-to-numbered lifecycle (a one-field "Idea" capture, then
+  "Promote" assigns the next per-project ADR number). Daemon: migration
+  `012_project_records.sql`, `project_records.py` (models + CRUD),
+  `routes_project_records.py` (REST CRUD + `/promote` + a `/records` bundle),
+  10 tests. UI: a tabbed Decisions/Backlog/History section in
+  `ProjectDetailModal.tsx` (`ProjectRecordsSection.tsx` +
+  `project-records-client.ts`). AI-callable -- the endpoints are listed in
+  `GET /api/v1/ai/context` so a worker can capture an idea or record a
+  decision as it works. Verified live (add idea -> promote -> ADR-001).
 - **Team Builder wizard** (`renderer/components/SquadWizard.tsx`): a guided
   goal -> preset team -> roster -> review flow. "Build a team" is the primary
   CTA on Agent Squads; the raw create forms moved behind an Advanced
