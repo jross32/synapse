@@ -79,9 +79,12 @@ def test_pick_runtime_prefers_first_installed_runtime(monkeypatch: pytest.Monkey
         preferred_runtimes=["codex", "claude", "copilot"],
     )
 
+    # pick_runtime resolves candidates via runtime_resolution.resolve_command
+    # (which looks beyond bare PATH -- e.g. the Codex VS Code extension), so
+    # mock that, not shutil.which, to make the test machine-independent.
     monkeypatch.setattr(
-        agent_squads.shutil,
-        "which",
+        agent_squads,
+        "resolve_command",
         lambda cmd: None if cmd == "codex" else f"/fake/{cmd}",
     )
 
@@ -208,3 +211,20 @@ def test_completed_work_item_links_transcript_after_session_exit(tmp_path: Path)
         files = c.get("/api/v1/projects/demo-project/files").json()["files"]
         transcript = next(file for file in files if file["id"] == updated["transcript_file_id"])
         assert transcript["source_session"] == session_id
+
+
+def test_stop_squad_is_safe_when_idle(tmp_path: Path) -> None:
+    app, client = _harness(tmp_path)
+    with client as c:
+        squad = _create_squad(c)
+        _create_work_item(c, squad["id"])
+        # Nothing launched -> the kill switch must still succeed cleanly so the
+        # UI "Stop all" never errors on an idle squad.
+        res = c.post(f"/api/v1/agent-squads/{squad['id']}/stop")
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["squad_id"] == squad["id"]
+        assert body["stopped_sessions"] == 0
+
+        missing = c.post("/api/v1/agent-squads/does-not-exist/stop")
+        assert missing.status_code >= 400

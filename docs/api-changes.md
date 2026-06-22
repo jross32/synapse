@@ -85,10 +85,12 @@ Every entry below must include: the date, the new version added, what changed, a
 
 | Date | Endpoint or event | Kind | Notes |
 |---|---|---|---|
-| 2026-06-21 | `GET /api/v1/profile` | additive | Returns the local-first `ProfileSummary`: account sign-in state, Supabase config readiness, sync status, primary provider identities, and the current host record. |
-| 2026-06-21 | `PATCH /api/v1/profile` | additive | Updates the local Profile hub config (`supabase_url`, `supabase_anon_key`, `sync_enabled`). Changing the Supabase backend clears any prior signed-in session so tokens cannot drift across projects. |
-| 2026-06-21 | `POST /api/v1/profile/signup` / `POST /api/v1/profile/signin` / `POST /api/v1/profile/signout` | additive | Email/password account lifecycle for the optional Synapse account. Signup may return a `notice` when the Supabase project requires email confirmation before a session is issued. |
-| 2026-06-21 | `POST /api/v1/profile/auth/start/{provider}` / `GET /api/v1/profile/auth/callback` | additive | OAuth start + callback for `google` and `github`, implemented as a daemon-owned PKCE handoff through Supabase Auth. The callback returns an HTML completion page so the browser tab can close cleanly after sign-in. |
+| 2026-06-21 | `GET /api/v1/profile` | additive | Returns the local-first `ProfileSummary`: Synapse Accounts sign-in state, sync backend, linked identities, portable preferences summary, and the current host record. |
+| 2026-06-21 | `PATCH /api/v1/profile` | additive | Updates daemon-owned profile config such as `sync_enabled`. Supabase-specific config fields were removed; the daemon now talks to the built-in Synapse Accounts service directly. |
+| 2026-06-21 | `GET /api/v1/profile/preferences` / `PATCH /api/v1/profile/preferences` | additive | Reads and updates portable setup preferences such as theme, sidebar layout, Discover recents, and Sessions quick-action collapse state. |
+| 2026-06-21 | `POST /api/v1/profile/signup` / `POST /api/v1/profile/signin` / `POST /api/v1/profile/signout` | additive | Native Synapse account lifecycle. Signup uses username + email + password, signin accepts username or email, and both routes persist rotating Synapse Accounts sessions locally through the daemon. |
+| 2026-06-21 | `POST /api/v1/profile/auth/start/{provider}` / `GET /api/v1/profile/auth/callback` | additive | OAuth handoff for external identities such as Google. The daemon now delegates to the first-party Synapse Accounts service and completes the browser flow through a short-lived handoff token. |
+| 2026-06-21 | `DELETE /api/v1/profile/providers/{provider}` | additive | Unlinks a linked external identity such as Google from the current Synapse account. |
 | 2026-06-21 | `GET /api/v1/profile/catalog-state` | additive | Returns `CatalogPreferenceState`: synced favorites/history/install-memory for Discover and Installed views, keyed by `tool:<id>` and `quick-action:<id>`. |
 | 2026-06-21 | `POST /api/v1/profile/favorites/{kind}/{id}` | additive | Sets or toggles the favorite flag for a tool or quick action. `kind` is `tool` or `quick-action`. |
 | 2026-06-21 | `GET /api/v1/profile/service-connections` | additive | Returns `ServiceConnection[]` for portable official connections (GitHub/Google account identities) plus local-detected runtimes such as Claude Code, Codex, ChatGPT/OpenAI session cache, and Copilot CLI. |
@@ -97,3 +99,14 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-06-21 | `v1.profile.updated` | additive | Broadcast when profile/account or catalog state changes so the shell can refresh account badges and Profile hub data without a hard reload. |
 | 2026-06-21 | `v1.profile.sync.updated` | additive | Broadcast when the daemon's account sync status changes. Payload includes `signed_in`, `sync_status`, `last_sync_at`, and `last_sync_error`. |
 | 2026-06-21 | `v1.service_connection.updated` | additive | Broadcast when a connected-service record changes so Sessions and the Profile hub can refresh their readiness cards. |
+
+### Shipped in v0.1.36-dev (Synapse Accounts service)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-06-21 | `POST /v1/auth/signup` / `POST /v1/auth/signin` / `POST /v1/auth/refresh` / `POST /v1/auth/signout` | additive | First-party Synapse Accounts auth service endpoints. Production is intended to run against Postgres; local dev can use SQLite. Access tokens are short-lived and refresh tokens rotate. |
+| 2026-06-21 | `GET /v1/me` | additive | Returns the signed-in Synapse account summary, including linked identities and provider metadata. |
+| 2026-06-21 | `GET /v1/public/config` | additive | Returns auth-provider availability so the daemon and renderer can show native-only or Google-enabled flows without manual user config. |
+| 2026-06-21 | `GET /v1/sync/document` / `PUT /v1/sync/document` | additive | Fetches and updates the cloud-backed portable sync document for preferences, favorites/history/install memory, and host inventory. Files/logs/transcripts/uploads remain out of scope. |
+| 2026-06-21 | `POST /v1/oauth/start` / `POST /v1/oauth/exchange` / `GET /v1/oauth/google/callback` | additive | Starts external OAuth, exchanges the completion handoff for a Synapse session, and completes the Google callback on the hosted service. |
+| 2026-06-21 | `DELETE /v1/providers/{provider}` | additive | Unlinks an external identity from the current Synapse account. |

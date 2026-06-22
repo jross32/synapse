@@ -72,6 +72,10 @@ class ActionRequest(BaseModel):
     source: AuditSource = AuditSource.DESKTOP
 
 
+class CreateProjectRequest(Project):
+    create_path: bool = False
+
+
 class ListResponse(BaseModel):
     projects: list[dict]
 
@@ -93,15 +97,25 @@ def build_projects_router(
         return projects_module.model_dump_for_client(project)
 
     @router.post("", response_model=None, status_code=201)
-    async def create_one(payload: Project) -> dict:
+    async def create_one(payload: CreateProjectRequest) -> dict:
+        project_path = Path(payload.path).expanduser()
+        path_created = False
+        if payload.create_path and not project_path.exists():
+            project_path.mkdir(parents=True, exist_ok=True)
+            path_created = True
+        project = payload.model_copy(
+            update={"path": str(project_path)},
+            deep=True,
+        )
         with storage.transaction() as conn:
-            created = projects_module.create(conn, payload)
+            created = projects_module.create(conn, project)
             audit(conn, AuditRecord(
                 entity_type="project",
                 entity_id=created.id,
                 action="create",
                 source=AuditSource.DESKTOP,
                 result="success",
+                details={"path_created": path_created},
             ))
         return projects_module.model_dump_for_client(created)
 

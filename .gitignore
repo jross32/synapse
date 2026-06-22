@@ -68,3 +68,11 @@ secrets/
 .playwright-mcp/
 installer/daemon-dist/
 *.exe
+
+# Test / agent scratch (per-run, never committed)
+.tmp/
+.codex-e2e-logs/
+discover-*.png
+sweep-*.jpg
+pytest-full.txt
+pytest*.txt

@@ -3,26 +3,17 @@
 Local-first rules:
 
 * Synapse continues to work without any account.
-* Remote sync only happens after the user configures a Supabase project and
-  signs in deliberately.
-* Portable data is stored locally first, then mirrored into the signed-in
-  Supabase user's ``user_metadata.synapse_profile`` blob so v1 can ship
-  cross-host favorites/history without requiring a custom hosted schema.
+* Local SQLite remains the per-machine source of truth and cache.
+* Remote sync is an overlay backed by the first-party Synapse Accounts service.
+* Mobile pairing remains separate from account identity.
 """
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import platform as platform_mod
-import secrets
-import shutil
 import socket
 import subprocess
-import urllib.error
-import urllib.parse
-import urllib.request
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,23 +21,27 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .errors import SynapseError, invalid
+from .errors import invalid
+from .runtime_resolution import resolve_command
 from .secrets import decrypt, encrypt
 from .storage import Storage
+from .synapse_accounts_client import (
+    AccountPayload,
+    SessionPayload,
+    SynapseAccountsClient,
+)
 from .time_utils import to_iso, utc_now
 
 _PROFILE_SINGLETON_ID = 1
-_SYNC_METADATA_KEY = "synapse_profile"
 _TOKEN_REFRESH_MARGIN_SECONDS = 45
-_SUPABASE_TIMEOUT_SECONDS = 12
-_OAUTH_STATE_TTL_SECONDS = 900
+_PUBLIC_CONFIG_CACHE_TTL_SECONDS = 300
 
 
 class ProfileSyncStatus(str):
     LOCAL_ONLY = "local-only"
     CONNECTED = "connected"
+    SYNC_DISABLED = "sync-disabled"
     ERROR = "error"
-    CONFIG_REQUIRED = "config-required"
 
 
 class ServiceConnectionMode(str):
@@ -61,7 +56,7 @@ class ServiceConnectionStatus(str):
     LOCAL_ONLY = "local-only"
 
 
-class ProviderIdentity(BaseModel):
+class LinkedIdentity(BaseModel):
     provider: str
     email: str | None = None
     identity_id: str | None = None
@@ -116,35 +111,46 @@ class CatalogPreferenceState(BaseModel):
     last_sync_error: str | None = None
 
 
+class ProfilePreferences(BaseModel):
+    theme: str | None = None
+    sidebar_layout: dict[str, Any] | None = None
+    sessions_quick_actions_collapsed: bool | None = None
+    discover_recent_keys: list[str] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
 class ProfileSummary(BaseModel):
     signed_in: bool
-    config_ready: bool
-    supabase_url: str | None = None
-    has_anon_key: bool = False
     sync_enabled: bool = False
     sync_status: str
+    sync_backend: str
     user_id: str | None = None
+    username: str | None = None
     email: str | None = None
     display_name: str | None = None
     avatar_url: str | None = None
-    provider: str | None = None
-    provider_identities: list[ProviderIdentity] = Field(default_factory=list)
+    email_verified: bool = False
+    account_provider: str | None = None
+    linked_identities: list[LinkedIdentity] = Field(default_factory=list)
     current_host: HostPresence
     portable_connection_count: int = 0
     local_connection_count: int = 0
     last_sync_at: str | None = None
     last_sync_error: str | None = None
+    available_auth_providers: list[str] = Field(default_factory=lambda: ["native"])
+    account_backend_reachable: bool = False
+    preferences: ProfilePreferences = Field(default_factory=ProfilePreferences)
 
 
 class ProfileConfigUpdate(BaseModel):
-    supabase_url: str | None = None
-    supabase_anon_key: str | None = None
     sync_enabled: bool | None = None
 
 
-class _SupabaseResponse(BaseModel):
-    status: int
-    payload: Any
+class ProfilePreferencesUpdate(BaseModel):
+    theme: str | None = None
+    sidebar_layout: dict[str, Any] | None = None
+    sessions_quick_actions_collapsed: bool | None = None
+    discover_recent_keys: list[str] | None = None
 
 
 def _now_iso() -> str:
@@ -160,17 +166,6 @@ def _json_loads(raw: str | None, default: Any) -> Any:
         return default
 
 
-def _normalize_supabase_url(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = value.strip().rstrip("/")
-    if not cleaned:
-        return None
-    if not cleaned.startswith("http://") and not cleaned.startswith("https://"):
-        cleaned = f"https://{cleaned}"
-    return cleaned
-
-
 def _token_cipher(value: str | None, *, storage: Storage) -> bytes | None:
     if not value:
         return None
@@ -183,30 +178,33 @@ def _token_plaintext(value: bytes | None, *, storage: Storage) -> str | None:
     return decrypt(value, data_dir=storage.data_dir)
 
 
-def _s256_pkce_challenge(verifier: str) -> str:
-    digest = hashlib.sha256(verifier.encode("utf-8")).digest()
-    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-
-
 def _timestamp_or_empty(value: str | None) -> str:
     return value or ""
 
 
 class ProfileManager:
-    """Owns local profile state, optional Supabase auth, and sync."""
+    """Owns local profile state, optional Synapse Accounts auth, and sync."""
 
-    def __init__(self, storage: Storage) -> None:
+    def __init__(
+        self,
+        storage: Storage,
+        accounts_client: SynapseAccountsClient | None = None,
+    ) -> None:
         self._storage = storage
+        self._accounts = accounts_client or SynapseAccountsClient()
+        self._cached_auth_providers: list[str] = ["native"]
+        self._cached_auth_providers_at: datetime | None = None
+        self._account_backend_reachable = False
 
-    # ── public summary / config ──────────────────────────────────────────
+    # ── public summary / preferences ───────────────────────────────────
 
     def summary(self, *, refresh_remote: bool = True) -> ProfileSummary:
         current_host = self.ensure_current_host()
         row = self._state_row()
-        if refresh_remote and row["user_id"] and row["sync_enabled"]:
+        if refresh_remote and row["user_id"]:
             self._refresh_from_remote(best_effort=True)
             row = self._state_row()
-        connections = self.list_service_connections(refresh_remote=False)
+        connections = self.list_service_connections(refresh_remote=False, detect_local=False)
         portable_count = len(
             [c for c in connections if c.mode == ServiceConnectionMode.PORTABLE_OFFICIAL]
         )
@@ -214,29 +212,28 @@ class ProfileManager:
             [c for c in connections if c.mode == ServiceConnectionMode.LOCAL_DETECTED]
         )
         signed_in = bool(row["user_id"])
-        config_ready = bool(row["supabase_url"] and row["supabase_anon_key"])
         if row["last_sync_error"]:
             sync_status = ProfileSyncStatus.ERROR
-        elif signed_in:
+        elif signed_in and row["sync_enabled"]:
             sync_status = ProfileSyncStatus.CONNECTED
-        elif config_ready:
-            sync_status = ProfileSyncStatus.LOCAL_ONLY
+        elif signed_in and not row["sync_enabled"]:
+            sync_status = ProfileSyncStatus.SYNC_DISABLED
         else:
-            sync_status = ProfileSyncStatus.CONFIG_REQUIRED
+            sync_status = ProfileSyncStatus.LOCAL_ONLY
         return ProfileSummary(
             signed_in=signed_in,
-            config_ready=config_ready,
-            supabase_url=row["supabase_url"],
-            has_anon_key=bool(row["supabase_anon_key"]),
             sync_enabled=bool(row["sync_enabled"]),
             sync_status=sync_status,
+            sync_backend="synapse-account" if signed_in else "local-only",
             user_id=row["user_id"],
+            username=row["username"],
             email=row["email"],
             display_name=row["display_name"],
             avatar_url=row["avatar_url"],
-            provider=row["provider"],
-            provider_identities=[
-                ProviderIdentity.model_validate(item)
+            email_verified=bool(row["email_verified_at"]),
+            account_provider=row["provider"],
+            linked_identities=[
+                LinkedIdentity.model_validate(item)
                 for item in _json_loads(row["provider_identities_json"], [])
             ],
             current_host=current_host,
@@ -244,174 +241,120 @@ class ProfileManager:
             local_connection_count=local_count,
             last_sync_at=row["last_sync_at"],
             last_sync_error=row["last_sync_error"],
+            available_auth_providers=self._available_auth_providers(best_effort=True),
+            account_backend_reachable=self._account_backend_reachable,
+            preferences=self.preferences(),
         )
 
     def configure(self, payload: ProfileConfigUpdate) -> ProfileSummary:
         row = self._state_row()
-        now = _now_iso()
-        next_url = row["supabase_url"] if payload.supabase_url is None else _normalize_supabase_url(payload.supabase_url)
-        next_key = row["supabase_anon_key"] if payload.supabase_anon_key is None else (payload.supabase_anon_key or None)
         next_sync = row["sync_enabled"] if payload.sync_enabled is None else int(payload.sync_enabled)
-        changed_backend = next_url != row["supabase_url"] or next_key != row["supabase_anon_key"]
         with self._storage.transaction() as conn:
             conn.execute(
                 """
                 UPDATE profile_state
-                SET supabase_url = ?,
-                    supabase_anon_key = ?,
-                    sync_enabled = ?,
-                    updated_at = ?,
-                    user_id = CASE WHEN ? THEN NULL ELSE user_id END,
-                    email = CASE WHEN ? THEN NULL ELSE email END,
-                    display_name = CASE WHEN ? THEN NULL ELSE display_name END,
-                    avatar_url = CASE WHEN ? THEN NULL ELSE avatar_url END,
-                    provider = CASE WHEN ? THEN NULL ELSE provider END,
-                    provider_identities_json = CASE WHEN ? THEN '[]' ELSE provider_identities_json END,
-                    access_token_cipher = CASE WHEN ? THEN NULL ELSE access_token_cipher END,
-                    refresh_token_cipher = CASE WHEN ? THEN NULL ELSE refresh_token_cipher END,
-                    access_token_expires_at = CASE WHEN ? THEN NULL ELSE access_token_expires_at END,
-                    last_sync_error = CASE WHEN ? THEN NULL ELSE last_sync_error END
+                SET sync_enabled = ?, updated_at = ?, last_sync_error = NULL
+                WHERE id = 1
+                """,
+                (next_sync, _now_iso()),
+            )
+        if next_sync and row["user_id"]:
+            self._sync_to_remote(best_effort=True)
+        return self.summary(refresh_remote=False)
+
+    def preferences(self) -> ProfilePreferences:
+        row = self._state_row()
+        payload = _json_loads(row["preferences_json"], {})
+        if not isinstance(payload, dict):
+            payload = {}
+        payload.setdefault("updated_at", row["preferences_updated_at"])
+        return ProfilePreferences.model_validate(payload)
+
+    def update_preferences(self, payload: ProfilePreferencesUpdate) -> ProfilePreferences:
+        current = self.preferences().model_dump()
+        if payload.theme is not None:
+            current["theme"] = payload.theme
+        if payload.sidebar_layout is not None:
+            current["sidebar_layout"] = payload.sidebar_layout
+        if payload.sessions_quick_actions_collapsed is not None:
+            current["sessions_quick_actions_collapsed"] = payload.sessions_quick_actions_collapsed
+        if payload.discover_recent_keys is not None:
+            current["discover_recent_keys"] = payload.discover_recent_keys
+        current["updated_at"] = _now_iso()
+        with self._storage.transaction() as conn:
+            conn.execute(
+                """
+                UPDATE profile_state
+                SET preferences_json = ?, preferences_updated_at = ?, updated_at = ?
                 WHERE id = 1
                 """,
                 (
-                    next_url,
-                    next_key,
-                    next_sync,
-                    now,
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
-                    int(changed_backend),
+                    json.dumps(current),
+                    current["updated_at"],
+                    current["updated_at"],
                 ),
             )
-        return self.summary(refresh_remote=False)
+        self._sync_to_remote(best_effort=True)
+        return self.preferences()
 
-    # ── auth lifecycle ───────────────────────────────────────────────────
+    # ── auth lifecycle ─────────────────────────────────────────────────
 
     def sign_up_password(
         self,
         *,
+        username: str,
         email: str,
         password: str,
         display_name: str | None = None,
     ) -> tuple[ProfileSummary, str | None]:
-        config = self._require_supabase_config()
-        body: dict[str, Any] = {"email": email, "password": password}
-        if display_name:
-            body["data"] = {"display_name": display_name}
-        res = self._supabase_request(
-            path="/auth/v1/signup",
-            anon_key=config["supabase_anon_key"],
-            method="POST",
-            payload=body,
+        session = self._accounts.sign_up(
+            username=username,
+            email=email,
+            password=password,
+            display_name=display_name,
         )
-        session = res.payload.get("session") if isinstance(res.payload, dict) else None
-        user = res.payload.get("user") if isinstance(res.payload, dict) else None
-        notice = None
-        if session:
-            self._store_session_payload(session, user=user)
-            self._refresh_from_remote(best_effort=True)
-        else:
-            notice = "Check your email to finish confirming this Synapse account."
-        return self.summary(refresh_remote=False), notice
+        self._store_session_payload(session)
+        self._sync_to_remote(best_effort=True)
+        return self.summary(refresh_remote=False), None
 
-    def sign_in_password(self, *, email: str, password: str) -> ProfileSummary:
-        config = self._require_supabase_config()
-        res = self._supabase_request(
-            path="/auth/v1/token?grant_type=password",
-            anon_key=config["supabase_anon_key"],
-            method="POST",
-            payload={"email": email, "password": password},
-        )
-        self._store_session_payload(res.payload)
+    def sign_in_password(self, *, login: str, password: str) -> ProfileSummary:
+        session = self._accounts.sign_in(login=login, password=password)
+        self._store_session_payload(session)
         self._refresh_from_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
-    def start_oauth(self, *, provider: str, redirect_to: str) -> str:
-        if provider not in {"google", "github"}:
-            raise invalid("profile", f"Unsupported provider '{provider}'.")
-        config = self._require_supabase_config()
-        state = secrets.token_urlsafe(24)
-        verifier = secrets.token_urlsafe(48)
-        challenge = _s256_pkce_challenge(verifier)
-        now = utc_now()
-        expires_at = now + timedelta(seconds=_OAUTH_STATE_TTL_SECONDS)
-        with self._storage.transaction() as conn:
-            conn.execute(
-                """
-                INSERT INTO profile_oauth_states (
-                    state, provider, code_verifier, redirect_to, created_at, expires_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    state,
-                    provider,
-                    verifier,
-                    redirect_to,
-                    to_iso(now),
-                    to_iso(expires_at),
-                ),
-            )
-        query = urllib.parse.urlencode(
-            {
-                "provider": provider,
-                "redirect_to": redirect_to,
-                "code_challenge": challenge,
-                "code_challenge_method": "s256",
-                "state": state,
-                "flow_type": "pkce",
-            }
+    def start_oauth(self, *, provider: str, redirect_to: str, mode: str = "signin") -> str:
+        access_token = self._ensure_access_token() if mode == "link" else None
+        response = self._accounts.start_oauth(
+            provider=provider,
+            callback_url=redirect_to,
+            mode="link" if mode == "link" else "signin",
+            access_token=access_token,
         )
-        return f"{config['supabase_url']}/auth/v1/authorize?{query}"
+        return response.url
 
-    def complete_oauth(self, *, code: str, state: str) -> ProfileSummary:
-        row = self._storage.conn.execute(
-            """
-            SELECT state, provider, code_verifier, expires_at, used_at
-            FROM profile_oauth_states
-            WHERE state = ?
-            """,
-            (state,),
-        ).fetchone()
-        if row is None:
-            raise invalid("profile", "That sign-in handoff is no longer valid.")
-        if row["used_at"] is not None:
-            raise invalid("profile", "That sign-in handoff was already used.")
-        if utc_now() > datetime.fromisoformat(row["expires_at"]):
-            raise invalid("profile", "That sign-in handoff expired. Start again from Synapse.")
-        config = self._require_supabase_config()
-        res = self._supabase_request(
-            path="/auth/v1/token?grant_type=pkce",
-            anon_key=config["supabase_anon_key"],
-            method="POST",
-            payload={"auth_code": code, "code_verifier": row["code_verifier"]},
-        )
-        with self._storage.transaction() as conn:
-            conn.execute(
-                "UPDATE profile_oauth_states SET used_at = ? WHERE state = ?",
-                (_now_iso(), state),
-            )
-        self._store_session_payload(res.payload)
+    def complete_oauth(self, *, handoff: str) -> ProfileSummary:
+        session = self._accounts.exchange_oauth(handoff=handoff)
+        self._store_session_payload(session)
         self._refresh_from_remote(best_effort=True)
+        return self.summary(refresh_remote=False)
+
+    def unlink_provider(self, *, provider: str) -> ProfileSummary:
+        access_token = self._ensure_access_token()
+        account = self._accounts.unlink_provider(provider=provider, access_token=access_token)
+        self._store_account_payload(account)
+        self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
     def sign_out(self) -> ProfileSummary:
         row = self._state_row()
-        config_ready = bool(row["supabase_url"] and row["supabase_anon_key"])
         access_token = _token_plaintext(row["access_token_cipher"], storage=self._storage)
-        if config_ready and access_token:
+        refresh_token = _token_plaintext(row["refresh_token_cipher"], storage=self._storage)
+        if access_token or refresh_token:
             try:
-                self._supabase_request(
-                    path="/auth/v1/logout",
-                    anon_key=row["supabase_anon_key"],
-                    method="POST",
+                self._accounts.sign_out(
                     access_token=access_token,
+                    refresh_token=refresh_token,
                 )
             except Exception:
                 pass
@@ -420,7 +363,9 @@ class ProfileManager:
                 """
                 UPDATE profile_state
                 SET user_id = NULL,
+                    username = NULL,
                     email = NULL,
+                    email_verified_at = NULL,
                     display_name = NULL,
                     avatar_url = NULL,
                     provider = NULL,
@@ -436,7 +381,7 @@ class ProfileManager:
             )
         return self.summary(refresh_remote=False)
 
-    # ── catalog state ────────────────────────────────────────────────────
+    # ── catalog state ──────────────────────────────────────────────────
 
     def catalog_state(self) -> CatalogPreferenceState:
         current_host = self.ensure_current_host()
@@ -484,9 +429,7 @@ class ProfileManager:
         item_key = f"{kind}:{item_id}"
         row = self._storage.conn.execute(
             """
-            SELECT favorite, last_used_at, use_count, last_installed_at, installed_host_ids_json, updated_at
-            FROM catalog_preferences
-            WHERE item_key = ?
+            SELECT favorite FROM catalog_preferences WHERE item_key = ?
             """,
             (item_key,),
         ).fetchone()
@@ -547,9 +490,7 @@ class ProfileManager:
         now = _now_iso()
         row = self._storage.conn.execute(
             """
-            SELECT favorite, last_used_at, use_count, installed_host_ids_json
-            FROM catalog_preferences
-            WHERE item_key = ?
+            SELECT installed_host_ids_json FROM catalog_preferences WHERE item_key = ?
             """,
             (item_key,),
         ).fetchone()
@@ -587,8 +528,7 @@ class ProfileManager:
         if row is None:
             return
         host_ids = set(_json_loads(row["installed_host_ids_json"], []))
-        if host.id in host_ids:
-            host_ids.remove(host.id)
+        host_ids.discard(host.id)
         with self._storage.transaction() as conn:
             conn.execute(
                 """
@@ -600,7 +540,7 @@ class ProfileManager:
             )
         self._sync_to_remote(best_effort=True)
 
-    # ── services / hosts ────────────────────────────────────────────────
+    # ── services / hosts ───────────────────────────────────────────────
 
     def list_hosts(self) -> list[HostPresence]:
         self.ensure_current_host()
@@ -624,7 +564,12 @@ class ProfileManager:
             for row in rows
         ]
 
-    def list_service_connections(self, *, refresh_remote: bool = True) -> list[ServiceConnection]:
+    def list_service_connections(
+        self,
+        *,
+        refresh_remote: bool = True,
+        detect_local: bool = True,
+    ) -> list[ServiceConnection]:
         if refresh_remote:
             self._refresh_from_remote(best_effort=True)
         host = self.ensure_current_host()
@@ -654,27 +599,28 @@ class ProfileManager:
         }
 
         out: dict[str, ServiceConnection] = dict(persisted)
-        for provider in ("claude-code", "openai-codex", "chatgpt-openai", "github-copilot"):
-            detected = self._detect_local_service(provider, host)
-            if provider in out:
-                out[provider] = out[provider].model_copy(
-                    update={
-                        "status": detected.status,
-                        "details": {**out[provider].details, **detected.details},
-                        "last_verified_at": detected.last_verified_at,
-                        "last_host_id": detected.last_host_id,
-                        "updated_at": max(out[provider].updated_at, detected.updated_at),
-                    }
-                )
-            else:
-                out[provider] = detected
+        if detect_local:
+            for provider in ("claude-code", "openai-codex", "chatgpt-openai", "github-copilot"):
+                detected = self._detect_local_service(provider, host)
+                if provider in out:
+                    out[provider] = out[provider].model_copy(
+                        update={
+                            "status": detected.status,
+                            "details": {**out[provider].details, **detected.details},
+                            "last_verified_at": detected.last_verified_at,
+                            "last_host_id": detected.last_host_id,
+                            "updated_at": max(out[provider].updated_at, detected.updated_at),
+                        }
+                    )
+                else:
+                    out[provider] = detected
 
         identities = [
-            ProviderIdentity.model_validate(item)
+            LinkedIdentity.model_validate(item)
             for item in _json_loads(self._state_row()["provider_identities_json"], [])
         ]
         for identity in identities:
-            if identity.provider not in {"github", "google"}:
+            if identity.provider not in {"google", "github"}:
                 continue
             existing = out.get(identity.provider)
             now = _now_iso()
@@ -688,7 +634,7 @@ class ProfileManager:
                 details={
                     "source": "synapse-account",
                     "email": identity.email,
-                    "message": "Linked through your Synapse account sign-in.",
+                    "message": "Linked through your Synapse account.",
                 },
                 last_verified_at=now,
                 last_host_id=host.id,
@@ -697,20 +643,23 @@ class ProfileManager:
             )
             out[identity.provider] = portable
 
-        return sorted(out.values(), key=lambda item: (item.mode != ServiceConnectionMode.PORTABLE_OFFICIAL, item.display_name.lower()))
+        return sorted(
+            out.values(),
+            key=lambda item: (item.mode != ServiceConnectionMode.PORTABLE_OFFICIAL, item.display_name.lower()),
+        )
 
     def connect_service(self, *, provider: str) -> ServiceConnection:
         host = self.ensure_current_host()
         if provider in {"github", "google"}:
             identities = [
-                ProviderIdentity.model_validate(item)
+                LinkedIdentity.model_validate(item)
                 for item in _json_loads(self._state_row()["provider_identities_json"], [])
             ]
             identity = next((item for item in identities if item.provider == provider), None)
             if identity is None:
                 raise invalid(
                     "profile",
-                    f"Sign into Synapse with {provider.title()} first to mark that service portable.",
+                    f"Link {provider.title()} through your Synapse account first.",
                 )
             connection = ServiceConnection(
                 id=f"account-{provider}",
@@ -722,7 +671,7 @@ class ProfileManager:
                 details={
                     "source": "synapse-account",
                     "email": identity.email,
-                    "message": "Linked through your Synapse account sign-in.",
+                    "message": "Linked through your Synapse account.",
                 },
                 last_verified_at=_now_iso(),
                 last_host_id=host.id,
@@ -797,15 +746,19 @@ class ProfileManager:
             updated_at=refreshed["updated_at"],
         )
 
-    # ── remote sync ──────────────────────────────────────────────────────
+    # ── remote sync ─────────────────────────────────────────────────────
 
     def _refresh_from_remote(self, *, best_effort: bool) -> None:
         row = self._state_row()
-        if not row["user_id"] or not row["sync_enabled"]:
+        if not row["user_id"]:
             return
         try:
-            user = self._fetch_current_user()
-            self._merge_remote_payload(user)
+            access_token = self._ensure_access_token()
+            account = self._accounts.get_me(access_token=access_token)
+            self._store_account_payload(account)
+            if row["sync_enabled"]:
+                document = self._accounts.get_sync_document(access_token=access_token)
+                self._merge_remote_payload(document.document)
             self._set_sync_status(error=None)
         except Exception as exc:
             if best_effort:
@@ -819,18 +772,8 @@ class ProfileManager:
             return
         try:
             access_token = self._ensure_access_token()
-            payload = {
-                "data": {
-                    _SYNC_METADATA_KEY: self._build_remote_payload(),
-                }
-            }
-            self._supabase_request(
-                path="/auth/v1/user",
-                anon_key=row["supabase_anon_key"],
-                access_token=access_token,
-                method="PUT",
-                payload=payload,
-            )
+            document = self._build_remote_payload()
+            self._accounts.put_sync_document(access_token=access_token, document=document)
             self._set_sync_status(error=None)
         except Exception as exc:
             if best_effort:
@@ -863,8 +806,9 @@ class ProfileManager:
             """
         ).fetchall()
         return {
-            "schema": 1,
+            "schema": 2,
             "updated_at": _now_iso(),
+            "preferences": self.preferences().model_dump(mode="json"),
             "catalog_preferences": [
                 {
                     "item_key": row["item_key"],
@@ -909,15 +853,25 @@ class ProfileManager:
             ],
         }
 
-    def _merge_remote_payload(self, user_payload: dict[str, Any]) -> None:
-        user = user_payload.get("user") if "user" in user_payload else user_payload
-        metadata = user.get("user_metadata") if isinstance(user, dict) else {}
-        profile_payload = metadata.get(_SYNC_METADATA_KEY) if isinstance(metadata, dict) else None
-        if not isinstance(profile_payload, dict):
+    def _merge_remote_payload(self, document: dict[str, Any]) -> None:
+        if not isinstance(document, dict):
             return
-
+        preferences_payload = document.get("preferences")
         with self._storage.transaction() as conn:
-            for item in profile_payload.get("catalog_preferences", []):
+            if isinstance(preferences_payload, dict):
+                local_updated = _timestamp_or_empty(self._state_row()["preferences_updated_at"])
+                remote_updated = str(preferences_payload.get("updated_at") or "")
+                if remote_updated and local_updated <= remote_updated:
+                    conn.execute(
+                        """
+                        UPDATE profile_state
+                        SET preferences_json = ?, preferences_updated_at = ?, updated_at = ?
+                        WHERE id = 1
+                        """,
+                        (json.dumps(preferences_payload), remote_updated, _now_iso()),
+                    )
+
+            for item in document.get("catalog_preferences", []):
                 if not isinstance(item, dict):
                     continue
                 existing = conn.execute(
@@ -956,7 +910,7 @@ class ProfileManager:
                     ),
                 )
 
-            for connection in profile_payload.get("service_connections", []):
+            for connection in document.get("service_connections", []):
                 if not isinstance(connection, dict):
                     continue
                 existing = conn.execute(
@@ -998,7 +952,7 @@ class ProfileManager:
                     ),
                 )
 
-            for host in profile_payload.get("hosts", []):
+            for host in document.get("hosts", []):
                 if not isinstance(host, dict):
                     continue
                 conn.execute(
@@ -1022,18 +976,7 @@ class ProfileManager:
                     ),
                 )
 
-    # ── Supabase wire helpers ────────────────────────────────────────────
-
-    def _fetch_current_user(self) -> dict[str, Any]:
-        row = self._state_row()
-        access_token = self._ensure_access_token()
-        res = self._supabase_request(
-            path="/auth/v1/user",
-            anon_key=row["supabase_anon_key"],
-            access_token=access_token,
-            method="GET",
-        )
-        return res.payload
+    # ── account transport helpers ──────────────────────────────────────
 
     def _ensure_access_token(self) -> str:
         row = self._state_row()
@@ -1045,155 +988,100 @@ class ProfileManager:
         if utc_now() + timedelta(seconds=_TOKEN_REFRESH_MARGIN_SECONDS) < datetime.fromisoformat(expires_at):
             return access_token
 
-        res = self._supabase_request(
-            path="/auth/v1/token?grant_type=refresh_token",
-            anon_key=row["supabase_anon_key"],
-            method="POST",
-            payload={"refresh_token": refresh_token},
-        )
-        self._store_session_payload(res.payload)
+        session = self._accounts.refresh(refresh_token=refresh_token)
+        self._store_session_payload(session)
         row = self._state_row()
         renewed = _token_plaintext(row["access_token_cipher"], storage=self._storage)
         if not renewed:
             raise invalid("profile", "Could not refresh the Synapse account session.")
         return renewed
 
-    def _store_session_payload(self, payload: dict[str, Any], *, user: dict[str, Any] | None = None) -> None:
-        if not isinstance(payload, dict):
-            raise invalid("profile", "The account provider did not return a valid session.")
-        access_token = payload.get("access_token")
-        refresh_token = payload.get("refresh_token")
-        if not isinstance(access_token, str) or not isinstance(refresh_token, str):
-            raise invalid("profile", "The account provider did not return login tokens.")
+    def _store_session_payload(self, payload: SessionPayload) -> None:
+        expires_at = to_iso(utc_now() + timedelta(seconds=int(payload.expires_in or 900)))
+        self._store_account_payload(
+            payload.account,
+            access_token=payload.access_token,
+            refresh_token=payload.refresh_token,
+            expires_at=expires_at,
+        )
 
-        current_user = user
-        if current_user is None:
-            current_user = payload.get("user") if isinstance(payload.get("user"), dict) else None
-        if current_user is None:
-            fetched = self._supabase_request(
-                path="/auth/v1/user",
-                anon_key=self._state_row()["supabase_anon_key"],
-                access_token=access_token,
-                method="GET",
-            )
-            current_user = fetched.payload
-
-        if not isinstance(current_user, dict):
-            raise invalid("profile", "The account provider did not return a valid user.")
-
-        app_metadata = current_user.get("app_metadata") if isinstance(current_user.get("app_metadata"), dict) else {}
-        user_metadata = current_user.get("user_metadata") if isinstance(current_user.get("user_metadata"), dict) else {}
-        identities: list[dict[str, Any]] = []
-        for entry in current_user.get("identities") or []:
-            if not isinstance(entry, dict):
-                continue
-            identity_data = entry.get("identity_data") if isinstance(entry.get("identity_data"), dict) else {}
-            identities.append(
-                {
-                    "provider": entry.get("provider"),
-                    "email": identity_data.get("email"),
-                    "identity_id": entry.get("id"),
-                }
-            )
-        expires_in = int(payload.get("expires_in") or 3600)
-        expires_at = to_iso(utc_now() + timedelta(seconds=expires_in))
-        display_name = user_metadata.get("display_name") or current_user.get("email") or "Synapse user"
-        provider = app_metadata.get("provider")
+    def _store_account_payload(
+        self,
+        account: AccountPayload,
+        *,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        expires_at: str | None = None,
+    ) -> None:
         now = _now_iso()
+        existing = self._state_row()
         with self._storage.transaction() as conn:
             conn.execute(
                 """
                 UPDATE profile_state
                 SET user_id = ?,
+                    username = ?,
                     email = ?,
+                    email_verified_at = ?,
                     display_name = ?,
                     avatar_url = ?,
                     provider = ?,
                     provider_identities_json = ?,
-                    access_token_cipher = ?,
-                    refresh_token_cipher = ?,
-                    access_token_expires_at = ?,
-                    sync_enabled = 1,
+                    access_token_cipher = COALESCE(?, access_token_cipher),
+                    refresh_token_cipher = COALESCE(?, refresh_token_cipher),
+                    access_token_expires_at = COALESCE(?, access_token_expires_at),
+                    sync_enabled = CASE WHEN user_id IS NULL THEN 1 ELSE sync_enabled END,
                     updated_at = ?,
                     last_sync_error = NULL
                 WHERE id = 1
                 """,
                 (
-                    current_user.get("id"),
-                    current_user.get("email"),
-                    display_name,
-                    user_metadata.get("avatar_url"),
-                    provider,
-                    json.dumps(identities),
-                    _token_cipher(access_token, storage=self._storage),
-                    _token_cipher(refresh_token, storage=self._storage),
+                    account.account_id,
+                    account.username,
+                    account.email,
+                    account.email_verified_at if account.email_verified else None,
+                    account.display_name,
+                    account.avatar_url,
+                    account.account_provider,
+                    json.dumps([identity.model_dump(mode="json") for identity in account.linked_identities]),
+                    _token_cipher(access_token, storage=self._storage) if access_token else None,
+                    _token_cipher(refresh_token, storage=self._storage) if refresh_token else None,
                     expires_at,
                     now,
                 ),
             )
+            if existing["user_id"] is None:
+                conn.execute(
+                    "UPDATE profile_state SET sync_enabled = 1 WHERE id = 1"
+                )
 
-    def _supabase_request(
-        self,
-        *,
-        path: str,
-        anon_key: str,
-        method: str,
-        payload: Any | None = None,
-        access_token: str | None = None,
-    ) -> _SupabaseResponse:
-        base = self._state_row()["supabase_url"]
-        if not base:
-            raise invalid("profile", "Configure a Supabase project first.")
-        url = f"{base}{path}"
-        data: bytes | None = None
-        headers = {
-            "Accept": "application/json",
-            "apikey": anon_key,
-        }
-        if access_token:
-            headers["Authorization"] = f"Bearer {access_token}"
-        if payload is not None:
-            headers["Content-Type"] = "application/json"
-            data = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(url, data=data, method=method.upper(), headers=headers)
+    def _available_auth_providers(self, *, best_effort: bool) -> list[str]:
+        now = utc_now()
+        if (
+            self._cached_auth_providers_at is not None
+            and now - self._cached_auth_providers_at < timedelta(seconds=_PUBLIC_CONFIG_CACHE_TTL_SECONDS)
+        ):
+            return self._cached_auth_providers
         try:
-            with urllib.request.urlopen(request, timeout=_SUPABASE_TIMEOUT_SECONDS) as response:
-                raw = response.read().decode("utf-8")
-                parsed = json.loads(raw) if raw else {}
-                return _SupabaseResponse(status=response.status, payload=parsed)
-        except urllib.error.HTTPError as exc:
-            raw = exc.read().decode("utf-8", errors="replace")
-            try:
-                parsed = json.loads(raw) if raw else {}
-            except json.JSONDecodeError:
-                parsed = {"message": raw or exc.reason}
-            message = parsed.get("msg") or parsed.get("message") or exc.reason
-            raise SynapseError(
-                code="profile.remote_error",
-                message=f"Supabase request failed: {message}",
-                status=422,
-                details={"status": exc.code, "body": parsed},
-            )
-        except urllib.error.URLError as exc:
-            raise SynapseError(
-                code="profile.remote_unreachable",
-                message=f"Could not reach Supabase: {exc.reason}",
-                status=422,
-            )
+            config = self._accounts.public_config()
+            self._cached_auth_providers = config.available_providers or ["native"]
+            self._cached_auth_providers_at = now
+            self._account_backend_reachable = True
+            return self._cached_auth_providers
+        except Exception:
+            # No accounts backend reachable -> sign-in is unavailable. Keep the
+            # "native" default in the providers list (back-compat) but flag the
+            # backend unreachable so the UI shows an honest "sync is optional"
+            # state instead of a sign-in form that always errors. Deliberately
+            # do NOT stamp _cached_auth_providers_at here: a Refresh right after
+            # the user starts the accounts service should re-probe and pick it
+            # up immediately rather than wait out the cache TTL.
+            self._account_backend_reachable = False
+            if best_effort:
+                return self._cached_auth_providers
+            raise
 
-    # ── internal helpers ────────────────────────────────────────────────
-
-    def _require_supabase_config(self) -> dict[str, str]:
-        row = self._state_row()
-        if not row["supabase_url"] or not row["supabase_anon_key"]:
-            raise invalid(
-                "profile",
-                "Configure your Supabase URL and anon key in the Profile hub first.",
-            )
-        return {
-            "supabase_url": row["supabase_url"],
-            "supabase_anon_key": row["supabase_anon_key"],
-        }
+    # ── internal helpers ───────────────────────────────────────────────
 
     def _state_row(self):
         row = self._storage.conn.execute("SELECT * FROM profile_state WHERE id = 1").fetchone()
@@ -1203,8 +1091,14 @@ class ProfileManager:
         with self._storage.transaction() as conn:
             conn.execute(
                 """
-                INSERT INTO profile_state (id, sync_enabled, provider_identities_json, created_at, updated_at)
-                VALUES (1, 0, '[]', ?, ?)
+                INSERT INTO profile_state (
+                    id,
+                    sync_enabled,
+                    provider_identities_json,
+                    preferences_json,
+                    created_at,
+                    updated_at
+                ) VALUES (1, 0, '[]', '{}', ?, ?)
                 """,
                 (now, now),
             )
@@ -1289,7 +1183,7 @@ class ProfileManager:
         if provider not in provider_map:
             raise invalid("profile", f"Unsupported service provider '{provider}'.")
         meta = provider_map[provider]
-        binary_path = shutil.which(meta["binary"])
+        binary_path = resolve_command(meta["binary"])
         config_detected = any(path.exists() for path in meta["config_paths"])
         details: dict[str, Any] = {
             "binary": meta["binary"],
@@ -1311,7 +1205,7 @@ class ProfileManager:
             details["message"] = "No local sign-in cache or CLI was detected on this host."
 
         if provider == "github-copilot":
-            gh_path = shutil.which("gh")
+            gh_path = resolve_command("gh")
             details["gh_path"] = gh_path
             if gh_path:
                 try:
@@ -1349,9 +1243,11 @@ __all__ = [
     "CatalogPreferenceItem",
     "CatalogPreferenceState",
     "HostPresence",
+    "LinkedIdentity",
     "ProfileConfigUpdate",
     "ProfileManager",
+    "ProfilePreferences",
+    "ProfilePreferencesUpdate",
     "ProfileSummary",
-    "ProviderIdentity",
     "ServiceConnection",
 ]

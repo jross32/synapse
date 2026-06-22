@@ -40,6 +40,11 @@ export function currentBrowserBaseUrl(): string {
   if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
     return 'http://localhost:7878';
   }
+  const host = window.location.hostname.toLowerCase();
+  const isLocalDevHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (isLocalDevHost && window.location.port === '5173') {
+    return `${window.location.protocol}//${window.location.hostname}:7878`;
+  }
   return window.location.origin;
 }
 

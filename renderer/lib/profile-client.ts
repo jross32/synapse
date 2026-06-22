@@ -3,22 +3,24 @@ import type {
   CatalogPreferenceItem,
   CatalogPreferenceState,
   HostPresence,
+  ProfilePreferences,
   ProfileSummary,
   ServiceConnection,
 } from './generated-types';
 
 export interface ProfileConfigPayload {
-  supabase_url?: string | null;
-  supabase_anon_key?: string | null;
   sync_enabled?: boolean | null;
 }
 
 export interface ProfileAuthPayload {
-  email: string;
+  login: string;
   password: string;
 }
 
-export interface ProfileSignUpPayload extends ProfileAuthPayload {
+export interface ProfileSignUpPayload {
+  username: string;
+  email: string;
+  password: string;
   display_name?: string | null;
 }
 
@@ -47,6 +49,16 @@ export async function updateProfileConfig(payload: ProfileConfigPayload): Promis
   return apiFetch<ProfileSummary>('/profile', { method: 'PATCH', body: payload });
 }
 
+export async function getProfilePreferences(): Promise<ProfilePreferences> {
+  return apiFetch<ProfilePreferences>('/profile/preferences', { method: 'GET' });
+}
+
+export async function updateProfilePreferences(
+  payload: Partial<ProfilePreferences>
+): Promise<ProfilePreferences> {
+  return apiFetch<ProfilePreferences>('/profile/preferences', { method: 'PATCH', body: payload });
+}
+
 export async function signInProfile(payload: ProfileAuthPayload): Promise<ProfileSummary> {
   return apiFetch<ProfileSummary>('/profile/signin', { method: 'POST', body: payload });
 }
@@ -61,8 +73,21 @@ export async function startProfileAuth(provider: 'google' | 'github'): Promise<P
   });
 }
 
+export async function linkProfileAuth(provider: 'google' | 'github'): Promise<ProfileAuthStartResponse> {
+  return apiFetch<ProfileAuthStartResponse>(
+    `/profile/auth/start/${encodeURIComponent(provider)}?mode=link`,
+    { method: 'POST' }
+  );
+}
+
 export async function signOutProfile(): Promise<ProfileSummary> {
   return apiFetch<ProfileSummary>('/profile/signout', { method: 'POST' });
+}
+
+export async function unlinkProfileProvider(provider: string): Promise<ProfileSummary> {
+  return apiFetch<ProfileSummary>(`/profile/providers/${encodeURIComponent(provider)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function getCatalogState(): Promise<CatalogPreferenceState> {

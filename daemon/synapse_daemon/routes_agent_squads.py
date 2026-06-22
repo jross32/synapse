@@ -172,6 +172,38 @@ def build_agent_squads_router(
                 ),
             )
 
+    @router.post("/agent-squads/{squad_id}/stop", response_model=None)
+    async def stop_squad(squad_id: str) -> dict[str, Any]:
+        # Kill switch: close every live PTY session owned by this squad's work
+        # items. Each manager.close() fires pty.session_finalized, which the
+        # squad event listener turns into a terminal work-item status -- so we
+        # don't mutate work-item rows here, the listener does it consistently.
+        squad = squads.get_squad(storage.conn, squad_id)
+        items = squads.list_work_items(storage.conn, squad_id)
+        closed: list[str] = []
+        for item in items:
+            if not item.pty_session_id:
+                continue
+            if await manager.close(item.pty_session_id):
+                closed.append(item.id)
+        with storage.transaction() as conn:
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="agent_squad",
+                    entity_id=squad_id,
+                    action="stop",
+                    source=squads.AuditSource.DESKTOP,
+                    result="success",
+                    details={"stopped_sessions": len(closed)},
+                ),
+            )
+        await bus.publish(
+            event_name("agent_squad", "updated"),
+            {"squad": squad.model_dump(mode="json"), "stopped_sessions": len(closed)},
+        )
+        return {"squad_id": squad_id, "stopped_sessions": len(closed), "work_item_ids": closed}
+
     @router.post("/agent-squads/{squad_id}/work-items", response_model=None, status_code=201)
     async def create_work_item(
         squad_id: str, payload: AgentWorkItemCreate

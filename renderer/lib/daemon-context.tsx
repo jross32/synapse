@@ -67,7 +67,7 @@ export interface DaemonContextValue {
   daemonBaseUrl: string;
   refreshProjects: () => Promise<void>;
   refreshHealth: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<ProfileSummary | null>;
   /** Optimistic local mutations so a page doesn't have to wait for a refetch. */
   upsertProjectLocal: (project: Project) => void;
   removeProjectLocal: (id: string) => void;
@@ -124,10 +124,13 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
 
   const refreshProfile = useCallback(async () => {
     try {
-      setProfile(await getProfile());
+      const next = await getProfile();
+      setProfile(next);
       setProfileError(null);
+      return next;
     } catch (err) {
       setProfileError((err as Error).message || 'Failed to load profile');
+      return null;
     }
   }, []);
 

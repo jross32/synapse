@@ -37,7 +37,6 @@ import io
 import logging
 import os
 import secrets
-import shutil
 import signal
 import sys
 import threading
@@ -48,6 +47,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from .api_versions import event_name
+from .runtime_resolution import resolve_command
 from .time_utils import to_iso, utc_now
 from .ws import EventBus
 
@@ -471,7 +471,7 @@ class PtySessionManager:
             raise ValueError("spawn requires a non-empty argv")
         # Resolve the binary so the user gets an honest error before the PTY
         # is even allocated.
-        resolved = shutil.which(argv[0])
+        resolved = resolve_command(argv[0])
         if resolved is None:
             raise FileNotFoundError(f"command not found on PATH: {argv[0]!r}")
 

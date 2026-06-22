@@ -41,6 +41,10 @@ import {
   type QuickAction,
 } from '../lib/quick-actions-client';
 import { getServiceConnections } from '../lib/profile-client';
+import {
+  getStoredSessionsQuickActionsCollapsed,
+  setStoredSessionsQuickActionsCollapsed,
+} from '../lib/session-prefs';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -57,6 +61,11 @@ function HelpPanel(): JSX.Element {
         <li>
           Every session is a real pseudo-terminal — colours, line editing,
           Ctrl+C, all work like a normal shell.
+        </li>
+        <li>
+          On phones or browser agents, use the command pad below the terminal
+          to send commands, Enter, Ctrl+C, Tab, and arrow keys without
+          fighting xterm focus.
         </li>
         <li>
           Quick-launch buttons spawn the CLI for you. If the binary isn't on
@@ -141,23 +150,53 @@ function friendlyArgvLabel(argv: string[], fallback: string): string {
   return stripped || head;
 }
 
-const QUICK_LAUNCH: QuickLaunch[] = [
-  { id: 'claude', label: 'Claude', icon: Sparkles, argv: ['claude'] },
-  { id: 'codex', label: 'Codex', icon: Bot, argv: ['codex'] },
-  { id: 'copilot', label: 'Copilot', icon: Bot, argv: ['copilot'] },
-  {
-    id: 'python',
-    label: 'Python REPL',
-    icon: TerminalIcon,
-    argv: [isWindows ? 'python' : 'python3', '-i', '-q'],
-  },
-  {
-    id: 'shell',
-    label: isWindows ? 'PowerShell' : isMac ? 'zsh' : 'bash',
-    icon: TerminalSquare,
-    argv: isWindows ? ['powershell.exe', '-NoLogo'] : [isMac ? 'zsh' : 'bash', '-i'],
-  },
-];
+const QUICK_LAUNCH: QuickLaunch[] = isWindows
+  ? [
+      { id: 'claude', label: 'Claude', icon: Sparkles, argv: ['claude'] },
+      { id: 'codex', label: 'Codex', icon: Bot, argv: ['codex'] },
+      { id: 'copilot', label: 'Copilot', icon: Bot, argv: ['copilot'] },
+      {
+        id: 'python',
+        label: 'Python REPL',
+        icon: TerminalIcon,
+        argv: ['python', '-i', '-q'],
+      },
+      {
+        id: 'powershell',
+        label: 'PowerShell',
+        icon: TerminalSquare,
+        argv: ['powershell.exe', '-NoLogo'],
+      },
+      {
+        id: 'cmd',
+        label: 'Command Prompt',
+        icon: TerminalSquare,
+        argv: ['cmd.exe'],
+      },
+      {
+        id: 'wsl',
+        label: 'WSL Bash',
+        icon: TerminalSquare,
+        argv: ['wsl.exe', '-e', 'bash', '-il'],
+      },
+    ]
+  : [
+      { id: 'claude', label: 'Claude', icon: Sparkles, argv: ['claude'] },
+      { id: 'codex', label: 'Codex', icon: Bot, argv: ['codex'] },
+      { id: 'copilot', label: 'Copilot', icon: Bot, argv: ['copilot'] },
+      {
+        id: 'python',
+        label: 'Python REPL',
+        icon: TerminalIcon,
+        argv: [isMac ? 'python3' : 'python3', '-i', '-q'],
+      },
+      {
+        id: 'shell',
+        label: isMac ? 'zsh' : 'bash',
+        icon: TerminalSquare,
+        argv: [isMac ? 'zsh' : 'bash', '-i'],
+      },
+    ];
 
 /**
  * Install recipes for coders that aren't on PATH yet (v0.1.28). The user
@@ -246,18 +285,12 @@ export function SessionsPage({
   // collapsed on first visit (user's ask). Persisted in localStorage so
   // a tab refresh doesn't reset the user's preference.
   const [qaCollapsed, setQaCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    const raw = window.localStorage.getItem('synapse.sessions.qa-collapsed');
-    return raw === null ? true : raw === '1';
+    return getStoredSessionsQuickActionsCollapsed();
   });
   function toggleQa(): void {
     setQaCollapsed((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem('synapse.sessions.qa-collapsed', next ? '1' : '0');
-      } catch {
-        /* private-mode storage blocked -- ignore */
-      }
+      setStoredSessionsQuickActionsCollapsed(next);
       return next;
     });
   }
@@ -483,11 +516,12 @@ export function SessionsPage({
       }
     }
     if (!dropTab) return;
-    setTabs((prev) => prev.filter((t) => t.sessionId !== sessionId));
-    if (active === sessionId) {
-      const remaining = tabs.filter((t) => t.sessionId !== sessionId);
-      setActive(remaining[0]?.sessionId ?? null);
-    }
+    setTabs((prev) => {
+      const remaining = prev.filter((t) => t.sessionId !== sessionId);
+      setActive((current) => (current === sessionId ? remaining[0]?.sessionId ?? null : current));
+      return remaining;
+    });
+    void listSessions().then(setRegistry).catch(() => undefined);
   }
 
   /** Restart a session in place: close the existing PTY, spawn a new
@@ -876,12 +910,46 @@ export function SessionsPage({
 
       {/* Terminal panel — fixed height keeps fit math stable. */}
       {activeTab ? (
-        <div className='h-[60vh] min-h-[420px]'>
-          <SessionTerminal
-            key={activeTab.sessionId}
-            sessionId={activeTab.sessionId}
-            initialScrollback={activeTab.scrollback ?? undefined}
-          />
+        <div className='flex flex-col gap-3'>
+          <Card className='flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between'>
+            <div className='min-w-0'>
+              <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary/85'>
+                Active session
+              </p>
+              <p className='mt-1 truncate font-mono text-sm'>{activeTab.argv.join(' ')}</p>
+              <p className='mt-1 text-xs text-muted-foreground'>
+                Keep using this on desktop or phone. The command pad below is
+                touch-friendly, and Close ends the PTY on the host, not just the tab.
+              </p>
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => void restartTab(activeTab.sessionId)}
+              >
+                <RotateCcw className='h-4 w-4' />
+                Restart
+              </Button>
+              <Button
+                type='button'
+                variant='destructive'
+                size='sm'
+                onClick={() => void closeTab(activeTab.sessionId)}
+              >
+                <X className='h-4 w-4' />
+                Close session
+              </Button>
+            </div>
+          </Card>
+          <div className='h-[65vh] min-h-[320px] sm:min-h-[420px]'>
+            <SessionTerminal
+              key={activeTab.sessionId}
+              sessionId={activeTab.sessionId}
+              initialScrollback={activeTab.scrollback ?? undefined}
+            />
+          </div>
         </div>
       ) : (
         <Card className='flex flex-col items-center gap-3 border-dashed p-12 text-center'>

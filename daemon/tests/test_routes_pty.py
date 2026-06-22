@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from synapse_daemon.app import build_app
+from synapse_daemon.pty_sessions import PtySession, PtySessionManager
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
@@ -102,6 +103,38 @@ def test_probe_returns_false_for_nonsense(tmp_path: Path) -> None:
         body = res.json()
         assert body["available"] is False
         assert body["resolved"] is None
+
+
+def test_probe_uses_runtime_resolution_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _harness(tmp_path)
+    monkeypatch.setattr(
+        "synapse_daemon.routes_pty.resolve_command",
+        lambda cmd: r"C:\Runtime\codex.exe" if cmd == "codex" else None,
+    )
+    with client as c:
+        res = c.get("/api/v1/pty/probe", params={"cmd": "codex"})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["available"] is True
+        assert body["resolved"] == r"C:\Runtime\codex.exe"
+
+
+@pytest.mark.asyncio
+async def test_manager_spawn_uses_runtime_resolution_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+
+    async def fake_start(self: PtySession) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "synapse_daemon.pty_sessions.resolve_command",
+        lambda cmd: r"C:\Runtime\codex.exe" if cmd == "codex" else None,
+    )
+    monkeypatch.setattr(PtySession, "start", fake_start)
+
+    session = await manager.spawn(["codex"])
+    assert session.argv[0] == r"C:\Runtime\codex.exe"
 
 
 def test_pty_requires_auth(tmp_path: Path) -> None:

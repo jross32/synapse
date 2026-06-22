@@ -28,6 +28,9 @@ dependencies = [
   "uvicorn[standard]>=0.30.0,<1.0.0",
   "psutil>=6.0.0,<7.0.0",
   "pydantic>=2.9.0,<3.0.0",
+  "argon2-cffi>=23.1.0,<24.0.0",
+  "sqlalchemy>=2.0.36,<3.0.0",
+  "psycopg[binary]>=3.2.1,<4.0.0",
   "websockets>=13.0,<14.0",
   "watchdog>=4.0.0,<7.0.0",
   "cryptography>=43.0.0,<46.0.0",
@@ -49,6 +52,7 @@ build = [
 [project.scripts]
 synapsed = "synapse_daemon.__main__:main"
 synapse  = "synapse_daemon.cli:main"
+synapse-accounts = "synapse_accounts.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/jross32/synapse"
@@ -56,7 +60,7 @@ Repository = "https://github.com/jross32/synapse"
 
 [tool.setuptools.packages.find]
 where = ["daemon"]
-include = ["synapse_daemon*"]
+include = ["synapse_daemon*", "synapse_accounts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["daemon/tests"]

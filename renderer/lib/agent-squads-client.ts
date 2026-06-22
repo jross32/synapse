@@ -110,6 +110,19 @@ export async function patchAgentSquad(
   });
 }
 
+export interface StopAgentSquadResponse {
+  squad_id: string;
+  stopped_sessions: number;
+  work_item_ids: string[];
+}
+
+/** Kill switch: close every live PTY session owned by this squad. */
+export async function stopAgentSquad(id: string): Promise<StopAgentSquadResponse> {
+  return apiFetch<StopAgentSquadResponse>(`/agent-squads/${encodeURIComponent(id)}/stop`, {
+    method: 'POST',
+  });
+}
+
 export async function createAgentWorkItem(
   squadId: string,
   input: CreateAgentWorkItemInput

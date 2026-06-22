@@ -71,12 +71,22 @@ export function loadSidebarLayout(): SidebarLayout {
   }
 }
 
-export function saveSidebarLayout(layout: SidebarLayout): void {
+export function saveSidebarLayout(
+  layout: SidebarLayout,
+  options?: { emit?: boolean }
+): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
   } catch {
     /* private-mode quota -- ignore */
+  }
+  if (options?.emit !== false) {
+    window.dispatchEvent(
+      new CustomEvent('synapse:portable-preferences', {
+        detail: { sidebar_layout: layout },
+      })
+    );
   }
 }
 

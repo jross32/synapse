@@ -28,6 +28,7 @@ export interface ProjectCreateInput {
   name: string;
   path: string;
   launch_cmd: string;
+  create_path?: boolean;
   description?: string | null;
   category?: string | null;
   icon?: string | null;

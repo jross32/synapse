@@ -308,12 +308,15 @@ export function rememberDiscoverItem(itemKey: string): string[] {
   const now = Date.now();
   const current = readStoredRecents().filter((entry) => entry.key !== itemKey);
   const next = [{ key: itemKey, usedAt: now }, ...current].slice(0, MAX_RECENTS);
-  try {
-    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
-  } catch {
-    return dedupeKeys(next.map((entry) => entry.key));
-  }
-  return next.map((entry) => entry.key);
+  return writeStoredRecents(next);
+}
+
+export function replaceDiscoverRecents(keys: string[], options?: { emit?: boolean }): string[] {
+  const next = keys.slice(0, MAX_RECENTS).map((key, index) => ({
+    key,
+    usedAt: Date.now() - index,
+  }));
+  return writeStoredRecents(next, options);
 }
 
 function compareDiscoverItems(left: DiscoverItem, right: DiscoverItem): number {
@@ -352,6 +355,26 @@ function readStoredRecents(): StoredRecent[] {
   } catch {
     return [];
   }
+}
+
+function writeStoredRecents(
+  entries: StoredRecent[],
+  options?: { emit?: boolean }
+): string[] {
+  const keys = dedupeKeys(entries.map((entry) => entry.key)).slice(0, MAX_RECENTS);
+  try {
+    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(entries.slice(0, MAX_RECENTS)));
+  } catch {
+    return keys;
+  }
+  if (options?.emit !== false && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('synapse:portable-preferences', {
+        detail: { discover_recent_keys: keys },
+      })
+    );
+  }
+  return keys;
 }
 
 function dedupeKeys(keys: string[]): string[] {

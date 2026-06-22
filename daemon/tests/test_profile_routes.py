@@ -11,6 +11,11 @@ from synapse_daemon.app import build_app
 from synapse_daemon.profile import ProfileManager
 from synapse_daemon.pty_sessions import PtySessionManager
 from synapse_daemon.storage import Storage
+from synapse_daemon.synapse_accounts_client import (
+    AccountPayload,
+    LinkedIdentityPayload,
+    SessionPayload,
+)
 from synapse_daemon.ws import EventBus
 
 
@@ -30,28 +35,79 @@ def test_profile_defaults_to_local_first_summary(tmp_path: Path) -> None:
     assert res.status_code == 200
     body = res.json()
     assert body["signed_in"] is False
-    assert body["config_ready"] is False
-    assert body["sync_status"] == "config-required"
+    assert body["sync_status"] == "local-only"
+    assert body["sync_backend"] == "local-only"
+    assert body["available_auth_providers"][0] == "native"
     assert body["current_host"]["name"]
 
 
-def test_profile_config_patch_persists_supabase_settings(tmp_path: Path) -> None:
+class _UnreachableAccounts:
+    """Stand-in for a Synapse Accounts client with no backend running."""
+
+    def public_config(self):  # noqa: ANN201 - test double
+        raise RuntimeError("connection refused")
+
+
+class _ReachableAccounts:
+    def public_config(self):  # noqa: ANN201 - test double
+        from synapse_daemon.synapse_accounts_client import PublicConfigPayload
+
+        return PublicConfigPayload(available_providers=["native", "google"])
+
+
+def test_summary_flags_unreachable_accounts_backend(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    manager = ProfileManager(storage, accounts_client=_UnreachableAccounts())
+    summary = manager.summary()
+    # Sign-in must be flagged off, but the app stays fully usable local-first.
+    assert summary.account_backend_reachable is False
+    assert summary.signed_in is False
+    assert "native" in summary.available_auth_providers
+
+
+def test_summary_flags_reachable_accounts_backend(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    manager = ProfileManager(storage, accounts_client=_ReachableAccounts())
+    summary = manager.summary()
+    assert summary.account_backend_reachable is True
+    assert "google" in summary.available_auth_providers
+
+
+def test_profile_config_patch_persists_local_sync_setting(tmp_path: Path) -> None:
     client, _, _ = _harness(tmp_path)
     with client as c:
         res = c.patch(
             "/api/v1/profile",
             json={
-                "supabase_url": "demo.supabase.co",
-                "supabase_anon_key": "public-demo-key",
                 "sync_enabled": False,
             },
         )
         again = c.get("/api/v1/profile")
     assert res.status_code == 200, res.text
-    assert res.json()["config_ready"] is True
-    assert res.json()["has_anon_key"] is True
     assert res.json()["sync_enabled"] is False
-    assert again.json()["supabase_url"] == "https://demo.supabase.co"
+    assert again.json()["sync_enabled"] is False
+
+
+def test_profile_preferences_patch_round_trips(tmp_path: Path) -> None:
+    client, _, _ = _harness(tmp_path)
+    with client as c:
+        res = c.patch(
+            "/api/v1/profile/preferences",
+            json={
+                "theme": "hacker",
+                "sessions_quick_actions_collapsed": False,
+                "discover_recent_keys": ["tool:cloudtap"],
+            },
+        )
+        again = c.get("/api/v1/profile/preferences")
+    assert res.status_code == 200, res.text
+    assert res.json()["theme"] == "hacker"
+    assert res.json()["sessions_quick_actions_collapsed"] is False
+    assert again.json()["discover_recent_keys"] == ["tool:cloudtap"]
 
 
 def test_profile_favorites_round_trip_into_catalog_state(tmp_path: Path) -> None:
@@ -113,66 +169,45 @@ def test_quick_action_launch_updates_profile_usage_history(
     assert items["quick-action:new-mcp-server"]["used_before"] is True
 
 
-def test_profile_sign_in_uses_mocked_supabase_session(
+def test_profile_sign_in_uses_mocked_accounts_session(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client, _, app = _harness(tmp_path)
 
-    def fake_supabase(self, *, path, anon_key, method, payload=None, access_token=None):
-        if path == "/auth/v1/token?grant_type=password":
-            return type("Resp", (), {
-                "payload": {
-                    "access_token": "access-token",
-                    "refresh_token": "refresh-token",
-                    "expires_in": 3600,
-                    "user": {
-                        "id": "user-123",
-                        "email": "justin@example.com",
-                        "app_metadata": {"provider": "github"},
-                        "user_metadata": {"display_name": "Justin", "avatar_url": None},
-                        "identities": [
-                            {
-                                "id": "identity-1",
-                                "provider": "github",
-                                "identity_data": {"email": "justin@example.com"},
-                            }
-                        ],
-                    },
-                }
-            })()
-        if path == "/auth/v1/user":
-            return type("Resp", (), {
-                "payload": {
-                    "id": "user-123",
-                    "email": "justin@example.com",
-                    "app_metadata": {"provider": "github"},
-                    "user_metadata": {"display_name": "Justin", "avatar_url": None},
-                    "identities": [
-                        {
-                            "id": "identity-1",
-                            "provider": "github",
-                            "identity_data": {"email": "justin@example.com"},
-                        }
-                    ],
-                }
-            })()
-        raise AssertionError(f"unexpected Supabase path: {path}")
+    def fake_sign_in(*, login: str, password: str) -> SessionPayload:
+        assert login == "justin@example.com"
+        assert password == "hunter42"
+        return SessionPayload(
+            access_token="access-token",
+            refresh_token="refresh-token",
+            expires_in=3600,
+            account=AccountPayload(
+                account_id="user-123",
+                username="justin",
+                email="justin@example.com",
+                email_verified=True,
+                email_verified_at="2026-06-21T00:00:00+00:00",
+                display_name="Justin",
+                avatar_url=None,
+                account_provider="google",
+                linked_identities=[
+                    LinkedIdentityPayload(
+                        provider="google",
+                        email="justin@example.com",
+                        identity_id="identity-1",
+                    )
+                ],
+            ),
+        )
 
-    monkeypatch.setattr(ProfileManager, "_supabase_request", fake_supabase)
+    monkeypatch.setattr(app.state.profile_manager._accounts, "sign_in", fake_sign_in)
 
     with client as c:
-        c.patch(
-            "/api/v1/profile",
-            json={
-                "supabase_url": "https://demo.supabase.co",
-                "supabase_anon_key": "public-demo-key",
-            },
-        )
         res = c.post(
             "/api/v1/profile/signin",
-            json={"email": "justin@example.com", "password": "hunter42"},
+            json={"login": "justin@example.com", "password": "hunter42"},
         )
     assert res.status_code == 200, res.text
     assert res.json()["signed_in"] is True
-    assert res.json()["provider"] == "github"
+    assert res.json()["account_provider"] == "google"
     assert res.json()["display_name"] == "Justin"

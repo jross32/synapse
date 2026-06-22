@@ -141,7 +141,7 @@ export interface RestoreReport {
 
 // ── Profile hub + portable catalog state (v0.1.36-dev) ─────────────────
 
-export interface ProviderIdentity {
+export interface LinkedIdentity {
   provider: string;
   email: string | null;
   identity_id: string | null;
@@ -196,24 +196,35 @@ export interface CatalogPreferenceState {
   last_sync_error: string | null;
 }
 
+export interface ProfilePreferences {
+  theme: string | null;
+  sidebar_layout: Record<string, unknown> | null;
+  sessions_quick_actions_collapsed: boolean | null;
+  discover_recent_keys: string[];
+  updated_at: string | null;
+}
+
 export interface ProfileSummary {
   signed_in: boolean;
-  config_ready: boolean;
-  supabase_url: string | null;
-  has_anon_key: boolean;
   sync_enabled: boolean;
   sync_status: string;
+  sync_backend: string;
   user_id: string | null;
+  username: string | null;
   email: string | null;
   display_name: string | null;
   avatar_url: string | null;
-  provider: string | null;
-  provider_identities: ProviderIdentity[];
+  email_verified: boolean;
+  account_provider: string | null;
+  linked_identities: LinkedIdentity[];
   current_host: HostPresence;
   portable_connection_count: number;
   local_connection_count: number;
   last_sync_at: string | null;
   last_sync_error: string | null;
+  available_auth_providers: string[];
+  account_backend_reachable: boolean;
+  preferences: ProfilePreferences;
 }
 
 // ── Projects (Milestone D) ───────────────────────────────────────────────
@@ -458,6 +469,8 @@ export type AgentVisibility = 'lead' | 'helper';
 
 export type AgentContextMode = 'full' | 'standard' | 'minimal';
 
+export type AgentRoleTier = 'boss' | 'supervisor' | 'worker';
+
 export type AgentSquadStatus = 'active' | 'paused' | 'completed';
 
 export type AgentWorkItemStatus =
@@ -474,6 +487,7 @@ export interface AgentRoleTemplate {
   preferred_runtimes: string[];
   default_visibility: AgentVisibility;
   context_mode: AgentContextMode;
+  role_tier: AgentRoleTier;
   can_delegate: boolean;
   prompt_preamble_md: string;
   enabled: boolean;

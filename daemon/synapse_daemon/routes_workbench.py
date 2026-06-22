@@ -11,7 +11,6 @@ opened from where (Contract #11).
 
 from __future__ import annotations
 
-import shutil
 import sys
 from typing import Any
 
@@ -23,6 +22,7 @@ from .audit import AuditRecord, audit
 from .errors import invalid
 from .models import AuditSource
 from .pty_sessions import PtySessionManager
+from .runtime_resolution import resolve_command
 from .storage import Storage
 
 
@@ -39,7 +39,7 @@ def _default_coder_argv() -> list[str]:
     """Best-effort default: prefer Claude, then Codex, fall back to a shell."""
 
     for candidate in ("claude", "codex"):
-        if shutil.which(candidate):
+        if resolve_command(candidate):
             return [candidate]
     if sys.platform == "win32":
         return ["powershell.exe", "-NoLogo"]

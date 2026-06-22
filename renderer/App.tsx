@@ -3,9 +3,9 @@
 // The whole tree sits under <DaemonProvider> so every page shares one
 // daemon connection. "Routing" is just an activePage enum -- no URL router.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { DaemonProvider } from '@shared/daemon-context';
+import { DaemonProvider, useDaemon } from '@shared/daemon-context';
 import {
   bootstrapRuntimeAuth,
   clearDeviceToken,
@@ -15,6 +15,8 @@ import {
   type RuntimeAuthMode,
 } from '@shared/browser-runtime';
 import { DEFAULT_PAGE, NAV_ITEMS, type PageId } from '@shared/nav';
+import { applyPortablePreferences, isProfilePreferencesEmpty, readLocalPortablePreferences } from '@shared/profile-preferences';
+import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { Sidebar } from './components/Sidebar';
@@ -83,6 +85,7 @@ export default function App(): JSX.Element {
 
   return (
     <DaemonProvider>
+      <PortablePreferencesBridge />
       <Shell
         mobileRoute={mobileRoute}
         onForgetDevice={() => {
@@ -92,6 +95,43 @@ export default function App(): JSX.Element {
       />
     </DaemonProvider>
   );
+}
+
+function PortablePreferencesBridge(): null {
+  const { profile, refreshProfile } = useDaemon();
+  const seededSignatureRef = useRef<string | null>(null);
+  const appliedSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    function onPortablePreferences(event: Event): void {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+      if (!detail || typeof detail !== 'object') return;
+      void updateProfilePreferences(detail).catch(() => undefined);
+    }
+    window.addEventListener('synapse:portable-preferences', onPortablePreferences);
+    return () => window.removeEventListener('synapse:portable-preferences', onPortablePreferences);
+  }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+    if (isProfilePreferencesEmpty(profile.preferences)) {
+      const local = readLocalPortablePreferences();
+      if (isProfilePreferencesEmpty(local)) return;
+      const signature = JSON.stringify(local);
+      if (seededSignatureRef.current === signature) return;
+      seededSignatureRef.current = signature;
+      void updateProfilePreferences(local)
+        .then(() => refreshProfile())
+        .catch(() => undefined);
+      return;
+    }
+    const signature = JSON.stringify(profile.preferences);
+    if (appliedSignatureRef.current === signature) return;
+    appliedSignatureRef.current = signature;
+    applyPortablePreferences(profile.preferences);
+  }, [profile, refreshProfile]);
+
+  return null;
 }
 
 function BootSplash(): JSX.Element {

@@ -11,15 +11,18 @@ from pydantic import BaseModel, Field
 from .api_versions import event_name
 from .auth import AuthManager, require_token
 from .errors import invalid
-from .profile import ProfileConfigUpdate, ProfileManager
+from .profile import ProfileConfigUpdate, ProfileManager, ProfilePreferencesUpdate
 
 
 class ProfileSignInRequest(BaseModel):
+    login: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=8)
+
+
+class ProfileSignUpRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=32)
     email: str = Field(..., min_length=3)
-    password: str = Field(..., min_length=6)
-
-
-class ProfileSignUpRequest(ProfileSignInRequest):
+    password: str = Field(..., min_length=8)
     display_name: str | None = None
 
 
@@ -156,9 +159,20 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
         await _publish_profile_updated(request, manager, "config-updated")
         return summary.model_dump(mode="json")
 
+    @router.get("/preferences", response_model=None, dependencies=[guard])
+    async def get_profile_preferences() -> dict:
+        return manager.preferences().model_dump(mode="json")
+
+    @router.patch("/preferences", response_model=None, dependencies=[guard])
+    async def patch_profile_preferences(payload: ProfilePreferencesUpdate, request: Request) -> dict:
+        preferences = manager.update_preferences(payload)
+        await _publish_profile_updated(request, manager, "preferences-updated")
+        return preferences.model_dump(mode="json")
+
     @router.post("/signup", response_model=None, dependencies=[guard])
     async def sign_up(payload: ProfileSignUpRequest, request: Request) -> dict:
         summary, notice = manager.sign_up_password(
+            username=payload.username,
             email=payload.email,
             password=payload.password,
             display_name=payload.display_name,
@@ -168,20 +182,21 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/signin", response_model=None, dependencies=[guard])
     async def sign_in(payload: ProfileSignInRequest, request: Request) -> dict:
-        summary = manager.sign_in_password(email=payload.email, password=payload.password)
+        summary = manager.sign_in_password(login=payload.login, password=payload.password)
         await _publish_profile_updated(request, manager, "signed-in")
         return summary.model_dump(mode="json")
 
     @router.post("/auth/start/{provider}", response_model=AuthStartResponse, dependencies=[guard])
-    async def start_auth(provider: str, request: Request) -> AuthStartResponse:
+    async def start_auth(provider: str, request: Request, mode: str = "signin") -> AuthStartResponse:
         redirect_to = str(request.url_for("profile_auth_callback"))
-        return AuthStartResponse(url=manager.start_oauth(provider=provider, redirect_to=redirect_to))
+        return AuthStartResponse(
+            url=manager.start_oauth(provider=provider, redirect_to=redirect_to, mode=mode)
+        )
 
     @router.get("/auth/callback", response_model=None, name="profile_auth_callback")
     async def auth_callback(
         request: Request,
-        code: str | None = None,
-        state: str | None = None,
+        handoff: str | None = None,
         error: str | None = None,
         error_description: str | None = None,
     ):
@@ -191,14 +206,14 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
                 title="Could not connect the Synapse account",
                 message=error_description or error,
             )
-        if not code or not state:
+        if not handoff:
             return _callback_page(
                 ok=False,
                 title="Could not finish sign-in",
                 message="The provider did not return the data Synapse expected.",
             )
         try:
-            summary = manager.complete_oauth(code=code, state=state)
+            summary = manager.complete_oauth(handoff=handoff)
         except Exception as exc:
             return _callback_page(
                 ok=False,
@@ -216,6 +231,12 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
     async def sign_out(request: Request) -> dict:
         summary = manager.sign_out()
         await _publish_profile_updated(request, manager, "signed-out")
+        return summary.model_dump(mode="json")
+
+    @router.delete("/providers/{provider}", response_model=None, dependencies=[guard])
+    async def unlink_provider(provider: str, request: Request) -> dict:
+        summary = manager.unlink_provider(provider=provider)
+        await _publish_profile_updated(request, manager, "provider-unlinked")
         return summary.model_dump(mode="json")
 
     @router.get("/catalog-state", response_model=None, dependencies=[guard])

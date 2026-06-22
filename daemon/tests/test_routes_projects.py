@@ -137,6 +137,26 @@ def test_create_via_post_returns_201(tmp_path: Path) -> None:
         storage.close()
 
 
+def test_create_via_post_can_create_missing_directory(tmp_path: Path) -> None:
+    client, storage, *_ = _harness(tmp_path)
+    try:
+        project_path = tmp_path / "created-on-demand" / "nested"
+        payload = {
+            "id": "created-on-demand",
+            "name": "Created On Demand",
+            "path": str(project_path),
+            "launch_cmd": "python -V",
+            "create_path": True,
+        }
+        with client as c:
+            res = c.post("/api/v1/projects", json=payload)
+            assert res.status_code == 201
+            assert project_path.exists()
+            assert res.json()["path"] == str(project_path)
+    finally:
+        storage.close()
+
+
 def test_create_duplicate_returns_conflict(tmp_path: Path) -> None:
     client, storage, *_ = _harness(tmp_path)
     try:

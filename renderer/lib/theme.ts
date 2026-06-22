@@ -68,11 +68,21 @@ export function getStoredTheme(): Theme {
   return 'dark';
 }
 
-export function setStoredTheme(theme: Theme): void {
+export function setStoredTheme(
+  theme: Theme,
+  options?: { emit?: boolean }
+): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, theme);
   } catch {
     /* ignore */
+  }
+  if (options?.emit !== false && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('synapse:portable-preferences', {
+        detail: { theme },
+      })
+    );
   }
 }
 

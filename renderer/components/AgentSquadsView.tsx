@@ -9,6 +9,7 @@ import {
   RefreshCcw,
   Rocket,
   Sparkles,
+  Square,
   SquareTerminal,
   Users,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ import {
   listAgentRoleTemplates,
   listAgentSquads,
   patchAgentSquad,
+  stopAgentSquad,
   updateAgentWorkItemStatus,
 } from '@shared/agent-squads-client';
 import { useDaemon } from '@shared/daemon-context';
@@ -42,6 +44,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
+import { SquadWizard } from './SquadWizard';
 
 interface OpenTabRef {
   sessionId: string;
@@ -100,6 +103,7 @@ export function AgentSquadsView({
   const [projects, setProjects] = useState<Project[]>([]);
   const [roles, setRoles] = useState<AgentRoleTemplate[]>([]);
   const [squads, setSquads] = useState<AgentSquad[]>([]);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [detail, setDetail] = useState<AgentSquadDetail | null>(null);
   const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -136,28 +140,42 @@ export function AgentSquadsView({
 
   async function refreshOverview(): Promise<void> {
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
-    try {
-      const [loadedProjects, loadedRoles, loadedSquads] = await Promise.all([
-        listProjects(),
-        listAgentRoleTemplates(),
-        listAgentSquads(),
-      ]);
-      setProjects(loadedProjects);
-      setRoles(loadedRoles);
+    // allSettled, not all: a single failing fetch must not zero the whole HUD
+    // (that produced a misleading "0 projects / 0 roles / 0 squads" state even
+    // when only one call hiccuped). Each section degrades independently.
+    const [projectsRes, rolesRes, squadsRes] = await Promise.allSettled([
+      listProjects(),
+      listAgentRoleTemplates(),
+      listAgentSquads(),
+    ]);
+    const issues: string[] = [];
+
+    if (projectsRes.status === 'fulfilled') {
+      setProjects(projectsRes.value);
+      setSquadForm((prev) => ({
+        ...prev,
+        project_id: prev.project_id || projectsRes.value[0]?.id || '',
+      }));
+    } else {
+      issues.push((projectsRes.reason as Error).message);
+    }
+
+    if (rolesRes.status === 'fulfilled') setRoles(rolesRes.value);
+    else issues.push((rolesRes.reason as Error).message);
+
+    if (squadsRes.status === 'fulfilled') {
+      const loadedSquads = squadsRes.value;
       setSquads(loadedSquads);
       setSelectedSquadId((prev) => {
         if (prev && loadedSquads.some((item) => item.id === prev)) return prev;
         return loadedSquads[0]?.id ?? null;
       });
-      setSquadForm((prev) => ({
-        ...prev,
-        project_id: prev.project_id || loadedProjects[0]?.id || '',
-      }));
-      setLoadState('ready');
-    } catch (err) {
-      setError((err as Error).message || 'Failed to load AI squads.');
-      setLoadState('ready');
+    } else {
+      issues.push((squadsRes.reason as Error).message);
     }
+
+    setError(issues.length ? issues.join(' ') : null);
+    setLoadState('ready');
   }
 
   useEffect(() => {
@@ -400,6 +418,22 @@ export function AgentSquadsView({
     }
   }
 
+  async function handleStopSquad(): Promise<void> {
+    if (!selectedSquad) return;
+    setBusy('squad-stop');
+    setError(null);
+    try {
+      // Kill switch: close every live PTY session this squad owns. The daemon
+      // finalizes the work items via the session_finalized event.
+      await stopAgentSquad(selectedSquad.id);
+      await reloadDetail();
+    } catch (err) {
+      setError((err as Error).message || 'Could not stop the squad.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handlePauseSquad(nextStatus: AgentSquad['status']): Promise<void> {
     if (!selectedSquad) return;
     setBusy(`squad-${nextStatus}`);
@@ -416,6 +450,7 @@ export function AgentSquadsView({
   }
 
   return (
+    <>
     <div className='grid gap-4 xl:grid-cols-[320px,minmax(0,1fr),360px]'>
       <div className='flex min-h-[70vh] flex-col gap-4'>
         <Card className='overflow-hidden border-primary/15 bg-[radial-gradient(circle_at_top_left,rgba(122,90,248,0.18),transparent_45%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(9,12,24,0.98))] p-4'>
@@ -439,9 +474,19 @@ export function AgentSquadsView({
             <StatPill label='Roles' value={String(roles.length)} />
             <StatPill label='Squads' value={String(squads.length)} />
           </div>
+          <Button className='mt-4 w-full' onClick={() => setWizardOpen(true)}>
+            <Users className='h-4 w-4' /> Build a team
+          </Button>
+          <p className='mt-2 text-center text-[11px] text-muted-foreground'>
+            Guided setup -- pick a goal, a starter team, tweak the roster, done.
+          </p>
         </Card>
 
-        <Card className='flex flex-col gap-3 p-4'>
+        <details className='rounded-xl border border-border/60 bg-card/40'>
+          <summary className='cursor-pointer list-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground'>
+            Advanced: build a squad manually
+          </summary>
+        <Card className='flex flex-col gap-3 border-0 bg-transparent p-4 pt-0'>
           <div className='flex items-center justify-between gap-2'>
             <div>
               <h3 className='text-sm font-semibold'>Create a squad</h3>
@@ -503,6 +548,7 @@ export function AgentSquadsView({
             Create squad
           </Button>
         </Card>
+        </details>
 
         <Card className='flex min-h-0 flex-1 flex-col p-3'>
           <div className='mb-3 flex items-center justify-between gap-2 px-1'>
@@ -600,6 +646,20 @@ export function AgentSquadsView({
                 >
                   <CheckCircle2 className='h-4 w-4' />
                   Mark complete
+                </Button>
+                <Button
+                  variant='destructive'
+                  size='sm'
+                  onClick={() => void handleStopSquad()}
+                  disabled={busy === 'squad-stop'}
+                  title='Close every running session in this squad'
+                >
+                  {busy === 'squad-stop' ? (
+                    <Loader2 className='h-4 w-4 animate-spin' />
+                  ) : (
+                    <Square className='h-4 w-4' />
+                  )}
+                  Stop all
                 </Button>
               </div>
             )}
@@ -1100,6 +1160,18 @@ export function AgentSquadsView({
         </Card>
       </div>
     </div>
+    <SquadWizard
+      open={wizardOpen}
+      onClose={() => setWizardOpen(false)}
+      projects={projects}
+      roles={roles}
+      onCreated={(squadId) => {
+        setWizardOpen(false);
+        setSelectedSquadId(squadId);
+        void refreshOverview();
+      }}
+    />
+    </>
   );
 }
 

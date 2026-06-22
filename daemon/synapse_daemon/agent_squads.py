@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import secrets
-import shutil
 import sqlite3
 import sys
 from datetime import datetime
@@ -15,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .errors import invalid, not_found
 from .models import AuditSource
+from .runtime_resolution import resolve_command
 from .time_utils import from_iso, to_iso, utc_now
 
 
@@ -27,6 +27,14 @@ class AgentContextMode(str, Enum):
     FULL = "full"
     STANDARD = "standard"
     MINIMAL = "minimal"
+
+
+class AgentRoleTier(str, Enum):
+    """Where a role sits in the squad hierarchy (boss -> supervisor -> worker)."""
+
+    BOSS = "boss"
+    SUPERVISOR = "supervisor"
+    WORKER = "worker"
 
 
 class AgentSquadStatus(str, Enum):
@@ -50,6 +58,7 @@ class AgentRoleTemplate(BaseModel):
     preferred_runtimes: list[str] = Field(default_factory=list)
     default_visibility: AgentVisibility = AgentVisibility.HELPER
     context_mode: AgentContextMode = AgentContextMode.STANDARD
+    role_tier: AgentRoleTier = AgentRoleTier.WORKER
     can_delegate: bool = True
     prompt_preamble_md: str = ""
     enabled: bool = True
@@ -65,6 +74,7 @@ class AgentRoleTemplateCreate(BaseModel):
     preferred_runtimes: list[str] = Field(default_factory=list)
     default_visibility: AgentVisibility = AgentVisibility.HELPER
     context_mode: AgentContextMode = AgentContextMode.STANDARD
+    role_tier: AgentRoleTier = AgentRoleTier.WORKER
     can_delegate: bool = True
     prompt_preamble_md: str = ""
     enabled: bool = True
@@ -77,6 +87,7 @@ class AgentRoleTemplateUpdate(BaseModel):
     preferred_runtimes: list[str] | None = None
     default_visibility: AgentVisibility | None = None
     context_mode: AgentContextMode | None = None
+    role_tier: AgentRoleTier | None = None
     can_delegate: bool | None = None
     prompt_preamble_md: str | None = None
     enabled: bool | None = None
@@ -190,6 +201,9 @@ def _row_to_role(row: sqlite3.Row) -> AgentRoleTemplate:
         preferred_runtimes=_loads_list(row["preferred_runtimes_json"]),
         default_visibility=AgentVisibility(row["default_visibility"]),
         context_mode=AgentContextMode(row["context_mode"]),
+        role_tier=AgentRoleTier(
+            row["role_tier"] if "role_tier" in row.keys() and row["role_tier"] else "worker"
+        ),
         can_delegate=bool(row["can_delegate"]),
         prompt_preamble_md=row["prompt_preamble_md"] or "",
         enabled=bool(row["enabled"]),
@@ -254,12 +268,30 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
     now = _seed_time()
     defaults = [
         AgentRoleTemplateCreate(
+            id="boss",
+            name="Boss (Orchestrator)",
+            description="Top-level lead. Turns a goal into a plan and delegates to supervisors and workers.",
+            preferred_runtimes=["claude", "codex", "copilot"],
+            default_visibility=AgentVisibility.LEAD,
+            context_mode=AgentContextMode.FULL,
+            role_tier=AgentRoleTier.BOSS,
+            can_delegate=True,
+            prompt_preamble_md=(
+                "You are the squad boss. Turn the goal into a concrete plan, decide which "
+                "roles are needed, and delegate concrete tasks to supervisors and workers. "
+                "Prefer existing tools and workflows over writing from scratch. Keep a "
+                "crisp running summary the rest of the squad can follow."
+            ),
+            sort_order=5,
+        ),
+        AgentRoleTemplateCreate(
             id="planner",
             name="Planner",
             description="Lead agent that scopes work, breaks it down, and routes helpers.",
             preferred_runtimes=["claude", "codex", "copilot"],
             default_visibility=AgentVisibility.LEAD,
             context_mode=AgentContextMode.FULL,
+            role_tier=AgentRoleTier.BOSS,
             can_delegate=True,
             prompt_preamble_md=(
                 "Act as the visible lead. Clarify the goal, plan the next steps, "
@@ -268,12 +300,28 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
             sort_order=10,
         ),
         AgentRoleTemplateCreate(
+            id="supervisor",
+            name="Supervisor",
+            description="Mid-level lead that owns one workstream and coordinates its workers.",
+            preferred_runtimes=["claude", "codex", "copilot"],
+            default_visibility=AgentVisibility.LEAD,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.SUPERVISOR,
+            can_delegate=True,
+            prompt_preamble_md=(
+                "You own one workstream for the boss. Break it into concrete worker tasks, "
+                "keep them unblocked, and report a tight status back up the chain."
+            ),
+            sort_order=15,
+        ),
+        AgentRoleTemplateCreate(
             id="implementer",
             name="Implementer",
             description="Builds the code, runs checks, and reports concrete changes.",
             preferred_runtimes=["codex", "claude", "copilot"],
             default_visibility=AgentVisibility.HELPER,
             context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
             can_delegate=False,
             prompt_preamble_md=(
                 "Bias toward implementation momentum. Make the change, run the relevant "
@@ -288,6 +336,7 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
             preferred_runtimes=["claude", "copilot", "codex"],
             default_visibility=AgentVisibility.HELPER,
             context_mode=AgentContextMode.MINIMAL,
+            role_tier=AgentRoleTier.WORKER,
             can_delegate=False,
             prompt_preamble_md=(
                 "Review with a bug-finding mindset. Prioritize concrete risks, "
@@ -302,6 +351,7 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
             preferred_runtimes=["claude", "copilot", "codex"],
             default_visibility=AgentVisibility.HELPER,
             context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
             can_delegate=False,
             prompt_preamble_md=(
                 "Collect the minimal context needed to unblock the squad, then hand back "
@@ -309,15 +359,90 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
             ),
             sort_order=40,
         ),
+        AgentRoleTemplateCreate(
+            id="tester",
+            name="Tester / QA",
+            description="Writes and runs tests; reports pass/fail with the exact failing cases.",
+            preferred_runtimes=["codex", "claude", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Own quality. Add or run tests for the change, surface concrete failures "
+                "with repro steps, and confirm the fix before calling it done."
+            ),
+            sort_order=50,
+        ),
+        AgentRoleTemplateCreate(
+            id="designer",
+            name="Designer (UX/UI)",
+            description="Owns layout, component states, accessibility, and visual polish.",
+            preferred_runtimes=["claude", "copilot", "codex"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Own the experience. Improve layout, empty/loading/error states, "
+                "accessibility, and visual consistency using the existing design tokens."
+            ),
+            sort_order=60,
+        ),
+        AgentRoleTemplateCreate(
+            id="docs-writer",
+            name="Docs Writer",
+            description="Writes and updates docs, READMEs, and changelogs to match the code.",
+            preferred_runtimes=["claude", "copilot", "codex"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Keep the written record honest. Update docs, READMEs, and changelogs so "
+                "they match what the code actually does after this change."
+            ),
+            sort_order=70,
+        ),
+        AgentRoleTemplateCreate(
+            id="devops",
+            name="DevOps",
+            description="Owns build, packaging, CI, and run/deploy scripts.",
+            preferred_runtimes=["codex", "claude", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Own the pipeline. Make builds, packaging, and run scripts reliable and "
+                "reproducible; verify they pass before handing back."
+            ),
+            sort_order=80,
+        ),
+        AgentRoleTemplateCreate(
+            id="security",
+            name="Security",
+            description="Audits for vulnerabilities, secret leaks, and unsafe defaults.",
+            preferred_runtimes=["claude", "copilot", "codex"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.MINIMAL,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Audit with an attacker mindset. Flag vulnerabilities, leaked secrets, and "
+                "unsafe defaults, with concrete severity and a recommended fix."
+            ),
+            sort_order=90,
+        ),
     ]
     for item in defaults:
         conn.execute(
             """
             INSERT OR IGNORE INTO agent_role_templates (
                 id, name, description, preferred_runtimes_json, default_visibility,
-                context_mode, can_delegate, prompt_preamble_md, enabled, sort_order,
+                context_mode, role_tier, can_delegate, prompt_preamble_md, enabled, sort_order,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item.id,
@@ -326,6 +451,7 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
                 json.dumps(item.preferred_runtimes),
                 item.default_visibility.value,
                 item.context_mode.value,
+                item.role_tier.value,
                 1 if item.can_delegate else 0,
                 item.prompt_preamble_md,
                 1 if item.enabled else 0,
@@ -360,9 +486,9 @@ def create_role_template(
         """
         INSERT INTO agent_role_templates (
             id, name, description, preferred_runtimes_json, default_visibility,
-            context_mode, can_delegate, prompt_preamble_md, enabled, sort_order,
+            context_mode, role_tier, can_delegate, prompt_preamble_md, enabled, sort_order,
             created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             payload.id,
@@ -371,6 +497,7 @@ def create_role_template(
             json.dumps(payload.preferred_runtimes),
             payload.default_visibility.value,
             payload.context_mode.value,
+            payload.role_tier.value,
             1 if payload.can_delegate else 0,
             payload.prompt_preamble_md,
             1 if payload.enabled else 0,
@@ -397,7 +524,7 @@ def update_role_template(
         """
         UPDATE agent_role_templates
         SET name = ?, description = ?, preferred_runtimes_json = ?, default_visibility = ?,
-            context_mode = ?, can_delegate = ?, prompt_preamble_md = ?, enabled = ?,
+            context_mode = ?, role_tier = ?, can_delegate = ?, prompt_preamble_md = ?, enabled = ?,
             sort_order = ?, updated_at = ?
         WHERE id = ?
         """,
@@ -407,6 +534,7 @@ def update_role_template(
             json.dumps(updated.preferred_runtimes),
             updated.default_visibility.value,
             updated.context_mode.value,
+            updated.role_tier.value,
             1 if updated.can_delegate else 0,
             updated.prompt_preamble_md,
             1 if updated.enabled else 0,
@@ -655,7 +783,7 @@ def pick_runtime(
     if role is None:
         return "powershell.exe" if sys.platform == "win32" else "bash"
     for candidate in role.preferred_runtimes:
-        if shutil.which(candidate):
+        if resolve_command(candidate):
             return candidate
     if role.preferred_runtimes:
         return role.preferred_runtimes[0]

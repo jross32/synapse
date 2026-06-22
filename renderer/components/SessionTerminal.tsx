@@ -8,15 +8,26 @@
 //            /pty/{id}/resize so the child sees a fresh TIOCSWINSZ.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  CornerDownLeft,
+  Focus,
+  MoveHorizontal,
+  MoveVertical,
+  SquareTerminal,
+  X,
+} from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 
+import { isMobileRoute } from '@shared/browser-runtime';
 import { useDaemon } from '@shared/daemon-context';
 import { closeSession, resizeSession, writeInput } from '@shared/pty-client';
 import { cn } from '@shared/utils';
+import { Button } from './ui/button';
 
 export interface SessionTerminalProps {
   sessionId: string;
@@ -53,6 +64,13 @@ export function SessionTerminal({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const prefersTouchPad =
+    typeof window !== 'undefined' &&
+    (isMobileRoute() || window.matchMedia?.('(pointer: coarse)').matches === true);
+  const [commandPadOpen, setCommandPadOpen] = useState(prefersTouchPad);
+  const [commandDraft, setCommandDraft] = useState('');
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [commandError, setCommandError] = useState<string | null>(null);
 
   // Keep the latest onExit callback reachable without rebuilding the
   // terminal each time the parent re-renders.
@@ -165,7 +183,9 @@ export function SessionTerminal({
       }
     });
 
-    term.focus();
+    if (!prefersTouchPad) {
+      term.focus();
+    }
 
     return () => {
       cancelAnimationFrame(initialFitFrame);
@@ -182,7 +202,7 @@ export function SessionTerminal({
     // tear the terminal down and rebuild it mid-stream. Scrollback is read
     // through a ref-guarded one-shot; onExit goes through onExitRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, subscribeRaw]);
+  }, [prefersTouchPad, sessionId, subscribeRaw]);
 
   // Late-arriving scrollback (the parent fetched it async): write it once
   // the terminal is alive, with the same one-shot guard.
@@ -236,79 +256,212 @@ export function SessionTerminal({
     termRef.current?.focus();
   }
 
+  function blurTerminalInput(): void {
+    const helper = hostRef.current?.querySelector('textarea.xterm-helper-textarea');
+    if (helper instanceof HTMLTextAreaElement) {
+      helper.blur();
+    }
+  }
+
+  async function sendText(text: string, options?: { clearDraft?: boolean }) {
+    if (!text) return;
+    setCommandBusy(true);
+    setCommandError(null);
+    try {
+      blurTerminalInput();
+      await writeInput(sessionId, { text });
+      if (options?.clearDraft) setCommandDraft('');
+    } catch (err) {
+      setCommandError((err as Error).message || 'Failed to send terminal input.');
+    } finally {
+      setCommandBusy(false);
+    }
+  }
+
+  const commandButtons: Array<{ label: string; value: string; icon?: typeof CornerDownLeft }> = [
+    { label: 'Enter', value: '\r', icon: CornerDownLeft },
+    { label: 'Ctrl+C', value: '\u0003' },
+    { label: 'Tab', value: '\t' },
+    { label: 'Esc', value: '\u001b' },
+    { label: 'Up', value: '\u001b[A', icon: MoveVertical },
+    { label: 'Down', value: '\u001b[B', icon: MoveVertical },
+    { label: 'Left', value: '\u001b[D', icon: MoveHorizontal },
+    { label: 'Right', value: '\u001b[C', icon: MoveHorizontal },
+  ];
+
   return (
     <div
       ref={containerRef}
       className={cn(
-        'relative h-full w-full overflow-hidden rounded-md border border-border bg-[#0b0f17]',
+        'relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-md border border-border bg-[#0b0f17]',
         className
       )}
     >
-      <div
-        ref={hostRef}
-        role='application'
-        aria-label={`Terminal session ${sessionId}`}
-        className='h-full w-full p-2'
-      />
-      {searchOpen && (
+      <div className='relative min-h-0 flex-1'>
         <div
-          role='search'
-          aria-label='Search terminal scrollback'
-          className='absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border border-border bg-card/95 p-1 shadow-lg backdrop-blur'
-        >
-          <input
-            ref={searchInputRef}
-            type='text'
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              findNext(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                closeSearch();
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (e.shiftKey) findPrev(searchQuery);
-                else findNext(searchQuery);
-              }
-            }}
-            placeholder='Find in scrollback…'
-            aria-label='Search query'
-            className='h-7 w-48 rounded bg-background px-2 font-mono text-xs outline-none ring-0 placeholder:text-muted-foreground focus:ring-1 focus:ring-primary'
-          />
-          <button
-            type='button'
-            onClick={() => findPrev(searchQuery)}
-            disabled={!searchQuery}
-            aria-label='Previous match'
-            title='Previous match (Shift+Enter)'
-            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+          ref={hostRef}
+          role='application'
+          aria-label={`Terminal session ${sessionId}`}
+          className='h-full w-full p-2'
+        />
+        {searchOpen && (
+          <div
+            role='search'
+            aria-label='Search terminal scrollback'
+            className='absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border border-border bg-card/95 p-1 shadow-lg backdrop-blur'
           >
-            <ChevronUp className='h-3.5 w-3.5' aria-hidden='true' />
-          </button>
-          <button
-            type='button'
-            onClick={() => findNext(searchQuery)}
-            disabled={!searchQuery}
-            aria-label='Next match'
-            title='Next match (Enter)'
-            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
-          >
-            <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />
-          </button>
-          <button
-            type='button'
-            onClick={closeSearch}
-            aria-label='Close search'
-            title='Close (Esc)'
-            className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground'
-          >
-            <X className='h-3.5 w-3.5' aria-hidden='true' />
-          </button>
+            <input
+              ref={searchInputRef}
+              type='text'
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                findNext(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  closeSearch();
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (e.shiftKey) findPrev(searchQuery);
+                  else findNext(searchQuery);
+                }
+              }}
+              placeholder='Find in scrollback...'
+              aria-label='Search query'
+              className='h-7 w-48 rounded bg-background px-2 font-mono text-xs outline-none ring-0 placeholder:text-muted-foreground focus:ring-1 focus:ring-primary'
+            />
+            <button
+              type='button'
+              onClick={() => findPrev(searchQuery)}
+              disabled={!searchQuery}
+              aria-label='Previous match'
+              title='Previous match (Shift+Enter)'
+              className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              <ChevronUp className='h-3.5 w-3.5' aria-hidden='true' />
+            </button>
+            <button
+              type='button'
+              onClick={() => findNext(searchQuery)}
+              disabled={!searchQuery}
+              aria-label='Next match'
+              title='Next match (Enter)'
+              className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />
+            </button>
+            <button
+              type='button'
+              onClick={closeSearch}
+              aria-label='Close search'
+              title='Close (Esc)'
+              className='rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground'
+            >
+              <X className='h-3.5 w-3.5' aria-hidden='true' />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className='border-t border-border/80 bg-card/80 p-3 backdrop-blur'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <div className='flex items-center gap-2'>
+            <SquareTerminal className='h-4 w-4 text-primary' aria-hidden='true' />
+            <div>
+              <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary/85'>
+                Command pad
+              </p>
+              <p className='text-xs text-muted-foreground'>
+                Send commands and control keys without relying on direct xterm typing.
+              </p>
+            </div>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              onClick={() => {
+                blurTerminalInput();
+                setCommandPadOpen((prev) => !prev);
+              }}
+            >
+              <Focus className='h-4 w-4' />
+              {commandPadOpen ? 'Hide pad' : 'Show pad'}
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={() => termRef.current?.focus()}
+            >
+              <Focus className='h-4 w-4' />
+              Focus terminal
+            </Button>
+          </div>
         </div>
-      )}
+        {commandPadOpen && (
+          <div className='mt-3 flex flex-col gap-3'>
+            <form
+              className='flex flex-col gap-2 lg:flex-row'
+              onSubmit={(e) => {
+                e.preventDefault();
+                void sendText(`${commandDraft}\r`, { clearDraft: true });
+              }}
+            >
+              <textarea
+                value={commandDraft}
+                onChange={(e) => setCommandDraft(e.target.value)}
+                onFocus={blurTerminalInput}
+                placeholder='Type a command here, then send it into the live terminal...'
+                aria-label='Command pad input'
+                rows={2}
+                className='min-h-[72px] flex-1 rounded-xl border border-input bg-background/70 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/40'
+              />
+              <div className='flex flex-wrap gap-2 lg:w-48 lg:flex-col'>
+                <Button
+                  type='submit'
+                  disabled={commandBusy || commandDraft.length === 0}
+                  className='flex-1'
+                >
+                  <CornerDownLeft className='h-4 w-4' />
+                  Send line
+                </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  disabled={commandBusy || commandDraft.length === 0}
+                  onClick={() => void sendText(commandDraft)}
+                  className='flex-1'
+                >
+                  Send text
+                </Button>
+              </div>
+            </form>
+            <div className='flex flex-wrap gap-2'>
+              {commandButtons.map(({ label, value, icon: Icon }) => (
+                <Button
+                  key={label}
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  disabled={commandBusy}
+                  onClick={() => void sendText(value)}
+                >
+                  {Icon ? <Icon className='h-3.5 w-3.5' /> : null}
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {commandError && (
+              <p role='alert' className='text-xs text-destructive'>
+                {commandError}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

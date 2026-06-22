@@ -24,6 +24,17 @@ export interface ProjectFormDialogProps {
 
 const ID_RE = /^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$/;
 
+function slugifyProjectId(value: string): string {
+  const base = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!base) return '';
+  if (/^[a-z]/.test(base)) return base;
+  return `project-${base}`;
+}
+
 export function ProjectFormDialog({
   open,
   mode,
@@ -43,6 +54,8 @@ export function ProjectFormDialog({
     project?.expected_port == null ? '' : String(project.expected_port)
   );
   const [kind, setKind] = useState<ProjectKind>(project?.kind ?? 'app');
+  const [createPath, setCreatePath] = useState(true);
+  const [idTouched, setIdTouched] = useState(Boolean(project?.id));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +82,7 @@ export function ProjectFormDialog({
           name: name.trim(),
           path: path.trim(),
           launch_cmd: launchCmd.trim(),
+          create_path: createPath,
           description: description.trim() || null,
           expected_port: expectedPort === '' ? null : Number(expectedPort),
           group: group.trim() || null,
@@ -130,15 +144,49 @@ export function ProjectFormDialog({
 
         {!isEdit && (
           <Field label='ID (kebab-case, permanent)'>
-            <Input value={id} onChange={(e) => setId(e.target.value.toLowerCase())} placeholder='my-app' />
+            <Input
+              value={id}
+              onChange={(e) => {
+                setIdTouched(true);
+                setId(e.target.value.toLowerCase());
+              }}
+              placeholder='my-app'
+            />
           </Field>
         )}
         <Field label='Name'>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder='My App' />
+          <Input
+            value={name}
+            onChange={(e) => {
+              const next = e.target.value;
+              setName(next);
+              if (!isEdit && !idTouched) {
+                setId(slugifyProjectId(next));
+              }
+            }}
+            placeholder='My App'
+          />
         </Field>
         <Field label='Working directory'>
           <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder='C:\Users\you\my-app' />
         </Field>
+        {!isEdit && (
+          <label className='flex items-start gap-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-3 text-sm'>
+            <input
+              type='checkbox'
+              className='mt-0.5 h-4 w-4 rounded border-border'
+              checked={createPath}
+              onChange={(e) => setCreatePath(e.target.checked)}
+            />
+            <span className='min-w-0'>
+              <span className='font-medium text-foreground'>Create the folder if it does not exist yet</span>
+              <span className='mt-1 block text-xs text-muted-foreground'>
+                Handy from mobile or hosted browser sessions where the AI cannot open a native
+                file picker or make a folder through your local OS shell first.
+              </span>
+            </span>
+          </label>
+        )}
         <Field label='Launch command'>
           <Input value={launchCmd} onChange={(e) => setLaunchCmd(e.target.value)} placeholder='npm start' />
         </Field>

@@ -300,6 +300,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
         # Sessions-centric AI squads (v0.1.36-dev)
         "AgentVisibility": _agents.AgentVisibility,  # type: ignore[dict-item]
         "AgentContextMode": _agents.AgentContextMode,  # type: ignore[dict-item]
+        "AgentRoleTier": _agents.AgentRoleTier,  # type: ignore[dict-item]
         "AgentSquadStatus": _agents.AgentSquadStatus,  # type: ignore[dict-item]
         "AgentWorkItemStatus": _agents.AgentWorkItemStatus,  # type: ignore[dict-item]
         "AgentRoleTemplate": _agents.AgentRoleTemplate,
@@ -307,11 +308,12 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "AgentWorkItem": _agents.AgentWorkItem,
         "AgentSquadDetail": _agents.AgentSquadDetail,
         # Profile hub + portable catalog state
-        "ProviderIdentity": _profile.ProviderIdentity,
+        "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,
         "ServiceConnection": _profile.ServiceConnection,
         "CatalogPreferenceItem": _profile.CatalogPreferenceItem,
         "CatalogPreferenceState": _profile.CatalogPreferenceState,
+        "ProfilePreferences": _profile.ProfilePreferences,
         "ProfileSummary": _profile.ProfileSummary,
         # Tool plugin system (v0.1.9 · multi-instance v0.1.9.5)
         "ToolFieldType": ToolFieldType,  # type: ignore[dict-item]

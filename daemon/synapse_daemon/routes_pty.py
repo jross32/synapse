@@ -14,8 +14,6 @@ Live output rides the WebSocket bus as ``v1.pty.session_output`` events
 from __future__ import annotations
 
 import base64
-import shutil
-import sys
 from typing import Any
 
 from fastapi import APIRouter
@@ -23,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from .errors import invalid, not_found
 from .pty_sessions import PtySession, PtySessionManager
+from .runtime_resolution import resolve_command
 
 
 class SpawnRequest(BaseModel):
@@ -62,7 +61,7 @@ def build_pty_router(manager: PtySessionManager) -> APIRouter:
         installed yet.
         """
 
-        resolved = shutil.which(cmd)
+        resolved = resolve_command(cmd)
         return {"cmd": cmd, "available": resolved is not None, "resolved": resolved}
 
     @router.get("", response_model=None)
