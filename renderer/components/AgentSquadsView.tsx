@@ -451,7 +451,13 @@ export function AgentSquadsView({
 
   return (
     <>
-    <div className='grid gap-4 xl:grid-cols-[320px,minmax(0,1fr),360px]'>
+    <div
+      className={
+        selectedSquad
+          ? 'grid gap-4 xl:grid-cols-[320px,minmax(0,1fr),360px]'
+          : 'mx-auto flex w-full max-w-2xl flex-col gap-4'
+      }
+    >
       <div className='flex min-h-[70vh] flex-col gap-4'>
         <Card className='overflow-hidden border-primary/15 bg-[radial-gradient(circle_at_top_left,rgba(122,90,248,0.18),transparent_45%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(9,12,24,0.98))] p-4'>
           <div className='flex items-start justify-between gap-3'>
@@ -608,6 +614,8 @@ export function AgentSquadsView({
         </Card>
       </div>
 
+      {selectedSquad && (
+        <>
       <div className='flex min-h-[70vh] flex-col gap-4'>
         <Card className='flex flex-col gap-3 p-4'>
           <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -670,7 +678,7 @@ export function AgentSquadsView({
             </div>
           ) : (
             <div className='rounded-2xl border border-dashed border-border p-3 text-sm text-muted-foreground'>
-              No squad goal yet. Add one from the left panel so the lead and helpers
+              No squad goal yet. Set one when you build the team so the lead and helpers
               share the same north star.
             </div>
           )}
@@ -690,12 +698,18 @@ export function AgentSquadsView({
               </p>
             </div>
             {selectedSquad && (
-              <Button variant='ghost' size='sm' onClick={() => void reloadDetail()}>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => void reloadDetail()}
+                aria-label='Refresh work queue'
+                title='Refresh work queue'
+              >
                 <RefreshCcw className='h-4 w-4' />
               </Button>
             )}
           </div>
-          <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr),320px]'>
+          <div className='flex flex-col gap-3'>
             <div className='flex flex-col gap-2'>
               {detail?.work_items.length ? (
                 detail.work_items.map((item) => {
@@ -788,15 +802,18 @@ export function AgentSquadsView({
                 })
               ) : (
                 <div className='rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground'>
-                  No work items yet. Add the first lead or helper task from the panel on
-                  the right.
+                  No work items yet. Use <span className='font-medium text-foreground'>Add work item</span> below, or
+                  <span className='font-medium text-foreground'> Build a team</span> to seed tasks automatically.
                 </div>
               )}
             </div>
 
-            <div className='rounded-2xl border border-border bg-secondary/20 p-4'>
-              <h3 className='text-sm font-semibold'>New work item</h3>
-              <p className='mt-1 text-xs text-muted-foreground'>
+            <details className='rounded-2xl border border-border bg-secondary/20'>
+              <summary className='flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground'>
+                <Plus className='h-4 w-4' /> Add work item
+              </summary>
+            <div className='px-4 pb-4'>
+              <p className='text-xs text-muted-foreground'>
                 Create top-level work in the squad queue. Helpers inherit the same
                 project memory and handoff model.
               </p>
@@ -858,6 +875,7 @@ export function AgentSquadsView({
                 </Button>
               </div>
             </div>
+            </details>
           </div>
         </Card>
 
@@ -1001,16 +1019,22 @@ export function AgentSquadsView({
                     </Button>
                   )}
                 </div>
-                <div className='flex flex-wrap gap-2'>
-                  <Button variant='ghost' size='sm' onClick={() => void handleQuickStatus('running')}>
-                    Mark running
-                  </Button>
-                  <Button variant='ghost' size='sm' onClick={() => void handleQuickStatus('blocked')}>
-                    Mark blocked
-                  </Button>
-                  <Button variant='ghost' size='sm' onClick={() => void handleQuickStatus('completed')}>
-                    Mark completed
-                  </Button>
+                <div className='flex items-center gap-2'>
+                  <label htmlFor='wi-status' className='text-xs text-muted-foreground'>
+                    Set status
+                  </label>
+                  <select
+                    id='wi-status'
+                    value={selectedWorkItem.status}
+                    onChange={(e) => void handleQuickStatus(e.target.value as AgentWorkItemStatus)}
+                    className='h-8 rounded-md border border-input bg-transparent px-2 text-sm'
+                  >
+                    <option value='queued'>Queued</option>
+                    <option value='running'>Running</option>
+                    <option value='handoff'>Handoff</option>
+                    <option value='blocked'>Blocked</option>
+                    <option value='completed'>Completed</option>
+                  </select>
                 </div>
               </div>
             </>
@@ -1021,6 +1045,8 @@ export function AgentSquadsView({
           )}
         </Card>
 
+        {selectedWorkItem && (
+          <>
         <Card className='flex flex-col gap-3 p-4'>
           <div className='flex items-center gap-2'>
             <Sparkles className='h-4 w-4 text-primary' />
@@ -1158,7 +1184,11 @@ export function AgentSquadsView({
             </p>
           )}
         </Card>
+          </>
+        )}
       </div>
+        </>
+      )}
     </div>
     <SquadWizard
       open={wizardOpen}

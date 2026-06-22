@@ -58,9 +58,15 @@ def resolve_command(command: str) -> str | None:
     if lowered in {"copilot", "copilot.exe"}:
         candidates.extend(
             [
+                appdata / "npm" / "copilot.cmd",
+                appdata / "npm" / "copilot.exe",
+                appdata / "npm" / "copilot.ps1",
                 local_appdata / "Microsoft" / "WinGet" / "Links" / "copilot.exe",
             ]
         )
+        winget_packages = local_appdata / "Microsoft" / "WinGet" / "Packages"
+        if winget_packages.exists():
+            candidates.extend(winget_packages.glob("GitHub.Copilot_*/copilot.exe"))
 
     if lowered in {"gh", "gh.exe"}:
         candidates.extend(

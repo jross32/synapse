@@ -45,6 +45,21 @@ re-verified live against an isolated daemon.
   longer zeroes the whole HUD (the misleading 0 projects / 0 roles / 0 squads).
 - `test_pick_runtime` is machine-independent (mocks `resolve_command`, not
   `shutil.which`, which broke on machines with the Codex VS Code extension).
+- **White dropdown in dark mode**: native `<select>` popups rendered with the
+  OS light theme because body-level `color-scheme: dark` did not reach
+  Electron's OS-painted `<option>` popups. `renderer/styles.css` now sets
+  `color-scheme` directly on `select` / `input` / `textarea` (light theme
+  overrides), fixing every dropdown app-wide.
+
+### Changed
+- **Agent Squads is no longer overwhelming.** The cockpit (8 cards / 4 forms)
+  is gated on a selected squad -- the empty state is just the hero +
+  "Build a team" + squad picker. Delegate/Handoff forms appear only after a
+  work item is selected; the "New work item" form is collapsed behind an
+  "Add work item" disclosure; the three status buttons became one "Set status"
+  control; the Direct/Squads mode toggle is a larger, labeled tablist; and the
+  Direct-mode roadmap card is gated behind Help. Verified over a Cloudtap WAN
+  tunnel (phone pairing, not LAN).
 
 ## [0.1.36-dev] -- 2026-06-20..21
 

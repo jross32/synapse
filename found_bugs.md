@@ -22,6 +22,48 @@ Confidence model used in this file:
 
 This is **not** a mathematically complete list of every bug in the repo. It is an extensive audit of the highest-value defects and likely defects reachable from the current codebase and the reported failure.
 
+## 2026-06-22 Sessions / Squads UX + Dark-Mode Follow-Up
+
+### Resolved in the current working tree
+
+1. **Confirmed / resolved:** native `<select>` dropdowns rendered with a white
+   OS popup in dark mode (reported on the Agent Squads role pickers). Body-level
+   `color-scheme: dark` did not reach Electron's OS-painted `<option>` popups;
+   [renderer/styles.css](renderer/styles.css) now sets `color-scheme: dark`
+   directly on `select` / `input` / `textarea` (light theme overrides), fixing
+   every dropdown app-wide.
+2. **Resolved UX overload:** Sessions -> Agent squads dumped a 3-column, 8-card
+   cockpit (4 always-on forms) on first visit. The cockpit is now gated on a
+   selected squad (empty state = hero + "Build a team" + squad picker); the
+   Delegate/Handoff forms appear only after a work item is selected; the
+   "New work item" form is collapsed behind an "Add work item" disclosure; the
+   three status buttons collapsed to one "Set status" control; the mode toggle
+   is a larger, labeled `role="tablist"`; and the Direct-mode roadmap card is
+   gated behind Help. See [AgentSquadsView.tsx](renderer/components/AgentSquadsView.tsx)
+   and [Sessions.tsx](renderer/pages/Sessions.tsx).
+
+### Verified live on 2026-06-22 (Cloudtap WAN, not LAN)
+
+Using Playwright as a phone at 390x844 over a real Cloudtap quick-tunnel
+(`https://shanghai-aims-belle-buck.trycloudflare.com`, a public Cloudflare URL,
+not a LAN address):
+
+1. Loaded `/mobile` over the public URL; the pair screen rendered with the WAN
+   badge and the correct tunnel origin.
+2. Minted a 6-digit code (`POST /api/v1/pair/code`), entered it, and reached the
+   full mobile shell over WAN.
+3. Agent squads empty state showed only the onboarding panel (no cockpit dump);
+   after creating a squad the cockpit appeared and Delegate/Handoff stayed
+   hidden until a work item was selected.
+4. A `<select>` computed `color-scheme: dark`, confirming the dropdown fix over
+   the wire.
+5. Runtime readiness reported Claude Code, GitHub Copilot CLI, and OpenAI Codex
+   all `ready`, confirming `runtime_resolution.py` detects the winget-installed
+   `copilot.exe`.
+
+Gates at the time: renderer + electron `tsc` clean, `npm run build` clean,
+423 daemon tests pass / 11 skipped.
+
 ## Executive Summary
 
 The reported freeze after turning on LAN access is not explained by a single isolated mistake. It is a **bug cluster** centered on the fact that the in-app restart path does **not** restart the same system that the desktop shortcut starts in dev mode.

@@ -134,6 +134,36 @@ async def test_spawn_unknown_command_raises_file_not_found() -> None:
         await manager.spawn(argv=["definitely-not-a-real-binary-xyz"])
 
 
+async def test_windows_copilot_spawn_wraps_through_powershell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+    seen: dict[str, list[str] | None] = {"argv": None}
+
+    async def fake_start(self) -> None:  # type: ignore[no-untyped-def]
+        seen["argv"] = list(self._spawn_argv)
+
+    monkeypatch.setattr("synapse_daemon.pty_sessions.sys.platform", "win32")
+    monkeypatch.setattr(
+        "synapse_daemon.pty_sessions.resolve_command",
+        lambda cmd: {
+            "copilot": r"C:\Users\justi\AppData\Roaming\npm\copilot.cmd",
+            "powershell.exe": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+        }.get(cmd),
+    )
+    monkeypatch.setattr("synapse_daemon.pty_sessions.PtySession.start", fake_start)
+
+    session = await manager.spawn(["copilot"])
+    assert session.argv[0] == r"C:\Users\justi\AppData\Roaming\npm\copilot.cmd"
+    assert seen["argv"] == [
+        r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+        "-NoLogo",
+        "-Command",
+        "& 'c:\\users\\justi\\appdata\\roaming\\npm\\copilot.cmd'",
+    ]
+
+
 async def test_close_unknown_session_is_false() -> None:
     bus = EventBus()
     manager = PtySessionManager(bus)

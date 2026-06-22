@@ -159,6 +159,21 @@
     color-scheme: dark;
   }
   html.theme-light body { color-scheme: light; }
+
+  /* Body-level color-scheme does not reliably reach OS-painted <select>
+     popups inside Electron/Chromium, so dropdowns rendered white over the
+     dark UI. Set it directly on the form controls -- this is the reliable
+     fix for the white-dropdown-in-dark-mode bug. Light theme overrides. */
+  select,
+  input,
+  textarea {
+    color-scheme: dark;
+  }
+  html.theme-light select,
+  html.theme-light input,
+  html.theme-light textarea {
+    color-scheme: light;
+  }
 }
 
 /* Shared keyframes used by status badges (Contract #2).

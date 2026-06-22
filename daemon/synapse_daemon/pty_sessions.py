@@ -251,6 +251,7 @@ class PtySession:
         self,
         session_id: str,
         argv: list[str],
+        spawn_argv: list[str],
         cwd: str | None,
         env: dict[str, str],
         rows: int,
@@ -281,11 +282,12 @@ class PtySession:
         self._reader_thread: threading.Thread | None = None
         self._closing = False
         self._env = env
+        self._spawn_argv = list(spawn_argv)
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        await asyncio.to_thread(self._backend.spawn, self.argv, self.cwd, self._env)
+        await asyncio.to_thread(self._backend.spawn, self._spawn_argv, self.cwd, self._env)
         # Honour the renderer's initial size up front so the child sees a
         # sane TIOCSWINSZ from the first prompt.
         self._backend.resize(self.rows, self.cols)
@@ -457,6 +459,38 @@ class PtySessionManager:
         self._storage = storage
         self._sessions: dict[str, PtySession] = {}
 
+    @staticmethod
+    def _powershell_quote(value: str) -> str:
+        """Quote one argument for a PowerShell ``-Command`` string."""
+
+        return "'" + value.replace("'", "''") + "'"
+
+    def _spawn_argv_for_runtime(self, argv: list[str]) -> list[str]:
+        """Adjust platform-specific runtimes while keeping the public argv stable.
+
+        GitHub Copilot CLI on Windows is documented and tested as a PowerShell
+        experience. Launching the raw ``copilot.exe`` directly under winpty can
+        hang for a few seconds and then exit with ``unknown option
+        '--no-warnings'``. Wrapping just that runtime through PowerShell keeps
+        the session interactive while the UI still sees the real Copilot argv.
+        """
+
+        if sys.platform != "win32" or not argv:
+            return list(argv)
+        if Path(argv[0]).stem.lower() != "copilot":
+            return list(argv)
+        powershell = resolve_command("powershell.exe")
+        if powershell is None:
+            return list(argv)
+        # On Windows, ``shutil.which`` can hand back the Copilot WinGet path
+        # with an upper-case ``.EXE`` suffix. Launching that exact casing
+        # through PowerShell reproducibly trips Copilot's ``--no-warnings``
+        # startup failure; the same absolute path in lower-case stays
+        # interactive. Normalise just the executable path before quoting.
+        runtime_argv = [argv[0].lower(), *argv[1:]]
+        command = "& " + " ".join(self._powershell_quote(part) for part in runtime_argv)
+        return [powershell, "-NoLogo", "-Command", command]
+
     async def spawn(
         self,
         argv: list[str],
@@ -474,6 +508,8 @@ class PtySessionManager:
         resolved = resolve_command(argv[0])
         if resolved is None:
             raise FileNotFoundError(f"command not found on PATH: {argv[0]!r}")
+        display_argv = [resolved, *argv[1:]]
+        spawn_argv = self._spawn_argv_for_runtime(display_argv)
 
         # Default cwd to the user's home directory (v0.1.35). Why: the
         # major AI CLIs we ship in the marketplace (claude, codex) cache
@@ -504,7 +540,8 @@ class PtySessionManager:
         session_id = session_id or secrets.token_hex(6)
         session = PtySession(
             session_id=session_id,
-            argv=[resolved, *argv[1:]],
+            argv=display_argv,
+            spawn_argv=spawn_argv,
             cwd=cwd,
             env=merged_env,
             rows=rows,

@@ -570,12 +570,19 @@ export function SessionsPage({
     )
   );
   const modeToggle = (
-    <div className='inline-flex rounded-full border border-border bg-card p-1'>
+    <div
+      role='tablist'
+      aria-label='Session workspace mode'
+      className='inline-flex rounded-full border border-border bg-card p-1'
+    >
       <button
         type='button'
+        role='tab'
+        aria-selected={mode === 'direct'}
         onClick={() => setMode('direct')}
+        title='Direct sessions: raw, single-process terminals'
         className={cn(
-          'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+          'rounded-full px-4 py-2 text-sm font-medium transition-colors',
           mode === 'direct'
             ? 'bg-primary text-primary-foreground'
             : 'text-muted-foreground hover:text-foreground'
@@ -585,9 +592,12 @@ export function SessionsPage({
       </button>
       <button
         type='button'
+        role='tab'
+        aria-selected={mode === 'squads'}
         onClick={() => setMode('squads')}
+        title='Agent squads: coordinated lead + helper AI workers'
         className={cn(
-          'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+          'rounded-full px-4 py-2 text-sm font-medium transition-colors',
           mode === 'squads'
             ? 'bg-primary text-primary-foreground'
             : 'text-muted-foreground hover:text-foreground'
@@ -789,23 +799,26 @@ export function SessionsPage({
 
       {/* Phase B preview (v0.1.36 A7). Signals where Sessions is
           headed without committing schema or shipping the
-          implementation yet. */}
-      <Card className='flex items-start gap-3 border-dashed p-4 text-sm'>
-        <Sparkles className='mt-0.5 h-4 w-4 shrink-0 text-primary' aria-hidden='true' />
-        <div className='flex flex-col gap-1'>
-          <p className='font-medium'>
-            Coming next: project objectives + cross-AI continuity
-          </p>
-          <p className='text-xs text-muted-foreground'>
-            A per-project objectives tree lets you "click a task and resume" --
-            the right CLI launches in the right folder with prior context.
-            Claude and Codex will share a per-project NOTES file so switching
-            between them keeps the thread alive. ADR-0006 is being written;
-            you'll see it under <code className='font-mono'>docs/adr/</code>{' '}
-            before code lands.
-          </p>
-        </div>
-      </Card>
+          implementation yet. Gated behind Help so it isn't permanent
+          first-visit clutter. */}
+      {helpOpen && (
+        <Card className='flex items-start gap-3 border-dashed p-4 text-sm'>
+          <Sparkles className='mt-0.5 h-4 w-4 shrink-0 text-primary' aria-hidden='true' />
+          <div className='flex flex-col gap-1'>
+            <p className='font-medium'>
+              Coming next: project objectives + cross-AI continuity
+            </p>
+            <p className='text-xs text-muted-foreground'>
+              A per-project objectives tree lets you "click a task and resume" --
+              the right CLI launches in the right folder with prior context.
+              Claude and Codex will share a per-project NOTES file so switching
+              between them keeps the thread alive. ADR-0006 is being written;
+              you'll see it under <code className='font-mono'>docs/adr/</code>{' '}
+              before code lands.
+            </p>
+          </div>
+        </Card>
+      )}
 
       {/* Tab strip */}
       {/* Install dialog (v0.1.28). Surfaces when a quick-launch's binary
