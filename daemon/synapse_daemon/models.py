@@ -268,6 +268,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
 
     from . import errors as _errors
     from . import agent_squads as _agents
+    from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
     from . import profile as _profile
@@ -307,6 +308,14 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "AgentSquad": _agents.AgentSquad,
         "AgentWorkItem": _agents.AgentWorkItem,
         "AgentSquadDetail": _agents.AgentSquadDetail,
+        # Per-project decision records, backlog, versions (ADR-0011)
+        "ProjectAdrStatus": _records.ProjectAdrStatus,  # type: ignore[dict-item]
+        "ProjectBacklogStatus": _records.ProjectBacklogStatus,  # type: ignore[dict-item]
+        "ProjectBacklogPriority": _records.ProjectBacklogPriority,  # type: ignore[dict-item]
+        "ProjectAdr": _records.ProjectAdr,
+        "ProjectBacklogItem": _records.ProjectBacklogItem,
+        "ProjectVersion": _records.ProjectVersion,
+        "ProjectRecords": _records.ProjectRecords,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,

@@ -50,6 +50,7 @@ from .routes_workbench import build_workbench_router
 from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
+from .routes_project_records import build_project_records_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
 from .routes_tools import build_tools_router
@@ -232,6 +233,12 @@ def build_app(
     )
     app.include_router(
         build_agent_squads_router(storage, pty_manager, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Per-project ADRs, backlog, and version history (ADR-0011).
+    app.include_router(
+        build_project_records_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
