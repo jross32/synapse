@@ -228,3 +228,36 @@ def test_stop_squad_is_safe_when_idle(tmp_path: Path) -> None:
 
         missing = c.post("/api/v1/agent-squads/does-not-exist/stop")
         assert missing.status_code >= 400
+
+
+def test_launch_with_missing_cwd_returns_clean_error(tmp_path: Path) -> None:
+    # Regression: a work item whose project directory does not exist must yield
+    # a clean 422, never crash the daemon (a bad cwd can take winpty/ConPTY --
+    # and the whole process -- down at a level Python can't catch).
+    app, client = _harness(tmp_path)
+    shell = "powershell.exe" if sys.platform == "win32" else "bash"
+    with client as c:
+        c.post(
+            "/api/v1/projects",
+            json={
+                "id": "ghost",
+                "name": "Ghost",
+                "path": str(tmp_path / "does-not-exist"),
+                "kind": "other",
+                "launch_cmd": "echo hi",
+            },
+        )
+        squad = c.post(
+            "/api/v1/agent-squads",
+            json={"project_id": "ghost", "name": "Ghost Team", "lead_role_id": "boss"},
+        ).json()
+        wi = c.post(
+            f"/api/v1/agent-squads/{squad['id']}/work-items",
+            json={"title": "x", "assigned_role_id": "implementer"},
+        ).json()
+        res = c.post(
+            f"/api/v1/agent-work-items/{wi['id']}/launch",
+            json={"preferred_runtime": shell, "open_in_tab": False},
+        )
+        assert res.status_code == 422, res.text
+        assert c.get("/api/v1/health").status_code == 200

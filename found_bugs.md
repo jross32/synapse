@@ -585,3 +585,70 @@ This section is intentionally about sequencing, not implementation details.
 3. Fix wrapper teardown so it only stops Synapse-owned children.
 4. Re-test the LAN toggle and phone pairing flow end to end.
 5. After that, clean up the version drift and packaging-path issues.
+
+## 2026-06-22 Agent Squads + Profile Follow-Up
+
+This pass finished the Profile feature, powered up Agent Squads, and hardened
+the PTY launch path. Found + fixed live against an isolated daemon.
+
+### Newly confirmed defects (now fixed)
+
+1. **Confirmed (high):** launching a squad work item whose project working
+   directory does not exist took the **entire daemon process down**. The
+   native PTY backend (`pywinpty` / ConPTY) raises `WinptyError: The directory
+   name is invalid.` AND the process still dies a moment later -- the Python
+   `except` returned a clean 422 to the client, but the daemon was gone on the
+   next request (`health=000`). Root cause: a bad `cwd` reached the native
+   backend at all.
+   - **Fixed:** [pty_sessions.py](daemon/synapse_daemon/pty_sessions.py)
+     `spawn()` now validates `Path(cwd).is_dir()` up front and raises
+     `FileNotFoundError` (-> 422) before winpty is invoked.
+     [routes_agent_squads.py](daemon/synapse_daemon/routes_agent_squads.py)
+     `launch_work_item` also catches broad spawn failures as a clean
+     `ErrorEnvelope`. Verified: bad cwd -> 422 and `health=200` afterward;
+     regression test `test_launch_with_missing_cwd_returns_clean_error`.
+
+2. **Confirmed (med):** the squad **kill switch** (`POST /agent-squads/{id}/stop`)
+   closed the PTY sessions but left the work items stuck at `running` forever,
+   because it relied on the async `pty.session_finalized` event, which did not
+   finalize forced-closed items.
+   - **Fixed:** `stop_squad` now finalizes the closed work items
+     deterministically (reusing `complete_work_item_from_session_exit`) and
+     broadcasts per-item updates. Verified: launch -> `running` -> Stop all ->
+     `blocked`, daemon alive.
+
+3. **Confirmed (low):** the Agent Squads overview used `Promise.all`, so a
+   single failing fetch zeroed the whole HUD (misleading `0 projects / 0 roles
+   / 0 squads`). Now uses `Promise.allSettled` -- each section degrades
+   independently.
+
+4. **Confirmed (UX):** the Profile hub showed native sign-in forms even when no
+   Synapse Accounts service was reachable, so signing in always errored with
+   `profile.remote_unreachable`. Now the daemon exposes
+   `ProfileSummary.account_backend_reachable` and the UI shows an honest "sync
+   is optional / not configured" panel instead. Local-first features unaffected.
+
+### Verified live (2026-06-22)
+
+Against an isolated daemon (temp port + temp data-dir, so the running app was
+untouched):
+
+1. Migration `011_squad_hierarchy.sql` applies; `GET /agent-role-templates`
+   returns **11 roles** with correct `role_tier` (boss x2, supervisor, 8
+   workers).
+2. `GET /profile` returns `account_backend_reachable` reflecting a live probe.
+3. create project -> squad -> launch real PowerShell PTY worker -> `running`;
+   `POST /agent-squads/{id}/stop` -> `stopped_sessions=1` -> work item
+   `blocked`; daemon `health=200` throughout.
+4. Bad cwd launch -> `422`, daemon survives.
+5. Renderer (Playwright at 5173): Team Builder wizard opens, all 4 steps
+   render, 6 preset cards render, 0 console errors.
+6. Mobile (Playwright at 390px, `/mobile`): Sessions exposes Claude / Codex /
+   Copilot launchers + Agent squads.
+
+### Not yet done (next pass)
+
+- Full "AI worker actually builds a small app" capstone e2e (needs a real
+  Claude OAuth session; the squad -> PTY -> stop pipeline itself is verified).
+- Autonomous AI-boss + Synapse-as-a-claude.ai-connector (approved-in-principle
+  ADRs; not started).

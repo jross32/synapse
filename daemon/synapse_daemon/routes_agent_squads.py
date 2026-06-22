@@ -175,18 +175,24 @@ def build_agent_squads_router(
     @router.post("/agent-squads/{squad_id}/stop", response_model=None)
     async def stop_squad(squad_id: str) -> dict[str, Any]:
         # Kill switch: close every live PTY session owned by this squad's work
-        # items. Each manager.close() fires pty.session_finalized, which the
-        # squad event listener turns into a terminal work-item status -- so we
-        # don't mutate work-item rows here, the listener does it consistently.
+        # items, then deterministically finalize those work items. We do NOT
+        # rely solely on the async pty.session_finalized event -- a forced close
+        # must leave the queue in a clean, non-running state the instant this
+        # returns, even if event delivery is delayed. Re-running the finalize is
+        # idempotent (it only transitions items still in RUNNING).
         squad = squads.get_squad(storage.conn, squad_id)
         items = squads.list_work_items(storage.conn, squad_id)
-        closed: list[str] = []
+        closed: list[tuple[str, str]] = []  # (work_item_id, session_id)
         for item in items:
             if not item.pty_session_id:
                 continue
             if await manager.close(item.pty_session_id):
-                closed.append(item.id)
+                closed.append((item.id, item.pty_session_id))
         with storage.transaction() as conn:
+            for _wid, session_id in closed:
+                squads.complete_work_item_from_session_exit(
+                    conn, session_id=session_id, exit_code=-1
+                )
             audit(
                 conn,
                 AuditRecord(
@@ -198,11 +204,21 @@ def build_agent_squads_router(
                     details={"stopped_sessions": len(closed)},
                 ),
             )
+        for work_item_id, _session_id in closed:
+            updated = squads.get_work_item(storage.conn, work_item_id)
+            await bus.publish(
+                event_name("agent_work_item", "updated"),
+                {"work_item": updated.model_dump(mode="json")},
+            )
         await bus.publish(
             event_name("agent_squad", "updated"),
             {"squad": squad.model_dump(mode="json"), "stopped_sessions": len(closed)},
         )
-        return {"squad_id": squad_id, "stopped_sessions": len(closed), "work_item_ids": closed}
+        return {
+            "squad_id": squad_id,
+            "stopped_sessions": len(closed),
+            "work_item_ids": [wid for wid, _ in closed],
+        }
 
     @router.post("/agent-squads/{squad_id}/work-items", response_model=None, status_code=201)
     async def create_work_item(
@@ -280,6 +296,15 @@ def build_agent_squads_router(
                 )
             except FileNotFoundError as exc:
                 raise invalid("agent_work_item", str(exc))
+            except Exception as exc:
+                # A PTY spawn can fail many ways beyond a missing binary -- a bad
+                # project cwd, winpty errors, or permission issues. Surface them
+                # as a clean ErrorEnvelope (Contract #4) instead of letting the
+                # exception escape and take the daemon down.
+                raise invalid(
+                    "agent_work_item",
+                    f"Could not start a session for this work item: {exc}",
+                )
             work_item = squads.set_work_item_session(
                 conn,
                 work_item.id,

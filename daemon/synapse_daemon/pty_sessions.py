@@ -487,6 +487,14 @@ class PtySessionManager:
         if cwd is None:
             cwd = str(Path.home())
 
+        # Validate the working directory up front. Passing a non-existent cwd to
+        # the native PTY backend (ConPTY/winpty on Windows) can take the whole
+        # daemon process down at a level Python cannot catch -- the WinptyError
+        # is raised AND the process still dies. Refuse a bad cwd cleanly here so
+        # callers get an honest FileNotFoundError (-> 422) and the daemon lives.
+        if cwd is not None and not Path(cwd).is_dir():
+            raise FileNotFoundError(f"working directory does not exist: {cwd!r}")
+
         merged_env = dict(os.environ)
         if env:
             merged_env.update(env)

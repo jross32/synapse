@@ -110,3 +110,11 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-06-21 | `GET /v1/sync/document` / `PUT /v1/sync/document` | additive | Fetches and updates the cloud-backed portable sync document for preferences, favorites/history/install memory, and host inventory. Files/logs/transcripts/uploads remain out of scope. |
 | 2026-06-21 | `POST /v1/oauth/start` / `POST /v1/oauth/exchange` / `GET /v1/oauth/google/callback` | additive | Starts external OAuth, exchanges the completion handoff for a Synapse session, and completes the Google callback on the hosted service. |
 | 2026-06-21 | `DELETE /v1/providers/{provider}` | additive | Unlinks an external identity from the current Synapse account. |
+
+### Shipped in v0.1.36-dev (Agent Squads hierarchy + kill switch, Profile reachability)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-06-22 | `POST /api/v1/agent-squads/{id}/stop` | additive | Kill switch: closes every live PTY session owned by the squad's work items and finalizes those work items. Returns `{squad_id, stopped_sessions, work_item_ids}`. |
+| 2026-06-22 | `AgentRoleTemplate.role_tier` | additive | New field on role templates: `boss` / `supervisor` / `worker`. Drives the Team Builder hierarchy. Existing installs gain it via migration `011_squad_hierarchy.sql` (default `worker`; the original seeds are re-tiered). |
+| 2026-06-22 | `ProfileSummary.account_backend_reachable` | additive | New boolean on the profile summary. `false` when no Synapse Accounts service is reachable, so the UI hides native sign-in and shows a "sync is optional / not configured" state instead of forms that always error. |

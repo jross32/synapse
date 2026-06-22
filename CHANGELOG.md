@@ -10,6 +10,42 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36-dev] -- 2026-06-22
+
+Profile completion + Agent Squads usability/power + daemon resilience
+(authored by Claude on top of the Codex wave). Gates green: renderer +
+electron tsc clean, 420 daemon tests pass / 11 skipped. Daemon changes
+re-verified live against an isolated daemon.
+
+### Added
+- **Team Builder wizard** (`renderer/components/SquadWizard.tsx`): a guided
+  goal -> preset team -> roster -> review flow. "Build a team" is the primary
+  CTA on Agent Squads; the raw create forms moved behind an Advanced
+  disclosure so the page no longer overwhelms first-time users.
+- **Role hierarchy + roster**: `role_tier` (`boss` / `supervisor` / `worker`)
+  via migration `011_squad_hierarchy.sql`; seeded roles expanded 4 -> 11
+  (boss, planner, supervisor, implementer, reviewer, researcher, tester,
+  designer, docs-writer, devops, security).
+- **Squad kill switch**: `POST /api/v1/agent-squads/{id}/stop` closes a
+  squad's live PTY sessions and finalizes its work items; "Stop all" button in
+  the cockpit. Substrate for the future autonomous boss.
+- **Profile reachability**: `ProfileSummary.account_backend_reachable`. The
+  Profile hub now shows an honest "sync is optional / not configured" panel
+  when no Synapse Accounts service is reachable, instead of sign-in forms that
+  always error. Local-first Profile features are unaffected.
+
+### Fixed
+- Daemon no longer crashes when a work item launches with a missing/invalid
+  working directory -- the cwd is validated before the native PTY backend
+  (winpty/ConPTY) is invoked, so a bad cwd returns a clean 422 and the daemon
+  stays up.
+- "Stop all" reliably finalizes work items (they were left `running` because
+  finalization depended on async event delivery).
+- Agent Squads overview uses `Promise.allSettled` so one failing fetch no
+  longer zeroes the whole HUD (the misleading 0 projects / 0 roles / 0 squads).
+- `test_pick_runtime` is machine-independent (mocks `resolve_command`, not
+  `shutil.which`, which broke on machines with the Codex VS Code extension).
+
 ## [0.1.36-dev] -- 2026-06-20..21
 
 Phone-parity + multi-AI workflow wave (authored primarily by the Codex
