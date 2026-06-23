@@ -268,6 +268,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
 
     from . import errors as _errors
     from . import agent_squads as _agents
+    from . import assistant as _assistant
     from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
@@ -316,6 +317,14 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "ProjectBacklogItem": _records.ProjectBacklogItem,
         "ProjectVersion": _records.ProjectVersion,
         "ProjectRecords": _records.ProjectRecords,
+        # Local-LLM assistant (ADR-0014)
+        "AssistantRole": _assistant.AssistantRole,  # type: ignore[dict-item]
+        "OllamaModelInfo": _assistant.OllamaModelInfo,
+        "AssistantSettings": _assistant.AssistantSettings,
+        "AssistantStatus": _assistant.AssistantStatus,
+        "AssistantMessage": _assistant.AssistantMessage,
+        "AssistantChat": _assistant.AssistantChat,
+        "AssistantChatDetail": _assistant.AssistantChatDetail,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,

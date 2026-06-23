@@ -51,6 +51,7 @@ from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
+from .routes_assistant import build_assistant_router
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
@@ -240,6 +241,12 @@ def build_app(
     # Per-project ADRs, backlog, and version history (ADR-0011).
     app.include_router(
         build_project_records_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Local-LLM assistant (Ollama chat) -- ADR-0014.
+    app.include_router(
+        build_assistant_router(storage, tool_registry),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
