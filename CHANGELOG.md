@@ -18,6 +18,11 @@ electron tsc clean, 420 daemon tests pass / 11 skipped. Daemon changes
 re-verified live against an isolated daemon.
 
 ### Added
+- **Remote WAN recovery helper**: `scripts/remote-recovery.ps1` starts or
+  reuses the daemon, optionally installs `cloudflared` through winget, opens
+  Cloudtap on port `7878`, waits for the WAN `/mobile` URL, and prints a fresh
+  pairing code for Codex/local automation rescue sessions. Packaged builds now
+  include it under `resources/scripts/remote-recovery.ps1`.
 - **Per-project decision records (ADR-0011)**: every managed project now
   carries its own **ADRs**, **backlog**, and **version history**. ADRs have a
   quick-idea -> promote-to-numbered lifecycle (a one-field "Idea" capture, then

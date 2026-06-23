@@ -115,6 +115,7 @@ async function apiFetchInternal<T = unknown>(
 
   const init: RequestInit = {
     ...rest,
+    credentials: rest.credentials ?? 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -163,6 +164,7 @@ async function fetchLocalToken(base: string): Promise<string> {
   localTokenRefresh = (async () => {
     const res = await fetch(`${base}${API_PREFIX}/auth/local-token`, {
       method: 'GET',
+      credentials: 'include',
       headers: { Accept: 'application/json' },
     });
     const text = await res.text();

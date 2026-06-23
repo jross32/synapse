@@ -25,6 +25,7 @@ import logging
 import socket
 import urllib.error
 import urllib.request
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ log = logging.getLogger(__name__)
 
 LAN_HOST = "0.0.0.0"
 LOOPBACK_HOST = "127.0.0.1"
+CLOUDTAP_WARMUP_GRACE_SECONDS = 90
 
 
 def _detect_lan_ips() -> list[str]:
@@ -262,6 +264,31 @@ async def _verify_public_tunnel(public_url: str) -> RemoteAccessWanVerification:
     )
 
 
+def _apply_cloudtap_warmup_grace(
+    verification: RemoteAccessWanVerification,
+    *,
+    created_at,
+) -> RemoteAccessWanVerification:
+    if verification.status != "error":
+        return verification
+    if created_at is None:
+        return verification
+    age = utc_now() - created_at
+    if age > timedelta(seconds=CLOUDTAP_WARMUP_GRACE_SECONDS):
+        return verification
+    if verification.failure_code not in {"unreachable", "http_status", "invalid_json", "unexpected_payload"}:
+        return verification
+    return verification.model_copy(
+        update={
+            "status": "warming",
+            "failure_message": (
+                "Cloudtap is still warming up and DNS/mobile checks can lag for a minute. "
+                f"Latest probe: {verification.failure_message}"
+            ),
+        }
+    )
+
+
 def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
     router = APIRouter(tags=["system"])
 
@@ -337,6 +364,10 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
                 )
             else:
                 verification = await _verify_public_tunnel(public_url)
+                verification = _apply_cloudtap_warmup_grace(
+                    verification,
+                    created_at=daemon_tunnel.created_at,
+                )
 
             wan = RemoteAccessWan(
                 available=True,

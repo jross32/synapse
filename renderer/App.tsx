@@ -12,6 +12,7 @@ import {
   forgetDeviceToken,
   getStoredDeviceIdentity,
   isMobileRoute,
+  tryResumeDeviceSession,
   type RuntimeAuthMode,
 } from '@shared/browser-runtime';
 import { DEFAULT_PAGE, NAV_ITEMS, type PageId } from '@shared/nav';
@@ -62,8 +63,14 @@ export default function App(): JSX.Element {
   useEffect(() => {
     function onUnauthorized(): void {
       if (!mobileRoute) return;
-      clearDeviceToken();
-      setAuthMode(getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required');
+      void (async () => {
+        clearDeviceToken();
+        if (await tryResumeDeviceSession()) {
+          setAuthMode('paired-device');
+          return;
+        }
+        setAuthMode(getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required');
+      })();
     }
     window.addEventListener('synapse:unauthorized', onUnauthorized);
     return () => window.removeEventListener('synapse:unauthorized', onUnauthorized);

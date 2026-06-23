@@ -58,6 +58,18 @@ def test_redeem_creates_a_working_device_token(tmp_path: Path) -> None:
     assert auth.verify(result["token"]) is True
 
 
+def test_redeem_known_device_reuses_existing_record(tmp_path: Path) -> None:
+    auth = AuthManager(_storage(tmp_path), "local")
+    first = auth.redeem(auth.issue_code()["code"], "Pixel")
+
+    second_code = auth.issue_code()["code"]
+    second = auth.redeem(second_code, "New name ignored", first["device"]["id"])
+
+    assert second["device"]["id"] == first["device"]["id"]
+    assert second["device"]["name"] == "Pixel"
+    assert len(auth.list_devices()) == 1
+
+
 def test_redeem_wrong_code_is_rejected(tmp_path: Path) -> None:
     auth = AuthManager(_storage(tmp_path), "local")
     auth.issue_code()
@@ -100,6 +112,15 @@ def test_claim_redeem_mints_a_new_working_session(tmp_path: Path) -> None:
     reconnected = auth.redeem_claim(claim["claim"])
     assert reconnected["device"]["id"] == paired["device"]["id"]
     assert auth.verify(reconnected["token"]) is True
+
+
+def test_resume_from_cookie_token_returns_existing_device(tmp_path: Path) -> None:
+    auth = AuthManager(_storage(tmp_path), "local")
+    paired = auth.redeem(auth.issue_code()["code"], "Phone")
+
+    resumed = auth.resume_from_cookie_token(paired["token"])
+    assert resumed["token"] == paired["token"]
+    assert resumed["device"]["id"] == paired["device"]["id"]
 
 
 def test_claim_is_single_use(tmp_path: Path) -> None:
@@ -172,6 +193,7 @@ def test_full_pairing_flow_over_rest(tmp_path: Path) -> None:
     assert paired.status_code == 200
     device_token = paired.json()["token"]
     assert paired.json()["computer_name"]
+    assert paired.cookies.get("synapse-device-token") == device_token
 
     # The device token now authenticates a protected route.
     phone_authed = TestClient(app, headers={"X-Synapse-Token": device_token})
@@ -206,10 +228,34 @@ def test_handoff_claim_reconnects_without_new_pair_code(tmp_path: Path) -> None:
     reconnected = TestClient(app).post("/api/v1/pair/claim", json={"claim": claim})
     assert reconnected.status_code == 200
     second_token = reconnected.json()["token"]
+    assert reconnected.cookies.get("synapse-device-token") == second_token
     second_phone = TestClient(app, headers={"X-Synapse-Token": second_token})
 
     assert original_phone.get("/api/v1/projects").status_code == 200
     assert second_phone.get("/api/v1/projects").status_code == 200
+
+
+def test_cookie_resume_restores_mobile_session_without_new_code(tmp_path: Path) -> None:
+    app, _ = _app(tmp_path)
+    local = app.state.auth.local_token
+    desktop = TestClient(app, headers={"X-Synapse-Token": local})
+
+    code = desktop.post("/api/v1/pair/code").json()["code"]
+    phone = TestClient(app)
+    paired = phone.post("/api/v1/pair", json={"code": code, "device_name": "Pixel"})
+    assert paired.status_code == 200
+
+    cookie_token = paired.cookies.get("synapse-device-token")
+    assert cookie_token == paired.json()["token"]
+
+    resumed = phone.post("/api/v1/pair/resume")
+    assert resumed.status_code == 200
+    assert resumed.json()["token"] == cookie_token
+    assert resumed.json()["device"]["name"] == "Pixel"
+
+    # Protected routes should also accept the same device cookie when no
+    # X-Synapse-Token header is present.
+    assert phone.get("/api/v1/projects").status_code == 200
 
 
 def test_revoking_device_invalidates_all_sessions_and_claims(tmp_path: Path) -> None:

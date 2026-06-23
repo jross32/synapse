@@ -2,7 +2,7 @@
 
 A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
 
-> **Status:** `v0.1.36-dev` — **ADR-0003 workbench expansion complete (Phases A–F) + mobile parity / WAN follow-up verified + first-party Profile hub landed.** Every project has a **Files** surface: drag-drop or pick, browser-side magic-byte inspection before upload, always-on AV via Windows Defender (POSIX: ClamAV) before the bytes land for real. Workbench PTY exits persist their scrollback as transcripts. **ChatGPT export.zip -> markdown**: drop the official OpenAI export into the Apps page header button; each conversation lands as a deterministic `.md` under the auto-created `imported-chatgpt` project, deduped by sha256. **AI Quick-actions** rail on Sessions: one click opens a Claude session in the `scratch` project with the templated prompt pre-loaded as `PROMPT.md` + `SYNAPSE_QUICK_ACTION_PROMPT`. Sessions now also includes a first-pass **Agent Squads** mode: durable planner / implementer / reviewer / researcher templates, explicit handoffs that append to `.synapse-ai-context.md`, and helper workers that stay real PTY sessions instead of hidden background jobs. `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), with paired-device auth, a touch-friendly two-row nav, and a one-click LAN -> Cloudtap WAN handoff via **Use on this phone**. Tools → **Discover** now has a viewport-safe category rail with profile-backed favorites/history, and the shell now exposes an optional **Profile hub** for Synapse Accounts native sign-in, Google-ready linking/sign-in, connected-service readiness, host inventory, and synced catalog preferences. `synapse.cmd` now owns full dev restarts end to end, the desktop app self-heals local-token drift instead of sticking on 401s, the packaged daemon now builds into `installer/daemon-dist`, and the daemon resolves bundled tools/templates/mobile assets cleanly from packaged resources. Double-click `synapse.cmd` to launch. Agent Squads now has a guided **Team Builder wizard**, a `boss` / `supervisor` / `worker` role hierarchy with 11 seeded roles, and a **Stop all** kill switch; the Profile hub shows an honest "sync is optional" state when no accounts service is reachable. **420 tests pass + 11 skipped.** Next: email verification / password-reset flows on top of the new accounts service, then Milestone J packaging polish. See [`PROGRESS.md`](./PROGRESS.md) and [`CHANGELOG.md`](./CHANGELOG.md).
+> **Status:** `v0.1.36-dev` — **ADR-0003 workbench expansion complete (Phases A–F) + mobile parity / WAN follow-up verified + first-party Profile hub landed.** Every project has a **Files** surface: drag-drop or pick, browser-side magic-byte inspection before upload, always-on AV via Windows Defender (POSIX: ClamAV) before the bytes land for real. Workbench PTY exits persist their scrollback as transcripts. **ChatGPT export.zip -> markdown**: drop the official OpenAI export into the Apps page header button; each conversation lands as a deterministic `.md` under the auto-created `imported-chatgpt` project, deduped by sha256. **AI Quick-actions** rail on Sessions: one click opens a Claude session in the `scratch` project with the templated prompt pre-loaded as `PROMPT.md` + `SYNAPSE_QUICK_ACTION_PROMPT`. Sessions now also includes a first-pass **Agent Squads** mode: durable planner / implementer / reviewer / researcher templates, explicit handoffs that append to `.synapse-ai-context.md`, and helper workers that stay real PTY sessions instead of hidden background jobs. `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), with paired-device auth, a touch-friendly two-row nav, a one-click LAN -> Cloudtap WAN handoff via **Use on this phone**, and `scripts/remote-recovery.ps1` as a Codex-friendly rescue path that starts/reuses the daemon, opens WAN, and prints the `/mobile` link plus pairing code. Tools → **Discover** now has a viewport-safe category rail with profile-backed favorites/history, and the shell now exposes an optional **Profile hub** for Synapse Accounts native sign-in, Google-ready linking/sign-in, connected-service readiness, host inventory, and synced catalog preferences. `synapse.cmd` now owns full dev restarts end to end, the desktop app self-heals local-token drift instead of sticking on 401s, the packaged daemon now builds into `installer/daemon-dist`, and the daemon resolves bundled tools/templates/mobile assets cleanly from packaged resources. Double-click `synapse.cmd` to launch. Agent Squads now has a guided **Team Builder wizard**, a `boss` / `supervisor` / `worker` role hierarchy with 11 seeded roles, and a **Stop all** kill switch; the Profile hub shows an honest "sync is optional" state when no accounts service is reachable. **437 tests pass + 11 skipped.** Next: email verification / password-reset flows on top of the new accounts service, then Milestone J packaging polish. See [`PROGRESS.md`](./PROGRESS.md) and [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## What it is
 
@@ -67,7 +67,7 @@ python scripts/gen-icon.py          # generate tray + window icons (idempotent)
 
 # Verify toolchain
 npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 420 tests pass + 11 skipped
+python -m pytest -q                  # 437 tests pass + 11 skipped
 
 # Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
 synapse.cmd
@@ -80,6 +80,19 @@ install-shortcut.cmd
 ```
 
 `synapse.cmd` boots the daemon + Vite + Electron, waits for health checks, and opens the Synapse window. Close the window — it hides to the tray. Right-click the tray icon → **Quit Synapse** to fully exit. Logs land in `data/daemon-runtime.log` and `data/vite-runtime.log`.
+
+### Remote recovery from Codex
+
+If the desktop UI is down but a Codex session still has access to this Windows machine, run the recovery helper. It starts or reuses the daemon, opens Cloudtap on port `7878`, waits for the WAN `/mobile` URL, and prints a fresh pairing code.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\remote-recovery.ps1
+
+# First-use helper when cloudflared is missing:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\remote-recovery.ps1 -InstallCloudflared
+```
+
+Packaged builds ship the same helper under `resources\scripts\remote-recovery.ps1` so a local automation session can recover WAN phone access without opening the desktop app first.
 
 ### Inspecting the live Electron app
 
@@ -106,7 +119,7 @@ daemon/        Python (FastAPI) execution layer — owns all state
 tools/         Plugin manifests (drop in a folder, no UI surgery needed)
 docs/          api-changes.md, security.md, adr/
 installer/     PyInstaller + electron-builder + NSIS configs (Milestone J)
-scripts/       PowerShell helpers (dev mode, version bump, type gen)
+scripts/       PowerShell helpers (dev mode, version bump, type gen, WAN recovery)
 ```
 
 See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps, AI-coding guardrails, plugin layout, design contracts).

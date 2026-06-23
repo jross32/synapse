@@ -301,6 +301,11 @@ export function PhoneAccessPanel(): JSX.Element {
 
   const wanReady = status.wan.verification.status === 'ready';
   const lanOpen = status.network.bound_host === '0.0.0.0';
+  const wanMobileUrl =
+    status.wan.verification.mobile_url ??
+    (status.wan.public_url
+      ? `${status.wan.public_url.replace(/\/+$/, '')}/mobile`
+      : null);
 
   return (
     <>
@@ -627,26 +632,26 @@ export function PhoneAccessPanel(): JSX.Element {
                       </Badge>
                     </div>
 
-                    {status.wan.active && status.wan.public_url && (
+                    {status.wan.active && wanMobileUrl && (
                       <div className='mt-4 space-y-2'>
                         <div className='flex flex-wrap items-center gap-2'>
                           <button
                             type='button'
-                            onClick={() => void openExternal(status.wan.public_url!)}
+                            onClick={() => void openExternal(wanMobileUrl)}
                             className='inline-flex min-w-0 items-center gap-1.5 font-mono text-sm text-primary hover:underline'
                           >
                             <ExternalLink className='h-3.5 w-3.5' />
-                            <span className='truncate'>{status.wan.public_url}</span>
+                            <span className='truncate'>{wanMobileUrl}</span>
                           </button>
                           <Button
                             type='button'
                             variant='ghost'
                             size='sm'
                             className='h-7 px-2 text-xs'
-                            onClick={() => void copy(status.wan.public_url!)}
+                            onClick={() => void copy(wanMobileUrl)}
                           >
                             <Copy className='h-3 w-3' />
-                            {justCopied === status.wan.public_url ? 'Copied' : 'Copy'}
+                            {justCopied === wanMobileUrl ? 'Copied' : 'Copy'}
                           </Button>
                         </div>
                         <div className='grid gap-2 sm:grid-cols-2'>

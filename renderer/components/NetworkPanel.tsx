@@ -73,6 +73,8 @@ export function NetworkPanel(): JSX.Element {
     typeof daemonTunnel?.result.public_url === 'string'
       ? (daemonTunnel.result.public_url as string)
       : null;
+  const daemonTunnelMobileUrl =
+    daemonTunnelUrl ? `${daemonTunnelUrl.replace(/\/+$/, '')}/mobile` : null;
 
   async function openTunnel(): Promise<void> {
     setTunnelBusy(true);
@@ -409,28 +411,28 @@ export function NetworkPanel(): JSX.Element {
                   <button
                     type='button'
                     onClick={() =>
-                      daemonTunnelUrl &&
-                      void openExternal(daemonTunnelUrl)
+                      daemonTunnelMobileUrl &&
+                      void openExternal(daemonTunnelMobileUrl)
                     }
                     className='flex min-w-0 items-center gap-1.5 font-mono text-xs text-primary hover:underline'
                     title='Open in browser'
                   >
                     <ExternalLink className='h-3 w-3 shrink-0' aria-hidden='true' />
                     <span className='truncate'>
-                      {daemonTunnelUrl ?? 'opening…'}
+                      {daemonTunnelMobileUrl ?? 'opening…'}
                     </span>
                   </button>
                   <div className='flex shrink-0 items-center gap-1'>
-                    {daemonTunnelUrl && (
+                    {daemonTunnelMobileUrl && (
                       <Button
                         variant='ghost'
                         size='sm'
                         className='h-7 px-2 text-xs'
-                        onClick={() => void copy(daemonTunnelUrl ?? '')}
+                        onClick={() => void copy(daemonTunnelMobileUrl)}
                         aria-label='Copy tunnel URL to clipboard'
                         title='Copy URL'
                       >
-                        {justCopied === daemonTunnelUrl ? (
+                        {justCopied === daemonTunnelMobileUrl ? (
                           <span className='text-xs'>Copied</span>
                         ) : (
                           <Copy className='h-3 w-3' aria-hidden='true' />

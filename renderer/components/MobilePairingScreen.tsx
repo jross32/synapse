@@ -128,9 +128,13 @@ export function MobilePairingScreen({
     }
     setPhase('working');
     setStatusLine('Establishing trust with your computer…');
-    setError(null);
+      setError(null);
     try {
-      const result = await redeemPairingCode(trimmed, deviceName.trim() || 'Phone');
+      const result = await redeemPairingCode(
+        trimmed,
+        deviceName.trim() || device?.name || 'Phone',
+        device?.id ?? null
+      );
       finalizeSuccess(
         result,
         `Successfully paired to ${result.computer_name} as ${result.device.name}.`

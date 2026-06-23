@@ -81,6 +81,10 @@
         "to": "docs/marketplace-sample.json"
       },
       {
+        "from": "scripts/remote-recovery.ps1",
+        "to": "scripts/remote-recovery.ps1"
+      },
+      {
         "from": "dist",
         "to": "dist"
       },

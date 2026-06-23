@@ -179,7 +179,14 @@ class WsHub:
             if self.auth is not None:
                 from .auth import is_trusted_local
 
-                if not (is_trusted_local(websocket) or self.auth.verify(token)):
+                cookie_token = websocket.cookies.get(
+                    getattr(self.auth, "device_cookie_name", "")
+                )
+                if not (
+                    is_trusted_local(websocket)
+                    or self.auth.verify(token)
+                    or self.auth.verify(cookie_token)
+                ):
                     await websocket.close(code=1008)  # policy violation
                     return
 

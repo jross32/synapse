@@ -46,11 +46,18 @@ export async function revokePairedDevice(id: string): Promise<void> {
 
 export async function redeemPairingCode(
   code: string,
-  deviceName: string
+  deviceName: string,
+  deviceId?: string | null
 ): Promise<PairResult> {
   return apiFetch<PairResult>('/pair', {
     method: 'POST',
-    body: { code, device_name: deviceName },
+    body: { code, device_name: deviceName, device_id: deviceId ?? null },
+  });
+}
+
+export async function resumeDeviceSession(): Promise<PairResult> {
+  return apiFetch<PairResult>('/pair/resume', {
+    method: 'POST',
   });
 }
 

@@ -5,9 +5,11 @@ import {
   setDaemonBase,
 } from './api-client';
 import { hasElectronBridge } from './electron-bridge';
+import { resumeDeviceSession } from './pairing-client';
 
 const MOBILE_TOKEN_KEY = 'synapse.deviceToken';
 const MOBILE_DEVICE_KEY = 'synapse.deviceIdentity';
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 8000;
 
 let pendingClaim: string | null = null;
 
@@ -162,9 +164,48 @@ export function clearPendingPairClaim(): void {
   pendingClaim = null;
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`Timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+async function tryResumeFromBrowserCookie(): Promise<boolean> {
+  try {
+    const result = await withTimeout(resumeDeviceSession(), AUTH_BOOTSTRAP_TIMEOUT_MS);
+    rememberDeviceToken(result.token, {
+      id: result.device.id,
+      name: result.device.name,
+      computerName: result.computer_name,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function tryResumeDeviceSession(): Promise<boolean> {
+  return tryResumeFromBrowserCookie();
+}
+
 export async function bootstrapRuntimeAuth(): Promise<RuntimeAuthMode> {
   if (hasElectronBridge()) {
-    await bootstrapLocalToken();
+    // Let the desktop shell render immediately. DaemonProvider will bootstrap
+    // the local token and surface connection state if the daemon is still
+    // starting up.
     return 'local';
   }
 
@@ -176,23 +217,29 @@ export async function bootstrapRuntimeAuth(): Promise<RuntimeAuthMode> {
     if (claimReady) return 'claiming';
     const token = handoff?.token ?? getStoredDeviceToken();
     if (!token) {
+      if (await tryResumeFromBrowserCookie()) return 'paired-device';
       return getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required';
     }
     rememberDeviceToken(token);
     return 'paired-device';
   }
 
-  try {
-    await bootstrapLocalToken();
-    return 'local';
-  } catch {
-    if (claimReady) return 'claiming';
-    const token = handoff?.token ?? getStoredDeviceToken();
-    if (!token) return getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required';
+  if (claimReady) return 'claiming';
+  const token = handoff?.token ?? getStoredDeviceToken();
+  if (token) {
     setDaemonBase(currentBrowserBaseUrl());
     rememberDeviceToken(token);
     return 'paired-device';
   }
+
+  try {
+    setDaemonBase(currentBrowserBaseUrl());
+    await withTimeout(bootstrapLocalToken(), AUTH_BOOTSTRAP_TIMEOUT_MS);
+  } catch {
+    // Fall through to the desktop shell instead of pinning the app on the
+    // boot splash forever if auth bootstrap stalls.
+  }
+  return 'local';
 }
 
 export function mobileTunnelUrl(

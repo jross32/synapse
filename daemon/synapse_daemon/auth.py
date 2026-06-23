@@ -39,6 +39,7 @@ LOCAL_TOKEN_FILENAME = "auth-token"
 PAIRING_CODE_TTL_SECONDS = 600  # 10 minutes
 PAIRING_CODE_DIGITS = 6
 PAIRING_CLAIM_TTL_SECONDS = 300  # 5 minutes
+PAIRING_DEVICE_COOKIE_NAME = "synapse-device-token"
 
 # Headers a reverse proxy / tunnel adds. Their presence means the request did
 # NOT come straight from a process on this machine.
@@ -113,6 +114,10 @@ class AuthManager:
     def local_token(self) -> str:
         return self._local_token
 
+    @property
+    def device_cookie_name(self) -> str:
+        return PAIRING_DEVICE_COOKIE_NAME
+
     # ── verification ─────────────────────────────────────────────────────
 
     def verify(self, token: str | None) -> bool:
@@ -180,7 +185,7 @@ class AuthManager:
             return None
         return {"code": pending.code, "expires_at": to_iso(pending.expires_at)}
 
-    def redeem(self, code: str, device_name: str) -> dict:
+    def redeem(self, code: str, device_name: str, device_id: str | None = None) -> dict:
         """Redeem a pairing code -> create a paired device, return its token.
 
         The raw token is returned exactly once; only its hash is stored.
@@ -194,9 +199,31 @@ class AuthManager:
             raise invalid("pairing", "That pairing code is incorrect.")
 
         self._pending = None  # codes are single-use
+        now = to_iso(utc_now())
+        remembered_device_id = (device_id or "").strip()
+        if remembered_device_id:
+            existing = self.get_device(remembered_device_id)
+            if existing is not None:
+                with self._storage.transaction() as conn:
+                    token = self._issue_session_token(conn, remembered_device_id, now)
+                    conn.execute(
+                        "UPDATE paired_devices SET last_seen_at = ? WHERE id = ?",
+                        (now, remembered_device_id),
+                    )
+                    self._insert_session_record(conn, remembered_device_id, _sha256(token), now)
+                log.info("Re-paired existing device '%s' (%s).", existing["name"], remembered_device_id)
+                return {
+                    "token": token,
+                    "device": {
+                        "id": existing["id"],
+                        "name": existing["name"],
+                        "created_at": existing["created_at"],
+                        "last_seen_at": now,
+                    },
+                }
+
         device_id = str(uuid.uuid4())
         name = (device_name or "").strip() or "Paired device"
-        now = to_iso(utc_now())
         with self._storage.transaction() as conn:
             token = self._issue_session_token(conn, device_id, now)
             conn.execute(
@@ -213,6 +240,41 @@ class AuthManager:
                 "name": name,
                 "created_at": now,
                 "last_seen_at": now,
+            },
+        }
+
+    def resume_from_cookie_token(self, token: str | None) -> dict:
+        """Resume a paired-device session from the browser cookie.
+
+        The cookie stores the same raw bearer token the device already uses
+        for REST/WS auth. When localStorage is cleared or a mobile webview
+        drops JS state, this lets the browser rehydrate that session without
+        asking for another 6-digit code.
+        """
+
+        subject = self.subject_for_token(token)
+        if subject is None or subject.kind != "device" or subject.device_id is None:
+            raise SynapseError(
+                code="pairing.resume_required",
+                message="This browser is not trusted here yet. Pair it once or use a reconnect link.",
+                status=401,
+            )
+
+        device = self.get_device(subject.device_id)
+        if device is None:
+            raise SynapseError(
+                code="pairing.resume_required",
+                message="This browser is not trusted here yet. Pair it once or use a reconnect link.",
+                status=401,
+            )
+
+        return {
+            "token": token,
+            "device": {
+                "id": device["id"],
+                "name": device["name"],
+                "created_at": device["created_at"],
+                "last_seen_at": device["last_seen_at"],
             },
         }
 
@@ -349,7 +411,9 @@ def require_token(auth: AuthManager):
     """
 
     async def _dependency(request: Request) -> None:
-        token = request.headers.get("x-synapse-token")
+        token = request.headers.get("x-synapse-token") or request.cookies.get(
+            auth.device_cookie_name
+        )
         if not auth.verify(token):
             raise SynapseError(
                 code="auth.unauthorized",

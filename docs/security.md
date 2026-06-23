@@ -46,6 +46,21 @@ still cannot read or control anything without pairing first.
 - Has no detected authentication on a quick probe.
 - Belongs to a service Synapse is not managing (so the user actually knows what they're sharing).
 
+### Remote recovery helper
+
+`scripts/remote-recovery.ps1` is a local rescue path for the owner of the
+machine. It can start or reuse the daemon, open Cloudtap for port `7878`, and
+print the WAN `/mobile` URL plus a fresh 6-digit pairing code. This is meant
+for cases where Synapse's desktop window is down but the user still has a
+trusted automation path to the PC, such as a Codex session.
+
+The helper does not bypass Synapse auth. API routes still require a paired
+device token, pairing codes remain single-use and short-lived, and
+`/auth/local-token` remains blocked through Cloudflare proxy headers. It does,
+however, intentionally publish the mobile shell on the public internet through
+Cloudtap, so close the tunnel from Settings -> Phone access when remote
+recovery is no longer needed.
+
 ## Device authentication (v0.1.11, Milestone H)
 
 So Synapse can be reached from a phone — including off-network via a Cloudflare

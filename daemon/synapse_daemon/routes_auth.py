@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import socket
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from .audit import AuditRecord, audit
@@ -39,6 +39,7 @@ class PairRequest(BaseModel):
 
     code: str = Field(..., min_length=1)
     device_name: str = ""
+    device_id: str | None = None
 
 
 class PairClaimRequest(BaseModel):
@@ -83,6 +84,17 @@ def _computer_name() -> str:
     return socket.gethostname() or "This computer"
 
 
+def _set_device_cookie(response: Response, request: Request, auth: AuthManager, token: str) -> None:
+    response.set_cookie(
+        key=auth.device_cookie_name,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+
+
 async def _publish_remote_access_updated(request: Request, reason: str) -> None:
     await request.app.state.bus.publish(
         event_name("remote_access", "updated"),
@@ -111,8 +123,12 @@ def build_auth_router(storage: Storage, auth: AuthManager) -> APIRouter:
         return PairingCodeResponse.model_validate(result)
 
     @router.post("/pair", response_model=PairResponse)
-    async def redeem_pairing_code(payload: PairRequest, request: Request) -> PairResponse:
-        result = auth.redeem(payload.code, payload.device_name)
+    async def redeem_pairing_code(
+        payload: PairRequest,
+        request: Request,
+        response: Response,
+    ) -> PairResponse:
+        result = auth.redeem(payload.code, payload.device_name, payload.device_id)
         with storage.transaction() as conn:
             audit(
                 conn,
@@ -125,6 +141,7 @@ def build_auth_router(storage: Storage, auth: AuthManager) -> APIRouter:
                     details={"name": result["device"]["name"]},
                 ),
             )
+        _set_device_cookie(response, request, auth, result["token"])
         await request.app.state.bus.publish(
             event_name("device", "paired"),
             {
@@ -133,6 +150,16 @@ def build_auth_router(storage: Storage, auth: AuthManager) -> APIRouter:
             },
         )
         await _publish_remote_access_updated(request, "device-paired")
+        return PairResponse(
+            token=result["token"],
+            device=PairedDeviceResponse.model_validate(result["device"]),
+            computer_name=_computer_name(),
+        )
+
+    @router.post("/pair/resume", response_model=PairResponse)
+    async def resume_paired_browser(request: Request, response: Response) -> PairResponse:
+        result = auth.resume_from_cookie_token(request.cookies.get(auth.device_cookie_name))
+        _set_device_cookie(response, request, auth, result["token"])
         return PairResponse(
             token=result["token"],
             device=PairedDeviceResponse.model_validate(result["device"]),
@@ -192,6 +219,7 @@ def build_auth_router(storage: Storage, auth: AuthManager) -> APIRouter:
     async def redeem_handoff_claim(
         payload: PairClaimRequest,
         request: Request,
+        response: Response,
     ) -> PairResponse:
         result = auth.redeem_claim(payload.claim)
         with storage.transaction() as conn:
@@ -206,6 +234,7 @@ def build_auth_router(storage: Storage, auth: AuthManager) -> APIRouter:
                     details={"name": result["device"]["name"]},
                 ),
             )
+        _set_device_cookie(response, request, auth, result["token"])
         await request.app.state.bus.publish(
             event_name("device", "reconnected"),
             {

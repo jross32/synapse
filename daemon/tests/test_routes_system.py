@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 from synapse_daemon import boot_config
 from synapse_daemon.app import build_app
 from synapse_daemon.models import EntityStatus, ToolItem, ToolState
+from synapse_daemon.time_utils import utc_now
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
@@ -178,3 +180,52 @@ def test_remote_access_reports_wrong_port_when_cloudtap_points_elsewhere(
     body = res.json()
     assert body["wan"]["verification"]["status"] == "error"
     assert body["wan"]["verification"]["failure_code"] == "cloudtap.wrong_port"
+
+
+def test_remote_access_marks_fresh_cloudtap_probe_failures_as_warming(
+    tmp_path: Path, monkeypatch
+) -> None:
+    client, _ = _harness(tmp_path)
+    app = client.app
+
+    async def _fake_verify(public_url: str):
+        from synapse_daemon.routes_system import RemoteAccessWanVerification
+
+        return RemoteAccessWanVerification(
+            status="error",
+            checked_at="2026-06-22T00:00:00+00:00",
+            health_url=f"{public_url}/api/v1/health",
+            mobile_url=f"{public_url}/mobile",
+            health_ok=False,
+            mobile_ok=False,
+            failure_code="unreachable",
+            failure_message=f"Could not reach {public_url}/api/v1/health: getaddrinfo failed",
+        )
+
+    monkeypatch.setattr("synapse_daemon.routes_system._verify_public_tunnel", _fake_verify)
+
+    def _fake_state(_tool_id: str):
+        return ToolState(
+            tool_id="cloudtap",
+            status=EntityStatus.LAUNCHED,
+            items=[
+                ToolItem(
+                    id="t1",
+                    label="Synapse",
+                    status=EntityStatus.LAUNCHED,
+                    result={
+                        "local_port": 7878,
+                        "public_url": "https://warming.trycloudflare.com",
+                    },
+                    created_at=utc_now() - timedelta(seconds=15),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(app.state.tool_registry, "get_state", _fake_state)
+    with client as c:
+        res = c.get("/api/v1/remote-access")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["wan"]["verification"]["status"] == "warming"
+    assert "warming up" in body["wan"]["verification"]["failure_message"]
