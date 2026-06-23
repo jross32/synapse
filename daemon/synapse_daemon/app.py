@@ -51,6 +51,7 @@ from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
+from .mcp_connector import build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
 from .routes_tools import build_tools_router
@@ -244,6 +245,12 @@ def build_app(
     )
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
+
+    # MCP connector for the claude.ai custom connector (ADR-0012). NOT under
+    # /api/v1 and NOT behind the global token guard -- claude.ai POSTs to
+    # https://<cloudtap-tunnel>/mcp/<token> and the path token is the secret
+    # (validated inside the router). Read-only by default.
+    app.include_router(build_mcp_router(storage, tool_registry, auth))
 
     async def _subscribe_agent_events() -> None:
         await subscribe_agent_squad_events(storage, bus)

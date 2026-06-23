@@ -18,6 +18,16 @@ electron tsc clean, 420 daemon tests pass / 11 skipped. Daemon changes
 re-verified live against an isolated daemon.
 
 ### Added
+- **claude.ai connector / MCP server (ADR-0012)**: Synapse now answers MCP over
+  a hand-rolled, stateless Streamable-HTTP endpoint at `/mcp/{token}` so it can
+  be added to claude.ai (or Claude Desktop) as a *custom connector*. Read-only
+  by default (tools: `synapse_get_context`, `synapse_list_projects`,
+  `synapse_get_project_records`, `synapse_list_tools`,
+  `synapse_list_quick_actions`, `synapse_list_agent_squads`); the path `{token}`
+  must equal the daemon's local token (the secret in the URL). Expose it by
+  opening Cloudtap on 7878 and pasting `https://<tunnel>/mcp/<token>`. Writes
+  (e.g. `synapse_add_project_idea`) are gated behind `SYNAPSE_MCP_ALLOW_WRITES=1`.
+  No new dependency; `daemon/synapse_daemon/mcp_connector.py` + 11 tests.
 - **Remote WAN recovery helper**: `scripts/remote-recovery.ps1` starts or
   reuses the daemon, optionally installs `cloudflared` through winget, opens
   Cloudtap on port `7878`, waits for the WAN `/mobile` URL, and prints a fresh

@@ -95,6 +95,27 @@ socket without a valid token is closed (code 1008).
 v0.2+ roadmap: an account-less device-pairing flow polished for a fixed public
 address (same token mechanism, friendlier UX).
 
+## MCP connector (ADR-0012)
+
+The claude.ai custom connector reaches Synapse at `/mcp/{token}` — a separate
+surface from `/api/v1`, because claude.ai's connector dialog sends only the URL
+(no `X-Synapse-Token` header).
+
+- **Token-in-URL is the secret.** `{token}` must equal the daemon's local
+  token; a mismatch returns 401. The pasted URL
+  (`https://<tunnel>/mcp/<token>`) must be treated like a password — it only
+  works while the user's Cloudtap tunnel is open and dies when the tunnel
+  closes.
+- **Read-only by default.** Advertised tools only read (projects, tools,
+  quick-actions, squads, per-project records, an orientation digest). No
+  launch, create, run-action, or delete over the connector.
+- **Writes are opt-in.** `SYNAPSE_MCP_ALLOW_WRITES=1` additionally exposes
+  `synapse_add_project_idea` (capture a quick ADR idea). Process launch / exec
+  is never exposed here — that stays CLI-only until OAuth (v2).
+- **Close the tunnel when done.** Like remote recovery, this intentionally
+  publishes a surface on the public internet via Cloudtap; close it from
+  `Settings → Phone access` when not in use.
+
 ## Secrets
 
 No secrets are stored in plaintext by Synapse. Project env vars marked as `secret: true` are stored encrypted at rest (Windows DPAPI on the daemon's user account). The UI never round-trips secret values back to the client after the initial save — only a `(set)` placeholder is shown.
