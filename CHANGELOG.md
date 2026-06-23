@@ -18,6 +18,15 @@ electron tsc clean, 420 daemon tests pass / 11 skipped. Daemon changes
 re-verified live against an isolated daemon.
 
 ### Added
+- **Autonomous AI boss (ADR-0013)**: a launchable `autonomous-boss` quick-action.
+  Give it a goal and the AI boss drives Synapse's own REST API to orient
+  (`/ai/context`), pick or **create** a project, post a visible plan as a squad
+  (lead=`boss`), staff + launch the workers it chooses across the
+  boss/supervisor/worker hierarchy, **leverage existing tools/quick-actions**
+  (installing from the marketplace rather than reinventing), and **record +
+  learn** via project ADRs / backlog / `.synapse-ai-context.md`. Full autonomy,
+  human-initiated, bounded by the squad **kill switch** (ADR-0010). No new
+  daemon subsystem -- composes ADR-0010/0011/0012 primitives.
 - **claude.ai connector / MCP server (ADR-0012)**: Synapse now answers MCP over
   a hand-rolled, stateless Streamable-HTTP endpoint at `/mcp/{token}` so it can
   be added to claude.ai (or Claude Desktop) as a *custom connector*. Read-only
