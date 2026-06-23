@@ -33,6 +33,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { PageHeader } from '../components/PageHeader';
+import { ModelBrowser } from '../components/ModelBrowser';
 
 const SELECT_CLASS =
   'h-9 rounded-md border border-input bg-transparent px-2 text-sm text-foreground';
@@ -48,6 +49,7 @@ export function AssistantPage(): JSX.Element {
   const [detail, setDetail] = useState<AssistantChatDetail | null>(null);
   const [model, setModel] = useState('');
   const [draft, setDraft] = useState('');
+  const [view, setView] = useState<'chat' | 'models'>('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   async function refreshStatus(): Promise<void> {
@@ -238,6 +240,20 @@ export function AssistantPage(): JSX.Element {
       {header}
 
       <Card className='flex flex-wrap items-center gap-2 p-3'>
+        <div className='inline-flex rounded-md border border-border p-0.5'>
+          {(['chat', 'models'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                'rounded px-3 py-1 text-xs font-medium capitalize transition-colors',
+                view === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
         <span
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
@@ -258,38 +274,44 @@ export function AssistantPage(): JSX.Element {
             <PowerOff className='h-4 w-4' /> Stop
           </Button>
         )}
-        <div className='flex items-center gap-2'>
-          <label htmlFor='asst-model' className='text-xs text-muted-foreground'>Model</label>
-          <select id='asst-model' className={SELECT_CLASS} value={model} onChange={(e) => void pickModel(e.target.value)}>
-            {noModels && <option value=''>none installed</option>}
-            {status?.models.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
-          </select>
-        </div>
-        <div className='ml-auto flex items-center gap-2'>
-          <select className={SELECT_CLASS} value={activeId ?? ''} onChange={(e) => setActiveId(e.target.value || null)} aria-label='Active chat'>
-            {chats.length === 0 && <option value=''>no chats yet</option>}
-            {chats.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-          </select>
-          {activeId && (
-            <Button size='sm' variant='ghost' aria-label='Delete chat' title='Delete chat'
-              disabled={busy === `del:${activeId}`} onClick={() => void removeChat(activeId)}>
-              <Trash2 className='h-4 w-4' />
-            </Button>
-          )}
-          <Button size='sm' onClick={() => void newChat()} disabled={busy === 'new'}>
-            <MessageSquarePlus className='h-4 w-4' /> New chat
-          </Button>
-        </div>
+        {view === 'chat' && (
+          <>
+            <div className='flex items-center gap-2'>
+              <label htmlFor='asst-model' className='text-xs text-muted-foreground'>Model</label>
+              <select id='asst-model' className={SELECT_CLASS} value={model} onChange={(e) => void pickModel(e.target.value)}>
+                {noModels && <option value=''>none installed</option>}
+                {status?.models.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+              </select>
+            </div>
+            <div className='ml-auto flex items-center gap-2'>
+              <select className={SELECT_CLASS} value={activeId ?? ''} onChange={(e) => setActiveId(e.target.value || null)} aria-label='Active chat'>
+                {chats.length === 0 && <option value=''>no chats yet</option>}
+                {chats.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+              {activeId && (
+                <Button size='sm' variant='ghost' aria-label='Delete chat' title='Delete chat'
+                  disabled={busy === `del:${activeId}`} onClick={() => void removeChat(activeId)}>
+                  <Trash2 className='h-4 w-4' />
+                </Button>
+              )}
+              <Button size='sm' onClick={() => void newChat()} disabled={busy === 'new'}>
+                <MessageSquarePlus className='h-4 w-4' /> New chat
+              </Button>
+            </div>
+          </>
+        )}
       </Card>
 
-      {noModels && (
+      {view === 'models' && <ModelBrowser onInstalledChange={refreshStatus} />}
+
+      {view === 'chat' && noModels && (
         <Card className='flex flex-col items-start gap-2 border-dashed p-4 text-sm text-muted-foreground'>
-          <p>No models installed yet. Pull a small one to get started:</p>
-          <code className='rounded-md bg-card px-3 py-2 font-mono text-xs'>ollama pull llama3.2</code>
-          <p className='text-xs'>A one-click model marketplace is coming next.</p>
+          <p>No models installed yet. Grab one to get started:</p>
+          <Button size='sm' onClick={() => setView('models')}>Browse models</Button>
         </Card>
       )}
 
+      {view === 'chat' && (
       <Card className='flex min-h-0 flex-1 flex-col p-0'>
         <div ref={scrollRef} className='flex-1 space-y-3 overflow-y-auto p-4'>
           {!detail || detail.messages.length === 0 ? (
@@ -332,6 +354,7 @@ export function AssistantPage(): JSX.Element {
           </Button>
         </form>
       </Card>
+      )}
     </div>
   );
 }
