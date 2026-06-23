@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-23",
+  "models": [
+    {
+      "id": "llama3.2:1b",
+      "name": "Llama 3.2 1B",
+      "publisher": "Meta",
+      "description": "Tiny + fast. Great default for the in-app assistant on modest hardware.",
+      "parameter_size": "1B",
+      "size_label": "1.3 GB",
+      "tags": ["chat", "tiny", "fast"],
+      "recommended": true
+    },
+    {
+      "id": "llama3.2:3b",
+      "name": "Llama 3.2 3B",
+      "publisher": "Meta",
+      "description": "Noticeably smarter than 1B while still light. A good all-rounder.",
+      "parameter_size": "3B",
+      "size_label": "2.0 GB",
+      "tags": ["chat", "small"],
+      "recommended": true
+    },
+    {
+      "id": "qwen2.5:1.5b",
+      "name": "Qwen 2.5 1.5B",
+      "publisher": "Alibaba",
+      "description": "Compact and strong at reasoning + code for its size.",
+      "parameter_size": "1.5B",
+      "size_label": "1.0 GB",
+      "tags": ["chat", "code", "tiny"],
+      "recommended": false
+    },
+    {
+      "id": "qwen2.5:7b",
+      "name": "Qwen 2.5 7B",
+      "publisher": "Alibaba",
+      "description": "Capable mid-size model. Best when you have the RAM/VRAM for it.",
+      "parameter_size": "7B",
+      "size_label": "4.7 GB",
+      "tags": ["chat", "code"],
+      "recommended": false
+    },
+    {
+      "id": "phi3.5:latest",
+      "name": "Phi 3.5 Mini",
+      "publisher": "Microsoft",
+      "description": "3.8B that punches above its weight on reasoning tasks.",
+      "parameter_size": "3.8B",
+      "size_label": "2.2 GB",
+      "tags": ["chat", "reasoning", "small"],
+      "recommended": false
+    },
+    {
+      "id": "gemma2:2b",
+      "name": "Gemma 2 2B",
+      "publisher": "Google",
+      "description": "Small, polished, and quick. A nice lightweight alternative to Llama.",
+      "parameter_size": "2B",
+      "size_label": "1.6 GB",
+      "tags": ["chat", "small"],
+      "recommended": false
+    },
+    {
+      "id": "mistral:latest",
+      "name": "Mistral 7B",
+      "publisher": "Mistral AI",
+      "description": "The classic fast, high-quality 7B. Solid general chat + instructions.",
+      "parameter_size": "7B",
+      "size_label": "4.1 GB",
+      "tags": ["chat"],
+      "recommended": false
+    },
+    {
+      "id": "nomic-embed-text:latest",
+      "name": "Nomic Embed Text",
+      "publisher": "Nomic",
+      "description": "Embedding model (not chat) for semantic search / RAG features.",
+      "parameter_size": "137M",
+      "size_label": "274 MB",
+      "tags": ["embedding"],
+      "recommended": false
+    }
+  ]
+}

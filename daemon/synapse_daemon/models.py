@@ -269,6 +269,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import errors as _errors
     from . import agent_squads as _agents
     from . import assistant as _assistant
+    from . import model_market as _market
     from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
@@ -325,6 +326,11 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "AssistantMessage": _assistant.AssistantMessage,
         "AssistantChat": _assistant.AssistantChat,
         "AssistantChatDetail": _assistant.AssistantChatDetail,
+        # Local-model marketplace (ADR-0014 Phase M)
+        "ModelCatalogEntry": _market.ModelCatalogEntry,
+        "ModelCatalog": _market.ModelCatalog,
+        "ModelPullState": _market.ModelPullState,
+        "ModelPullList": _market.ModelPullList,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,

@@ -52,6 +52,8 @@ from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
 from .routes_assistant import build_assistant_router
+from .routes_models import build_models_router
+from .model_market import ModelPullManager
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
@@ -247,6 +249,15 @@ def build_app(
     # Local-LLM assistant (Ollama chat) -- ADR-0014.
     app.include_router(
         build_assistant_router(storage, tool_registry),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Local-model marketplace (browse + streaming pulls) -- ADR-0014 Phase M.
+    model_pulls = ModelPullManager(bus)
+    app.state.model_pulls = model_pulls
+    app.router.on_shutdown.append(model_pulls.shutdown)
+    app.include_router(
+        build_models_router(model_pulls),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

@@ -122,6 +122,13 @@ async def chat(model: str, messages: list[dict[str, str]], timeout: float = 180.
     return (data.get("message") or {}).get("content", "")
 
 
+async def delete_model(model: str) -> bool:
+    """Remove an installed model (DELETE /api/delete). Returns True on success."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.request("DELETE", f"{OLLAMA_BASE}/api/delete", json={"model": model})
+        return res.status_code == 200
+
+
 async def pull(model: str) -> AsyncIterator[dict[str, Any]]:
     """Stream a model download (POST /api/pull). Yields the raw progress dicts
     Ollama emits (status, total, completed). Used by the model marketplace."""
