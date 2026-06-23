@@ -3,6 +3,7 @@
 
 import {
   Activity,
+  Bot,
   House,
   LayoutGrid,
   Settings,
@@ -11,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-export type PageId = 'home' | 'apps' | 'tools' | 'sessions' | 'processes' | 'settings';
+export type PageId = 'home' | 'apps' | 'tools' | 'sessions' | 'assistant' | 'processes' | 'settings';
 
 export interface NavItem {
   id: PageId;
@@ -28,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'apps', label: 'Apps', icon: LayoutGrid, description: 'Launch + manage your projects' },
   { id: 'tools', label: 'Tools', icon: Wrench, description: 'Synapse tools, agents + workflows' },
   { id: 'sessions', label: 'Sessions', icon: Sparkles, description: 'AI coders + live terminal sessions' },
+  { id: 'assistant', label: 'Assistant', icon: Bot, description: 'Private local LLM chat about your projects + Synapse' },
   { id: 'processes', label: 'Processes', icon: Activity, description: 'Everything running right now' },
   { id: 'settings', label: 'Settings', icon: Settings, description: 'Daemon, theme + about', locked: true },
 ];
