@@ -55,6 +55,20 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
     return [...pinned, ...rest].slice(0, FEATURED_CAP);
   }, [projects]);
 
+  // The WS replay buffer can redeliver an event the client already has
+  // (e.g. on reconnect), which duplicated `evt.id` and triggered React's
+  // "two children with the same key" warning. Dedupe by id so keys are
+  // unique and the list never shows the same event twice.
+  const uniqueEvents = useMemo(() => {
+    const seen = new Set<string>();
+    return recentEvents.filter((evt) => {
+      const key = String(evt.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [recentEvents]);
+
   async function handleLaunch(project: Project): Promise<void> {
     setLaunchBusyId(project.id);
     setLaunchError(null);
@@ -146,7 +160,7 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
         <Card className='flex flex-col gap-3 p-6'>
           <div className='flex items-baseline justify-between gap-2'>
             <h2 className='text-lg font-semibold'>Recent activity</h2>
-            {recentEvents.length > 10 && (
+            {uniqueEvents.length > 10 && (
               <button
                 type='button'
                 onClick={() => setActivityExpanded((v) => !v)}
@@ -154,17 +168,17 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
               >
                 {activityExpanded
                   ? 'Show 10'
-                  : `Show all (${Math.min(recentEvents.length, 50)})`}
+                  : `Show all (${Math.min(uniqueEvents.length, 50)})`}
               </button>
             )}
           </div>
-          {recentEvents.length === 0 ? (
+          {uniqueEvents.length === 0 ? (
             <p className='text-sm text-muted-foreground'>
               No events yet. Daemon and project events will stream here live.
             </p>
           ) : (
             <ul className='flex flex-col gap-1.5'>
-              {recentEvents
+              {uniqueEvents
                 .slice(0, activityExpanded ? 50 : 10)
                 .map((evt) => (
                   <li key={evt.id} className='flex items-baseline gap-2 font-mono text-xs'>
