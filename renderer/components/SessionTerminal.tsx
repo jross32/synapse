@@ -13,6 +13,8 @@ import {
   ChevronUp,
   CornerDownLeft,
   Focus,
+  Mic,
+  MicOff,
   MoveHorizontal,
   MoveVertical,
   SquareTerminal,
@@ -26,6 +28,7 @@ import '@xterm/xterm/css/xterm.css';
 import { isMobileRoute } from '@shared/browser-runtime';
 import { useDaemon } from '@shared/daemon-context';
 import { closeSession, resizeSession, writeInput } from '@shared/pty-client';
+import { useSpeechDictation } from '@shared/use-speech';
 import { cn } from '@shared/utils';
 import { Button } from './ui/button';
 
@@ -71,6 +74,10 @@ export function SessionTerminal({
   const [commandDraft, setCommandDraft] = useState('');
   const [commandBusy, setCommandBusy] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
+  // Voice dictation -> command draft (ADR-0015). Appends each finalized phrase.
+  const dictation = useSpeechDictation(
+    useCallback((text: string) => setCommandDraft((d) => (d ? `${d} ${text}` : text)), [])
+  );
 
   // Keep the latest onExit callback reachable without rebuilding the
   // terminal each time the parent re-renders.
@@ -467,8 +474,28 @@ export function SessionTerminal({
                 >
                   Send text
                 </Button>
+                {dictation.supported && (
+                  <Button
+                    type='button'
+                    variant={dictation.listening ? 'default' : 'outline'}
+                    onClick={() => dictation.toggle()}
+                    className='flex-1'
+                    aria-label={dictation.listening ? 'Stop dictation' : 'Dictate a command'}
+                  >
+                    {dictation.listening ? <MicOff className='h-4 w-4' /> : <Mic className='h-4 w-4' />}
+                    {dictation.listening ? 'Listening…' : 'Dictate'}
+                  </Button>
+                )}
               </div>
             </form>
+            {dictation.listening && (
+              <p className='text-xs text-muted-foreground'>
+                🎙 {dictation.interim || 'Speak your command…'}
+              </p>
+            )}
+            {dictation.error && (
+              <p role='alert' className='text-xs text-destructive'>{dictation.error}</p>
+            )}
             <div className='flex flex-wrap gap-2'>
               {commandButtons.map(({ label, value, icon: Icon }) => (
                 <Button

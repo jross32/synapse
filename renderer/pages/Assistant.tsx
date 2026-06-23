@@ -2,11 +2,13 @@
 // Off by default: until the user turns it on, this shows an opt-in screen.
 // Works on desktop + the mobile shell (single responsive column).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bot,
   Loader2,
   MessageSquarePlus,
+  Mic,
+  MicOff,
   Power,
   PowerOff,
   Send,
@@ -28,6 +30,7 @@ import {
   type AssistantChatDetail,
   type AssistantStatus,
 } from '@shared/assistant-client';
+import { useSpeechDictation } from '@shared/use-speech';
 import { cn } from '@shared/utils';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -50,6 +53,9 @@ export function AssistantPage(): JSX.Element {
   const [model, setModel] = useState('');
   const [draft, setDraft] = useState('');
   const [view, setView] = useState<'chat' | 'models'>('chat');
+  const dictation = useSpeechDictation(
+    useCallback((t: string) => setDraft((d) => (d ? `${d} ${t}` : t)), [])
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   async function refreshStatus(): Promise<void> {
@@ -345,10 +351,23 @@ export function AssistantPage(): JSX.Element {
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={noModels ? 'Install a model first...' : 'Message the assistant...'}
+            placeholder={
+              dictation.listening ? (dictation.interim || 'Listening…') : noModels ? 'Install a model first...' : 'Message the assistant...'
+            }
             aria-label='Message the assistant'
             disabled={noModels || busy === 'send'}
           />
+          {dictation.supported && (
+            <Button
+              type='button'
+              variant={dictation.listening ? 'default' : 'outline'}
+              disabled={noModels}
+              onClick={() => dictation.toggle()}
+              aria-label={dictation.listening ? 'Stop dictation' : 'Dictate a message'}
+            >
+              {dictation.listening ? <MicOff className='h-4 w-4' /> : <Mic className='h-4 w-4' />}
+            </Button>
+          )}
           <Button type='submit' disabled={noModels || busy === 'send' || !draft.trim()}>
             {busy === 'send' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
           </Button>
