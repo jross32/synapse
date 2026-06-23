@@ -136,7 +136,12 @@ async function apiFetchInternal<T = unknown>(
         return apiFetchInternal<T>(path, options, false);
       }
     }
-    if (res.status === 401 && typeof window !== 'undefined') {
+    // Auth-bootstrap probes (`/pair/resume`, `/auth/local-token`) return 401 to
+    // mean "no resumable session", NOT "your session was lost". Dispatching the
+    // global unauthorized event for them creates a feedback loop: the handler
+    // re-attempts resume, that 401s, which dispatches again, ~90x/sec. Skip them.
+    const isAuthBootstrapPath = path === '/auth/local-token' || path === '/pair/resume';
+    if (res.status === 401 && typeof window !== 'undefined' && !isAuthBootstrapPath) {
       window.dispatchEvent(
         new CustomEvent('synapse:unauthorized', { detail: { status: res.status } })
       );

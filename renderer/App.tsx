@@ -38,6 +38,8 @@ export default function App(): JSX.Element {
   // while we're in 'system' mode (Contract #14).
   const mobileRoute = isMobileRoute();
   const [authMode, setAuthMode] = useState<RuntimeAuthMode | 'booting'>('booting');
+  // Guards the unauthorized handler so a burst of 401s can't re-enter it.
+  const handlingUnauthorized = useRef(false);
 
   useEffect(() => {
     applyTheme(getStoredTheme());
@@ -63,13 +65,19 @@ export default function App(): JSX.Element {
   useEffect(() => {
     function onUnauthorized(): void {
       if (!mobileRoute) return;
+      if (handlingUnauthorized.current) return;
+      handlingUnauthorized.current = true;
       void (async () => {
-        clearDeviceToken();
-        if (await tryResumeDeviceSession()) {
-          setAuthMode('paired-device');
-          return;
+        try {
+          clearDeviceToken();
+          if (await tryResumeDeviceSession()) {
+            setAuthMode('paired-device');
+            return;
+          }
+          setAuthMode(getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required');
+        } finally {
+          handlingUnauthorized.current = false;
         }
-        setAuthMode(getStoredDeviceIdentity() ? 'reconnect-required' : 'pair-required');
       })();
     }
     window.addEventListener('synapse:unauthorized', onUnauthorized);
