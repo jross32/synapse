@@ -51,7 +51,7 @@ from .routes_auth import build_auth_router
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
-from .mcp_connector import build_mcp_router
+from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
 from .routes_tools import build_tools_router
@@ -251,6 +251,12 @@ def build_app(
     # https://<cloudtap-tunnel>/mcp/<token> and the path token is the secret
     # (validated inside the router). Read-only by default.
     app.include_router(build_mcp_router(storage, tool_registry, auth))
+    # Authed helper so the desktop UI can show + copy the ready-made connector URL.
+    app.include_router(
+        build_mcp_info_router(tool_registry, auth),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
 
     async def _subscribe_agent_events() -> None:
         await subscribe_agent_squad_events(storage, bus)

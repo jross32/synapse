@@ -243,6 +243,44 @@ def build_mcp_router(
     return router
 
 
+def build_mcp_info_router(registry: ToolRegistry, auth: AuthManager) -> APIRouter:
+    """Authed (/api/v1) helper so the desktop UI can show + copy the ready-made
+    claude.ai connector URL without the user hand-assembling token + tunnel."""
+
+    router = APIRouter(tags=["mcp"])
+
+    @router.get("/mcp/connector", response_model=None)
+    async def connector_info(request: Request) -> dict[str, Any]:
+        token = auth.local_token or ""
+        port = int(getattr(request.app.state, "bound_port", 7878) or 7878)
+        mcp_path = f"/mcp/{token}"
+        tunnel_url: str | None = None
+        try:
+            registry.get_manifest("cloudtap")  # raises if cloudtap absent
+            state = registry.get_state("cloudtap")
+            item = next(
+                (i for i in state.items if i.result.get("local_port") == port),
+                None,
+            )
+            if item is not None:
+                tunnel_url = item.result.get("public_url")
+        except Exception:  # noqa: BLE001 -- cloudtap optional / not installed
+            tunnel_url = None
+        connector_url = f"{tunnel_url.rstrip('/')}{mcp_path}" if tunnel_url else None
+        return {
+            "read_only": not _writes_allowed(),
+            "writes_enabled": _writes_allowed(),
+            "bound_port": port,
+            "mcp_path": mcp_path,
+            "local_url": f"http://127.0.0.1:{port}{mcp_path}",
+            "tunnel_url": tunnel_url,
+            "tunnel_open": bool(tunnel_url),
+            "connector_url": connector_url,
+        }
+
+    return router
+
+
 def _ok(msg_id: Any, result: Any) -> dict[str, Any]:
     return {"jsonrpc": JSONRPC, "id": msg_id, "result": result}
 

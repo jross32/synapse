@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Trash2,
   Wifi,
   WifiOff,
@@ -29,6 +30,7 @@ import {
   type RemoteAccessDevice,
   type RemoteAccessStatus,
 } from '@shared/remote-access-client';
+import { getMcpConnectorInfo, type McpConnectorInfo } from '@shared/mcp-client';
 import { canRestart, openExternal, restartApp } from '@shared/electron-bridge';
 import { runToolAction } from '@shared/tools-client';
 import {
@@ -52,6 +54,7 @@ interface ReconnectPreview {
 export function PhoneAccessPanel(): JSX.Element {
   const { recentEvents } = useDaemon();
   const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
+  const [mcpInfo, setMcpInfo] = useState<McpConnectorInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -65,8 +68,12 @@ export function PhoneAccessPanel(): JSX.Element {
   async function refresh(): Promise<void> {
     setError(null);
     try {
-      const next = await getRemoteAccessStatus();
+      const [next, mcp] = await Promise.all([
+        getRemoteAccessStatus(),
+        getMcpConnectorInfo().catch(() => null),
+      ]);
       setStatus(next);
+      setMcpInfo(mcp);
     } catch (err) {
       setError((err as Error).message || 'Could not load phone access.');
     } finally {
@@ -686,6 +693,52 @@ export function PhoneAccessPanel(): JSX.Element {
                       </>
                     )}
                   </div>
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title='Connect to Claude (MCP connector)'
+              subtitle='Add Synapse to claude.ai as a read-only custom connector over your Cloudtap tunnel.'
+              icon={Sparkles}
+            >
+              {mcpInfo?.connector_url ? (
+                <div className='space-y-3'>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <Badge
+                      variant='outline'
+                      className='rounded-full border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200'
+                    >
+                      {mcpInfo.read_only ? 'Read-only' : 'Writes enabled'}
+                    </Badge>
+                    <span className='text-xs text-muted-foreground'>
+                      Paste into claude.ai &rarr; Settings &rarr; Connectors &rarr; Add custom connector.
+                    </span>
+                  </div>
+                  <div className='space-y-2 rounded-2xl border border-border/70 bg-background/55 p-4'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary/85'>
+                      Connector URL
+                    </p>
+                    <code className='block break-all font-mono text-xs text-foreground'>
+                      {mcpInfo.connector_url}
+                    </code>
+                    <Button type='button' onClick={() => void copy(mcpInfo.connector_url!)}>
+                      <Copy className='h-4 w-4' />
+                      {justCopied === mcpInfo.connector_url ? 'Copied' : 'Copy connector URL'}
+                    </Button>
+                  </div>
+                  <div className='flex items-start gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100'>
+                    <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
+                    <p>
+                      Treat this URL like a password &mdash; it carries your daemon token. It only works while the
+                      Cloudtap tunnel above is open; close the tunnel when you&apos;re done. Writes stay off unless you
+                      set <code className='font-mono'>SYNAPSE_MCP_ALLOW_WRITES=1</code>.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className='rounded-2xl border border-dashed border-border/70 bg-secondary/20 px-5 py-6 text-center text-sm text-muted-foreground'>
+                  Open a WAN tunnel above, then the ready-to-paste claude.ai connector URL will appear here.
                 </div>
               )}
             </SectionCard>

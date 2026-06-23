@@ -124,6 +124,25 @@ def test_get_is_405(tmp_path: Path) -> None:
     assert client.get(f"/mcp/{token}").status_code == 405
 
 
+def test_connector_info_authed(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+    res = client.get("/api/v1/mcp/connector", headers={"X-Synapse-Token": token})
+    assert res.status_code == 200, res.text
+    d = res.json()
+    assert d["read_only"] is True
+    assert d["mcp_path"] == f"/mcp/{token}"
+    assert d["local_url"].endswith(f"/mcp/{token}")
+    # No Cloudtap tunnel open in tests -> no connector URL yet.
+    assert d["tunnel_open"] is False
+    assert d["connector_url"] is None
+
+
+def test_connector_info_requires_auth(tmp_path: Path) -> None:
+    client, _ = _harness(tmp_path)
+    res = client.get("/api/v1/mcp/connector")
+    assert res.status_code in (401, 403)
+
+
 def test_writes_opt_in_exposes_add_idea(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
     client, token = _harness(tmp_path)
