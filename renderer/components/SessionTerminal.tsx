@@ -237,6 +237,36 @@ export function SessionTerminal({
     return () => container.removeEventListener('keydown', onKey, true);
   }, []);
 
+  // Keep the phone screen awake while a live terminal is on screen so a long
+  // AI session doesn't get cut off when the display sleeps. Wake Lock needs a
+  // secure context (HTTPS / Cloudtap WAN); it silently no-ops on plain-http
+  // LAN and on desktop.
+  useEffect(() => {
+    if (!prefersTouchPad) return;
+    const wakeLock = (navigator as unknown as { wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> } }).wakeLock;
+    if (!wakeLock?.request) return;
+    let sentinel: { release(): Promise<void> } | null = null;
+    let released = false;
+    const acquire = async () => {
+      try {
+        sentinel = await wakeLock.request('screen');
+      } catch {
+        /* denied / not visible -- ignore */
+      }
+    };
+    void acquire();
+    // The lock drops when the tab is hidden; re-acquire when it returns.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !released) void acquire();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      released = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      void sentinel?.release().catch(() => undefined);
+    };
+  }, [prefersTouchPad]);
+
   const findNext = useCallback((q: string) => {
     if (!searchRef.current) return;
     if (!q) return;

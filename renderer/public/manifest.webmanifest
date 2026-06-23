@@ -1,0 +1,14 @@
+{
+  "name": "Synapse",
+  "short_name": "Synapse",
+  "description": "Your developer command center -- control projects, tools, and AI sessions from anywhere.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b1020",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
