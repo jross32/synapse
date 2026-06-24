@@ -79,7 +79,13 @@ export function ReviewPage(): JSX.Element {
         <Card className='mx-auto flex max-w-md flex-col items-center gap-2 p-10 text-center'>
           <Inbox className='h-8 w-8 text-primary' />
           <h2 className='text-lg font-semibold'>All caught up</h2>
-          <p className='text-sm text-muted-foreground'>Nothing needs your review right now.</p>
+          <p className='text-sm text-muted-foreground'>
+            When an AI squad finishes a chunk of work or gets stuck, it shows up here to
+            <span className='text-foreground'> approve</span>,
+            <span className='text-foreground'> revise</span>, or
+            <span className='text-foreground'> reject</span> — from your desk or your phone.
+          </p>
+          <p className='text-xs text-muted-foreground'>Start a squad from the Sessions tab to put your AI workforce to work.</p>
         </Card>
       ) : (
         <div className='flex flex-col gap-3'>
