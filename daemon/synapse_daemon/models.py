@@ -328,6 +328,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "AssistantMessage": _assistant.AssistantMessage,
         "AssistantChat": _assistant.AssistantChat,
         "AssistantChatDetail": _assistant.AssistantChatDetail,
+        "AssistantAnswer": _assistant.AssistantAnswer,
         # Local-model marketplace (ADR-0014 Phase M)
         "ModelCatalogEntry": _market.ModelCatalogEntry,
         "ModelCatalog": _market.ModelCatalog,

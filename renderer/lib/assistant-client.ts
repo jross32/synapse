@@ -47,6 +47,11 @@ export interface AssistantChatDetail {
   messages: AssistantMessage[];
 }
 
+export interface AssistantAnswer {
+  answer: string;
+  model: string;
+}
+
 const p = encodeURIComponent;
 
 export function getAssistantStatus(): Promise<AssistantStatus> {
@@ -81,6 +86,14 @@ export function getAssistantChat(id: string): Promise<AssistantChatDetail> {
 
 export function deleteAssistantChat(id: string): Promise<void> {
   return apiFetch<void>(`/assistant/chats/${p(id)}`, { method: 'DELETE' });
+}
+
+export function askAssistant(input: {
+  content: string;
+  include_context?: boolean;
+  model?: string | null;
+}): Promise<AssistantAnswer> {
+  return apiFetch<AssistantAnswer>('/assistant/ask', { method: 'POST', body: input });
 }
 
 export function sendAssistantMessage(

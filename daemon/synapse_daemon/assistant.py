@@ -87,6 +87,20 @@ class AssistantSendMessage(BaseModel):
     model: str | None = None
 
 
+class AssistantAskRequest(BaseModel):
+    """A one-shot question with no persisted chat -- powers the global
+    quick-ask + "explain this error" actions (ADR-0014/0016)."""
+
+    content: str
+    include_context: bool = True
+    model: str | None = None
+
+
+class AssistantAnswer(BaseModel):
+    answer: str
+    model: str
+
+
 def _new_id() -> str:
     return secrets.token_hex(6)
 

@@ -110,3 +110,26 @@ def test_delete_chat(tmp_path: Path, mock_ollama: dict) -> None:
     chat = client.post("/api/v1/assistant/chats", json={}).json()
     assert client.delete(f"/api/v1/assistant/chats/{chat['id']}").status_code == 204
     assert client.get(f"/api/v1/assistant/chats/{chat['id']}").status_code == 404
+
+
+def test_ask_one_shot_with_context(tmp_path: Path, mock_ollama: dict) -> None:
+    client = _harness(tmp_path)
+    res = client.post("/api/v1/assistant/ask", json={"content": "what is this error?", "include_context": True})
+    assert res.status_code == 200, res.text
+    assert "local Synapse assistant" in res.json()["answer"]
+    assert res.json()["model"] == "llama3.2"
+    # The one-shot ask still got the live-state system message.
+    sys_msgs = [m for m in mock_ollama["messages"] if m["role"] == "system"]
+    assert sys_msgs and "Demo Project" in sys_msgs[0]["content"]
+    # No chat was persisted by a one-shot ask.
+    assert client.get("/api/v1/assistant/chats").json()["chats"] == []
+
+
+def test_ask_no_model_is_422(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mock_ollama: dict) -> None:
+    async def empty_models() -> list[dict]:
+        return []
+
+    monkeypatch.setattr(ollama_client, "list_models", empty_models)
+    client = _harness(tmp_path)
+    res = client.post("/api/v1/assistant/ask", json={"content": "hi"})
+    assert res.status_code == 422

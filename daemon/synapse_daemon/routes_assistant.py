@@ -12,6 +12,8 @@ from . import assistant as asst
 from . import ollama_client
 from . import projects as projects_module
 from .assistant import (
+    AssistantAnswer,
+    AssistantAskRequest,
     AssistantChatCreate,
     AssistantRole,
     AssistantSendMessage,
@@ -163,6 +165,49 @@ def build_assistant_router(storage: Storage, registry: ToolRegistry) -> APIRoute
     async def delete_chat(chat_id: str) -> None:
         with storage.transaction() as conn:
             asst.delete_chat(conn, chat_id)
+
+    @router.post("/assistant/ask", response_model=None)
+    async def ask(payload: AssistantAskRequest) -> dict[str, Any]:
+        """One-shot question, no persisted chat. Powers the quick-ask + the
+        log viewer's 'explain this error' action."""
+        content = payload.content.strip()
+        if not content:
+            raise invalid("assistant", "A question is required.")
+
+        settings = asst.get_settings(storage.conn)
+        model = payload.model or settings.default_model
+        if not model:
+            installed = await ollama_client.list_models()
+            model = installed[0]["name"] if installed else None
+        if not model:
+            raise invalid(
+                "assistant",
+                "No model selected and none installed. Pull a model in the marketplace first.",
+            )
+
+        wire: list[dict[str, str]] = []
+        if payload.include_context:
+            wire.append({"role": "system", "content": _context_message(storage, registry)})
+        wire.append({"role": "user", "content": content})
+
+        try:
+            reply = await ollama_client.chat(model, wire)
+        except Exception as exc:  # noqa: BLE001 -- surface as a readable error
+            raise invalid("assistant", f"The local model could not respond: {exc}") from exc
+
+        with storage.transaction() as conn:
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="assistant",
+                    entity_id="ask",
+                    action="ask",
+                    source=AuditSource.DESKTOP,
+                    result="success",
+                    details={"model": model},
+                ),
+            )
+        return AssistantAnswer(answer=reply, model=model).model_dump(mode="json")
 
     @router.post("/assistant/chats/{chat_id}/messages", response_model=None)
     async def send_message(chat_id: str, payload: AssistantSendMessage) -> dict[str, Any]:
