@@ -5,6 +5,7 @@ import {
   Activity,
   Bot,
   House,
+  Inbox,
   LayoutGrid,
   Settings,
   Sparkles,
@@ -12,7 +13,15 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-export type PageId = 'home' | 'apps' | 'tools' | 'sessions' | 'assistant' | 'processes' | 'settings';
+export type PageId =
+  | 'home'
+  | 'apps'
+  | 'tools'
+  | 'sessions'
+  | 'assistant'
+  | 'review'
+  | 'processes'
+  | 'settings';
 
 export interface NavItem {
   id: PageId;
@@ -30,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'tools', label: 'Tools', icon: Wrench, description: 'Synapse tools, agents + workflows' },
   { id: 'sessions', label: 'Sessions', icon: Sparkles, description: 'AI coders + live terminal sessions' },
   { id: 'assistant', label: 'Assistant', icon: Bot, description: 'Private local LLM chat about your projects + Synapse' },
+  { id: 'review', label: 'Review', icon: Inbox, description: 'Approve or redirect work your AI workforce handed back' },
   { id: 'processes', label: 'Processes', icon: Activity, description: 'Everything running right now' },
   { id: 'settings', label: 'Settings', icon: Settings, description: 'Daemon, theme + about', locked: true },
 ];

@@ -31,6 +31,7 @@ import { ToolsPage } from './pages/Tools';
 import { SessionsPage } from './pages/Sessions';
 import { ProcessesPage } from './pages/Processes';
 import { AssistantPage } from './pages/Assistant';
+import { ReviewPage } from './pages/Review';
 import { SettingsPage } from './pages/Settings';
 
 export default function App(): JSX.Element {
@@ -324,6 +325,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               />
             )}
             {page === 'assistant' && <AssistantPage />}
+            {page === 'review' && <ReviewPage />}
             {page === 'processes' && <ProcessesPage />}
             {page === 'settings' && (
               <SettingsPage mobileRoute={mobileRoute} onForgetDevice={onForgetDevice} />
