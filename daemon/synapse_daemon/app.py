@@ -55,6 +55,7 @@ from .routes_assistant import build_assistant_router
 from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
+from .routes_capture import build_capture_router
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
@@ -265,6 +266,12 @@ def build_app(
     # Needs-Review / approval inbox -- cross-squad handoffs + blocked items (ADR-0016).
     app.include_router(
         build_review_router(storage, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Capture inbox -- jot a note (typed/voice) -> backlog or AI memory (ADR-0016).
+    app.include_router(
+        build_capture_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

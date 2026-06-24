@@ -112,6 +112,24 @@ def append_work_item_handoff(
     return path
 
 
+def append_capture_note(
+    *,
+    data_dir: Path,
+    project_id: str,
+    project_name: str,
+    note: str,
+    source: str = "mobile",
+) -> Path:
+    """Append a free-form captured note (e.g. from the mobile Capture button)
+    into the project's shared AI memory so the next agent run sees it."""
+    path = ensure_ai_context_file(data_dir, project_id, project_name)
+    _rotate_if_needed(path)
+    heading = f"### {utc_now().date().isoformat()} · captured ({source})"
+    body = note.strip() or "_Empty note._"
+    _append_text(path, "\n".join(["", heading, "", body]) + "\n")
+    return path
+
+
 def write_role_prompt(
     *,
     data_dir: Path,

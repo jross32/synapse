@@ -1,6 +1,6 @@
 # ADR-0016: Mobile remote cockpit — Needs-Review inbox first
 
-- Status: Accepted (Phase R1 shipping: Needs-Review / approval inbox)
+- Status: Accepted (shipped: Needs-Review inbox + Capture button)
 - Date: 2026-06-23
 - Deciders: Justin (owner), Claude
 
@@ -38,9 +38,14 @@ each item with its summary / blockers / files and **Approve · Revise · Reject*
 actions; revise/reject prompt for a note. Subscribes to `v1.review.resolved`.
 Built mobile-first — this is a phone feature.
 
+## Shipped — Capture button (R2)
+A global floating "+ Capture" (every screen, desktop + mobile) → jot a note,
+**typed or dictated** (reuses the ADR-0015 voice hook), routed to a project's
+**backlog** (records) or its **`.synapse-ai-context.md`** AI memory, tagged
+`source=mobile`/`desktop`. "Send to the active session" is intentionally omitted
+— the command pad (with voice) already covers typing into a live terminal.
+
 ## Later in Phase R (own increments)
-- **Capture button** — note / voice / screenshot → a project's records,
-  `.synapse-ai-context.md`, or the active session (tagged `source=mobile`).
 - **Project Control Room (mobile)** — overview + launch/stop + logs + records +
   "start Claude/Codex here" on one page.
 - **Logs → "ask AI what this error means"** — package an error + context into a

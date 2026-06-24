@@ -21,6 +21,7 @@ import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { Sidebar } from './components/Sidebar';
+import { CaptureButton } from './components/CaptureButton';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
@@ -373,6 +374,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       />
       <ProfileHub open={profileOpen} onClose={() => setProfileOpen(false)} mobileRoute={mobileRoute} />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <CaptureButton />
     </div>
   );
 }

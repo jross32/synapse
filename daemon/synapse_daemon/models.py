@@ -271,6 +271,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import assistant as _assistant
     from . import model_market as _market
     from . import review as _review
+    from . import capture as _capture
     from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
@@ -336,6 +337,10 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "ReviewKind": _review.ReviewKind,  # type: ignore[dict-item]
         "ReviewItem": _review.ReviewItem,
         "ReviewInbox": _review.ReviewInbox,
+        # Capture inbox (ADR-0016 Phase R)
+        "CaptureDestination": _capture.CaptureDestination,  # type: ignore[dict-item]
+        "CaptureRequest": _capture.CaptureRequest,
+        "CaptureResult": _capture.CaptureResult,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,
