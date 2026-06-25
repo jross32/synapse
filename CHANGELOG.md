@@ -17,7 +17,10 @@ Every commit must append an entry under the in-progress version header.
   Mediator). A roster work-item can carry a `personality_id`; the synthesized
   worker prompt now layers a `## Personality` section after the role guidance, so
   two same-role workers differ in voice and can collaborate/debate. Built-ins are
-  editable but protected from deletion.
+  editable but protected from deletion. The Marketplace **Workers** section shows
+  the personality + role galleries (create/remove custom personalities), and the
+  **squad builder** now picks a personality per role — add the same role twice
+  with different personalities and the AIs collaborate/debate.
 
 ## [0.1.36-dev] -- 2026-06-22
 

@@ -6,7 +6,7 @@
 // + createAgentWorkItem); the raw forms stay available behind "Advanced" in
 // AgentSquadsView for power users.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   ChevronLeft,
@@ -24,6 +24,7 @@ import {
 import type { AgentRoleTemplate, AgentRoleTier, Project } from '@shared/generated-types';
 import { cn } from '@shared/utils';
 import { createAgentSquad, createAgentWorkItem } from '../lib/agent-squads-client';
+import { listPersonalities, type Personality } from '@shared/personalities-client';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Modal } from './ui/modal';
@@ -110,8 +111,18 @@ export function SquadWizard({
   const [goal, setGoal] = useState('');
   const [teamName, setTeamName] = useState('');
   const [roster, setRoster] = useState<string[]>([]);
+  // Personality per roster slot, aligned to `roster` by index (null = default).
+  const [personalityIds, setPersonalityIds] = useState<(string | null)[]>([]);
+  const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    void listPersonalities()
+      .then(setPersonalities)
+      .catch(() => setPersonalities([]));
+  }, [open]);
 
   const roleById = useMemo(() => {
     const map = new Map<string, AgentRoleTemplate>();
@@ -144,15 +155,25 @@ export function SquadWizard({
   function applyPreset(preset: Preset): void {
     const valid = preset.roleIds.filter((id) => roleById.has(id));
     setRoster(valid);
+    setPersonalityIds(valid.map(() => null));
     if (!teamName.trim()) setTeamName(preset.id === 'custom' ? '' : preset.name);
     setStep(2);
   }
 
   function addRole(id: string): void {
     setRoster((prev) => [...prev, id]);
+    setPersonalityIds((prev) => [...prev, null]);
   }
   function removeRoleAt(index: number): void {
     setRoster((prev) => prev.filter((_, i) => i !== index));
+    setPersonalityIds((prev) => prev.filter((_, i) => i !== index));
+  }
+  function setPersonalityAt(index: number, value: string | null): void {
+    setPersonalityIds((prev) => prev.map((p, i) => (i === index ? value : p)));
+  }
+  function clearRoster(): void {
+    setRoster([]);
+    setPersonalityIds([]);
   }
 
   async function create(): Promise<void> {
@@ -173,12 +194,14 @@ export function SquadWizard({
       });
       // Seed one queued work item per roster role so the whole team is visible
       // immediately. Nothing launches until the user clicks Launch.
-      for (const roleId of roster) {
+      for (let i = 0; i < roster.length; i += 1) {
+        const roleId = roster[i];
         const role = roleById.get(roleId);
         await createAgentWorkItem(squad.id, {
           title: `${role?.name ?? roleId}: ${name}`,
           instructions_md: goal.trim(),
           assigned_role_id: roleId,
+          personality_id: personalityIds[i] ?? null,
         });
       }
       onCreated(squad.id);
@@ -196,6 +219,7 @@ export function SquadWizard({
     setGoal('');
     setTeamName('');
     setRoster([]);
+    setPersonalityIds([]);
     setError(null);
   }
 
@@ -332,7 +356,7 @@ export function SquadWizard({
                 {roster.length > 0 && (
                   <button
                     type='button'
-                    onClick={() => setRoster([])}
+                    onClick={clearRoster}
                     className='text-xs text-muted-foreground hover:text-foreground'
                   >
                     Clear all
@@ -344,21 +368,36 @@ export function SquadWizard({
                   No roles yet. Add some from the list below — a boss is a good start.
                 </p>
               ) : (
-                <ul className='mt-2 flex flex-wrap gap-2'>
+                <ul className='mt-2 flex flex-col gap-2'>
                   {roster.map((id, index) => {
                     const role = roleById.get(id);
                     const Icon = TIER_ICON[role?.role_tier ?? 'worker'];
                     return (
                       <li
                         key={`${id}-${index}`}
-                        className='flex items-center gap-2 rounded-full border border-border bg-secondary/30 py-1 pl-3 pr-1 text-sm'
+                        className='flex items-center gap-2 rounded-lg border border-border bg-secondary/20 px-3 py-2 text-sm'
                       >
-                        <Icon className='h-3.5 w-3.5 text-muted-foreground' />
-                        {role?.name ?? id}
+                        <Icon className='h-3.5 w-3.5 shrink-0 text-muted-foreground' />
+                        <span className='min-w-0 flex-1 truncate'>{role?.name ?? id}</span>
+                        <select
+                          value={personalityIds[index] ?? ''}
+                          onChange={(e) => setPersonalityAt(index, e.target.value || null)}
+                          title='Personality'
+                          aria-label={`Personality for ${role?.name ?? id}`}
+                          className='max-w-[10rem] shrink-0 rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                          style={{ colorScheme: 'dark' }}
+                        >
+                          <option value='' className='bg-card'>Default personality</option>
+                          {personalities.map((p) => (
+                            <option key={p.id} value={p.id} className='bg-card'>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type='button'
                           onClick={() => removeRoleAt(index)}
-                          className='flex h-5 w-5 items-center justify-center rounded-full hover:bg-destructive/20'
+                          className='flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-destructive/20'
                           aria-label={`Remove ${role?.name ?? id}`}
                         >
                           <X className='h-3 w-3' />
@@ -432,13 +471,19 @@ export function SquadWizard({
                   >
                     <Icon className='h-3 w-3 text-muted-foreground' />
                     {role?.name ?? id}
+                    {personalityIds[index] && (
+                      <span className='text-primary'>
+                        · {personalities.find((p) => p.id === personalityIds[index])?.name ?? personalityIds[index]}
+                      </span>
+                    )}
                   </li>
                 );
               })}
             </ul>
             <p className='text-xs text-muted-foreground'>
               Creating the team adds one queued task per role. Nothing launches until you click
-              Launch on a task, so you stay in control.
+              Launch on a task, so you stay in control. Give two of the same role different
+              personalities and they&apos;ll collaborate and debate.
             </p>
           </div>
         )}

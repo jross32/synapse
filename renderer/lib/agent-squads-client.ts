@@ -36,6 +36,7 @@ export interface CreateAgentWorkItemInput {
   title: string;
   instructions_md?: string;
   assigned_role_id?: string | null;
+  personality_id?: string | null;
   preferred_runtime?: string | null;
   parent_id?: string | null;
 }
