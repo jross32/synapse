@@ -49,21 +49,24 @@ export function Sidebar({ active, onNavigate, onOpenPalette, onOpenProfile }: Si
       aria-label='Primary'
       className='flex h-full w-[56px] shrink-0 flex-col items-center gap-1 border-r border-border bg-card py-4 sm:w-[84px]'
     >
-      {/* Brand mark -- the Synapse disc, matching the app/taskbar icon. */}
+      {/* Brand mark -- the Synapse disc (matches the app/taskbar icon), set on a
+          subtle elevated badge so it stands out on the dark rail. */}
       <div className='mb-3 flex flex-col items-center gap-1'>
-        <svg viewBox='0 0 256 256' className='h-9 w-9 sm:h-10 sm:w-10' role='img' aria-label='Synapse'>
-          <circle cx='128' cy='128' r='128' fill='#0b0e1c' />
-          <circle cx='128' cy='128' r='92' fill='none' stroke='#7c3aed' strokeWidth='24' />
-          <circle cx='128' cy='128' r='34' fill='#eef2fb' />
-          <g fill='#22d3a6'>
-            <circle cx='128' cy='36' r='12' />
-            <circle cx='207.7' cy='82' r='12' />
-            <circle cx='207.7' cy='174' r='12' />
-            <circle cx='128' cy='220' r='12' />
-            <circle cx='48.3' cy='174' r='12' />
-            <circle cx='48.3' cy='82' r='12' />
-          </g>
-        </svg>
+        <div className='rounded-full bg-[#0b0e1c] shadow-md ring-1 ring-white/15'>
+          <svg viewBox='0 0 256 256' className='h-9 w-9 sm:h-10 sm:w-10' role='img' aria-label='Synapse'>
+            <circle cx='128' cy='128' r='128' fill='#0b0e1c' />
+            <circle cx='128' cy='128' r='90' fill='none' stroke='#7c3aed' strokeWidth='28' />
+            <circle cx='128' cy='128' r='34' fill='#eef2fb' />
+            <g fill='#22d3a6'>
+              <circle cx='128' cy='38' r='13' />
+              <circle cx='206' cy='83' r='13' />
+              <circle cx='206' cy='173' r='13' />
+              <circle cx='128' cy='218' r='13' />
+              <circle cx='50' cy='173' r='13' />
+              <circle cx='50' cy='83' r='13' />
+            </g>
+          </svg>
+        </div>
       </div>
 
       {/* Destinations */}

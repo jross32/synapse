@@ -291,8 +291,20 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
           <header className='border-b border-border bg-card/95 backdrop-blur'>
             <div className='mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 pb-3 pt-4'>
               <div className='flex min-w-0 items-center gap-3'>
-                <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-base font-semibold text-primary'>
-                  S
+                <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#0b0e1c] shadow-md ring-1 ring-white/15'>
+                  <svg viewBox='0 0 256 256' className='h-7 w-7' role='img' aria-label='Synapse'>
+                    <circle cx='128' cy='128' r='128' fill='#0b0e1c' />
+                    <circle cx='128' cy='128' r='90' fill='none' stroke='#7c3aed' strokeWidth='28' />
+                    <circle cx='128' cy='128' r='34' fill='#eef2fb' />
+                    <g fill='#22d3a6'>
+                      <circle cx='128' cy='38' r='13' />
+                      <circle cx='206' cy='83' r='13' />
+                      <circle cx='206' cy='173' r='13' />
+                      <circle cx='128' cy='218' r='13' />
+                      <circle cx='50' cy='173' r='13' />
+                      <circle cx='50' cy='83' r='13' />
+                    </g>
+                  </svg>
                 </div>
                 <div className='min-w-0'>
                   <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90'>

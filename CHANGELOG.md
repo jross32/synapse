@@ -28,7 +28,9 @@ Every commit must append an entry under the in-progress version header.
   in-app brand mark (sidebar), boot splash, and `icon.svg` favicon were realigned
   to the same disc-with-ring-and-nodes design as the app/taskbar icon (they had
   drifted to an unrelated hub-glyph and an "S"). `electron/icons/` is now bundled
-  as an extra resource so the packaged window/tray icon resolves too.
+  as an extra resource so the packaged window/tray icon resolves too. The sidebar
+  + mobile-topbar marks now sit on a subtle elevated badge (rim + shadow) so the
+  dark disc stands out on the dark rail instead of blending in.
 
 ## [0.1.36-dev] -- 2026-06-22
 
