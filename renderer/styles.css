@@ -195,6 +195,36 @@
   50% { opacity: 0.4; transform: scale(0.85); }
 }
 
+/* Launch-splash artwork (MW9): an animated synapse -- pulses flow along the
+   connections, the nodes breathe. The global reduced-motion rule below
+   neutralizes all of it. */
+@keyframes synapse-flow { to { stroke-dashoffset: -16; } }
+@keyframes synapse-node {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+@keyframes synapse-glow {
+  0%, 100% { opacity: 0.18; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.08); }
+}
+.synapse-art .flow { animation: synapse-flow 0.9s linear infinite; }
+.synapse-art .glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: synapse-glow 2.6s ease-in-out infinite;
+}
+.synapse-art .nodes circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: synapse-node 1.9s ease-in-out infinite;
+}
+.synapse-art .nodes circle:nth-of-type(2) { animation-delay: 0.14s; }
+.synapse-art .nodes circle:nth-of-type(3) { animation-delay: 0.28s; }
+.synapse-art .nodes circle:nth-of-type(4) { animation-delay: 0.42s; }
+.synapse-art .nodes circle:nth-of-type(5) { animation-delay: 0.56s; }
+.synapse-art .nodes circle:nth-of-type(6) { animation-delay: 0.70s; }
+.synapse-art .nodes circle:nth-of-type(7) { animation-delay: 0.84s; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-synapse-pulse,
   .animate-spin,
