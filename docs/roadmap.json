@@ -1,0 +1,158 @@
+{
+  "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
+  "generated_at": "2026-06-24",
+  "items": [
+    {
+      "id": "local-llm",
+      "title": "Local AI assistant",
+      "status": "shipped",
+      "phase": "Local LLM",
+      "adr": "ADR-0014",
+      "summary": "A private, on-device LLM (Ollama) you can chat with about your projects and Synapse itself — off by default."
+    },
+    {
+      "id": "model-marketplace",
+      "title": "Model marketplace",
+      "status": "shipped",
+      "phase": "Local LLM",
+      "adr": "ADR-0014",
+      "summary": "Browse + one-click download local models with live streaming progress."
+    },
+    {
+      "id": "voice",
+      "title": "Voice dictation",
+      "status": "shipped",
+      "phase": "Voice",
+      "adr": "ADR-0015",
+      "summary": "Dictate into the command pad + the assistant — great on the phone."
+    },
+    {
+      "id": "review-inbox",
+      "title": "Needs-Review inbox",
+      "status": "shipped",
+      "phase": "Remote cockpit",
+      "adr": "ADR-0016",
+      "summary": "Approve, revise, or reject what your AI workforce hands back — from your desk or your phone."
+    },
+    {
+      "id": "capture",
+      "title": "Capture button",
+      "status": "shipped",
+      "phase": "Remote cockpit",
+      "adr": "ADR-0016",
+      "summary": "Jot a note (typed or voice) into a project's backlog or its AI memory from anywhere."
+    },
+    {
+      "id": "logs-ask-ai",
+      "title": "Explain logs with AI",
+      "status": "shipped",
+      "phase": "Remote cockpit",
+      "adr": "ADR-0016",
+      "summary": "Ask the local assistant what a project's errors mean, right from the log viewer."
+    },
+    {
+      "id": "marketplace-hub",
+      "title": "Marketplace hub",
+      "status": "shipped",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0017",
+      "summary": "One visual home for tools, models, MCP servers, AI workers, and squads."
+    },
+    {
+      "id": "mcp-servers",
+      "title": "MCP servers for your AI",
+      "status": "shipped",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0017",
+      "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically."
+    },
+    {
+      "id": "launch-art",
+      "title": "Animated launch artwork",
+      "status": "shipped",
+      "phase": "Polish",
+      "adr": "ADR-0009",
+      "summary": "A living synapse on the boot splash, plus a real Synapse logo + readable dropdowns."
+    },
+    {
+      "id": "whats-new",
+      "title": "What's New & Roadmap",
+      "status": "in_progress",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0019",
+      "summary": "This page — see what shipped and what's coming, as a path."
+    },
+    {
+      "id": "workers-personalities",
+      "title": "AI workers with personalities",
+      "status": "coming",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0018",
+      "summary": "Download workers as a role + a personality — two AIs can share a role but differ in personality, so they collaborate and debate."
+    },
+    {
+      "id": "squad-presets",
+      "title": "Ready-made squad presets",
+      "status": "coming",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0018",
+      "summary": "Pick a team for a goal — a UI/UX crew, an SEO sweep, a scraping pipeline, a security review — in one tap."
+    },
+    {
+      "id": "publishing",
+      "title": "Publish your own",
+      "status": "coming",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0017",
+      "summary": "Package + share your own MCP servers, tools, workers, and presets with others."
+    },
+    {
+      "id": "option-previews",
+      "title": "Preview before you build",
+      "status": "coming",
+      "phase": "AI-coding power",
+      "adr": "ADR-0020",
+      "summary": "Before a big change, the AI shows a few cheap mockups (e.g. 3 nav-bar options) side by side — you pick, then it builds the one you chose."
+    },
+    {
+      "id": "live-preview",
+      "title": "Live web preview",
+      "status": "coming",
+      "phase": "AI-coding power",
+      "adr": "ADR-0020",
+      "summary": "See a project with a port rendered in-app, with a screenshot + report-issue button."
+    },
+    {
+      "id": "routines",
+      "title": "Routines (scheduled agents)",
+      "status": "coming",
+      "phase": "AI-coding power",
+      "adr": "ADR-0020",
+      "summary": "Run a squad or the autonomous boss on a schedule."
+    },
+    {
+      "id": "web-push",
+      "title": "Phone push notifications",
+      "status": "coming",
+      "phase": "Remote cockpit",
+      "adr": "ADR-0016",
+      "summary": "Get pinged on your phone when a worker needs you, a process crashes, or a tunnel changes."
+    },
+    {
+      "id": "permission-modes",
+      "title": "Per-device access + panic-lock",
+      "status": "coming",
+      "phase": "Remote cockpit",
+      "adr": "ADR-0016",
+      "summary": "View-only / operator / admin access per paired device, with a one-tap lock-everything."
+    },
+    {
+      "id": "whisper-voice",
+      "title": "Offline voice (Whisper)",
+      "status": "coming",
+      "phase": "Voice",
+      "adr": "ADR-0015",
+      "summary": "A downloadable local Whisper model for private, offline speech recognition."
+    }
+  ]
+}

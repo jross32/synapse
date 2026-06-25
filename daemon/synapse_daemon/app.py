@@ -58,6 +58,7 @@ from .routes_review import build_review_router
 from .routes_capture import build_capture_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .mcp_servers import McpServerManager
+from .routes_about import build_about_router
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
@@ -294,6 +295,12 @@ def build_app(
             if server.enabled and server.autorun:
                 mcp_manager.start(server)
     app.router.on_startup.append(_autostart_mcp_servers)
+    # What's New + Roadmap surface (ADR-0019) -- serves the changelog + roadmap.
+    app.include_router(
+        build_about_router(),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
 

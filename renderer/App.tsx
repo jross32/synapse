@@ -34,6 +34,7 @@ import { ProcessesPage } from './pages/Processes';
 import { AssistantPage } from './pages/Assistant';
 import { ReviewPage } from './pages/Review';
 import { MarketplacePage } from './pages/Marketplace';
+import { WhatsnewPage } from './pages/Whatsnew';
 import { SettingsPage } from './pages/Settings';
 
 export default function App(): JSX.Element {
@@ -355,6 +356,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
             {page === 'review' && <ReviewPage />}
             {page === 'marketplace' && <MarketplacePage />}
             {page === 'processes' && <ProcessesPage />}
+            {page === 'whatsnew' && <WhatsnewPage />}
             {page === 'settings' && (
               <SettingsPage mobileRoute={mobileRoute} onForgetDevice={onForgetDevice} />
             )}

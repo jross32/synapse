@@ -273,6 +273,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import review as _review
     from . import capture as _capture
     from . import mcp_servers as _mcp
+    from . import about as _about
     from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
@@ -351,6 +352,12 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "McpServer": _mcp.McpServer,
         "McpServerView": _mcp.McpServerView,
         "McpServerList": _mcp.McpServerList,
+        # What's New + Roadmap (ADR-0019)
+        "ChangelogSection": _about.ChangelogSection,
+        "ChangelogVersion": _about.ChangelogVersion,
+        "Changelog": _about.Changelog,
+        "RoadmapItem": _about.RoadmapItem,
+        "Roadmap": _about.Roadmap,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,

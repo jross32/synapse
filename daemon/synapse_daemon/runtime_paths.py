@@ -74,3 +74,20 @@ def bundled_models_sample() -> Path:
 
 def bundled_mcp_servers_sample() -> Path:
     return bundled_docs_dir() / "mcp-servers-sample.json"
+
+
+def bundled_changelog() -> Path:
+    """The CHANGELOG lives at the repo root in dev; bundled under docs/ when
+    packaged. Return the first that exists."""
+    for candidate in (
+        repo_root() / "CHANGELOG.md",
+        bundled_docs_dir() / "CHANGELOG.md",
+        resources_root() / "CHANGELOG.md",
+    ):
+        if candidate.exists():
+            return candidate
+    return repo_root() / "CHANGELOG.md"
+
+
+def bundled_roadmap() -> Path:
+    return bundled_docs_dir() / "roadmap.json"

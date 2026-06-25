@@ -7,6 +7,7 @@ import {
   House,
   Inbox,
   LayoutGrid,
+  Rocket,
   Settings,
   Sparkles,
   Store,
@@ -23,6 +24,7 @@ export type PageId =
   | 'review'
   | 'marketplace'
   | 'processes'
+  | 'whatsnew'
   | 'settings';
 
 export interface NavItem {
@@ -44,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'review', label: 'Review', icon: Inbox, description: 'Approve or redirect work your AI workforce handed back' },
   { id: 'marketplace', label: 'Marketplace', icon: Store, description: 'Install tools, models, MCP servers, AI workers + squads' },
   { id: 'processes', label: 'Processes', icon: Activity, description: 'Everything running right now' },
+  { id: 'whatsnew', label: "What's New", icon: Rocket, description: 'What shipped recently + the roadmap of what’s coming' },
   { id: 'settings', label: 'Settings', icon: Settings, description: 'Daemon, theme + about', locked: true },
 ];
 

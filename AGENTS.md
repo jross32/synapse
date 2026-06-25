@@ -71,6 +71,11 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
    - Security-related change → `docs/security.md`.
    - New CLI command → README's CLI section + this file's CLI table.
    - Architectural decision that touches a contract → new `docs/adr/NNNN-*.md`.
+   - **A user-visible feature shipped, changed, or newly planned → update
+     `docs/roadmap.json`** (flip an item's `status` shipped/in_progress/coming, or
+     add a `coming` item). This feeds the in-app **What's New** surface (ADR-0019),
+     so a stale roadmap = a stale "path" shown to the user. Keep ADR + CHANGELOG +
+     roadmap consistent when an idea changes the plan.
 6. **Commit author:** `jross32 <justinwross32@gmail.com>`. Don't change git config.
 7. **Commit to the current branch.** Never switch branches without being asked.
 8. **Commit message format:**

@@ -79,7 +79,11 @@
       {
         "from": "docs",
         "to": "docs",
-        "filter": ["*.json", "CHANGELOG.md", "roadmap.json"]
+        "filter": ["*.json"]
+      },
+      {
+        "from": "CHANGELOG.md",
+        "to": "docs/CHANGELOG.md"
       },
       {
         "from": "scripts/remote-recovery.ps1",
