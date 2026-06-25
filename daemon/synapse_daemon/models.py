@@ -272,6 +272,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import model_market as _market
     from . import review as _review
     from . import capture as _capture
+    from . import mcp_servers as _mcp
     from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
@@ -342,6 +343,14 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "CaptureDestination": _capture.CaptureDestination,  # type: ignore[dict-item]
         "CaptureRequest": _capture.CaptureRequest,
         "CaptureResult": _capture.CaptureResult,
+        # MCP-server marketplace (ADR-0017 MW2)
+        "McpTransport": _mcp.McpTransport,  # type: ignore[dict-item]
+        "McpServerStatus": _mcp.McpServerStatus,  # type: ignore[dict-item]
+        "McpCatalogEntry": _mcp.McpCatalogEntry,
+        "McpCatalog": _mcp.McpCatalog,
+        "McpServer": _mcp.McpServer,
+        "McpServerView": _mcp.McpServerView,
+        "McpServerList": _mcp.McpServerList,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,

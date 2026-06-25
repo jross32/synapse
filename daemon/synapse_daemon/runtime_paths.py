@@ -70,3 +70,7 @@ def bundled_marketplace_sample() -> Path:
 
 def bundled_models_sample() -> Path:
     return bundled_docs_dir() / "models-sample.json"
+
+
+def bundled_mcp_servers_sample() -> Path:
+    return bundled_docs_dir() / "mcp-servers-sample.json"

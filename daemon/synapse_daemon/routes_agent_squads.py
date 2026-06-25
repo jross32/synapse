@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
 
 from . import agent_squads as squads
+from . import mcp_servers as mcp_servers_module
 from . import projects as projects_module
 from .agent_squads import (
     AgentRoleTemplateCreate,
@@ -32,6 +35,20 @@ from .errors import invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
 from .ws import Event, EventBus
+
+
+def _write_mcp_config(storage: Storage) -> Path | None:
+    """Generate a Claude ``--mcp-config`` file from the user's enabled MCP
+    servers (ADR-0017 MW2). Returns the path, or None if there's nothing to wire
+    in. Lives in the data dir, so a project's own ``.mcp.json`` is untouched."""
+    servers = [s for s in mcp_servers_module.list_servers(storage.conn) if s.enabled]
+    config = mcp_servers_module.build_mcp_config(servers)
+    if not config.get("mcpServers"):
+        return None
+    path = storage.data_dir / "mcp" / "claude-mcp.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return path
 
 
 def build_agent_squads_router(
@@ -257,6 +274,13 @@ def build_agent_squads_router(
             role = squads.get_role_template(conn, work_item.assigned_role_id or squad.lead_role_id or "planner")
             chosen_runtime = squads.pick_runtime(role, body.preferred_runtime or work_item.preferred_runtime)
             argv = squads.argv_for_runtime(chosen_runtime)
+            # Wire the user's enabled MCP servers into a Claude worker (ADR-0017
+            # MW2). `--mcp-config` merges additively, so the project's own
+            # `.mcp.json` (if any) is left untouched.
+            if chosen_runtime == "claude":
+                mcp_config_path = _write_mcp_config(storage)
+                if mcp_config_path is not None:
+                    argv = [*argv, "--mcp-config", str(mcp_config_path)]
             session_id = squads._new_id()
             prompt_file = write_role_prompt(
                 data_dir=storage.data_dir,

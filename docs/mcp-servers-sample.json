@@ -1,0 +1,86 @@
+{
+  "_comment": "Bundled fallback catalog for the Synapse MCP-server marketplace (ADR-0017). stdio servers are launched by the AI on demand; http servers run standalone and Synapse can launch + health-check them.",
+  "version": 1,
+  "generated_at": "2026-06-24",
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem",
+      "publisher": "Anthropic",
+      "description": "Give your AI scoped read/write access to a folder you choose.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "{root}"],
+      "tags": ["files", "core"],
+      "recommended": true
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "publisher": "Anthropic",
+      "description": "A persistent knowledge graph the AI can write to and recall across sessions.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "tags": ["memory", "core"],
+      "recommended": true
+    },
+    {
+      "id": "sequential-thinking",
+      "name": "Sequential Thinking",
+      "publisher": "Anthropic",
+      "description": "A structured step-by-step reasoning scratchpad for harder problems.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "tags": ["reasoning"],
+      "recommended": false
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "publisher": "GitHub",
+      "description": "Browse repos, issues, and PRs. Needs a GITHUB_PERSONAL_ACCESS_TOKEN.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "" },
+      "tags": ["github", "git"],
+      "recommended": false
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright",
+      "publisher": "Microsoft",
+      "description": "Drive a real browser — navigate, click, screenshot, scrape — from your AI.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "tags": ["browser", "automation", "scraping"],
+      "recommended": true
+    },
+    {
+      "id": "fetch",
+      "name": "Fetch",
+      "publisher": "Anthropic",
+      "description": "Fetch a URL and hand the AI clean markdown. Great for quick research.",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "tags": ["web", "research"],
+      "recommended": false
+    },
+    {
+      "id": "custom-http",
+      "name": "Custom HTTP server (template)",
+      "publisher": "You",
+      "description": "Register your own running MCP server (e.g. a local web-scraper). Synapse health-checks it, can launch it, and wires it into your AI. Edit the URL + launch command after installing.",
+      "transport": "http",
+      "url": "http://127.0.0.1:8765/mcp",
+      "launch_command": "",
+      "launch_args": [],
+      "tags": ["custom", "self-hosted"],
+      "recommended": false
+    }
+  ]
+}

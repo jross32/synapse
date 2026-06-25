@@ -7,6 +7,7 @@ import { Boxes, Server, Users, UsersRound, Wrench, type LucideIcon } from 'lucid
 
 import { MarketplaceBrowser } from '../components/MarketplaceBrowser';
 import { ModelBrowser } from '../components/ModelBrowser';
+import { McpServerBrowser } from '../components/McpServerBrowser';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/ui/card';
 import { cn } from '@shared/utils';
@@ -65,16 +66,7 @@ export function MarketplacePage(): JSX.Element {
 
       {section === 'tools' && <MarketplaceBrowser />}
       {section === 'models' && <ModelBrowser />}
-      {section === 'mcp' && (
-        <ComingSoon
-          icon={Server}
-          title='MCP Servers'
-          lines={[
-            'Install MCP servers — filesystem, GitHub, Playwright, your own web-scraper — that your AI can use automatically.',
-            'Synapse checks whether each server is running, launches it on demand, and wires it into your AI sessions.',
-          ]}
-        />
-      )}
+      {section === 'mcp' && <McpServerBrowser />}
       {section === 'workers' && (
         <ComingSoon
           icon={Users}

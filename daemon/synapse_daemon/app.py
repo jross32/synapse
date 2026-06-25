@@ -56,6 +56,8 @@ from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
 from .routes_capture import build_capture_router
+from .routes_mcp_servers import build_mcp_servers_router
+from .mcp_servers import McpServerManager
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
@@ -275,6 +277,23 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    # MCP-server marketplace + manager (ADR-0017 MW2).
+    mcp_manager = McpServerManager()
+    app.state.mcp_manager = mcp_manager
+    app.router.on_shutdown.append(mcp_manager.shutdown)
+    app.include_router(
+        build_mcp_servers_router(storage, mcp_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+
+    async def _autostart_mcp_servers() -> None:
+        from . import mcp_servers as _mcp
+
+        for server in _mcp.list_servers(storage.conn):
+            if server.enabled and server.autorun:
+                mcp_manager.start(server)
+    app.router.on_startup.append(_autostart_mcp_servers)
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
 
