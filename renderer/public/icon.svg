@@ -1,16 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Synapse">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Synapse">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#11162a"/>
-      <stop offset="1" stop-color="#070a16"/>
-    </linearGradient>
-    <linearGradient id="s" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7c5cff"/>
-      <stop offset="1" stop-color="#22d3a6"/>
-    </linearGradient>
+    <radialGradient id="node" cx="0.5" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#a9f7e4"/>
+      <stop offset="0.55" stop-color="#22d3a6"/>
+      <stop offset="1" stop-color="#0c8f73"/>
+    </radialGradient>
+    <radialGradient id="core" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dde6f6"/>
+    </radialGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="url(#s)" stroke-width="10" opacity="0.25"/>
-  <text x="256" y="258" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace"
-        font-size="280" font-weight="700" fill="url(#s)" text-anchor="middle" dominant-baseline="central">S</text>
+  <circle cx="128" cy="128" r="128" fill="#0b0e1c"/>
+  <circle cx="128" cy="128" r="92" fill="none" stroke="#7c3aed" stroke-width="24"/>
+  <circle cx="128" cy="128" r="34" fill="url(#core)"/>
+  <g fill="url(#node)">
+    <circle cx="128" cy="36" r="12"/>
+    <circle cx="207.7" cy="82" r="12"/>
+    <circle cx="207.7" cy="174" r="12"/>
+    <circle cx="128" cy="220" r="12"/>
+    <circle cx="48.3" cy="174" r="12"/>
+    <circle cx="48.3" cy="82" r="12"/>
+  </g>
 </svg>

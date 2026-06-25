@@ -22,6 +22,14 @@ Every commit must append an entry under the in-progress version header.
   **squad builder** now picks a personality per role — add the same role twice
   with different personalities and the AIs collaborate/debate.
 
+### Fixed
+- **Consistent Synapse icon everywhere.** The window/taskbar + tray now use the
+  crisp multi-resolution `synapse.ico` (was a 936-byte low-res PNG), and the
+  in-app brand mark (sidebar), boot splash, and `icon.svg` favicon were realigned
+  to the same disc-with-ring-and-nodes design as the app/taskbar icon (they had
+  drifted to an unrelated hub-glyph and an "S"). `electron/icons/` is now bundled
+  as an extra resource so the packaged window/tray icon resolves too.
+
 ## [0.1.36-dev] -- 2026-06-22
 
 Profile completion + Agent Squads usability/power + daemon resilience

@@ -69,6 +69,10 @@
         "to": "daemon"
       },
       {
+        "from": "electron/icons",
+        "to": "electron/icons"
+      },
+      {
         "from": "tools",
         "to": "tools"
       },

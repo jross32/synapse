@@ -64,8 +64,8 @@ let restartInFlight = false;
 
 const repoRoot = path.resolve(__dirname, '..');
 
-const iconPath = path.join(__dirname, '..', 'electron', 'icons', 'synapse.png');
-const iconPathPackaged = path.join(process.resourcesPath ?? '', 'electron', 'icons', 'synapse.png');
+const iconPath = path.join(__dirname, '..', 'electron', 'icons', 'synapse.ico');
+const iconPathPackaged = path.join(process.resourcesPath ?? '', 'electron', 'icons', 'synapse.ico');
 
 function resolveIconPath(): string {
   // In dev, __dirname is .../dist-electron, so the icons folder is at ../electron/icons/.

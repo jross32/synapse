@@ -49,30 +49,21 @@ export function Sidebar({ active, onNavigate, onOpenPalette, onOpenProfile }: Si
       aria-label='Primary'
       className='flex h-full w-[56px] shrink-0 flex-col items-center gap-1 border-r border-border bg-card py-4 sm:w-[84px]'
     >
-      {/* Brand mark -- a synapse glyph: a hub node with branching connections. */}
+      {/* Brand mark -- the Synapse disc, matching the app/taskbar icon. */}
       <div className='mb-3 flex flex-col items-center gap-1'>
-        <div className='flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground sm:h-10 sm:w-10'>
-          <svg
-            viewBox='0 0 24 24'
-            className='h-5 w-5 sm:h-6 sm:w-6'
-            fill='none'
-            stroke='currentColor'
-            strokeWidth={1.8}
-            strokeLinecap='round'
-            role='img'
-            aria-label='Synapse'
-          >
-            <line x1='6.5' y1='7' x2='12' y2='12' />
-            <line x1='12' y1='12' x2='17.5' y2='6.5' />
-            <line x1='12' y1='12' x2='17' y2='17.5' />
-            <line x1='12' y1='12' x2='6.5' y2='17' />
-            <circle cx='12' cy='12' r='2.3' fill='currentColor' stroke='none' />
-            <circle cx='6.5' cy='7' r='1.5' fill='currentColor' stroke='none' />
-            <circle cx='17.5' cy='6.5' r='1.5' fill='currentColor' stroke='none' />
-            <circle cx='17' cy='17.5' r='1.5' fill='currentColor' stroke='none' />
-            <circle cx='6.5' cy='17' r='1.5' fill='currentColor' stroke='none' />
-          </svg>
-        </div>
+        <svg viewBox='0 0 256 256' className='h-9 w-9 sm:h-10 sm:w-10' role='img' aria-label='Synapse'>
+          <circle cx='128' cy='128' r='128' fill='#0b0e1c' />
+          <circle cx='128' cy='128' r='92' fill='none' stroke='#7c3aed' strokeWidth='24' />
+          <circle cx='128' cy='128' r='34' fill='#eef2fb' />
+          <g fill='#22d3a6'>
+            <circle cx='128' cy='36' r='12' />
+            <circle cx='207.7' cy='82' r='12' />
+            <circle cx='207.7' cy='174' r='12' />
+            <circle cx='128' cy='220' r='12' />
+            <circle cx='48.3' cy='174' r='12' />
+            <circle cx='48.3' cy='82' r='12' />
+          </g>
+        </svg>
       </div>
 
       {/* Destinations */}

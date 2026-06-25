@@ -159,31 +159,17 @@ function BootSplash(): JSX.Element {
     <div className='flex min-h-screen items-center justify-center bg-background text-foreground'>
       <div className='flex flex-col items-center gap-5 text-center'>
         <svg viewBox='0 0 120 120' className='synapse-art h-28 w-28' role='img' aria-label='Synapse'>
-          <circle className='glow' cx='60' cy='60' r='34' fill='hsl(var(--primary))' opacity='0.25' />
-          <g
-            className='flow'
-            stroke='hsl(var(--primary))'
-            strokeWidth='1.6'
-            strokeLinecap='round'
-            fill='none'
-            opacity='0.65'
-            strokeDasharray='4 5'
-          >
-            <line x1='60' y1='60' x2='30' y2='30' />
-            <line x1='60' y1='60' x2='92' y2='28' />
-            <line x1='60' y1='60' x2='98' y2='66' />
-            <line x1='60' y1='60' x2='72' y2='98' />
-            <line x1='60' y1='60' x2='28' y2='86' />
-            <line x1='60' y1='60' x2='22' y2='54' />
-          </g>
-          <g className='nodes' fill='hsl(var(--primary))'>
-            <circle cx='60' cy='60' r='7' />
-            <circle cx='30' cy='30' r='4' />
-            <circle cx='92' cy='28' r='4' />
-            <circle cx='98' cy='66' r='4' />
-            <circle cx='72' cy='98' r='4' />
-            <circle cx='28' cy='86' r='4' />
-            <circle cx='22' cy='54' r='4' />
+          <circle className='glow' cx='60' cy='60' r='52' fill='#7c3aed' opacity='0.18' />
+          <circle cx='60' cy='60' r='60' fill='#0b0e1c' />
+          <circle cx='60' cy='60' r='43' fill='none' stroke='#7c3aed' strokeWidth='11' />
+          <circle cx='60' cy='60' r='16' fill='#eef2fb' />
+          <g className='nodes' fill='#22d3a6'>
+            <circle cx='60' cy='17' r='5.5' />
+            <circle cx='97.2' cy='38.5' r='5.5' />
+            <circle cx='97.2' cy='81.5' r='5.5' />
+            <circle cx='60' cy='103' r='5.5' />
+            <circle cx='22.8' cy='81.5' r='5.5' />
+            <circle cx='22.8' cy='38.5' r='5.5' />
           </g>
         </svg>
         <div>
