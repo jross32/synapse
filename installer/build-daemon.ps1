@@ -21,6 +21,10 @@ Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $specFile -Force -ErrorAction SilentlyContinue
 
 Write-Host "-> Building bundled daemon executable"
+# --collect-all synapse_daemon bundles the numbered .sql migrations (loaded via
+# importlib.resources) -- without it the frozen daemon can't migrate a fresh DB.
+# uvicorn loads its protocol/loop impls dynamically, so PyInstaller can't see
+# them statically; collect + hidden-import them or the server won't start.
 & python -m PyInstaller `
   --noconfirm `
   --clean `
@@ -30,6 +34,14 @@ Write-Host "-> Building bundled daemon executable"
   --workpath $workDir `
   --specpath $specDir `
   --paths $pythonPath `
+  --collect-all synapse_daemon `
+  --collect-submodules uvicorn `
+  --collect-data uvicorn `
+  --hidden-import uvicorn.protocols.http.h11_impl `
+  --hidden-import uvicorn.protocols.websockets.websockets_impl `
+  --hidden-import uvicorn.lifespan.on `
+  --hidden-import uvicorn.loops.asyncio `
+  --hidden-import anyio._backends._asyncio `
   $entrypoint
 
 if ($LASTEXITCODE -ne 0) {

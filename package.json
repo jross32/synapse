@@ -77,8 +77,9 @@
         "to": "templates"
       },
       {
-        "from": "docs/marketplace-sample.json",
-        "to": "docs/marketplace-sample.json"
+        "from": "docs",
+        "to": "docs",
+        "filter": ["*.json", "CHANGELOG.md", "roadmap.json"]
       },
       {
         "from": "scripts/remote-recovery.ps1",
