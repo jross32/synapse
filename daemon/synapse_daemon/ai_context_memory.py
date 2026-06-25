@@ -142,6 +142,8 @@ def write_role_prompt(
     role_name: str,
     role_description: str,
     prompt_preamble_md: str,
+    personality_name: str | None = None,
+    personality_preamble_md: str = "",
     context_mode: str,
     handoff_summary_md: str | None,
     handoff_blockers_md: str | None,
@@ -165,6 +167,13 @@ def write_role_prompt(
             "",
             "## Role guidance",
             prompt_preamble_md.strip() or "_No extra role preamble._",
+            "",
+            "## Personality",
+            (
+                f"You are **{personality_name}**. {personality_preamble_md.strip()}".strip()
+                if personality_name
+                else "_No specific personality assigned — use balanced, professional judgment._"
+            ),
             "",
             "## Squad goal",
             squad_goal_md.strip() or "_No squad goal provided yet._",

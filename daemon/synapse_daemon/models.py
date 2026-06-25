@@ -274,6 +274,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import capture as _capture
     from . import mcp_servers as _mcp
     from . import about as _about
+    from . import personalities as _personalities
     from . import project_records as _records
     from . import health as _health
     from . import notifications as _notif
@@ -358,6 +359,10 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "Changelog": _about.Changelog,
         "RoadmapItem": _about.RoadmapItem,
         "Roadmap": _about.Roadmap,
+        # Workers = role + personality (ADR-0018 MW3)
+        "Personality": _personalities.Personality,
+        "PersonalityCreate": _personalities.PersonalityCreate,
+        "PersonalityUpdate": _personalities.PersonalityUpdate,
         # Profile hub + portable catalog state
         "LinkedIdentity": _profile.LinkedIdentity,
         "HostPresence": _profile.HostPresence,

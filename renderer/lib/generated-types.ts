@@ -516,6 +516,7 @@ export interface AgentWorkItem {
   instructions_md: string;
   status: AgentWorkItemStatus;
   assigned_role_id: string | null;
+  personality_id: string | null;
   preferred_runtime: string | null;
   pty_session_id: string | null;
   summary_md: string | null;

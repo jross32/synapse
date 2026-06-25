@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from . import agent_squads as squads
 from . import mcp_servers as mcp_servers_module
+from . import personalities as personalities_module
 from . import projects as projects_module
 from .agent_squads import (
     AgentRoleTemplateCreate,
@@ -272,6 +273,14 @@ def build_agent_squads_router(
             squad = squads.get_squad(conn, work_item.squad_id)
             project = projects_module.get(conn, squad.project_id)
             role = squads.get_role_template(conn, work_item.assigned_role_id or squad.lead_role_id or "planner")
+            # Layer in the worker's personality (ADR-0018 MW3) so two same-role
+            # workers differ. A deleted/missing personality must not block launch.
+            personality = None
+            if work_item.personality_id:
+                try:
+                    personality = personalities_module.get_personality(conn, work_item.personality_id)
+                except Exception:
+                    personality = None
             chosen_runtime = squads.pick_runtime(role, body.preferred_runtime or work_item.preferred_runtime)
             argv = squads.argv_for_runtime(chosen_runtime)
             # Wire the user's enabled MCP servers into a Claude worker (ADR-0017
@@ -293,6 +302,8 @@ def build_agent_squads_router(
                 role_name=role.name,
                 role_description=role.description,
                 prompt_preamble_md=role.prompt_preamble_md,
+                personality_name=personality.name if personality else None,
+                personality_preamble_md=personality.prompt_preamble_md if personality else "",
                 context_mode=role.context_mode.value,
                 handoff_summary_md=work_item.summary_md,
                 handoff_blockers_md=work_item.blockers_md,

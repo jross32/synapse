@@ -131,6 +131,7 @@ class AgentWorkItem(BaseModel):
     instructions_md: str = ""
     status: AgentWorkItemStatus = AgentWorkItemStatus.QUEUED
     assigned_role_id: str | None = None
+    personality_id: str | None = None
     preferred_runtime: str | None = None
     pty_session_id: str | None = None
     summary_md: str | None = None
@@ -148,6 +149,7 @@ class AgentWorkItemCreate(BaseModel):
     title: str
     instructions_md: str = ""
     assigned_role_id: str | None = None
+    personality_id: str | None = None
     preferred_runtime: str | None = None
     parent_id: str | None = None
     source: AuditSource = AuditSource.DESKTOP
@@ -236,6 +238,7 @@ def _row_to_work_item(row: sqlite3.Row) -> AgentWorkItem:
         instructions_md=row["instructions_md"] or "",
         status=AgentWorkItemStatus(row["status"]),
         assigned_role_id=row["assigned_role_id"],
+        personality_id=(row["personality_id"] if "personality_id" in row.keys() else None),
         preferred_runtime=row["preferred_runtime"],
         pty_session_id=row["pty_session_id"],
         summary_md=row["summary_md"],
@@ -648,10 +651,10 @@ def create_work_item(
     conn.execute(
         """
         INSERT INTO agent_work_items (
-            id, squad_id, parent_id, title, instructions_md, status, assigned_role_id,
+            id, squad_id, parent_id, title, instructions_md, status, assigned_role_id, personality_id,
             preferred_runtime, pty_session_id, summary_md, blockers_md, files_touched_json,
             suggested_next_role, transcript_file_id, opened_in_tab, created_at, updated_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, NULL, 0, ?, ?, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, NULL, 0, ?, ?, NULL)
         """,
         (
             work_item_id,
@@ -661,6 +664,7 @@ def create_work_item(
             payload.instructions_md,
             AgentWorkItemStatus.QUEUED.value,
             payload.assigned_role_id,
+            payload.personality_id,
             payload.preferred_runtime,
             json.dumps([]),
             to_iso(now),

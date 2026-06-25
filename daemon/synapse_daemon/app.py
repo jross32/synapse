@@ -59,6 +59,7 @@ from .routes_capture import build_capture_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .mcp_servers import McpServerManager
 from .routes_about import build_about_router
+from .routes_personalities import build_personalities_router
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
 from .routes_snapshot import build_snapshot_router
@@ -112,8 +113,10 @@ def build_app(
     profile_manager = ProfileManager(storage)
     with storage.transaction() as conn:
         from .agent_squads import seed_default_role_templates
+        from .personalities import seed_default_personalities
 
         seed_default_role_templates(conn)
+        seed_default_personalities(conn)
 
     app = FastAPI(
         title="Synapse daemon",
@@ -242,6 +245,12 @@ def build_app(
     )
     app.include_router(
         build_agent_squads_router(storage, pty_manager, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # AI personalities -- a worker = role + personality (ADR-0018 MW3).
+    app.include_router(
+        build_personalities_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

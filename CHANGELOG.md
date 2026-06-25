@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+### Added
+- **AI personalities — a worker = role + personality (ADR-0018 MW3).** New
+  `personalities` table (migration 015) + CRUD + REST at `/personalities`, with
+  five seeded built-ins (Pragmatist, Perfectionist, Skeptic, Visionary,
+  Mediator). A roster work-item can carry a `personality_id`; the synthesized
+  worker prompt now layers a `## Personality` section after the role guidance, so
+  two same-role workers differ in voice and can collaborate/debate. Built-ins are
+  editable but protected from deletion.
+
 ## [0.1.36-dev] -- 2026-06-22
 
 Profile completion + Agent Squads usability/power + daemon resilience

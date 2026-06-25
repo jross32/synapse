@@ -8,6 +8,7 @@ import { Boxes, Server, Users, UsersRound, Wrench, type LucideIcon } from 'lucid
 import { MarketplaceBrowser } from '../components/MarketplaceBrowser';
 import { ModelBrowser } from '../components/ModelBrowser';
 import { McpServerBrowser } from '../components/McpServerBrowser';
+import { WorkerBrowser } from '../components/WorkerBrowser';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/ui/card';
 import { cn } from '@shared/utils';
@@ -25,7 +26,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'tools', label: 'Tools', icon: Wrench, blurb: 'One-tap launchers, editors, and dev utilities.' },
   { id: 'models', label: 'Models', icon: Boxes, blurb: 'Local LLMs for the assistant — download + manage.' },
   { id: 'mcp', label: 'MCP Servers', icon: Server, blurb: 'Connect tools + data sources your AI can use automatically.' },
-  { id: 'workers', label: 'Workers', icon: Users, blurb: 'AI workers — a role plus a personality. Coming soon.' },
+  { id: 'workers', label: 'Workers', icon: Users, blurb: 'AI workers — a role plus a personality. Same role, different personality = real collaboration.' },
   { id: 'squads', label: 'Squad Presets', icon: UsersRound, blurb: 'Ready-made AI teams for common goals. Coming soon.' },
 ];
 
@@ -67,16 +68,7 @@ export function MarketplacePage(): JSX.Element {
       {section === 'tools' && <MarketplaceBrowser />}
       {section === 'models' && <ModelBrowser />}
       {section === 'mcp' && <McpServerBrowser />}
-      {section === 'workers' && (
-        <ComingSoon
-          icon={Users}
-          title='AI Workers'
-          lines={[
-            'Download workers — each is a role (UI designer, reviewer, scraper-builder…) plus a personality (pragmatist, skeptic, visionary…).',
-            'Two workers can share a role but differ in personality, so your AIs actually collaborate and debate when they build.',
-          ]}
-        />
-      )}
+      {section === 'workers' && <WorkerBrowser />}
       {section === 'squads' && (
         <ComingSoon
           icon={UsersRound}

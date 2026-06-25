@@ -85,7 +85,7 @@
     {
       "id": "workers-personalities",
       "title": "AI workers with personalities",
-      "status": "coming",
+      "status": "in_progress",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0018",
       "summary": "Download workers as a role + a personality — two AIs can share a role but differ in personality, so they collaborate and debate."
