@@ -35,6 +35,7 @@ from .profile import ProfileManager
 from .pty_sessions import PtySessionManager
 from .runtime_paths import bundled_dist_dir, bundled_mobile_dir, bundled_tools_dir
 from .routes_ai import build_ai_router
+from .routes_ai_factory import build_ai_factory_router
 from .routes_agent_squads import (
     build_agent_squads_router,
     subscribe_agent_squad_events,
@@ -48,6 +49,7 @@ from .routes_system import build_system_router
 from .routes_pty import build_pty_router
 from .routes_workbench import build_workbench_router
 from .routes_auth import build_auth_router
+from .routes_ai_cases import build_ai_cases_router, subscribe_ai_case_events
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
@@ -78,6 +80,8 @@ log = logging.getLogger(__name__)
 _ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:4312",
+    "http://127.0.0.1:4312",
     "null",
 ]
 
@@ -113,10 +117,12 @@ def build_app(
     profile_manager = ProfileManager(storage)
     with storage.transaction() as conn:
         from .agent_squads import seed_default_role_templates
+        from .ai_factory import seed_default_catalog
         from .personalities import seed_default_personalities
 
         seed_default_role_templates(conn)
         seed_default_personalities(conn)
+        seed_default_catalog(conn)
 
     app = FastAPI(
         title="Synapse daemon",
@@ -248,6 +254,16 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    app.include_router(
+        build_ai_cases_router(storage, pty_manager, process_manager, bus, auth),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_ai_factory_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
     # AI personalities -- a worker = role + personality (ADR-0018 MW3).
     app.include_router(
         build_personalities_router(storage),
@@ -327,6 +343,7 @@ def build_app(
 
     async def _subscribe_agent_events() -> None:
         await subscribe_agent_squad_events(storage, bus)
+        await subscribe_ai_case_events(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
 
     # Serve the phone-facing Web UI. Prefer the built React renderer (the

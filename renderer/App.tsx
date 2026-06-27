@@ -33,6 +33,7 @@ import { SessionsPage } from './pages/Sessions';
 import { ProcessesPage } from './pages/Processes';
 import { AssistantPage } from './pages/Assistant';
 import { ReviewPage } from './pages/Review';
+import { AiFactoryPage } from './pages/AiFactory';
 import { MarketplacePage } from './pages/Marketplace';
 import { WhatsnewPage } from './pages/Whatsnew';
 import { SettingsPage } from './pages/Settings';
@@ -352,6 +353,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
             )}
             {page === 'assistant' && <AssistantPage />}
             {page === 'review' && <ReviewPage />}
+            {page === 'ai-factory' && <AiFactoryPage />}
             {page === 'marketplace' && <MarketplacePage />}
             {page === 'processes' && <ProcessesPage />}
             {page === 'whatsnew' && <WhatsnewPage />}

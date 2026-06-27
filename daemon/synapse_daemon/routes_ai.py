@@ -21,6 +21,8 @@ from fastapi import APIRouter
 
 from . import projects as projects_module
 from . import agent_squads as agent_squads_module
+from . import ai_cases as ai_cases_module
+from . import ai_factory as ai_factory_module
 from .ai_context_memory import ai_context_metadata
 from .files_storage import list_for_project
 from .storage import Storage
@@ -124,6 +126,23 @@ def build_ai_router(
                 }
             )
 
+        ai_cases = []
+        for case in ai_cases_module.list_cases(storage.conn):
+            ai_cases.append(
+                {
+                    "id": case.id,
+                    "primary_project_id": case.primary_project_id,
+                    "case_mode": case.case_mode.value,
+                    "status": case.status.value,
+                    "phase": case.phase.value,
+                    "squad_id": case.squad_id,
+                    "branch_name": case.branch_name,
+                    "worktree_path": case.worktree_path,
+                    "updated_at": case.updated_at,
+                }
+            )
+        factory_counts = ai_factory_module.counts(storage.conn)
+
         # Tail of audit so the AI can spot "what just happened" without
         # pulling the whole table.
         cursor = storage.conn.execute(
@@ -156,10 +175,18 @@ def build_ai_router(
             "tools": tools,
             "sessions": sessions,
             "agent_squads": agent_squads,
+            "ai_cases": ai_cases,
             "agent_role_templates": [
                 role.model_dump(mode="json")
                 for role in agent_squads_module.list_role_templates(storage.conn)
             ],
+            "ai_factory": {
+                "counts": factory_counts,
+                "mission_profiles": [
+                    profile.model_dump(mode="json")
+                    for profile in ai_cases_module.mission_profiles()
+                ],
+            },
             "shared_files": [_file_to_inline(f) for f in shared_files],
             "audit_tail": audit_tail,
             "endpoints_for_ai": [
@@ -207,6 +234,16 @@ def build_ai_router(
                     "purpose": "create, launch, hand off, or update agent work items",
                     "method": "POST",
                     "path": "/api/v1/agent-squads/{id}/work-items | /api/v1/agent-work-items/{id}/launch | /handoff | /status",
+                },
+                {
+                    "purpose": "create, run, inspect, stop, and export AI Operating System cases",
+                    "method": "GET | POST",
+                    "path": "/api/v1/ai-cases | /api/v1/ai-cases/meta | /api/v1/ai-cases/{id} | /graph | /spawn | /run | /stop | /bundle | /export/{kind}",
+                },
+                {
+                    "purpose": "browse and manage the AI Factory catalog",
+                    "method": "GET | POST | PATCH | DELETE",
+                    "path": "/api/v1/ai-factory/catalog | /api/v1/ai-components | /api/v1/ai-recipes | /api/v1/ai-sources",
                 },
                 {
                     "purpose": "read a project's ADRs, backlog, and version history",

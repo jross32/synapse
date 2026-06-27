@@ -165,6 +165,8 @@ class AgentWorkItemDelegateRequest(BaseModel):
 
 class AgentWorkItemLaunchRequest(BaseModel):
     preferred_runtime: str | None = None
+    cwd_override: str | None = None
+    env: dict[str, str] | None = None
     rows: int = Field(default=24, ge=1, le=300)
     cols: int = Field(default=80, ge=1, le=500)
     open_in_tab: bool = True

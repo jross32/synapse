@@ -319,10 +319,12 @@ def build_agent_squads_router(
                 "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id)),
                 "SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT": AI_CONTEXT_DIRECTION_PROMPT,
             }
+            if body.env:
+                env.update({str(key): str(value) for key, value in body.env.items()})
             try:
                 session = await manager.spawn(
                     argv=argv,
-                    cwd=project.path,
+                    cwd=body.cwd_override or project.path,
                     env=env,
                     rows=body.rows,
                     cols=body.cols,

@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { Code2, FolderOpen, Globe, Paperclip, Pin, Sparkles, TerminalSquare } from 'lucide-react';
 
 import { projectBrowserUrl } from '@shared/browser-runtime';
+import { openProjectInAiOs } from '@shared/ai-cases-client';
 import { getProjectDiskUsage, launchProject, patchProject, stopProject } from '@shared/projects-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
@@ -131,6 +132,15 @@ export function ProjectTile({
           detail: { sessionId: session.session_id },
         })
       );
+    } catch (err) {
+      onActionError?.(project, err as Error);
+    }
+  }
+
+  async function handleOpenInAiOs(): Promise<void> {
+    try {
+      const launch = await openProjectInAiOs(project.id);
+      await openExternal(launch.url);
     } catch (err) {
       onActionError?.(project, err as Error);
     }
@@ -314,6 +324,15 @@ export function ProjectTile({
               <TerminalSquare className='h-3.5 w-3.5' /> Terminal
             </Button>
           )}
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-7 px-2 text-xs text-muted-foreground'
+            title='Open this project in the AI Operating System case board'
+            onClick={() => void handleOpenInAiOs()}
+          >
+            <Sparkles className='h-3.5 w-3.5' /> Open in AI OS
+          </Button>
           <Button
             variant='ghost'
             size='sm'

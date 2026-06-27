@@ -21,6 +21,16 @@ Every commit must append an entry under the in-progress version header.
   the personality + role galleries (create/remove custom personalities), and the
   **squad builder** now picks a personality per role — add the same role twice
   with different personalities and the AIs collaborate/debate.
+- **AI Factory + AI Operating System foundation (ADR-0020).** Synapse now ships
+  a native **AI Factory** page plus a separate **AI Operating System** app shell.
+  Daemon-side this adds structured AI cases (`intent`, `targets`, `directives`,
+  `policies`), mission profiles, richer case modes (`research`, `generate`,
+  `hybrid`, `audit`, `repair`, `migrate`, `replicate`, `benchmark`, `harvest`,
+  `portfolio`, `challenge`), case lineage/graph fields, case-owned job rows, new
+  export kinds, AI Factory catalog tables/endpoints, and an isolated worktree
+  launch path for case-owned workers. Renderer-side this adds the `AI Factory`
+  nav page, catalog browsing, case creation/run controls, and project-tile
+  `Open in AI OS` launchers. Packaging now bundles the `ai_os/` app resources.
 
 ### Fixed
 - **Consistent Synapse icon everywhere.** The window/taskbar + tray now use the
@@ -31,6 +41,10 @@ Every commit must append an entry under the in-progress version header.
   as an extra resource so the packaged window/tray icon resolves too. The sidebar
   + mobile-topbar marks now sit on a subtle elevated badge (rim + shadow) so the
   dark disc stands out on the dark rail instead of blending in.
+- **AI Factory case state no longer goes stale after external case updates.**
+  The page now listens to `v1.ai_case.*` events, refreshes its run list when the
+  daemon changes a case, and exposes an explicit `Stop selected case` control so
+  run/stop state stays honest without a manual reload.
 
 ## [0.1.36-dev] -- 2026-06-22
 

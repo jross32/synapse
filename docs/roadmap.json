@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-06-24",
+  "generated_at": "2026-06-27",
   "items": [
     {
       "id": "local-llm",
@@ -105,6 +105,30 @@
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0017",
       "summary": "Package + share your own MCP servers, tools, workers, and presets with others."
+    },
+    {
+      "id": "ai-factory",
+      "title": "AI Factory",
+      "status": "shipped",
+      "phase": "AI-coding power",
+      "adr": "ADR-0020",
+      "summary": "A native Synapse page for recipes, packs, sources, policies, and launch-ready AI case setup."
+    },
+    {
+      "id": "ai-os-case-engine",
+      "title": "AI OS case engine",
+      "status": "in_progress",
+      "phase": "AI-coding power",
+      "adr": "ADR-0020",
+      "summary": "Structured AI cases with mission profiles, isolated worktrees, case-owned jobs, graphs, and a dedicated run board."
+    },
+    {
+      "id": "parallel-bakeoffs",
+      "title": "Parallel bakeoffs",
+      "status": "coming",
+      "phase": "AI-coding power",
+      "adr": "ADR-0020",
+      "summary": "Benchmark several candidates or related repos at once, compare them, and keep the best path with a written rationale."
     },
     {
       "id": "option-previews",

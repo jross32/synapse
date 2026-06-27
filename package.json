@@ -98,6 +98,10 @@
         "to": "dist"
       },
       {
+        "from": "ai_os",
+        "to": "ai_os"
+      },
+      {
         "from": "mobile",
         "to": "mobile"
       }

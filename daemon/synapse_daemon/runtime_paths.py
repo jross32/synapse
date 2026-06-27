@@ -52,6 +52,10 @@ def bundled_mobile_dir() -> Path:
     return resources_root() / "mobile"
 
 
+def bundled_ai_os_dir() -> Path:
+    return resources_root() / "ai_os"
+
+
 def bundled_templates_dir() -> Path:
     return resources_root() / "templates"
 

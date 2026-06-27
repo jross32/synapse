@@ -3,6 +3,7 @@
 
 import {
   Activity,
+  BrainCircuit,
   Bot,
   House,
   Inbox,
@@ -22,6 +23,7 @@ export type PageId =
   | 'sessions'
   | 'assistant'
   | 'review'
+  | 'ai-factory'
   | 'marketplace'
   | 'processes'
   | 'whatsnew'
@@ -44,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'sessions', label: 'Sessions', icon: Sparkles, description: 'AI coders + live terminal sessions' },
   { id: 'assistant', label: 'Assistant', icon: Bot, description: 'Private local LLM chat about your projects + Synapse' },
   { id: 'review', label: 'Review', icon: Inbox, description: 'Approve or redirect work your AI workforce handed back' },
+  { id: 'ai-factory', label: 'AI Factory', icon: BrainCircuit, description: 'Recipes, sources, case design, and reusable AI intelligence' },
   { id: 'marketplace', label: 'Marketplace', icon: Store, description: 'Install tools, models, MCP servers, AI workers + squads' },
   { id: 'processes', label: 'Processes', icon: Activity, description: 'Everything running right now' },
   { id: 'whatsnew', label: "What's New", icon: Rocket, description: 'What shipped recently + the roadmap of what’s coming' },
