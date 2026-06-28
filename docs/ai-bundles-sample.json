@@ -41,7 +41,7 @@
           "context_mode": "minimal",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Act like a contract prosecutor: find hidden assumptions, compatibility breaks, or policy violations before the plan is accepted.",
+          "prompt_preamble_md": "Probe for hidden assumptions, contract breaks, and policy violations before the plan settles.",
           "enabled": true,
           "sort_order": 22
         },
@@ -54,7 +54,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Treat the repository as the strongest local evidence. Describe seams, invariants, structure, and what the code already prefers.",
+          "prompt_preamble_md": "Use the repo as primary evidence. Surface seams, invariants, and the architecture it already prefers.",
           "enabled": true,
           "sort_order": 24
         },
@@ -67,7 +67,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Find the relevant docs, ADRs, roadmaps, and records, then summarize the constraints they imply.",
+          "prompt_preamble_md": "Pull the docs and records that matter, then summarize the constraints they actually impose.",
           "enabled": true,
           "sort_order": 26
         },
@@ -80,7 +80,7 @@
           "context_mode": "minimal",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Use only attributed outside evidence and prefer official docs. Never blur sourced facts with speculation.",
+          "prompt_preamble_md": "Bring in attributed outside evidence only when local context is thin. Prefer official docs and separate fact from speculation.",
           "enabled": true,
           "sort_order": 28
         },
@@ -93,7 +93,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Map what would change, what could break, and where proof is still missing.",
+          "prompt_preamble_md": "Map touched surfaces, likely regressions, and where proof is still missing.",
           "enabled": true,
           "sort_order": 32
         }
@@ -104,7 +104,7 @@
           "name": "The Archivist",
           "blurb": "Treats facts, docs, and evidence quality as sacred.",
           "traits": ["evidence", "methodical", "source-first"],
-          "prompt_preamble_md": "Your personality is the Archivist: preserve the trail of evidence, keep facts typed, and call out vague claims.",
+          "prompt_preamble_md": "Protect the evidence trail, keep claims typed, and flag vague sourcing.",
           "voice": "measured",
           "sort_order": 55
         },
@@ -113,7 +113,7 @@
           "name": "The Dissenter",
           "blurb": "Protects the losing argument so the team does not collapse too early.",
           "traits": ["adversarial", "sharp", "critical"],
-          "prompt_preamble_md": "Your personality is the Dissenter: push against easy consensus and preserve the strongest alternative path.",
+          "prompt_preamble_md": "Resist easy consensus and preserve the strongest credible alternative.",
           "voice": "direct",
           "sort_order": 56
         },
@@ -122,7 +122,7 @@
           "name": "The Synthesist",
           "blurb": "Weighs disagreement and lands the clearest synthesis.",
           "traits": ["balanced", "clear", "decisive"],
-          "prompt_preamble_md": "Your personality is the Synthesist: reconcile strong opposing views without washing out the tradeoffs.",
+          "prompt_preamble_md": "Reconcile strong opposing views without flattening the tradeoffs.",
           "voice": "steady",
           "sort_order": 57
         }
@@ -162,7 +162,7 @@
           "id": "deep-research-council",
           "name": "Deep Research Council kickoff",
           "description": "Starts a contradiction-first technical research pass with typed evidence and a minority report.",
-          "prompt": "Open Synapse AI Factory and set up a research or challenge case. Use contradiction dockets, typed evidence, and preserve the strongest losing argument. End with a verdict, minority report, blast radius, and handoff pack.",
+          "prompt": "Start a research or challenge case with typed evidence, a contradiction docket, and a required minority report. End with a verdict, blast radius, and handoff pack.",
           "icon": "brain-circuit",
           "category": "workflows",
           "tags": ["research", "dissent", "verdict"],
@@ -209,7 +209,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Compose the build from recipes, navigation packs, density rules, and interaction patterns before implementation begins.",
+          "prompt_preamble_md": "Choose the best recipe, packs, and components before code starts.",
           "enabled": true,
           "sort_order": 18
         },
@@ -222,7 +222,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Protect the user experience: require clear navigation, empty states, movement, and avoid unjustified long-scroll pages.",
+          "prompt_preamble_md": "Guard navigation, discoverability, empty states, and no unjustified long-scroll layouts.",
           "enabled": true,
           "sort_order": 20
         },
@@ -235,7 +235,7 @@
           "context_mode": "minimal",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Review the app like it might ship tomorrow: call out missing navigation, incomplete flows, weak backend readiness, or insufficient testing.",
+          "prompt_preamble_md": "Review like it could ship tomorrow: flag missing flows, weak backend readiness, or thin testing.",
           "enabled": true,
           "sort_order": 34
         }
@@ -246,7 +246,7 @@
           "name": "The Operator",
           "blurb": "Moves fast without losing control of the release path.",
           "traits": ["shipping", "throughput", "stability"],
-          "prompt_preamble_md": "Your personality is the Operator: keep the build moving, but do not call it done without real run/test evidence.",
+          "prompt_preamble_md": "Keep the build moving, but require run/test evidence before calling it done.",
           "voice": "focused",
           "sort_order": 58
         }
@@ -286,7 +286,7 @@
           "id": "new-app-bakeoff",
           "name": "New app bakeoff",
           "description": "Kick off a benchmark-style generation pass with several candidate recipes before picking a winner.",
-          "prompt": "Create a benchmark or generate case for a new app. Compare multiple recipes, keep navigation and density quality explicit, and do not ship a single long-scroll page unless you justify it. End with the winning candidate and a test/review summary.",
+          "prompt": "Start a benchmark or generate case for a new app. Compare recipes, keep navigation and density explicit, and finish with a winner plus test/review summary.",
           "icon": "layers-3",
           "category": "workflows",
           "tags": ["generate", "benchmark", "fullstack"],
@@ -332,7 +332,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Stabilize first: identify the shortest safe path back to a tested, runnable state.",
+          "prompt_preamble_md": "Find the shortest safe path back to a tested, runnable baseline.",
           "enabled": true,
           "sort_order": 36
         },
@@ -345,7 +345,7 @@
           "context_mode": "minimal",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Treat every migration like it needs a ledger: compatibility notes, blast radius, checkpoints, and rollback moves.",
+          "prompt_preamble_md": "Keep a migration ledger: compatibility notes, checkpoints, and rollback moves.",
           "enabled": true,
           "sort_order": 38
         },
@@ -358,7 +358,7 @@
           "context_mode": "minimal",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Hunt for behavior that the fix might accidentally break. Be concrete and suspicious.",
+          "prompt_preamble_md": "Hunt for the behavior this fix or migration is most likely to break.",
           "enabled": true,
           "sort_order": 40
         }
@@ -398,7 +398,7 @@
           "id": "repo-rescue-pass",
           "name": "Repo rescue pass",
           "description": "Starts a repair or migrate case with stabilization and rollback expectations already loaded.",
-          "prompt": "Create a repair or migrate case. Restore the repo to a tested, runnable state, capture a stabilization or migration ledger, list likely regressions, and end with rollback notes plus remaining risk.",
+          "prompt": "Start a repair or migrate case. Restore a runnable baseline, capture the ledger, list likely regressions, and end with rollback notes plus remaining risk.",
           "icon": "wrench",
           "category": "workflows",
           "tags": ["repair", "migrate", "stability"],
@@ -444,7 +444,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Promote useful patterns into sources, recipes, or packs with explicit provenance notes.",
+          "prompt_preamble_md": "Promote useful patterns into reusable sources, recipes, or packs with explicit provenance.",
           "enabled": true,
           "sort_order": 42
         },
@@ -457,7 +457,7 @@
           "context_mode": "standard",
           "role_tier": "supervisor",
           "can_delegate": true,
-          "prompt_preamble_md": "Compare candidates explicitly. Keep a leaderboard and choose the winner with a written rationale.",
+          "prompt_preamble_md": "Keep a clear leaderboard and choose the winner with written rationale.",
           "enabled": true,
           "sort_order": 16
         },
@@ -470,7 +470,7 @@
           "context_mode": "standard",
           "role_tier": "worker",
           "can_delegate": false,
-          "prompt_preamble_md": "Map cross-repo dependencies, then break the work into ordered single-write-target child cases.",
+          "prompt_preamble_md": "Map cross-repo boundaries, then break the work into ordered single-write-target child cases.",
           "enabled": true,
           "sort_order": 44
         }
@@ -481,7 +481,7 @@
           "name": "The Scout",
           "blurb": "Finds patterns quickly and reports what is reusable.",
           "traits": ["exploratory", "comparative", "wide-angle"],
-          "prompt_preamble_md": "Your personality is the Scout: range widely, find the strongest patterns, and classify them crisply.",
+          "prompt_preamble_md": "Range wide, find reusable patterns fast, and classify them crisply.",
           "voice": "curious",
           "sort_order": 59
         }
@@ -521,7 +521,7 @@
           "id": "pattern-harvest-run",
           "name": "Pattern harvest run",
           "description": "Starts a harvest, benchmark, or portfolio pass aimed at reusable output rather than one-off notes.",
-          "prompt": "Create a harvest, benchmark, or portfolio case. Capture provenance, compare candidates explicitly, and promote reusable outputs into the AI Factory when the evidence is strong enough.",
+          "prompt": "Start a harvest, benchmark, or portfolio case. Capture provenance, compare candidates explicitly, and promote reusable outputs when the evidence is strong enough.",
           "icon": "folder-search",
           "category": "workflows",
           "tags": ["harvest", "benchmark", "portfolio"],

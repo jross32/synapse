@@ -61,6 +61,15 @@ Every commit must append an entry under the in-progress version header.
   daemon changes a case, and exposes an explicit `Stop selected case` control so
   run/stop state stays honest without a manual reload.
 
+### Changed
+- **Bundled AI bundle prompts are tighter and less repetitive.** The fallback
+  Marketplace bundle catalog (`docs/ai-bundles-sample.json`) was
+  pressure-tested against live AI-case installs and then trimmed so the
+  role/personality guidance no longer repeats labels the worker prompt already
+  provides. Quick-action prompts were also shortened to keep the quality bar
+  intact while cutting low-signal prompt overhead for research, generation,
+  rescue, and harvest/bakeoff runs.
+
 ## [0.1.36-dev] -- 2026-06-22
 
 Profile completion + Agent Squads usability/power + daemon resilience
