@@ -1,3 +1,4 @@
+import type { AiBundleCatalogItem } from './ai-bundles-client';
 import { apiFetch } from './api-client';
 
 export interface AiFactoryComponent {
@@ -50,7 +51,9 @@ export interface AiFactoryCatalogResponse {
     components: number;
     recipes: number;
     sources: number;
+    installed_bundles: number;
   };
+  bundles: AiBundleCatalogItem[];
   mission_profiles: Array<{
     id: string;
     title: string;

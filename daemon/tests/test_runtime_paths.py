@@ -26,3 +26,6 @@ def test_resources_root_uses_resources_parent_when_frozen(monkeypatch) -> None:
     assert runtime_paths.bundled_marketplace_sample() == Path(
         r"C:\Synapse\resources\docs\marketplace-sample.json"
     )
+    assert runtime_paths.bundled_ai_bundles_sample() == Path(
+        r"C:\Synapse\resources\docs\ai-bundles-sample.json"
+    )

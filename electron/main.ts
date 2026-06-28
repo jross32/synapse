@@ -379,6 +379,41 @@ async function daemonRequest<T = unknown>(
   return body ? (JSON.parse(body) as T) : (null as T);
 }
 
+function bundleBootstrapFilePath(): string {
+  return path.join(app.getPath('userData'), 'bootstrap-ai-bundles.json');
+}
+
+async function applyBootstrapAiBundles(): Promise<void> {
+  const target = bundleBootstrapFilePath();
+  if (!fs.existsSync(target)) return;
+
+  let bundleIds: string[] = [];
+  try {
+    const raw = JSON.parse(fs.readFileSync(target, 'utf-8')) as { bundle_ids?: unknown };
+    if (Array.isArray(raw.bundle_ids)) {
+      bundleIds = raw.bundle_ids.filter((value): value is string => typeof value === 'string' && value.length > 0);
+    }
+  } catch (error) {
+    console.error('[synapse] could not read bootstrap AI bundles file:', error);
+  }
+
+  try {
+    for (const bundleId of bundleIds) {
+      try {
+        await daemonRequest('POST', `/ai-bundles/install/${encodeURIComponent(bundleId)}?force=true`);
+      } catch (error) {
+        console.error(`[synapse] failed to bootstrap AI bundle ${bundleId}:`, error);
+      }
+    }
+  } finally {
+    try {
+      fs.unlinkSync(target);
+    } catch (error) {
+      console.error('[synapse] failed to remove bootstrap AI bundles file:', error);
+    }
+  }
+}
+
 // ── window + tray ─────────────────────────────────────────────────────────
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -705,6 +740,7 @@ app.whenReady().then(async () => {
       throw daemonBootError;
     }
     await waitForDaemon();
+    await applyBootstrapAiBundles();
     console.log('[synapse] daemon ready');
     // Populate the tray's Projects submenu + keep it fresh.
     void refreshTrayMenu();

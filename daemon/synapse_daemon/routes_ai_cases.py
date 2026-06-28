@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from . import agent_squads as squads
+from . import ai_bundles
 from . import ai_cases
 from . import ai_factory
 from . import project_records as records
@@ -53,6 +54,7 @@ def build_ai_cases_router(
 
     @router.get("/ai-cases/meta", response_model=None)
     async def ai_case_meta() -> dict[str, Any]:
+        installed_bundle_ids = set(ai_bundles.list_installed_bundle_ids(storage.conn))
         return {
             "case_modes": [mode.value for mode in ai_cases.AiCaseMode],
             "generation_modes": [mode.value for mode in ai_cases.AiGenerationMode],
@@ -60,6 +62,14 @@ def build_ai_cases_router(
             "write_policies": [policy.value for policy in ai_cases.AiWritePolicy],
             "recipes": [recipe.model_dump(mode="json") for recipe in ai_factory.list_recipes(storage.conn)],
             "component_families": [family.value for family in ai_factory.AiComponentFamily],
+            "available_bundles": [
+                {
+                    "id": bundle.id,
+                    "name": bundle.name,
+                    "installed": bundle.id in installed_bundle_ids,
+                }
+                for bundle in ai_bundles.load_catalog()
+            ],
         }
 
     @router.get("/ai-cases", response_model=None)
@@ -168,8 +178,17 @@ def build_ai_cases_router(
             branch_name=branch_name,
         )
         case_phase = _phase_for_run(case.case_mode)
+        prepared_children: list[ai_cases.AiCase] = []
 
         with storage.transaction() as conn:
+            case, bundle, prepared_children = _prepare_mode_specific_case_plan(
+                storage,
+                conn,
+                case,
+                primary,
+                neighbors,
+                bundle,
+            )
             role = squads.get_role_template(conn, "boss")
             squad = _ensure_case_squad(storage, conn, case, primary, neighbors, str(ensured_worktree), branch_name)
             work_items = squads.list_work_items(conn, squad.id)
@@ -285,6 +304,19 @@ def build_ai_cases_router(
                 ),
             )
         await bus.publish("v1.ai_case.updated", {"case_id": case.id, "status": case.status.value})
+        for child in prepared_children:
+            child_primary = projects_module.get(storage.conn, child.primary_project_id)
+            child_bundle = ai_cases.ensure_bundle(
+                storage.data_dir,
+                child,
+                child_primary,
+                _neighbor_projects(storage, child),
+            )
+            _write_case_metadata_files(storage, child, child_bundle)
+            await bus.publish(
+                "v1.ai_case.created",
+                {"case_id": child.id, "parent_case_id": case.id},
+            )
         detail = _case_detail(storage, manager, case)
         return {
             "case": detail.model_dump(mode="json"),
@@ -436,6 +468,398 @@ def _neighbor_projects(storage: Storage, case: ai_cases.AiCase) -> list[Project]
     return neighbors
 
 
+def _prepare_mode_specific_case_plan(
+    storage: Storage,
+    conn,
+    case: ai_cases.AiCase,
+    primary: Project,
+    neighbors: list[Project],
+    bundle: ai_cases.AiCaseBundle,
+) -> tuple[ai_cases.AiCase, ai_cases.AiCaseBundle, list[ai_cases.AiCase]]:
+    created_children: list[ai_cases.AiCase] = []
+    existing_children = _child_cases(conn, case.id)
+
+    if case.case_mode == ai_cases.AiCaseMode.BENCHMARK:
+        created_children.extend(
+            _ensure_benchmark_children(storage, conn, case, existing_children)
+        )
+        _sync_benchmark_bundle(bundle, [*existing_children, *created_children])
+    elif case.case_mode == ai_cases.AiCaseMode.HARVEST:
+        case = _ingest_harvest_sources(conn, case)
+        bundle.targets = case.targets
+        _sync_harvest_bundle(bundle, case.targets.attached_source_ids)
+    elif case.case_mode == ai_cases.AiCaseMode.PORTFOLIO:
+        created_children.extend(
+            _ensure_portfolio_children(storage, conn, case, primary, neighbors, existing_children)
+        )
+        _sync_portfolio_bundle(bundle, primary, neighbors, [*existing_children, *created_children])
+    elif case.case_mode == ai_cases.AiCaseMode.CHALLENGE:
+        created_children.extend(
+            _ensure_challenge_children(storage, conn, case, existing_children)
+        )
+        _sync_challenge_bundle(bundle, [*existing_children, *created_children])
+    elif case.case_mode == ai_cases.AiCaseMode.REPAIR:
+        _append_ledger_once(
+            bundle.stabilization_ledger,
+            entry_id=f"{case.id}-stabilize",
+            title="Stabilization lane opened",
+            summary="Restore the primary repo to a runnable, tested baseline before deeper cleanup.",
+        )
+    elif case.case_mode == ai_cases.AiCaseMode.MIGRATE:
+        _append_ledger_once(
+            bundle.migration_ledger,
+            entry_id=f"{case.id}-migrate",
+            title="Migration ledger opened",
+            summary="Track compatibility notes, checkpoints, and rollback moves throughout the upgrade.",
+        )
+    elif case.case_mode == ai_cases.AiCaseMode.AUDIT:
+        if not bundle.scorecard.prioritized_backlog:
+            bundle.scorecard.prioritized_backlog = [
+                "Capture the top UX issue and the top architecture issue before verdict.",
+                "Record whether browser coverage is present or missing.",
+                "List the first three fixes with the highest risk-reduction per token.",
+            ]
+
+    for child in created_children:
+        ai_cases.create_job(
+            conn,
+            case_id=case.id,
+            phase=ai_cases.AiCasePhase.COMPARE if case.case_mode in {ai_cases.AiCaseMode.BENCHMARK, ai_cases.AiCaseMode.PORTFOLIO} else ai_cases.AiCasePhase.RESEARCH,
+            label=f"Child case queued: {child.title or child.id}",
+            status=ai_cases.AiJobStatus.QUEUED,
+            worker_role_id="boss",
+            notes_md=f"Spawned child case {child.id} for {case.case_mode.value}.",
+        )
+        audit(
+            conn,
+            AuditRecord(
+                entity_type="ai_case",
+                entity_id=child.id,
+                action="spawn",
+                source=AuditSource.DESKTOP,
+                result="success",
+                details={"parent_case_id": case.id, "spawn_reason": child.spawn_reason},
+            ),
+        )
+
+    bundle.updated_at = utc_now()
+    return case, bundle, created_children
+
+
+def _child_cases(conn, parent_case_id: str) -> list[ai_cases.AiCase]:
+    return [
+        case
+        for case in ai_cases.list_cases(conn)
+        if case.parent_case_id == parent_case_id
+    ]
+
+
+def _ensure_benchmark_children(
+    storage: Storage,
+    conn,
+    case: ai_cases.AiCase,
+    existing_children: list[ai_cases.AiCase],
+) -> list[ai_cases.AiCase]:
+    existing_recipe_ids = {
+        child.directives.selected_recipe_id
+        for child in existing_children
+        if child.directives.selected_recipe_id
+    }
+    created: list[ai_cases.AiCase] = []
+    for recipe_id in _benchmark_candidate_recipe_ids(conn, case):
+        if recipe_id in existing_recipe_ids:
+            continue
+        recipe_name = recipe_id
+        try:
+            recipe_name = ai_factory.get_recipe(conn, recipe_id).name
+        except Exception:
+            pass
+        child_id = ai_cases._new_id()
+        child = ai_cases.spawn_child_case(
+            conn,
+            case,
+            ai_cases.AiCaseSpawnRequest(
+                case_mode=ai_cases.AiCaseMode.GENERATE,
+                mission_profile_id="new-app-from-brief",
+                directives=case.directives.model_copy(
+                    update={
+                        "selected_recipe_id": recipe_id,
+                        "candidate_recipe_ids": [],
+                        "recipe_selection_mode": ai_cases.AiRecipeSelectionMode.MANUAL,
+                    }
+                ),
+                candidate_label=recipe_name,
+                spawn_reason=f"Benchmark candidate for recipe {recipe_id}",
+                title=f"{case.title or case.intent.goal_md or 'Benchmark'} / {recipe_name}",
+            ),
+            case_id=child_id,
+            bundle_path=ai_cases.bundle_file_path(storage.data_dir, child_id),
+        )
+        created.append(child)
+    return created
+
+
+def _benchmark_candidate_recipe_ids(conn, case: ai_cases.AiCase) -> list[str]:
+    candidates: list[str] = []
+    if case.directives.selected_recipe_id:
+        candidates.append(case.directives.selected_recipe_id)
+    candidates.extend(case.directives.candidate_recipe_ids)
+    if not candidates:
+        candidates = [recipe.id for recipe in ai_factory.list_recipes(conn)[:3]]
+    deduped = list(dict.fromkeys(item for item in candidates if item))
+    return deduped[:4]
+
+
+def _sync_benchmark_bundle(
+    bundle: ai_cases.AiCaseBundle,
+    children: list[ai_cases.AiCase],
+) -> None:
+    seen = {candidate.case_id for candidate in bundle.candidate_leaderboard if candidate.case_id}
+    for child in children:
+        if child.id in seen:
+            continue
+        bundle.candidate_leaderboard.append(
+            ai_cases.AiCandidateResult(
+                case_id=child.id,
+                candidate_label=child.candidate_label or child.directives.selected_recipe_id or child.id,
+                summary="Candidate queued for benchmark comparison.",
+            )
+        )
+    _append_timeline_once(
+        bundle,
+        entry_id=f"{bundle.case_id}-benchmark",
+        phase=ai_cases.AiCasePhase.COMPARE,
+        label="Benchmark candidates prepared",
+        summary=f"{len(children)} candidate case(s) are available for side-by-side comparison.",
+    )
+    if not bundle.verdict.summary:
+        bundle.verdict.summary = "Benchmark pending. Compare child candidates before choosing the winner."
+
+
+def _ensure_portfolio_children(
+    storage: Storage,
+    conn,
+    case: ai_cases.AiCase,
+    primary: Project,
+    neighbors: list[Project],
+    existing_children: list[ai_cases.AiCase],
+) -> list[ai_cases.AiCase]:
+    existing_targets = {child.primary_project_id for child in existing_children}
+    sequence = [primary, *neighbors]
+    created: list[ai_cases.AiCase] = []
+    for project in sequence:
+        if project.id in existing_targets:
+            continue
+        references = [item.id for item in sequence if item.id != project.id]
+        child_id = ai_cases._new_id()
+        child = ai_cases.spawn_child_case(
+            conn,
+            case,
+            ai_cases.AiCaseSpawnRequest(
+                case_mode=ai_cases.AiCaseMode.RESEARCH,
+                mission_profile_id="repo-decision" if project.id == primary.id else "portfolio-sweep",
+                targets=case.targets.model_copy(
+                    update={
+                        "primary_project_id": project.id,
+                        "neighbor_project_ids": [],
+                        "reference_project_ids": references,
+                    }
+                ),
+                candidate_label=project.name,
+                spawn_reason=f"Portfolio execution slice for {project.id}",
+                title=f"{case.title or case.intent.goal_md or 'Portfolio'} / {project.name}",
+            ),
+            case_id=child_id,
+            bundle_path=ai_cases.bundle_file_path(storage.data_dir, child_id),
+        )
+        created.append(child)
+    return created
+
+
+def _sync_portfolio_bundle(
+    bundle: ai_cases.AiCaseBundle,
+    primary: Project,
+    neighbors: list[Project],
+    children: list[ai_cases.AiCase],
+) -> None:
+    for project in [primary, *neighbors]:
+        if any(card.project_id == project.id for card in bundle.claim_cards):
+            continue
+        bundle.claim_cards.append(
+            ai_cases.ClaimCard(
+                id=f"{bundle.case_id}-{project.id}",
+                title=f"Portfolio slice: {project.name}",
+                kind=ai_cases.ClaimCardKind.REPO_BACKED,
+                summary="Treat this repo as an ordered single-write-target slice inside the broader portfolio run.",
+                project_id=project.id,
+                evidence=[project.path],
+            )
+        )
+    _append_timeline_once(
+        bundle,
+        entry_id=f"{bundle.case_id}-portfolio",
+        phase=ai_cases.AiCasePhase.COMPARE,
+        label="Portfolio slices prepared",
+        summary=f"{len(children)} child case(s) sequence the portfolio into explicit execution slices.",
+    )
+
+
+def _ensure_challenge_children(
+    storage: Storage,
+    conn,
+    case: ai_cases.AiCase,
+    existing_children: list[ai_cases.AiCase],
+) -> list[ai_cases.AiCase]:
+    if any(child.candidate_label == "minority-path" for child in existing_children):
+        return []
+    child_id = ai_cases._new_id()
+    child = ai_cases.spawn_child_case(
+        conn,
+        case,
+        ai_cases.AiCaseSpawnRequest(
+            case_mode=ai_cases.AiCaseMode.RESEARCH,
+            mission_profile_id="challenge-pass",
+            candidate_label="minority-path",
+            spawn_reason="Force a credible alternative path before the case settles.",
+            title=f"{case.title or case.intent.goal_md or 'Challenge'} / Minority path",
+        ),
+        case_id=child_id,
+        bundle_path=ai_cases.bundle_file_path(storage.data_dir, child_id),
+    )
+    return [child]
+
+
+def _sync_challenge_bundle(
+    bundle: ai_cases.AiCaseBundle,
+    children: list[ai_cases.AiCase],
+) -> None:
+    if not bundle.contradiction_docket:
+        bundle.contradiction_docket.append(
+            ai_cases.ContradictionDocketItem(
+                id=f"{bundle.case_id}-challenge",
+                question="What is the strongest credible alternative path?",
+                stakes="Without a recorded alternative, the case may lock onto the first plausible answer.",
+                left=ai_cases.ContradictionSide(label="Current path"),
+                right=ai_cases.ContradictionSide(label="Minority path"),
+            )
+        )
+    if len(bundle.failure_matrix) < 3:
+        existing_risks = {item.risk for item in bundle.failure_matrix}
+        additions = [
+            ("User workflow stays harder than necessary", "A technically correct answer still feels clumsy in practice.", "Force a UX and movement pass before verdict."),
+            ("Hidden dependency was ignored", "A change lands cleanly in one repo but breaks another seam later.", "Require blast-radius and dependency mapping before handoff."),
+            ("Testing signal is too weak", "The winner looks good but regresses under real use.", "Require reviewer/tester notes and at least one runnable check."),
+        ]
+        for risk, consequence, mitigation in additions:
+            if risk in existing_risks:
+                continue
+            bundle.failure_matrix.append(
+                ai_cases.AiFailureMatrixItem(
+                    risk=risk,
+                    consequence=consequence,
+                    mitigation=mitigation,
+                )
+            )
+    _append_timeline_once(
+        bundle,
+        entry_id=f"{bundle.case_id}-challenge",
+        phase=ai_cases.AiCasePhase.RESEARCH,
+        label="Challenge lane prepared",
+        summary=f"{len(children)} alternate child case(s) preserve dissent before verdict.",
+    )
+
+
+def _ingest_harvest_sources(conn, case: ai_cases.AiCase) -> ai_cases.AiCase:
+    targets = case.targets.model_copy(deep=True)
+    attached = list(targets.attached_source_ids)
+    for index, url in enumerate(targets.reference_urls, start=1):
+        source_id = f"harvest-{case.id}-{index}"
+        if source_id not in attached:
+            if conn.execute(
+                "SELECT 1 FROM ai_factory_sources WHERE id = ?",
+                (source_id,),
+            ).fetchone() is None:
+                ai_factory.create_source(
+                    conn,
+                    ai_factory.AiSourceCreate(
+                        id=source_id,
+                        label=f"Harvest reference {index}",
+                        source_type=ai_factory.AiSourceType.WEB,
+                        url=url,
+                        reuse_posture=ai_factory.AiReusePosture.REFERENCE_ONLY,
+                        provenance_summary="Reference captured from the case's harvest input URLs.",
+                        metadata={"captured_by_case_id": case.id},
+                        notes_md=f"Captured from harvest reference URL: {url}",
+                    ),
+                )
+            attached.append(source_id)
+    targets.attached_source_ids = list(dict.fromkeys(attached))
+    if targets.attached_source_ids == case.targets.attached_source_ids:
+        return case
+    return ai_cases.update_case(conn, case.id, targets=targets)
+
+
+def _sync_harvest_bundle(bundle: ai_cases.AiCaseBundle, source_ids: list[str]) -> None:
+    existing_sources = {proposal.source_id for proposal in bundle.promotions if proposal.source_id}
+    for source_id in source_ids:
+        if source_id in existing_sources:
+            continue
+        bundle.promotions.append(
+            ai_cases.AiPromotionProposal(
+                source_id=source_id,
+                asset_family="recipe",
+                suggested_id=f"{source_id}-recipe",
+                title=f"Promote {source_id}",
+                rationale="Captured during harvest so future runs can reuse the pattern instead of rediscovering it.",
+            )
+        )
+    _append_timeline_once(
+        bundle,
+        entry_id=f"{bundle.case_id}-harvest",
+        phase=ai_cases.AiCasePhase.RESEARCH,
+        label="Harvest intake prepared",
+        summary=f"{len(source_ids)} source(s) are attached for promotion and provenance-aware reuse.",
+    )
+
+
+def _append_timeline_once(
+    bundle: ai_cases.AiCaseBundle,
+    *,
+    entry_id: str,
+    phase: ai_cases.AiCasePhase,
+    label: str,
+    summary: str,
+) -> None:
+    if any(item.id == entry_id for item in bundle.timeline):
+        return
+    bundle.timeline.append(
+        ai_cases.TimelineEntry(
+            id=entry_id,
+            phase=phase,
+            label=label,
+            summary=summary,
+        )
+    )
+
+
+def _append_ledger_once(
+    ledger: list[ai_cases.AiLedgerEntry],
+    *,
+    entry_id: str,
+    title: str,
+    summary: str,
+) -> None:
+    if any(item.id == entry_id for item in ledger):
+        return
+    ledger.append(
+        ai_cases.AiLedgerEntry(
+            id=entry_id,
+            title=title,
+            summary=summary,
+        )
+    )
+
+
 def _write_case_metadata_files(
     storage: Storage,
     case: ai_cases.AiCase,
@@ -551,17 +975,54 @@ def _ensure_case_squad(
             worktree_path=worktree_path,
             branch_name=branch_name,
         ):
+            assigned_role_id = _resolve_role_id(
+                conn,
+                contract.assigned_role_id,
+                contract.fallback_role_ids,
+            )
+            personality_id = _resolve_personality_id(
+                conn,
+                contract.preferred_personality_id,
+                contract.fallback_personality_ids,
+            )
             squads.create_work_item(
                 conn,
                 squad.id,
                 squads.AgentWorkItemCreate(
                     title=contract.title,
                     instructions_md=contract.instructions_md,
-                    assigned_role_id=contract.assigned_role_id,
+                    assigned_role_id=assigned_role_id,
+                    personality_id=personality_id,
                     source=AuditSource.DESKTOP,
                 ),
             )
     return squad
+
+
+def _resolve_role_id(conn, preferred_id: str | None, fallbacks: list[str]) -> str | None:
+    for candidate in [preferred_id, *fallbacks]:
+        if not candidate:
+            continue
+        row = conn.execute(
+            "SELECT 1 FROM agent_role_templates WHERE id = ?",
+            (candidate,),
+        ).fetchone()
+        if row is not None:
+            return candidate
+    return preferred_id
+
+
+def _resolve_personality_id(conn, preferred_id: str | None, fallbacks: list[str]) -> str | None:
+    for candidate in [preferred_id, *fallbacks]:
+        if not candidate:
+            continue
+        row = conn.execute(
+            "SELECT 1 FROM personalities WHERE id = ?",
+            (candidate,),
+        ).fetchone()
+        if row is not None:
+            return candidate
+    return None
 
 
 def _ensure_ai_os_project(

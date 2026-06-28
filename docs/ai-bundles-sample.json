@@ -1,0 +1,534 @@
+{
+  "_comment": "Bundled fallback catalog for AI-first bundles. These are Marketplace-installable packs aimed at AI operators, not only humans.",
+  "version": 1,
+  "generated_at": "2026-06-27T00:00:00Z",
+  "bundles": [
+    {
+      "id": "deep-research-council",
+      "name": "Deep Research Council",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "Adds structured dissent, repo/docs/web witnesses, a contradiction-first workflow, and a research kickoff action for high-confidence technical decisions.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 10,
+      "tags": ["research", "dissent", "verdict", "decision", "ai-first"],
+      "recommended_case_modes": ["research", "hybrid", "challenge", "portfolio"],
+      "recommended_mission_profiles": ["repo-decision", "product-architecture", "challenge-pass"],
+      "asset_refs": [
+        {"kind": "component", "id": "quality-default", "label": "Default quality gate", "summary": "Preserves reviewer and tester requirements."},
+        {"kind": "component", "id": "evidence-repo-first", "label": "Repo-first evidence", "summary": "Keeps repo-backed facts above looser web opinion."},
+        {"kind": "component", "id": "similarity-advisory", "label": "Advisory similarity", "summary": "Reports likeness without blocking the council."}
+      ],
+      "overlap_report": [
+        {"bundle_id": "parallel-harvest-bakeoff", "similarity_percent": 34, "summary": "Both support comparison-heavy thinking, but this one is verdict-first rather than intake-first.", "complementary": true},
+        {"bundle_id": "repo-rescue-lab", "similarity_percent": 18, "summary": "Minimal overlap; rescue is execution/stabilization oriented.", "complementary": true}
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Produces stronger minority reports and contradiction capture before a decision hardens.",
+        "token_savings_summary": "Reduces repeated back-and-forth by giving the boss, witnesses, and skeptic explicit lanes up front.",
+        "speed_gain_summary": "Cuts setup time for repo + docs + web triangulation.",
+        "best_for": ["architecture decisions", "tradeoff research", "adversarial review of plans"],
+        "caveats": ["This does not replace implementation packs when you intend to ship code after the verdict."]
+      },
+      "roles": [
+        {
+          "id": "contract-prosecutor",
+          "name": "Contract Prosecutor",
+          "description": "Challenges whether a proposed direction violates repo or API contracts.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Act like a contract prosecutor: find hidden assumptions, compatibility breaks, or policy violations before the plan is accepted.",
+          "enabled": true,
+          "sort_order": 22
+        },
+        {
+          "id": "repo-witness",
+          "name": "Repo Witness",
+          "description": "Reads the repository as evidence and reports the current reality.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Treat the repository as the strongest local evidence. Describe seams, invariants, structure, and what the code already prefers.",
+          "enabled": true,
+          "sort_order": 24
+        },
+        {
+          "id": "docs-witness",
+          "name": "Docs Witness",
+          "description": "Surfaces README, ADR, backlog, and record-level evidence.",
+          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Find the relevant docs, ADRs, roadmaps, and records, then summarize the constraints they imply.",
+          "enabled": true,
+          "sort_order": 26
+        },
+        {
+          "id": "open-web-witness",
+          "name": "Open-Web Witness",
+          "description": "Brings in official docs and attributed outside evidence when local context is not enough.",
+          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Use only attributed outside evidence and prefer official docs. Never blur sourced facts with speculation.",
+          "enabled": true,
+          "sort_order": 28
+        },
+        {
+          "id": "blast-radius-cartographer",
+          "name": "Blast Radius Cartographer",
+          "description": "Maps touched surfaces, contracts, tests, and likely regressions.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Map what would change, what could break, and where proof is still missing.",
+          "enabled": true,
+          "sort_order": 32
+        }
+      ],
+      "personalities": [
+        {
+          "id": "archivist",
+          "name": "The Archivist",
+          "blurb": "Treats facts, docs, and evidence quality as sacred.",
+          "traits": ["evidence", "methodical", "source-first"],
+          "prompt_preamble_md": "Your personality is the Archivist: preserve the trail of evidence, keep facts typed, and call out vague claims.",
+          "voice": "measured",
+          "sort_order": 55
+        },
+        {
+          "id": "dissenter",
+          "name": "The Dissenter",
+          "blurb": "Protects the losing argument so the team does not collapse too early.",
+          "traits": ["adversarial", "sharp", "critical"],
+          "prompt_preamble_md": "Your personality is the Dissenter: push against easy consensus and preserve the strongest alternative path.",
+          "voice": "direct",
+          "sort_order": 56
+        },
+        {
+          "id": "synthesist",
+          "name": "The Synthesist",
+          "blurb": "Weighs disagreement and lands the clearest synthesis.",
+          "traits": ["balanced", "clear", "decisive"],
+          "prompt_preamble_md": "Your personality is the Synthesist: reconcile strong opposing views without washing out the tradeoffs.",
+          "voice": "steady",
+          "sort_order": 57
+        }
+      ],
+      "recipes": [
+        {
+          "id": "research-cockpit-v1",
+          "name": "Research Cockpit",
+          "description": "A verdict-centered workspace with contradiction and evidence lanes.",
+          "archetype": "cockpit",
+          "nav_model": "split_pane",
+          "interaction_model": "drawers",
+          "visual_language": "notebook",
+          "data_behavior": "local_first",
+          "density_rule": "density-no-scroll",
+          "component_ids": ["nav-split-pane", "interaction-drawers", "visual-notebook", "quality-default", "density-no-scroll"],
+          "default_directives": {"generation_mode": "prototype", "recipe_selection_mode": "manual"},
+          "tags": ["research", "cockpit", "contradictions"],
+          "builtin": false
+        }
+      ],
+      "sources": [
+        {
+          "id": "whatif-research-rubric",
+          "label": "The WhatIf research rubric",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Internal bundle note for contradiction-led technical research cases.",
+          "metadata": {"bundle_id": "deep-research-council"},
+          "notes_md": "Use this source when you want the council to rank repo-backed evidence above generic opinion and to preserve a minority report.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "deep-research-council",
+          "name": "Deep Research Council kickoff",
+          "description": "Starts a contradiction-first technical research pass with typed evidence and a minority report.",
+          "prompt": "Open Synapse AI Factory and set up a research or challenge case. Use contradiction dockets, typed evidence, and preserve the strongest losing argument. End with a verdict, minority report, blast radius, and handoff pack.",
+          "icon": "brain-circuit",
+          "category": "workflows",
+          "tags": ["research", "dissent", "verdict"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "Best when you need an AI to investigate before it edits. This bundle is intentionally decision-heavy, not implementation-heavy."
+    },
+    {
+      "id": "fullstack-app-factory",
+      "name": "Fullstack App Factory",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "Optimizes Synapse for recipe-led app generation, navigation quality, review gates, and fast new-app bakeoffs.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 15,
+      "tags": ["generate", "fullstack", "ux", "recipe", "factory"],
+      "recommended_case_modes": ["generate", "hybrid", "benchmark", "replicate"],
+      "recommended_mission_profiles": ["new-app-from-brief", "fullstack-crud-generator", "multi-candidate-bakeoff"],
+      "asset_refs": [
+        {"kind": "component", "id": "test-playwright-review", "label": "Playwright + reviewer pass", "summary": "Keeps browser verification in the loop."},
+        {"kind": "component", "id": "deploy-local-runner", "label": "Local runnable deployment", "summary": "Pushes the output toward real local runnability."},
+        {"kind": "component", "id": "tech-react-fastapi", "label": "React + FastAPI fullstack", "summary": "Useful baseline stack for local fullstack generation."}
+      ],
+      "overlap_report": [
+        {"bundle_id": "repo-rescue-lab", "similarity_percent": 26, "summary": "Some overlap in quality gates, but rescue is rehab-focused while this is net-new build focused.", "complementary": true},
+        {"bundle_id": "parallel-harvest-bakeoff", "similarity_percent": 42, "summary": "Both help candidate generation, but this one biases toward shipping an app, not harvesting references.", "complementary": true}
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Improves navigation and review discipline so generated apps feel less one-page and more deliberate.",
+        "token_savings_summary": "Cuts repeated UI prompting by preloading recipe composition, UX stewardship, and reviewer/tester expectations.",
+        "speed_gain_summary": "Good for fast prototype vs local fullstack branching and new-app bakeoffs.",
+        "best_for": ["new app generation", "template diversification", "fast fullstack scaffolds"],
+        "caveats": ["Still pair this with a research bundle when the core product direction is not settled yet."]
+      },
+      "roles": [
+        {
+          "id": "recipe-composer",
+          "name": "Recipe Composer",
+          "description": "Chooses the best recipe, packs, and component mix before code starts.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Compose the build from recipes, navigation packs, density rules, and interaction patterns before implementation begins.",
+          "enabled": true,
+          "sort_order": 18
+        },
+        {
+          "id": "ux-steward",
+          "name": "UX Steward",
+          "description": "Guards movement, discoverability, and anti-scroll quality.",
+          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Protect the user experience: require clear navigation, empty states, movement, and avoid unjustified long-scroll pages.",
+          "enabled": true,
+          "sort_order": 20
+        },
+        {
+          "id": "release-reviewer",
+          "name": "Release Reviewer",
+          "description": "Checks whether a generated app is actually fit to hand off.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Review the app like it might ship tomorrow: call out missing navigation, incomplete flows, weak backend readiness, or insufficient testing.",
+          "enabled": true,
+          "sort_order": 34
+        }
+      ],
+      "personalities": [
+        {
+          "id": "operator",
+          "name": "The Operator",
+          "blurb": "Moves fast without losing control of the release path.",
+          "traits": ["shipping", "throughput", "stability"],
+          "prompt_preamble_md": "Your personality is the Operator: keep the build moving, but do not call it done without real run/test evidence.",
+          "voice": "focused",
+          "sort_order": 58
+        }
+      ],
+      "recipes": [
+        {
+          "id": "fullstack-factory-board",
+          "name": "Fullstack Factory Board",
+          "description": "Three-surface app workspace for build, inspect, and verify loops.",
+          "archetype": "board",
+          "nav_model": "left_rail",
+          "interaction_model": "drawers",
+          "visual_language": "premium_saas",
+          "data_behavior": "fullstack_crud",
+          "density_rule": "density-no-scroll",
+          "component_ids": ["nav-left-rail", "interaction-drawers", "visual-premium-saas", "quality-default", "test-playwright-review", "density-no-scroll"],
+          "default_directives": {"generation_mode": "local_fullstack", "recipe_selection_mode": "compare_top_n"},
+          "tags": ["generate", "fullstack", "board"],
+          "builtin": false
+        }
+      ],
+      "sources": [
+        {
+          "id": "whatif-factory-playbook",
+          "label": "The WhatIf app factory playbook",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Internal notes for recipe-led build and review flows.",
+          "metadata": {"bundle_id": "fullstack-app-factory"},
+          "notes_md": "Use this when the app should feel intentional, navigable, and ready for a reviewer/tester pass rather than just dumped on one page.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "new-app-bakeoff",
+          "name": "New app bakeoff",
+          "description": "Kick off a benchmark-style generation pass with several candidate recipes before picking a winner.",
+          "prompt": "Create a benchmark or generate case for a new app. Compare multiple recipes, keep navigation and density quality explicit, and do not ship a single long-scroll page unless you justify it. End with the winning candidate and a test/review summary.",
+          "icon": "layers-3",
+          "category": "workflows",
+          "tags": ["generate", "benchmark", "fullstack"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "Designed to improve output quality for generated apps without forcing a rigid visual style."
+    },
+    {
+      "id": "repo-rescue-lab",
+      "name": "Repo Rescue Lab",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "A stabilization-oriented pack for repair, migrate, and audit cases with explicit regression and rollback thinking.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 20,
+      "tags": ["repair", "migrate", "audit", "stability", "regression"],
+      "recommended_case_modes": ["repair", "migrate", "audit"],
+      "recommended_mission_profiles": ["broken-repo-rescue", "stack-upgrade", "ux-hardening-pass"],
+      "asset_refs": [
+        {"kind": "component", "id": "quality-default", "label": "Default quality gate", "summary": "Reviewer/tester gates remain non-optional."},
+        {"kind": "component", "id": "deploy-local-runner", "label": "Local runnable deployment", "summary": "Keeps rescue work grounded in a runnable state."}
+      ],
+      "overlap_report": [
+        {"bundle_id": "deep-research-council", "similarity_percent": 18, "summary": "Low overlap; this bundle assumes the repo already needs action, not only analysis.", "complementary": true},
+        {"bundle_id": "fullstack-app-factory", "similarity_percent": 26, "summary": "Some shared review discipline, but rescue focuses on recovery and migration ledgers.", "complementary": true}
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Strengthens regression thinking, rollback notes, and stabilization reporting.",
+        "token_savings_summary": "Reduces repeated prompts about tests, rollback, and migration notes by baking them into the workflow.",
+        "speed_gain_summary": "Best for turning a messy repo into a clearer repair or migration lane quickly.",
+        "best_for": ["broken repos", "version upgrades", "stabilization passes"],
+        "caveats": ["Use a generation-focused bundle instead when the goal is creating something net-new."]
+      },
+      "roles": [
+        {
+          "id": "repair-foreman",
+          "name": "Repair Foreman",
+          "description": "Owns repair sequencing and safe recovery order.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Stabilize first: identify the shortest safe path back to a tested, runnable state.",
+          "enabled": true,
+          "sort_order": 36
+        },
+        {
+          "id": "migration-steward",
+          "name": "Migration Steward",
+          "description": "Tracks compatibility notes, rollout order, and rollback plans.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Treat every migration like it needs a ledger: compatibility notes, blast radius, checkpoints, and rollback moves.",
+          "enabled": true,
+          "sort_order": 38
+        },
+        {
+          "id": "regression-hunter",
+          "name": "Regression Hunter",
+          "description": "Looks for likely breakage after repairs or migrations.",
+          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Hunt for behavior that the fix might accidentally break. Be concrete and suspicious.",
+          "enabled": true,
+          "sort_order": 40
+        }
+      ],
+      "recipes": [
+        {
+          "id": "repo-rescue-console",
+          "name": "Repo Rescue Console",
+          "description": "A dense operations-style recipe for triage, repair notes, and validation.",
+          "archetype": "console",
+          "nav_model": "command_palette",
+          "interaction_model": "keyboard_first",
+          "visual_language": "industrial",
+          "data_behavior": "local_first",
+          "density_rule": "density-no-scroll",
+          "component_ids": ["nav-command-palette", "interaction-keyboard-first", "visual-industrial", "quality-default", "density-no-scroll"],
+          "default_directives": {"generation_mode": "local_fullstack", "recipe_selection_mode": "manual"},
+          "tags": ["repair", "migrate", "console"],
+          "builtin": false
+        }
+      ],
+      "sources": [
+        {
+          "id": "whatif-repair-checklist",
+          "label": "The WhatIf repair checklist",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Internal checklist for repairs, migrations, and rollback-aware handoffs.",
+          "metadata": {"bundle_id": "repo-rescue-lab"},
+          "notes_md": "Use this when you need a stabilization ledger, regression notes, or a rollback-oriented migration handoff.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "repo-rescue-pass",
+          "name": "Repo rescue pass",
+          "description": "Starts a repair or migrate case with stabilization and rollback expectations already loaded.",
+          "prompt": "Create a repair or migrate case. Restore the repo to a tested, runnable state, capture a stabilization or migration ledger, list likely regressions, and end with rollback notes plus remaining risk.",
+          "icon": "wrench",
+          "category": "workflows",
+          "tags": ["repair", "migrate", "stability"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "Use this when the repo is already in distress or when the change surface is risky enough that rollback planning matters."
+    },
+    {
+      "id": "parallel-harvest-bakeoff",
+      "name": "Parallel Harvest + Bakeoff",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "Helps Synapse harvest patterns from references, compare several candidates, and sequence portfolio-style follow-up cases.",
+      "featured": false,
+      "verified": true,
+      "sort_rank": 30,
+      "tags": ["harvest", "benchmark", "portfolio", "replicate", "comparison"],
+      "recommended_case_modes": ["harvest", "benchmark", "portfolio", "replicate"],
+      "recommended_mission_profiles": ["recipe-library-intake", "multi-candidate-bakeoff", "portfolio-sweep", "inspired-clone"],
+      "asset_refs": [
+        {"kind": "component", "id": "workflow-bakeoff", "label": "Parallel bakeoff", "summary": "Starter workflow preset for comparisons."},
+        {"kind": "component", "id": "provenance-aware", "label": "Provenance aware", "summary": "Useful when source intake or replication matters."}
+      ],
+      "overlap_report": [
+        {"bundle_id": "deep-research-council", "similarity_percent": 34, "summary": "Both compare options, but this bundle is intake/candidate heavy rather than verdict heavy.", "complementary": true},
+        {"bundle_id": "fullstack-app-factory", "similarity_percent": 42, "summary": "This overlaps most with generation bakeoffs, but it is broader and more source-aware.", "complementary": true}
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Improves candidate comparison and provenance capture when inspiration or intake drives the build.",
+        "token_savings_summary": "Lets the system reuse harvested patterns instead of rediscovering them every run.",
+        "speed_gain_summary": "Best when several candidates or repos should be mapped quickly before deeper execution.",
+        "best_for": ["web/reference harvesting", "parallel candidate generation", "multi-repo sweeps"],
+        "caveats": ["Use with a write-capable child case for actual code changes in the primary repo."]
+      },
+      "roles": [
+        {
+          "id": "source-curator",
+          "name": "Source Curator",
+          "description": "Turns captured references into reusable bundle or factory assets.",
+          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Promote useful patterns into sources, recipes, or packs with explicit provenance notes.",
+          "enabled": true,
+          "sort_order": 42
+        },
+        {
+          "id": "benchmark-judge",
+          "name": "Benchmark Judge",
+          "description": "Ranks candidates across quality, time, token use, and evidence fit.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "lead",
+          "context_mode": "standard",
+          "role_tier": "supervisor",
+          "can_delegate": true,
+          "prompt_preamble_md": "Compare candidates explicitly. Keep a leaderboard and choose the winner with a written rationale.",
+          "enabled": true,
+          "sort_order": 16
+        },
+        {
+          "id": "portfolio-architect",
+          "name": "Portfolio Architect",
+          "description": "Maps repo boundaries and sequences child cases for multi-repo work.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Map cross-repo dependencies, then break the work into ordered single-write-target child cases.",
+          "enabled": true,
+          "sort_order": 44
+        }
+      ],
+      "personalities": [
+        {
+          "id": "scout",
+          "name": "The Scout",
+          "blurb": "Finds patterns quickly and reports what is reusable.",
+          "traits": ["exploratory", "comparative", "wide-angle"],
+          "prompt_preamble_md": "Your personality is the Scout: range widely, find the strongest patterns, and classify them crisply.",
+          "voice": "curious",
+          "sort_order": 59
+        }
+      ],
+      "recipes": [
+        {
+          "id": "harvest-bakeoff-lab",
+          "name": "Harvest Bakeoff Lab",
+          "description": "A side-by-side recipe for intake, candidate comparison, and promotion decisions.",
+          "archetype": "library",
+          "nav_model": "split_pane",
+          "interaction_model": "bulk_edit",
+          "visual_language": "editorial",
+          "data_behavior": "synced_app",
+          "density_rule": "density-no-scroll",
+          "component_ids": ["nav-split-pane", "interaction-bulk-edit", "visual-editorial", "provenance-aware", "similarity-advisory", "density-no-scroll"],
+          "default_directives": {"generation_mode": "prototype", "recipe_selection_mode": "compare_top_n"},
+          "tags": ["harvest", "benchmark", "portfolio"],
+          "builtin": false
+        }
+      ],
+      "sources": [
+        {
+          "id": "whatif-harvest-intake",
+          "label": "The WhatIf harvest intake guide",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Internal note for promoting harvested references into reusable factory intelligence.",
+          "metadata": {"bundle_id": "parallel-harvest-bakeoff"},
+          "notes_md": "Use this when a run should produce reusable recipes, packs, or source records instead of stopping at a one-off conclusion.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "pattern-harvest-run",
+          "name": "Pattern harvest run",
+          "description": "Starts a harvest, benchmark, or portfolio pass aimed at reusable output rather than one-off notes.",
+          "prompt": "Create a harvest, benchmark, or portfolio case. Capture provenance, compare candidates explicitly, and promote reusable outputs into the AI Factory when the evidence is strong enough.",
+          "icon": "folder-search",
+          "category": "workflows",
+          "tags": ["harvest", "benchmark", "portfolio"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "This bundle is strongest when the output should be reusable by future runs, not only consumed once."
+    }
+  ]
+}

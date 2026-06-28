@@ -91,6 +91,14 @@
       "summary": "Download workers as a role + a personality — two AIs can share a role but differ in personality, so they collaborate and debate."
     },
     {
+      "id": "ai-bundles",
+      "title": "AI bundles",
+      "status": "shipped",
+      "phase": "AI-coding power",
+      "adr": "ADR-0021",
+      "summary": "Install AI-first role, workflow, quick-action, and factory packs from the Marketplace, including bundle overlap readouts and installer-time bundle choices."
+    },
+    {
       "id": "squad-presets",
       "title": "Ready-made squad presets",
       "status": "coming",
@@ -101,10 +109,10 @@
     {
       "id": "publishing",
       "title": "Publish your own",
-      "status": "coming",
+      "status": "in_progress",
       "phase": "Marketplace & Workforce",
-      "adr": "ADR-0017",
-      "summary": "Package + share your own MCP servers, tools, workers, and presets with others."
+      "adr": "ADR-0021",
+      "summary": "Package + share your own AI bundles, MCP servers, tools, workers, and presets with installer-friendly install choices."
     },
     {
       "id": "ai-factory",
@@ -120,7 +128,7 @@
       "status": "in_progress",
       "phase": "AI-coding power",
       "adr": "ADR-0020",
-      "summary": "Structured AI cases with mission profiles, isolated worktrees, case-owned jobs, graphs, and a dedicated run board."
+      "summary": "Structured AI cases with mission profiles, isolated worktrees, case-owned jobs, child-case graphs, bundle-aware councils, and a dedicated run board."
     },
     {
       "id": "parallel-bakeoffs",

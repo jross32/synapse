@@ -39,6 +39,7 @@ from .profile import ProfileManager
 from .projects import Project, ProjectKind
 from .pty_sessions import PtySessionManager
 from .quick_actions import find_template, load_templates
+from .ai_bundles import installed_quick_actions_dir
 from .storage import Storage
 
 log = logging.getLogger(__name__)
@@ -110,7 +111,7 @@ def build_quick_actions_router(
 
     @router.get("", response_model=None)
     async def list_quick_actions() -> dict[str, Any]:
-        actions = load_templates()
+        actions = load_templates(extra_directories=[installed_quick_actions_dir(storage.data_dir)])
         return {"actions": [a.to_dict() for a in actions]}
 
     @router.post("/{action_id}/launch", response_model=None)
@@ -118,7 +119,10 @@ def build_quick_actions_router(
         action_id: str,
         payload: QuickActionLaunchRequest | None = None,
     ) -> dict[str, Any]:
-        template = find_template(action_id)
+        template = find_template(
+            action_id,
+            extra_directories=[installed_quick_actions_dir(storage.data_dir)],
+        )
         if template is None:
             raise not_found("quick_action", action_id)
 

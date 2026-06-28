@@ -72,6 +72,10 @@ def bundled_marketplace_sample() -> Path:
     return bundled_docs_dir() / "marketplace-sample.json"
 
 
+def bundled_ai_bundles_sample() -> Path:
+    return bundled_docs_dir() / "ai-bundles-sample.json"
+
+
 def bundled_models_sample() -> Path:
     return bundled_docs_dir() / "models-sample.json"
 

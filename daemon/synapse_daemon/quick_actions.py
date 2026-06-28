@@ -29,6 +29,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from collections.abc import Iterable
 from pathlib import Path
 
 from .runtime_paths import bundled_quick_actions_dir
@@ -118,41 +119,53 @@ def _parse(raw: object, source: str) -> QuickAction:
     )
 
 
-def load_templates(directory: Path | None = None) -> list[QuickAction]:
-    """Read every ``*.json`` in ``directory`` (default: bundled folder).
+def load_templates(
+    directory: Path | None = None,
+    *,
+    extra_directories: Iterable[Path] | None = None,
+) -> list[QuickAction]:
+    """Read every ``*.json`` in one or more directories.
 
     Malformed files are logged and skipped -- one bad template never takes
     the whole list down. The result is sorted by ``name`` for stable
     rendering in the Sessions rail.
     """
 
-    target = directory or _DEFAULT_TEMPLATES_DIR
-    if not target.is_dir():
-        log.info("Quick-action templates dir not found at %s; returning empty list.", target)
-        return []
+    directories: list[Path] = [directory or _DEFAULT_TEMPLATES_DIR]
+    if extra_directories is not None:
+        directories.extend(path for path in extra_directories if path not in directories)
     actions: dict[str, QuickAction] = {}
-    for path in sorted(target.glob("*.json")):
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-            action = _parse(raw, str(path))
-        except (json.JSONDecodeError, QuickActionError) as exc:
-            log.warning("Skipping malformed quick-action template %s: %s", path, exc)
+    for target in directories:
+        if not target.is_dir():
+            log.info("Quick-action templates dir not found at %s; skipping.", target)
             continue
-        if action.id in actions:
-            log.warning(
-                "Duplicate quick-action id %r at %s; keeping the first occurrence.",
-                action.id,
-                path,
-            )
-            continue
-        actions[action.id] = action
+        for path in sorted(target.glob("*.json")):
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                action = _parse(raw, str(path))
+            except (json.JSONDecodeError, QuickActionError) as exc:
+                log.warning("Skipping malformed quick-action template %s: %s", path, exc)
+                continue
+            if action.id in actions:
+                log.warning(
+                    "Duplicate quick-action id %r at %s; keeping the first occurrence.",
+                    action.id,
+                    path,
+                )
+                continue
+            actions[action.id] = action
     return sorted(actions.values(), key=lambda a: a.name.lower())
 
 
-def find_template(template_id: str, directory: Path | None = None) -> QuickAction | None:
+def find_template(
+    template_id: str,
+    directory: Path | None = None,
+    *,
+    extra_directories: Iterable[Path] | None = None,
+) -> QuickAction | None:
     """Return one template by id (lazy variant used by the launch route)."""
 
-    for action in load_templates(directory):
+    for action in load_templates(directory, extra_directories=extra_directories):
         if action.id == template_id:
             return action
     return None

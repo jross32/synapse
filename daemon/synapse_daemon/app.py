@@ -35,6 +35,7 @@ from .profile import ProfileManager
 from .pty_sessions import PtySessionManager
 from .runtime_paths import bundled_dist_dir, bundled_mobile_dir, bundled_tools_dir
 from .routes_ai import build_ai_router
+from .routes_ai_bundles import build_ai_bundles_router
 from .routes_ai_factory import build_ai_factory_router
 from .routes_agent_squads import (
     build_agent_squads_router,
@@ -195,6 +196,11 @@ def build_app(
     )
     app.include_router(
         build_marketplace_router(tool_registry, profile_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_ai_bundles_router(storage, profile_manager),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

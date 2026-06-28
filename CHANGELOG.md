@@ -31,6 +31,21 @@ Every commit must append an entry under the in-progress version header.
   launch path for case-owned workers. Renderer-side this adds the `AI Factory`
   nav page, catalog browsing, case creation/run controls, and project-tile
   `Open in AI OS` launchers. Packaging now bundles the `ai_os/` app resources.
+- **AI Bundles + installer bootstrap (ADR-0021).** Marketplace now exposes an
+  **AI Bundles** pillar for AI-first packs of roles, personalities, quick
+  actions, recipes, and sources. The daemon now ships bundle install tracking
+  (`ai_bundle_installs`, `ai_bundle_assets`, migration 017), `GET /api/v1/ai-bundles`
+  plus install/uninstall routes, bundle-aware profile catalog state, and
+  bundle-owned quick-action loading. The Windows installer now accepts optional
+  bundle choices up front and writes a bootstrap selection file that Electron
+  consumes on first launch.
+- **First mode-specialization pass for the advanced case engine.** Running
+  `benchmark`, `portfolio`, `challenge`, `harvest`, `repair`, `migrate`, and
+  `audit` cases now seeds mode-specific artifacts instead of falling back to the
+  same generic loop: benchmark candidates spawn child generate cases, portfolio
+  sweeps spawn ordered repo slices, challenge runs force a minority-path child
+  case, harvest runs promote reference URLs into reusable sources, and the
+  squad builder now resolves bundle-installed roles/personalities when present.
 
 ### Fixed
 - **Consistent Synapse icon everywhere.** The window/taskbar + tray now use the

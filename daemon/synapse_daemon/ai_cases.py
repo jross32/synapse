@@ -518,6 +518,9 @@ class AiCaseAngleContract(BaseModel):
     key: str
     title: str
     assigned_role_id: str
+    fallback_role_ids: list[str] = Field(default_factory=list)
+    preferred_personality_id: str | None = None
+    fallback_personality_ids: list[str] = Field(default_factory=list)
     instructions_md: str
 
 
@@ -1301,6 +1304,8 @@ def angle_contracts(
             key="judge",
             title="Judge / Boss",
             assigned_role_id="boss",
+            preferred_personality_id="synthesist",
+            fallback_personality_ids=["mediator"],
             instructions_md=(
                 f"{shared}\n\nRun the case. Keep the timeline current, enforce contradiction capture, "
                 "and do not mark the handoff complete until reviewer/tester/judge expectations are met."
@@ -1314,36 +1319,51 @@ def angle_contracts(
                     key="constraint-harvester",
                     title="Constraint Harvester",
                     assigned_role_id="researcher",
+                    preferred_personality_id="archivist",
+                    fallback_personality_ids=["perfectionist"],
                     instructions_md=f"{shared}\n\nList the hard constraints, non-goals, risks, and hidden assumptions.",
                 ),
                 AiCaseAngleContract(
                     key="repo-witness",
                     title="Repo Witness",
-                    assigned_role_id="researcher",
+                    assigned_role_id="repo-witness",
+                    fallback_role_ids=["researcher"],
+                    preferred_personality_id="operator",
+                    fallback_personality_ids=["pragmatist"],
                     instructions_md=f"{shared}\n\nInspect the repo(s) and surface patterns, seams, contracts, and current architecture realities.",
                 ),
                 AiCaseAngleContract(
                     key="docs-witness",
                     title="Docs Witness",
-                    assigned_role_id="docs-writer",
+                    assigned_role_id="docs-witness",
+                    fallback_role_ids=["docs-writer", "researcher"],
+                    preferred_personality_id="archivist",
                     instructions_md=f"{shared}\n\nSummarize README guidance, ADRs, records, and documented contracts relevant to this case.",
                 ),
                 AiCaseAngleContract(
                     key="open-web-witness",
                     title="Open-Web Witness",
-                    assigned_role_id="researcher",
+                    assigned_role_id="open-web-witness",
+                    fallback_role_ids=["researcher"],
+                    preferred_personality_id="scout",
+                    fallback_personality_ids=["visionary"],
                     instructions_md=f"{shared}\n\nUse web evidence where helpful, but prefer official docs and clearly attributed sources.",
                 ),
                 AiCaseAngleContract(
                     key="blast-radius-cartographer",
                     title="Blast Radius Cartographer",
-                    assigned_role_id="reviewer",
+                    assigned_role_id="blast-radius-cartographer",
+                    fallback_role_ids=["reviewer"],
+                    preferred_personality_id="perfectionist",
                     instructions_md=f"{shared}\n\nMap touched areas, contracts, likely regressions, and the test surface.",
                 ),
                 AiCaseAngleContract(
                     key="skeptic",
                     title="Skeptic",
-                    assigned_role_id="reviewer",
+                    assigned_role_id="contract-prosecutor",
+                    fallback_role_ids=["reviewer"],
+                    preferred_personality_id="dissenter",
+                    fallback_personality_ids=["skeptic"],
                     instructions_md=f"{shared}\n\nStress-test the majority view and preserve the strongest losing argument.",
                 ),
             ]
@@ -1354,42 +1374,102 @@ def angle_contracts(
                 AiCaseAngleContract(
                     key="recipe-composer",
                     title="Recipe Composer",
-                    assigned_role_id="planner",
+                    assigned_role_id="recipe-composer",
+                    fallback_role_ids=["planner"],
+                    preferred_personality_id="visionary",
                     instructions_md=f"{shared}\n\nChoose the best recipe/components or compare top candidates before implementation begins.",
                 ),
                 AiCaseAngleContract(
                     key="ux-steward",
                     title="UX Steward",
-                    assigned_role_id="designer",
+                    assigned_role_id="ux-steward",
+                    fallback_role_ids=["designer"],
+                    preferred_personality_id="visionary",
                     instructions_md=f"{shared}\n\nEnforce movement, navigation, density, and no unjustified long-scroll layouts.",
                 ),
                 AiCaseAngleContract(
                     key="implementer",
                     title="Implementer",
                     assigned_role_id="implementer",
+                    preferred_personality_id="operator",
+                    fallback_personality_ids=["pragmatist"],
                     instructions_md=f"{shared}\n\nExecute inside the writable worktree only. Record concrete file changes and verification.",
                 ),
                 AiCaseAngleContract(
                     key="tester",
                     title="Tester",
                     assigned_role_id="tester",
+                    preferred_personality_id="perfectionist",
                     instructions_md=f"{shared}\n\nOwn the test pass, including browser checks when relevant. Report exact failures and residual risk.",
                 ),
                 AiCaseAngleContract(
                     key="reviewer",
                     title="Reviewer",
-                    assigned_role_id="reviewer",
+                    assigned_role_id="release-reviewer",
+                    fallback_role_ids=["reviewer"],
+                    preferred_personality_id="synthesist",
+                    fallback_personality_ids=["mediator"],
                     instructions_md=f"{shared}\n\nReview implementation quality, blast radius, and coverage before handoff.",
                 ),
             ]
+        )
+    if case.case_mode == AiCaseMode.REPAIR:
+        contracts.append(
+            AiCaseAngleContract(
+                key="repair-foreman",
+                title="Repair Foreman",
+                assigned_role_id="repair-foreman",
+                fallback_role_ids=["implementer", "planner"],
+                preferred_personality_id="operator",
+                fallback_personality_ids=["pragmatist"],
+                instructions_md=f"{shared}\n\nSequence the rescue from fastest stabilization move to deeper cleanup, and keep the repo runnable throughout.",
+            )
+        )
+    if case.case_mode == AiCaseMode.MIGRATE:
+        contracts.append(
+            AiCaseAngleContract(
+                key="migration-steward",
+                title="Migration Steward",
+                assigned_role_id="migration-steward",
+                fallback_role_ids=["planner", "reviewer"],
+                preferred_personality_id="archivist",
+                fallback_personality_ids=["mediator"],
+                instructions_md=f"{shared}\n\nOwn the migration ledger, compatibility notes, rollout order, and rollback path.",
+            )
+        )
+    if case.case_mode in {AiCaseMode.AUDIT, AiCaseMode.REPAIR, AiCaseMode.MIGRATE}:
+        contracts.append(
+            AiCaseAngleContract(
+                key="regression-hunter",
+                title="Regression Hunter",
+                assigned_role_id="regression-hunter",
+                fallback_role_ids=["tester", "reviewer"],
+                preferred_personality_id="dissenter",
+                fallback_personality_ids=["skeptic"],
+                instructions_md=f"{shared}\n\nHunt for the most likely regressions or weak spots introduced by the proposed fix or migration.",
+            )
         )
     if case.case_mode == AiCaseMode.HARVEST:
         contracts.append(
             AiCaseAngleContract(
                 key="source-curator",
                 title="Source Curator",
-                assigned_role_id="docs-writer",
+                assigned_role_id="source-curator",
+                fallback_role_ids=["docs-writer", "researcher"],
+                preferred_personality_id="archivist",
                 instructions_md=f"{shared}\n\nTurn harvested evidence into source records, promotion ideas, and reusable factory assets.",
+            )
+        )
+    if case.case_mode == AiCaseMode.PORTFOLIO:
+        contracts.append(
+            AiCaseAngleContract(
+                key="portfolio-architect",
+                title="Portfolio Architect",
+                assigned_role_id="portfolio-architect",
+                fallback_role_ids=["planner", "researcher"],
+                preferred_personality_id="scout",
+                fallback_personality_ids=["visionary"],
+                instructions_md=f"{shared}\n\nMap cross-repo boundaries, sequence follow-up child cases, and keep the one-write-target rule explicit.",
             )
         )
     if case.case_mode == AiCaseMode.BENCHMARK:
@@ -1397,7 +1477,10 @@ def angle_contracts(
             AiCaseAngleContract(
                 key="benchmark-judge",
                 title="Benchmark Judge",
-                assigned_role_id="supervisor",
+                assigned_role_id="benchmark-judge",
+                fallback_role_ids=["supervisor"],
+                preferred_personality_id="synthesist",
+                fallback_personality_ids=["mediator"],
                 instructions_md=f"{shared}\n\nSpawn and compare candidate cases, maintain the leaderboard, and select the winner with rationale.",
             )
         )

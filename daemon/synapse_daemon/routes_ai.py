@@ -21,6 +21,7 @@ from fastapi import APIRouter
 
 from . import projects as projects_module
 from . import agent_squads as agent_squads_module
+from . import ai_bundles as ai_bundles_module
 from . import ai_cases as ai_cases_module
 from . import ai_factory as ai_factory_module
 from .ai_context_memory import ai_context_metadata
@@ -142,6 +143,7 @@ def build_ai_router(
                 }
             )
         factory_counts = ai_factory_module.counts(storage.conn)
+        installed_bundle_ids = set(ai_bundles_module.list_installed_bundle_ids(storage.conn))
 
         # Tail of audit so the AI can spot "what just happened" without
         # pulling the whole table.
@@ -181,10 +183,17 @@ def build_ai_router(
                 for role in agent_squads_module.list_role_templates(storage.conn)
             ],
             "ai_factory": {
-                "counts": factory_counts,
+                "counts": {
+                    **factory_counts,
+                    "installed_bundles": len(installed_bundle_ids),
+                },
                 "mission_profiles": [
                     profile.model_dump(mode="json")
                     for profile in ai_cases_module.mission_profiles()
+                ],
+                "installed_bundles": [
+                    bundle.model_dump(mode="json")
+                    for bundle in ai_bundles_module.list_installed_bundles(storage.conn)
                 ],
             },
             "shared_files": [_file_to_inline(f) for f in shared_files],
@@ -244,6 +253,11 @@ def build_ai_router(
                     "purpose": "browse and manage the AI Factory catalog",
                     "method": "GET | POST | PATCH | DELETE",
                     "path": "/api/v1/ai-factory/catalog | /api/v1/ai-components | /api/v1/ai-recipes | /api/v1/ai-sources",
+                },
+                {
+                    "purpose": "install or inspect AI-first bundles for roles, personalities, quick actions, and factory assets",
+                    "method": "GET | POST | DELETE",
+                    "path": "/api/v1/ai-bundles | /api/v1/ai-bundles/install/{id}",
                 },
                 {
                     "purpose": "read a project's ADRs, backlog, and version history",

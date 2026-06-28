@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -64,6 +65,39 @@ def _harness(tmp_path: Path):
     app = build_app(storage, bus, process_manager=pm)
     client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
     return app, client, storage, pm
+
+
+def _patch_fake_spawn(monkeypatch: pytest.MonkeyPatch, app) -> None:
+    sessions: dict[str, object] = {}
+
+    async def fake_spawn(*, argv, cwd, env=None, rows=24, cols=80, project_id=None):  # type: ignore[override]
+        session_id = f"sid-{len(sessions) + 1}"
+
+        class _Session:
+            exit_code = None
+            pid = 42
+
+            def __init__(self) -> None:
+                self.session_id = session_id
+                self.argv = argv
+                self.cwd = cwd
+
+            def summary(self):
+                return SimpleNamespace(
+                    session_id=session_id,
+                    pid=42,
+                    cwd=cwd,
+                    argv=argv,
+                    started_at="2026-06-27T00:00:00+00:00",
+                    exit_code=None,
+                )
+
+        session = _Session()
+        sessions[session_id] = session
+        return session
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", fake_spawn)
+    monkeypatch.setattr(app.state.pty_manager, "get", lambda session_id: sessions.get(session_id))
 
 
 def test_create_case_persists_bundle_and_targets(tmp_path: Path) -> None:
@@ -190,3 +224,127 @@ def test_open_ai_os_route_registers_managed_project(tmp_path: Path, monkeypatch:
         assert launched["project_id"] == "ai-operating-system"
         created = c.get("/api/v1/projects/ai-operating-system")
         assert created.status_code == 200, created.text
+
+
+def test_install_ai_bundle_registers_assets_and_quick_action(
+    tmp_path: Path,
+) -> None:
+    _app, client, storage, _pm = _harness(tmp_path)
+    with client as c:
+        installed = c.post("/api/v1/ai-bundles/install/deep-research-council")
+        assert installed.status_code == 200, installed.text
+        catalog = c.get("/api/v1/ai-bundles")
+        actions = c.get("/api/v1/quick-actions")
+        profile = c.get("/api/v1/profile/catalog-state")
+    assert "deep-research-council" in catalog.json()["installed_ids"]
+    assert any(item["id"] == "deep-research-council" for item in actions.json()["actions"])
+    profile_items = {item["item_key"]: item for item in profile.json()["items"]}
+    assert profile_items["bundle:deep-research-council"]["installed_here"] is True
+    assert storage.conn.execute(
+        "SELECT 1 FROM agent_role_templates WHERE id = ?",
+        ("contract-prosecutor",),
+    ).fetchone() is not None
+
+
+def test_benchmark_run_spawns_candidate_children(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client, storage, _pm = _harness(tmp_path)
+    _patch_fake_spawn(monkeypatch, app)
+    with client as c:
+        c.post("/api/v1/ai-bundles/install/fullstack-app-factory")
+        created = c.post(
+            "/api/v1/ai-cases",
+            json={
+                "primary_project_id": "demo-project",
+                "goal_md": "Generate the best candidate app.",
+                "case_mode": "benchmark",
+                "selected_recipe_id": "fullstack-factory-board",
+                "intent": {"goal_md": "Generate the best candidate app."},
+                "targets": {"primary_project_id": "demo-project"},
+                "directives": {
+                    "selected_recipe_id": "fullstack-factory-board",
+                    "candidate_recipe_ids": ["research-cockpit-v1", "repo-rescue-console"],
+                },
+            },
+        )
+        case_id = created.json()["case"]["id"]
+        launched = c.post(f"/api/v1/ai-cases/{case_id}/run", json={"open_in_tab": False})
+        assert launched.status_code == 200, launched.text
+        graph = c.get(f"/api/v1/ai-cases/{case_id}/graph").json()
+        bundle = ai_cases.load_bundle(storage.data_dir, case_id)
+    assert len(graph["nodes"]) >= 3
+    assert len(bundle.candidate_leaderboard) >= 2
+
+
+def test_portfolio_run_spawns_sequenced_child_slices(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client, storage, _pm = _harness(tmp_path)
+    _patch_fake_spawn(monkeypatch, app)
+    with client as c:
+        created = c.post(
+            "/api/v1/ai-cases",
+            json={
+                "primary_project_id": "demo-project",
+                "neighbor_project_ids": ["neighbor-project"],
+                "goal_md": "Map the system boundary and sequence the repo work.",
+                "case_mode": "portfolio",
+            },
+        )
+        case_id = created.json()["case"]["id"]
+        launched = c.post(f"/api/v1/ai-cases/{case_id}/run", json={"open_in_tab": False})
+        assert launched.status_code == 200, launched.text
+        graph = c.get(f"/api/v1/ai-cases/{case_id}/graph").json()
+        bundle = ai_cases.load_bundle(storage.data_dir, case_id)
+    assert len(graph["nodes"]) >= 3
+    assert any(card.project_id == "neighbor-project" for card in bundle.claim_cards)
+
+
+def test_challenge_and_harvest_modes_gain_specialized_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client, storage, _pm = _harness(tmp_path)
+    _patch_fake_spawn(monkeypatch, app)
+    with client as c:
+        challenge = c.post(
+            "/api/v1/ai-cases",
+            json={
+                "primary_project_id": "demo-project",
+                "goal_md": "Challenge this proposed direction.",
+                "case_mode": "challenge",
+            },
+        )
+        challenge_id = challenge.json()["case"]["id"]
+        challenge_run = c.post(f"/api/v1/ai-cases/{challenge_id}/run", json={"open_in_tab": False})
+        assert challenge_run.status_code == 200, challenge_run.text
+        challenge_graph = c.get(f"/api/v1/ai-cases/{challenge_id}/graph").json()
+        challenge_bundle = ai_cases.load_bundle(storage.data_dir, challenge_id)
+
+        harvest = c.post(
+            "/api/v1/ai-cases",
+            json={
+                "primary_project_id": "demo-project",
+                "goal_md": "Harvest reusable ideas from references.",
+                "case_mode": "harvest",
+                "intent": {"goal_md": "Harvest reusable ideas from references."},
+                "targets": {
+                    "primary_project_id": "demo-project",
+                    "reference_urls": ["https://example.com/reference-a", "https://example.com/reference-b"],
+                },
+            },
+        )
+        harvest_id = harvest.json()["case"]["id"]
+        harvest_run = c.post(f"/api/v1/ai-cases/{harvest_id}/run", json={"open_in_tab": False})
+        assert harvest_run.status_code == 200, harvest_run.text
+        harvest_bundle = ai_cases.load_bundle(storage.data_dir, harvest_id)
+        harvest_case = c.get(f"/api/v1/ai-cases/{harvest_id}").json()
+
+    assert len(challenge_graph["nodes"]) >= 2
+    assert len(challenge_bundle.failure_matrix) >= 3
+    assert len(challenge_bundle.contradiction_docket) >= 1
+    assert len(harvest_bundle.promotions) >= 2
+    assert len(harvest_case["case"]["targets"]["attached_source_ids"]) >= 2

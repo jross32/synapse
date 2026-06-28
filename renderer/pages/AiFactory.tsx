@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Aperture, BookTemplate, BrainCircuit, FolderSearch, GitBranchPlus, Layers3, Sparkles } from 'lucide-react';
+import { Aperture, BookTemplate, Bot, BrainCircuit, FolderSearch, GitBranchPlus, Layers3, Sparkles } from 'lucide-react';
 
 import { PageHeader } from '../components/PageHeader';
 import { Badge } from '../components/ui/badge';
@@ -10,12 +10,13 @@ import { cn } from '@shared/utils';
 import { createAiCase, getAiCaseMeta, listAiCases, openProjectInAiOs, runAiCase, stopAiCase } from '@shared/ai-cases-client';
 import { getAiFactoryCatalog, type AiFactoryCatalogResponse } from '@shared/ai-factory-client';
 
-type FactoryTab = 'recipes' | 'components' | 'sources' | 'cases';
+type FactoryTab = 'recipes' | 'components' | 'sources' | 'bundles' | 'cases';
 
 const TABS: Array<{ id: FactoryTab; label: string; icon: typeof BookTemplate }> = [
   { id: 'recipes', label: 'Recipes', icon: BookTemplate },
   { id: 'components', label: 'Components', icon: Layers3 },
   { id: 'sources', label: 'Sources', icon: FolderSearch },
+  { id: 'bundles', label: 'Bundles', icon: Bot },
   { id: 'cases', label: 'Runs', icon: GitBranchPlus },
 ];
 
@@ -69,6 +70,7 @@ export function AiFactoryPage(): JSX.Element {
     if (tab === 'recipes') return catalog.catalog.recipes;
     if (tab === 'components') return catalog.catalog.components;
     if (tab === 'sources') return catalog.catalog.sources;
+    if (tab === 'bundles') return catalog.bundles;
     return cases;
   }, [catalog, cases, tab]);
   const selected = useMemo(
@@ -287,6 +289,9 @@ export function AiFactoryPage(): JSX.Element {
               <MetricCard label='Components' value={String(catalog?.counts.components ?? 0)} />
               <MetricCard label='Sources' value={String(catalog?.counts.sources ?? 0)} />
             </div>
+            <div className='grid grid-cols-1 gap-2'>
+              <MetricCard label='Installed bundles' value={String(catalog?.counts.installed_bundles ?? 0)} />
+            </div>
           </div>
         </Card>
 
@@ -346,6 +351,7 @@ export function AiFactoryPage(): JSX.Element {
                     {'archetype' in item && <Badge variant='secondary'>{item.archetype}</Badge>}
                     {'family' in item && <Badge variant='secondary'>{item.family}</Badge>}
                     {'source_type' in item && <Badge variant='secondary'>{item.source_type}</Badge>}
+                    {'publisher' in item && <Badge variant={item.installed ? 'default' : 'outline'}>{item.installed ? 'installed' : 'available'}</Badge>}
                   </div>
                 </button>
               );
@@ -426,6 +432,14 @@ export function AiFactoryPage(): JSX.Element {
                         <InspectorLine label='Reuse posture' value={selected.reuse_posture} />
                       </>
                     )}
+                    {'publisher' in selected && (
+                      <>
+                        <InspectorLine label='Publisher' value={selected.publisher} />
+                        <InspectorLine label='Version' value={selected.version} />
+                        <InspectorLine label='Installed' value={selected.installed ? 'yes' : 'no'} />
+                        <InspectorLine label='Case modes' value={(selected.recommended_case_modes ?? []).join(', ') || 'n/a'} />
+                      </>
+                    )}
                     <p className='rounded-2xl border border-border bg-secondary/40 p-4 text-sm text-muted-foreground'>
                       {selected.description || selected.provenance_summary || selected.notes_md || 'No notes recorded yet.'}
                     </p>
@@ -445,6 +459,14 @@ export function AiFactoryPage(): JSX.Element {
                             {tag}
                           </Badge>
                         ))}
+                      </div>
+                    )}
+                    {'publisher' in selected && (
+                      <div className='grid grid-cols-2 gap-2'>
+                        <MetricCard label='Roles' value={String(selected.roles?.length ?? 0)} />
+                        <MetricCard label='Quick actions' value={String(selected.quick_actions?.length ?? 0)} />
+                        <MetricCard label='Recipes' value={String(selected.recipes?.length ?? 0)} />
+                        <MetricCard label='Sources' value={String(selected.sources?.length ?? 0)} />
                       </div>
                     )}
                   </>

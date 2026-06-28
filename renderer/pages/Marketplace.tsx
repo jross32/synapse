@@ -3,8 +3,9 @@
 // squads. Tools + Models reuse the existing browsers; the rest land in MW2-MW4.
 
 import { useState } from 'react';
-import { Boxes, Server, Users, UsersRound, Wrench, type LucideIcon } from 'lucide-react';
+import { Bot, Boxes, Server, Users, UsersRound, Wrench, type LucideIcon } from 'lucide-react';
 
+import { AiBundleBrowser } from '../components/AiBundleBrowser';
 import { MarketplaceBrowser } from '../components/MarketplaceBrowser';
 import { ModelBrowser } from '../components/ModelBrowser';
 import { McpServerBrowser } from '../components/McpServerBrowser';
@@ -13,7 +14,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/ui/card';
 import { cn } from '@shared/utils';
 
-type Section = 'tools' | 'models' | 'mcp' | 'workers' | 'squads';
+type Section = 'tools' | 'bundles' | 'models' | 'mcp' | 'workers' | 'squads';
 
 interface SectionDef {
   id: Section;
@@ -24,6 +25,7 @@ interface SectionDef {
 
 const SECTIONS: SectionDef[] = [
   { id: 'tools', label: 'Tools', icon: Wrench, blurb: 'One-tap launchers, editors, and dev utilities.' },
+  { id: 'bundles', label: 'AI Bundles', icon: Bot, blurb: 'Install AI-first role, workflow, quick-action, and factory packs built to improve the way Synapse itself works.' },
   { id: 'models', label: 'Models', icon: Boxes, blurb: 'Local LLMs for the assistant — download + manage.' },
   { id: 'mcp', label: 'MCP Servers', icon: Server, blurb: 'Connect tools + data sources your AI can use automatically.' },
   { id: 'workers', label: 'Workers', icon: Users, blurb: 'AI workers — a role plus a personality. Same role, different personality = real collaboration.' },
@@ -66,6 +68,7 @@ export function MarketplacePage(): JSX.Element {
       <p className='text-sm text-muted-foreground'>{SECTIONS.find((s) => s.id === section)?.blurb}</p>
 
       {section === 'tools' && <MarketplaceBrowser />}
+      {section === 'bundles' && <AiBundleBrowser />}
       {section === 'models' && <ModelBrowser />}
       {section === 'mcp' && <McpServerBrowser />}
       {section === 'workers' && <WorkerBrowser />}

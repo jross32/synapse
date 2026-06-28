@@ -114,6 +114,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "include": "installer/installer.nsh",
       "createDesktopShortcut": true,
       "shortcutName": "Synapse"
     }

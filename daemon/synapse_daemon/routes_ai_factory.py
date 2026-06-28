@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from . import ai_bundles
 from . import ai_cases
 from . import ai_factory
 from .storage import Storage
@@ -16,10 +17,21 @@ def build_ai_factory_router(storage: Storage) -> APIRouter:
 
     @router.get("/ai-factory/catalog", response_model=None)
     async def get_catalog() -> dict[str, Any]:
+        installed_bundle_ids = set(ai_bundles.list_installed_bundle_ids(storage.conn))
         return {
             "catalog": ai_factory.catalog(storage.conn).model_dump(mode="json"),
-            "counts": ai_factory.counts(storage.conn),
+            "counts": {
+                **ai_factory.counts(storage.conn),
+                "installed_bundles": ai_bundles.count_installed(storage.conn),
+            },
             "mission_profiles": [profile.model_dump(mode="json") for profile in ai_cases.mission_profiles()],
+            "bundles": [
+                {
+                    **bundle.model_dump(mode="json"),
+                    "installed": bundle.id in installed_bundle_ids,
+                }
+                for bundle in ai_bundles.load_catalog()
+            ],
             "recent_cases": [
                 case.model_dump(mode="json")
                 for case in ai_cases.list_cases(storage.conn)[:8]

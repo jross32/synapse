@@ -23,6 +23,7 @@ export interface AiCaseMetaResponse {
   recipes: Array<{ id: string; name: string }>;
   write_policies: string[];
   component_families: string[];
+  available_bundles: Array<{ id: string; name: string; installed: boolean }>;
 }
 
 export interface AiCaseCreatePayload {

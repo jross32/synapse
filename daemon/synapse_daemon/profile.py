@@ -396,7 +396,7 @@ class ProfileManager:
         items: list[CatalogPreferenceItem] = []
         for row in rows:
             installed_host_ids = list(_json_loads(row["installed_host_ids_json"], []))
-            installed_here = row["kind"] == "tool" and current_host.id in installed_host_ids
+            installed_here = row["kind"] in {"tool", "bundle"} and current_host.id in installed_host_ids
             items.append(
                 CatalogPreferenceItem(
                     item_key=row["item_key"],
@@ -484,9 +484,9 @@ class ProfileManager:
                 )
         self._sync_to_remote(best_effort=True)
 
-    def record_tool_install(self, *, tool_id: str) -> None:
+    def record_catalog_install(self, *, kind: str, item_id: str) -> None:
         host = self.ensure_current_host()
-        item_key = f"tool:{tool_id}"
+        item_key = f"{kind}:{item_id}"
         now = _now_iso()
         row = self._storage.conn.execute(
             """
@@ -503,9 +503,9 @@ class ProfileManager:
                     INSERT INTO catalog_preferences (
                         item_key, kind, item_id, favorite, use_count,
                         last_installed_at, installed_host_ids_json, updated_at
-                    ) VALUES (?, 'tool', ?, 0, 0, ?, ?, ?)
+                    ) VALUES (?, ?, ?, 0, 0, ?, ?, ?)
                     """,
-                    (item_key, tool_id, now, json.dumps(sorted(host_ids)), now),
+                    (item_key, kind, item_id, now, json.dumps(sorted(host_ids)), now),
                 )
             else:
                 conn.execute(
@@ -518,9 +518,9 @@ class ProfileManager:
                 )
         self._sync_to_remote(best_effort=True)
 
-    def record_tool_uninstall(self, *, tool_id: str) -> None:
+    def record_catalog_uninstall(self, *, kind: str, item_id: str) -> None:
         host = self.ensure_current_host()
-        item_key = f"tool:{tool_id}"
+        item_key = f"{kind}:{item_id}"
         row = self._storage.conn.execute(
             "SELECT installed_host_ids_json FROM catalog_preferences WHERE item_key = ?",
             (item_key,),
@@ -539,6 +539,12 @@ class ProfileManager:
                 (json.dumps(sorted(host_ids)), _now_iso(), item_key),
             )
         self._sync_to_remote(best_effort=True)
+
+    def record_tool_install(self, *, tool_id: str) -> None:
+        self.record_catalog_install(kind="tool", item_id=tool_id)
+
+    def record_tool_uninstall(self, *, tool_id: str) -> None:
+        self.record_catalog_uninstall(kind="tool", item_id=tool_id)
 
     # ── services / hosts ───────────────────────────────────────────────
 
