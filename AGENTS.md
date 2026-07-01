@@ -14,6 +14,14 @@ Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`P
 
 **Never leave the repo broken.** If you can't finish a milestone in one session, finish a *commit* that compiles, typechecks, and passes tests. Then update `PROGRESS.md` to record what's left.
 
+**Run preflight first + commit small complete units.** Before you start, run
+`pwsh -NoProfile -File scripts/preflight.ps1` — it prints the **next-free ADR +
+migration numbers to claim** (re-checked from disk, incl. untracked files, so two
+coders never collide) and your **uncommitted footprint**. Do **not** accumulate a
+multi-thousand-line uncommitted dump across many half-built features; land each
+**complete, compiling, tested** piece as its own commit as you go. (Both of these
+drifted recently and had to be reconciled — this rule prevents a repeat.)
+
 ---
 
 ## Repo layout (high level)
