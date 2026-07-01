@@ -76,3 +76,9 @@ discover-*.png
 sweep-*.jpg
 pytest-full.txt
 pytest*.txt
+data-pwatest/
+installer/build-temp/
+ollamabuild/
+synapse.lnk
+icon-check.*
+icon-preview.*
