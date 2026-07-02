@@ -240,7 +240,12 @@ export function PhoneAccessPanel(): JSX.Element {
   async function installCloudtap(): Promise<void> {
     window.dispatchEvent(
       new CustomEvent('synapse:navigate', {
-        detail: { page: 'tools', tab: 'discover', focusId: 'cloudtap' },
+        detail: {
+          page: 'tools',
+          section: 'tools',
+          toolsTab: 'discover',
+          focusToolId: 'cloudtap',
+        },
       })
     );
   }

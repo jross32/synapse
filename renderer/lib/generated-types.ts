@@ -536,6 +536,152 @@ export interface AgentSquadDetail {
   work_items: AgentWorkItem[];
 }
 
+// ── Chat-first coder workspace (v0.1.36-dev) ────────────────────────────
+
+export type CoderThreadStatus = 'active' | 'archived' | 'closed';
+
+export type CoderMessageRole = 'user' | 'assistant' | 'system' | 'reviewer';
+
+export type CoderReviewPassStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export type CoderRunStatus =
+  | 'created'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'crashed'
+  | 'stopped'
+  | 'unavailable';
+
+export interface CoderWorkspacePreferences {
+  advanced_terminal_enabled: boolean;
+  raw_pty_enabled: boolean;
+  updated_at: string;
+}
+
+export interface CoderThread {
+  id: string;
+  project_id: string;
+  title: string;
+  status: CoderThreadStatus;
+  active_runtime_id: string | null;
+  active_provider: string | null;
+  active_model: string | null;
+  workspace_context_mode: string;
+  pinned: boolean;
+  archived: boolean;
+  thread_kind: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+  last_run_at: string | null;
+}
+
+export interface CoderThreadSummary {
+  thread: CoderThread;
+  message_count: number;
+  review_pass_count: number;
+  run_count: number;
+  last_message_preview: string;
+}
+
+export interface CoderMessage {
+  id: string;
+  thread_id: string;
+  role: CoderMessageRole;
+  content_md: string;
+  runtime_id: string | null;
+  provider: string | null;
+  model: string | null;
+  coder_run_id: string | null;
+  artifact_ids: string[];
+  usage_summary: Record<string, unknown>;
+  benchmark_attempt_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CoderRuntimeSwitch {
+  id: string;
+  thread_id: string;
+  from_runtime_id: string | null;
+  from_provider: string | null;
+  from_model: string | null;
+  to_runtime_id: string | null;
+  to_provider: string | null;
+  to_model: string | null;
+  reason: string;
+  created_at: string;
+}
+
+export interface CoderReviewPass {
+  id: string;
+  thread_id: string;
+  requested_runtime_id: string | null;
+  requested_provider: string | null;
+  requested_model: string | null;
+  status: CoderReviewPassStatus;
+  title: string;
+  summary_md: string;
+  coder_run_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CoderRun {
+  id: string;
+  thread_id: string | null;
+  message_id: string | null;
+  review_pass_id: string | null;
+  runtime_id: string;
+  provider: string;
+  model: string;
+  surface_kind: string;
+  surface_profile_version: string;
+  pty_session_id: string | null;
+  project_id: string | null;
+  benchmark_attempt_id: string | null;
+  status: CoderRunStatus;
+  started_at: string;
+  first_input_at: string | null;
+  first_output_at: string | null;
+  ended_at: string | null;
+  exit_code: number | null;
+  input_event_count: number;
+  output_event_count: number;
+  used_any_input: boolean;
+  used_any_output: boolean;
+  crash_reason: string | null;
+  workspace_context_mode: string;
+  attachments_count: number;
+  hidden_context_hash: string | null;
+  workspace_overhead_bytes: number;
+  context_items_injected: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface CoderThreadDetail {
+  thread: CoderThread;
+  messages: CoderMessage[];
+  runtime_switches: CoderRuntimeSwitch[];
+  review_passes: CoderReviewPass[];
+  linked_runs: CoderRun[];
+}
+
+export interface CoderWorkspaceContext {
+  thread: CoderThread;
+  recent_messages: CoderMessage[];
+  review_passes: CoderReviewPass[];
+  linked_runs: CoderRun[];
+  files_count: number;
+  recent_file_ids: string[];
+  records_summary: Record<string, number>;
+  available_actions: string[];
+  preferences: CoderWorkspacePreferences;
+}
+
 // ── PTY sessions (v0.1.25 / v0.1.26 · ADR-0002 Phase A) ──────────────────
 
 export interface PtySessionSummary {
@@ -546,6 +692,7 @@ export interface PtySessionSummary {
   exit_code: number | null;
   rows: number;
   cols: number;
+  project_id: string | null;
 }
 
 export interface PtySessionListResponse {

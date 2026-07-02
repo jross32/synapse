@@ -17,7 +17,11 @@ import { PageHeader } from '../components/PageHeader';
 const STOPPABLE = new Set(['launched']);
 const RUNNING = new Set(['launching', 'launched', 'stopping']);
 
-export function ProcessesPage(): JSX.Element {
+export interface ProcessesPageProps {
+  headerless?: boolean;
+}
+
+export function ProcessesPage({ headerless = false }: ProcessesPageProps): JSX.Element {
   const { projects, resourcesById, upsertProjectLocal } = useDaemon();
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -53,27 +57,46 @@ export function ProcessesPage(): JSX.Element {
 
   return (
     <div className='flex flex-col gap-6'>
-      <PageHeader
-        title='Processes'
-        subtitle={`Everything Synapse is running right now. CPU + memory update live (~2s). ${runningCount} active.`}
-        action={
-          stoppable.length > 0 && (
-            <Button
-              variant='outline'
-              disabled={stoppingAll}
-              onClick={() => setConfirmOpen(true)}
-              aria-label={`Stop all ${stoppable.length} running projects`}
-            >
-              {stoppingAll ? (
-                <Loader2 className='h-4 w-4 animate-spin' aria-hidden='true' />
-              ) : (
-                <Square className='h-4 w-4' aria-hidden='true' />
-              )}
-              Stop all ({stoppable.length})
-            </Button>
-          )
-        }
-      />
+      {!headerless && (
+        <PageHeader
+          title='Processes'
+          subtitle={`Everything Synapse is running right now. CPU + memory update live (~2s). ${runningCount} active.`}
+          action={
+            stoppable.length > 0 && (
+              <Button
+                variant='outline'
+                disabled={stoppingAll}
+                onClick={() => setConfirmOpen(true)}
+                aria-label={`Stop all ${stoppable.length} running projects`}
+              >
+                {stoppingAll ? (
+                  <Loader2 className='h-4 w-4 animate-spin' aria-hidden='true' />
+                ) : (
+                  <Square className='h-4 w-4' aria-hidden='true' />
+                )}
+                Stop all ({stoppable.length})
+              </Button>
+            )
+          }
+        />
+      )}
+      {headerless && stoppable.length > 0 && (
+        <div className='flex justify-end'>
+          <Button
+            variant='outline'
+            disabled={stoppingAll}
+            onClick={() => setConfirmOpen(true)}
+            aria-label={`Stop all ${stoppable.length} running projects`}
+          >
+            {stoppingAll ? (
+              <Loader2 className='h-4 w-4 animate-spin' aria-hidden='true' />
+            ) : (
+              <Square className='h-4 w-4' aria-hidden='true' />
+            )}
+            Stop all ({stoppable.length})
+          </Button>
+        </div>
+      )}
       {actionError && (
         <p role='alert' className='text-sm text-destructive'>
           {actionError}

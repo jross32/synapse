@@ -256,11 +256,13 @@ export interface SessionsPageProps {
   /** Called after the initial session id has been consumed, so it doesn't
    *  re-trigger on next mount. */
   onConsumedInitial?: () => void;
+  headerless?: boolean;
 }
 
 export function SessionsPage({
   initialSessionId,
   onConsumedInitial,
+  headerless = false,
 }: SessionsPageProps = {}): JSX.Element {
   const { recentEvents } = useDaemon();
   const [mode, setMode] = useState<'direct' | 'squads'>('direct');
@@ -611,11 +613,14 @@ export function SessionsPage({
   if (mode === 'squads') {
     return (
       <div className='flex h-full flex-col gap-4'>
-        <PageHeader
-          title='Sessions'
-          subtitle='Coordinate lead and helper AI workers inside the same PTY-based workspace. Every helper remains a real, reopenable terminal session.'
-          action={modeToggle}
-        />
+        {!headerless && (
+          <PageHeader
+            title='Sessions'
+            subtitle='Coordinate lead and helper AI workers inside the same PTY-based workspace. Every helper remains a real, reopenable terminal session.'
+            action={modeToggle}
+          />
+        )}
+        {headerless && <div className='flex justify-end'>{modeToggle}</div>}
         <RuntimeReadinessCard connections={runtimeConnections} />
         <AgentSquadsView
           tabs={tabs}
@@ -630,11 +635,14 @@ export function SessionsPage({
 
   return (
     <div className='flex h-full flex-col gap-4'>
-      <PageHeader
-        title='Sessions'
-        subtitle='Live AI coders & shells — Claude, Codex, Python, anything on PATH. Each session runs under a real PTY so colours, line editing and Ctrl+C all behave.'
-        action={modeToggle}
-      />
+      {!headerless && (
+        <PageHeader
+          title='Sessions'
+          subtitle='Live AI coders & shells — Claude, Codex, Python, anything on PATH. Each session runs under a real PTY so colours, line editing and Ctrl+C all behave.'
+          action={modeToggle}
+        />
+      )}
+      {headerless && <div className='flex justify-end'>{modeToggle}</div>}
 
       <RuntimeReadinessCard connections={runtimeConnections} />
 

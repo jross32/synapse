@@ -2,6 +2,8 @@
 // Theme toggle, autostart, and LAN exposure controls land in later versions
 // as their backing daemon settings are wired.
 
+import { PanelLeft, Rocket, UserRound } from 'lucide-react';
+
 import { useDaemon } from '@shared/daemon-context';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import { openExternal } from '@shared/electron-bridge';
@@ -29,11 +31,17 @@ const CONN_LABEL: Record<string, string> = {
 export interface SettingsPageProps {
   mobileRoute?: boolean;
   onForgetDevice?: () => void;
+  onOpenProfile?: () => void;
+  onOpenSidebarSettings?: () => void;
+  onOpenWhatsNew?: () => void;
 }
 
 export function SettingsPage({
   mobileRoute = false,
   onForgetDevice,
+  onOpenProfile,
+  onOpenSidebarSettings,
+  onOpenWhatsNew,
 }: SettingsPageProps): JSX.Element {
   const { health, healthError, connState, uiVersion, platform, daemonBaseUrl } = useDaemon();
 
@@ -57,6 +65,30 @@ export function SettingsPage({
           </div>
         </Card>
       )}
+
+      <Card className='grid gap-4 p-6 md:grid-cols-3'>
+        <SettingsActionCard
+          icon={UserRound}
+          title='Profile & Account'
+          description='Open the existing profile hub to manage sign-in, linked services, and sync.'
+          cta='Open profile'
+          onClick={onOpenProfile}
+        />
+        <SettingsActionCard
+          icon={PanelLeft}
+          title='Navigation & Installed Pages'
+          description='Choose which hubs show in the desktop sidebar and which installed pages get their own slot.'
+          cta='Customize navigation'
+          onClick={onOpenSidebarSettings}
+        />
+        <SettingsActionCard
+          icon={Rocket}
+          title="What's New & Roadmap"
+          description='See what shipped recently and where Synapse is heading next.'
+          cta='Open roadmap'
+          onClick={onOpenWhatsNew}
+        />
+      </Card>
 
       <Card className='flex flex-col gap-4 p-6'>
         <h2 className='text-lg font-semibold'>Daemon</h2>
@@ -121,6 +153,35 @@ function Row({ label, children }: { label: string; children: React.ReactNode }):
     <div className='grid gap-1 text-sm sm:grid-cols-[180px_1fr] sm:gap-4'>
       <span className='text-muted-foreground'>{label}</span>
       <span className='font-mono text-foreground'>{children}</span>
+    </div>
+  );
+}
+
+function SettingsActionCard({
+  icon: Icon,
+  title,
+  description,
+  cta,
+  onClick,
+}: {
+  icon: typeof UserRound;
+  title: string;
+  description: string;
+  cta: string;
+  onClick?: () => void;
+}): JSX.Element {
+  return (
+    <div className='flex flex-col gap-3 rounded-xl border border-border bg-secondary/20 p-4'>
+      <div className='flex h-10 w-10 items-center justify-center rounded-xl bg-card'>
+        <Icon className='h-5 w-5 text-primary' />
+      </div>
+      <div>
+        <h2 className='text-base font-semibold'>{title}</h2>
+        <p className='mt-1 text-sm text-muted-foreground'>{description}</p>
+      </div>
+      <Button variant='outline' size='sm' onClick={onClick} disabled={!onClick}>
+        {cta}
+      </Button>
     </div>
   );
 }

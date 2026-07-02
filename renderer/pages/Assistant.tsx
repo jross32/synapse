@@ -41,7 +41,11 @@ import { ModelBrowser } from '../components/ModelBrowser';
 const SELECT_CLASS =
   'h-9 rounded-md border border-input bg-transparent px-2 text-sm text-foreground';
 
-export function AssistantPage(): JSX.Element {
+export interface AssistantPageProps {
+  headerless?: boolean;
+}
+
+export function AssistantPage({ headerless = false }: AssistantPageProps): JSX.Element {
   const [status, setStatus] = useState<AssistantStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -172,7 +176,7 @@ export function AssistantPage(): JSX.Element {
     });
   }
 
-  const header = (
+  const header = headerless ? null : (
     <PageHeader
       title='Assistant'
       subtitle='A private, local LLM (Ollama) that runs on your machine. Ask about your projects, squads, and Synapse itself.'

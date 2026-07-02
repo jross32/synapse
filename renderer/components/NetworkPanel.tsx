@@ -378,7 +378,12 @@ export function NetworkPanel(): JSX.Element {
                   onClick={() => {
                     window.dispatchEvent(
                       new CustomEvent('synapse:navigate', {
-                        detail: { page: 'tools', tab: 'browse', focusId: 'cloudtap' },
+                        detail: {
+                          page: 'tools',
+                          section: 'tools',
+                          toolsTab: 'discover',
+                          focusToolId: 'cloudtap',
+                        },
                       })
                     );
                   }}

@@ -290,7 +290,7 @@ export function SessionTerminal({
     setSearchOpen(false);
     setSearchQuery('');
     searchRef.current?.clearDecorations();
-    termRef.current?.focus();
+    requestAnimationFrame(() => termRef.current?.focus());
   }
 
   function blurTerminalInput(): void {
@@ -298,6 +298,11 @@ export function SessionTerminal({
     if (helper instanceof HTMLTextAreaElement) {
       helper.blur();
     }
+  }
+
+  function focusTerminalFromSurface(): void {
+    if (prefersTouchPad) return;
+    requestAnimationFrame(() => termRef.current?.focus());
   }
 
   async function sendText(text: string, options?: { clearDraft?: boolean }) {
@@ -340,6 +345,7 @@ export function SessionTerminal({
           role='application'
           aria-label={`Terminal session ${sessionId}`}
           className='h-full w-full p-2'
+          onMouseDown={focusTerminalFromSurface}
         />
         {searchOpen && (
           <div
@@ -431,7 +437,7 @@ export function SessionTerminal({
               type='button'
               variant='ghost'
               size='sm'
-              onClick={() => termRef.current?.focus()}
+              onClick={focusTerminalFromSurface}
             >
               <Focus className='h-4 w-4' />
               Focus terminal

@@ -3,8 +3,8 @@
 // Reads everything from the shared DaemonProvider context: projects, live
 // resource snapshots, refresh. No own WebSocket.
 
-import { useMemo, useRef, useState } from 'react';
-import { Download, FolderSearch, HelpCircle, Plus, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, Download, FolderSearch, HelpCircle, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
@@ -27,6 +27,7 @@ import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFo
 import { ProjectTile } from '../components/ProjectTile';
 import { PageHeader } from '../components/PageHeader';
 import { StatusLegend } from '../components/StatusLegend';
+import { ProcessesPage } from './Processes';
 
 function matchesQuery(p: Project, q: string): boolean {
   if (!q) return true;
@@ -48,14 +49,21 @@ function matchesQuery(p: Project, q: string): boolean {
     .every((word) => haystack.includes(word));
 }
 
+type AppsSection = 'projects' | 'running';
+
 interface FormState {
   mode: ProjectFormMode;
   project?: Project;
 }
 
-export function AppsPage(): JSX.Element {
+export interface AppsPageProps {
+  initialSection?: AppsSection;
+}
+
+export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.Element {
   const { projects, resourcesById, refreshProjects, upsertProjectLocal, removeProjectLocal } =
     useDaemon();
+  const [section, setSection] = useState<AppsSection>(initialSection);
 
   const [form, setForm] = useState<FormState | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
@@ -70,6 +78,10 @@ export function AppsPage(): JSX.Element {
   const [importResult, setImportResult] = useState<ChatgptImportResponse | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setSection(initialSection);
+  }, [initialSection]);
 
   async function handleImportFile(file: File): Promise<void> {
     setImporting(true);
@@ -135,8 +147,13 @@ export function AppsPage(): JSX.Element {
     <div className='flex flex-col gap-6'>
       <PageHeader
         title='Apps'
-        subtitle="Your registered projects. Each tile is a folder Synapse manages. Installable plugins live in Tools."
+        subtitle={
+          section === 'projects'
+            ? 'Your registered projects. Each tile is a folder Synapse manages. Installable plugins live in My Tools.'
+            : 'Everything Synapse is running right now, with live CPU and memory telemetry.'
+        }
         action={
+          section === 'projects' &&
           <div className='flex gap-2'>
             <div className='flex items-stretch gap-1'>
               <Button
@@ -178,6 +195,30 @@ export function AppsPage(): JSX.Element {
           </div>
         }
       />
+
+      <div
+        role='tablist'
+        aria-label='Apps sections'
+        className='inline-flex w-fit gap-1 rounded-lg border border-border bg-secondary/30 p-1'
+      >
+        <TopTab
+          active={section === 'projects'}
+          onClick={() => setSection('projects')}
+          label='Projects'
+          icon={FolderSearch}
+        />
+        <TopTab
+          active={section === 'running'}
+          onClick={() => setSection('running')}
+          label='Running Now'
+          icon={Activity}
+        />
+      </div>
+
+      {section === 'running' ? (
+        <ProcessesPage headerless />
+      ) : (
+        <>
 
       {(importResult || importError) && (
         <Card
@@ -388,6 +429,8 @@ export function AppsPage(): JSX.Element {
         open={importHelpOpen}
         onClose={() => setImportHelpOpen(false)}
       />
+        </>
+      )}
     </div>
   );
 }
@@ -423,6 +466,36 @@ function KindChip({ label, count, active, onClick, icon: Icon }: KindChipProps):
       >
         {count}
       </span>
+    </button>
+  );
+}
+
+function TopTab({
+  active,
+  onClick,
+  label,
+  icon: Icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: typeof Search;
+}): JSX.Element {
+  return (
+    <button
+      type='button'
+      role='tab'
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+        active
+          ? 'bg-card text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      <Icon className='h-4 w-4' />
+      {label}
     </button>
   );
 }

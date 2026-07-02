@@ -2,7 +2,7 @@
 // local models, MCP servers, AI workers (role + personality), and ready-made
 // squads. Tools + Models reuse the existing browsers; the rest land in MW2-MW4.
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bot, Boxes, Server, Users, UsersRound, Wrench, type LucideIcon } from 'lucide-react';
 
 import { AiBundleBrowser } from '../components/AiBundleBrowser';
@@ -15,6 +15,7 @@ import { Card } from '../components/ui/card';
 import { cn } from '@shared/utils';
 
 type Section = 'tools' | 'bundles' | 'models' | 'mcp' | 'workers' | 'squads';
+export type MarketplacePageSection = Section;
 
 interface SectionDef {
   id: Section;
@@ -32,18 +33,50 @@ const SECTIONS: SectionDef[] = [
   { id: 'squads', label: 'Squad Presets', icon: UsersRound, blurb: 'Ready-made AI teams for common goals. Coming soon.' },
 ];
 
-export function MarketplacePage(): JSX.Element {
-  const [section, setSection] = useState<Section>('tools');
+export interface MarketplacePageProps {
+  headerless?: boolean;
+  initialSection?: Section;
+  allowedSections?: Section[];
+}
+
+export function MarketplacePage({
+  headerless = false,
+  initialSection = 'tools',
+  allowedSections,
+}: MarketplacePageProps): JSX.Element {
+  const visibleSections = useMemo(
+    () =>
+      allowedSections && allowedSections.length > 0
+        ? SECTIONS.filter((section) => allowedSections.includes(section.id))
+        : SECTIONS,
+    [allowedSections]
+  );
+  const fallbackSection = visibleSections[0]?.id ?? 'tools';
+  const [section, setSection] = useState<Section>(
+    visibleSections.some((item) => item.id === initialSection) ? initialSection : fallbackSection
+  );
+
+  useEffect(() => {
+    if (visibleSections.some((item) => item.id === section)) return;
+    setSection(fallbackSection);
+  }, [fallbackSection, section, visibleSections]);
+
+  useEffect(() => {
+    if (!visibleSections.some((item) => item.id === initialSection)) return;
+    setSection(initialSection);
+  }, [initialSection, visibleSections]);
 
   return (
     <div className='flex h-full flex-col gap-4'>
-      <PageHeader
-        title='Marketplace'
-        subtitle='Install tools, models, MCP servers, AI workers, and ready-made squads — your AI workforce, one tap away.'
-      />
+      {!headerless && (
+        <PageHeader
+          title='Marketplace'
+          subtitle='Install tools, models, MCP servers, AI workers, and ready-made squads — your AI workforce, one tap away.'
+        />
+      )}
 
       <div className='flex flex-wrap gap-2'>
-        {SECTIONS.map((s) => {
+        {visibleSections.map((s) => {
           const Icon = s.icon;
           const active = section === s.id;
           return (

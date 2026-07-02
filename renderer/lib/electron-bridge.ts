@@ -108,6 +108,11 @@ export async function openExternal(target: string): Promise<void> {
     return;
   }
   if (/^https?:\/\//i.test(target)) {
-    window.open(target, '_blank', 'noopener');
+    const opened = typeof window.open === 'function'
+      ? window.open(target, '_blank', 'noopener')
+      : null;
+    if (!opened) {
+      window.location.assign(target);
+    }
   }
 }

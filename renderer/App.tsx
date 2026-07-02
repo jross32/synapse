@@ -1,9 +1,7 @@
-// Synapse app shell (Milestone F) -- icon-rail sidebar + the active page.
-//
-// The whole tree sits under <DaemonProvider> so every page shares one
-// daemon connection. "Routing" is just an activePage enum -- no URL router.
+// Synapse app shell -- grouped hubs, installed pages, and responsive desktop/mobile nav.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronUp } from 'lucide-react';
 
 import { DaemonProvider, useDaemon } from '@shared/daemon-context';
 import {
@@ -15,36 +13,51 @@ import {
   tryResumeDeviceSession,
   type RuntimeAuthMode,
 } from '@shared/browser-runtime';
-import { DEFAULT_PAGE, NAV_ITEMS, type PageId } from '@shared/nav';
-import { applyPortablePreferences, isProfilePreferencesEmpty, readLocalPortablePreferences } from '@shared/profile-preferences';
+import {
+  listInstalledPages,
+  type InstalledPageView,
+} from '@shared/installed-pages-client';
+import {
+  DEFAULT_ROUTE,
+  MOBILE_NAV_ORDER,
+  coreNavItem,
+  routeIcon,
+  routeLabel,
+  type AiCodingSection,
+  type AppRoute,
+  type AppsSection,
+  type MarketplaceSection,
+  type NavigationIntent,
+  type ToolsSection,
+  type ToolsTab,
+} from '@shared/nav';
+import {
+  applyPortablePreferences,
+  isProfilePreferencesEmpty,
+  readLocalPortablePreferences,
+} from '@shared/profile-preferences';
 import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
-import { Sidebar } from './components/Sidebar';
 import { CaptureButton } from './components/CaptureButton';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
+import { Sidebar } from './components/Sidebar';
+import { SidebarSettings } from './components/SidebarSettings';
 import { HomePage } from './pages/Home';
 import { AppsPage } from './pages/Apps';
 import { ToolsPage } from './pages/Tools';
-import { SessionsPage } from './pages/Sessions';
-import { ProcessesPage } from './pages/Processes';
-import { AssistantPage } from './pages/Assistant';
-import { ReviewPage } from './pages/Review';
+import { AiCodingPage } from './pages/AiCoding';
 import { AiFactoryPage } from './pages/AiFactory';
-import { MarketplacePage } from './pages/Marketplace';
 import { WhatsnewPage } from './pages/Whatsnew';
 import { SettingsPage } from './pages/Settings';
+import { WebScraperPage } from './pages/WebScraper';
 
 export default function App(): JSX.Element {
-  // Apply the stored theme as early as possible to avoid a flash of dark
-  // when the user is on light. Also re-apply if the OS preference flips
-  // while we're in 'system' mode (Contract #14).
   const mobileRoute = isMobileRoute();
   const [authMode, setAuthMode] = useState<RuntimeAuthMode | 'booting'>('booting');
-  // Guards the unauthorized handler so a burst of 401s can't re-enter it.
   const handlingUnauthorized = useRef(false);
 
   useEffect(() => {
@@ -130,7 +143,8 @@ function PortablePreferencesBridge(): null {
       void updateProfilePreferences(detail).catch(() => undefined);
     }
     window.addEventListener('synapse:portable-preferences', onPortablePreferences);
-    return () => window.removeEventListener('synapse:portable-preferences', onPortablePreferences);
+    return () =>
+      window.removeEventListener('synapse:portable-preferences', onPortablePreferences);
   }, []);
 
   useEffect(() => {
@@ -175,7 +189,7 @@ function BootSplash(): JSX.Element {
         </svg>
         <div>
           <h1 className='text-2xl font-semibold tracking-tight'>Synapse</h1>
-          <p className='text-sm text-muted-foreground'>Preparing the app shell…</p>
+          <p className='text-sm text-muted-foreground'>Preparing the app shell...</p>
         </div>
       </div>
     </div>
@@ -188,23 +202,123 @@ interface ShellProps {
 }
 
 function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
-  const [page, setPage] = useState<PageId>(DEFAULT_PAGE);
+  const { recentEvents } = useDaemon();
+  const [route, setRoute] = useState<AppRoute>(DEFAULT_ROUTE);
+  const [appsSection, setAppsSection] = useState<AppsSection>('projects');
+  const [toolsSection, setToolsSection] = useState<ToolsSection>('tools');
+  const [toolsTab, setToolsTab] = useState<ToolsTab>('installed');
+  const [marketplaceSection, setMarketplaceSection] =
+    useState<MarketplaceSection>('tools');
+  const [aiCodingSection, setAiCodingSection] =
+    useState<AiCodingSection>('sessions');
+  const [toolsIntentNonce, setToolsIntentNonce] = useState(0);
+  const [toolsFocusId, setToolsFocusId] = useState<string | undefined>(undefined);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [toolsIntent, setToolsIntent] = useState<{
-    tab?: 'installed' | 'discover';
-    focusId?: string;
-    nonce: number;
-  } | null>(null);
-  // Set by ToolCard "Open in Sessions" → SessionsPage reads it on mount and
-  // auto-attaches a tab so the user doesn't have to know the session id.
+  const [sidebarSettingsOpen, setSidebarSettingsOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
+  const [installedPages, setInstalledPages] = useState<InstalledPageView[]>([]);
+  const seenMcpEventId = useRef(0);
+  const [navCollapsed, setNavCollapsed] = useState(
+    () =>
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('synapse:mobile-nav-collapsed') === '1'
+  );
 
-  // Global Ctrl+K / Cmd+K — the universal command palette (Contract #21).
-  // Global `?` — the keyboard shortcuts help modal. We skip the binding
-  // when the event target is an input / textarea / contenteditable so a
-  // user typing "?" into the palette filter doesn't trigger it.
+  async function refreshInstalledPages(): Promise<void> {
+    try {
+      const response = await listInstalledPages();
+      setInstalledPages(response.pages);
+    } catch {
+      /* keep the shell usable even if this optional surface fails */
+    }
+  }
+
+  useEffect(() => {
+    seenMcpEventId.current = recentEvents.reduce((max, event) => Math.max(max, event.id), 0);
+    void refreshInstalledPages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const fresh = recentEvents.filter(
+      (event) =>
+        event.id > seenMcpEventId.current && event.name.startsWith('v1.mcp_server.')
+    );
+    if (fresh.length === 0) return;
+    seenMcpEventId.current = recentEvents.reduce(
+      (max, event) => Math.max(max, event.id),
+      seenMcpEventId.current
+    );
+    void refreshInstalledPages();
+  }, [recentEvents]);
+
+  useEffect(() => {
+    if (route.kind !== 'installed') return;
+    if (installedPages.some((page) => page.id === route.id)) return;
+    navigate({ page: 'tools', section: 'installed-pages' });
+  }, [installedPages, route]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('synapse:mobile-nav-collapsed', navCollapsed ? '1' : '0');
+    } catch {
+      /* storage unavailable -- non-fatal */
+    }
+  }, [navCollapsed]);
+
+  function navigate(intent: NavigationIntent): void {
+    if (intent.page === 'home') {
+      setRoute({ kind: 'core', page: 'home' });
+      return;
+    }
+    if (intent.page === 'ai-factory') {
+      setRoute({ kind: 'core', page: 'ai-factory' });
+      return;
+    }
+    if (intent.page === 'settings') {
+      setRoute({ kind: 'core', page: 'settings' });
+      return;
+    }
+    if (intent.page === 'whatsnew') {
+      setRoute({ kind: 'core', page: 'whatsnew' });
+      return;
+    }
+    if (intent.page === 'apps') {
+      setAppsSection(intent.section ?? 'projects');
+      setRoute({ kind: 'core', page: 'apps' });
+      return;
+    }
+    if (intent.page === 'tools') {
+      setToolsSection(intent.section ?? 'tools');
+      if (intent.toolsTab) setToolsTab(intent.toolsTab);
+      if (intent.marketplaceSection) setMarketplaceSection(intent.marketplaceSection);
+      if (intent.focusToolId) {
+        setToolsFocusId(intent.focusToolId);
+        setToolsIntentNonce(Date.now());
+      }
+      setRoute({ kind: 'core', page: 'tools' });
+      return;
+    }
+    if (intent.page === 'ai-coding') {
+      setAiCodingSection(intent.section ?? 'sessions');
+      setRoute({ kind: 'core', page: 'ai-coding' });
+      return;
+    }
+    if (intent.page === 'installed') {
+      setRoute({ kind: 'installed', id: intent.installedPageId });
+    }
+  }
+
+  function navigateRoute(nextRoute: AppRoute): void {
+    if (nextRoute.kind === 'core') {
+      setRoute(nextRoute);
+      return;
+    }
+    setRoute(nextRoute);
+  }
+
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null): boolean {
       if (!(target instanceof HTMLElement)) return false;
@@ -213,20 +327,20 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       if (target.isContentEditable) return true;
       return false;
     }
-    function onKey(e: KeyboardEvent): void {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
+    function onKey(event: KeyboardEvent): void {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
         setPaletteOpen((open) => !open);
         return;
       }
       if (
-        e.key === '?' &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !isTypingTarget(e.target)
+        event.key === '?' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !isTypingTarget(event.target)
       ) {
-        e.preventDefault();
+        event.preventDefault();
         setShortcutsOpen((open) => !open);
       }
     }
@@ -234,59 +348,52 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // ToolCard fires `synapse:open-session` when a `pty.spawn` action lands a
-  // session id. We catch it here -- ToolCard never has to know which page
-  // owns the terminal UI.
   useEffect(() => {
     function onOpenSession(event: Event): void {
       const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
       if (typeof detail?.sessionId !== 'string' || !detail.sessionId) return;
       setPendingSession(detail.sessionId);
-      setPage('sessions');
+      navigate({ page: 'ai-coding', section: 'sessions' });
     }
     window.addEventListener('synapse:open-session', onOpenSession);
     return () => window.removeEventListener('synapse:open-session', onOpenSession);
   }, []);
 
-  // Generic page-navigation event (v0.1.36) -- any deep surface can
-  // fire it to jump to another page without holding a ref to setPage.
-  // Today: NetworkPanel "Install Cloudtap" CTA fires this with
-  // { page: 'tools', tab: 'discover', focusId: 'cloudtap' }.
   useEffect(() => {
     function onNavigate(event: Event): void {
-      const detail = (event as CustomEvent<{
-        page?: PageId;
-        tab?: 'installed' | 'discover';
-        focusId?: string;
-      }>).detail;
-      if (!detail?.page) return;
-      const allowed = NAV_ITEMS.find((n) => n.id === detail.page);
-      if (!allowed) return;
-      setPage(detail.page);
-      if (detail.page === 'tools') {
-        setToolsIntent({
-          tab: detail.tab,
-          focusId: detail.focusId,
-          nonce: Date.now(),
-        });
-      }
+      const detail = (event as CustomEvent<NavigationIntent>).detail;
+      if (!detail || typeof detail !== 'object' || !('page' in detail)) return;
+      navigate(detail);
     }
     window.addEventListener('synapse:navigate', onNavigate);
     return () => window.removeEventListener('synapse:navigate', onNavigate);
   }, []);
 
-  const activeNav = NAV_ITEMS.find((item) => item.id === page) ?? NAV_ITEMS[0];
+  const activeLabel = routeLabel(route, installedPages);
+  const ActiveNavIcon = routeIcon(route, installedPages);
+  const mobileItems = MOBILE_NAV_ORDER.map((id) => coreNavItem(id));
+  const toolsIntent = useMemo(
+    () => ({
+      section: toolsSection,
+      tab: toolsTab,
+      focusId: toolsFocusId,
+      marketplaceSection,
+      nonce: toolsIntentNonce,
+    }),
+    [marketplaceSection, toolsFocusId, toolsIntentNonce, toolsSection, toolsTab]
+  );
 
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
       {!mobileRoute && (
         <Sidebar
-          active={page}
-          onNavigate={setPage}
+          active={route}
+          installedPages={installedPages}
+          onNavigate={navigateRoute}
           onOpenPalette={() => setPaletteOpen(true)}
-          onOpenProfile={() => setProfileOpen(true)}
         />
       )}
+
       <div className='flex min-w-0 flex-1 flex-col'>
         {mobileRoute && (
           <header className='border-b border-border bg-card/95 backdrop-blur'>
@@ -311,9 +418,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
                   <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90'>
                     Synapse Mobile
                   </p>
-                  <h1 className='truncate text-lg font-semibold tracking-tight'>
-                    {activeNav.label}
-                  </h1>
+                  <h1 className='truncate text-lg font-semibold tracking-tight'>{activeLabel}</h1>
                 </div>
               </div>
               <div className='flex items-center gap-2'>
@@ -335,6 +440,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
             </div>
           </header>
         )}
+
         <main className='flex-1 overflow-y-auto'>
           <div
             className={cn(
@@ -342,66 +448,118 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               mobileRoute && 'pb-44'
             )}
           >
-            {page === 'home' && <HomePage onNavigate={setPage} />}
-            {page === 'apps' && <AppsPage />}
-            {page === 'tools' && <ToolsPage intent={toolsIntent} />}
-            {page === 'sessions' && (
-              <SessionsPage
-                initialSessionId={pendingSession}
-                onConsumedInitial={() => setPendingSession(null)}
+            {route.kind === 'core' && route.page === 'home' && (
+              <HomePage onNavigate={navigate} />
+            )}
+            {route.kind === 'core' && route.page === 'apps' && (
+              <AppsPage initialSection={appsSection} />
+            )}
+            {route.kind === 'core' && route.page === 'tools' && (
+              <ToolsPage
+                intent={toolsIntent}
+                installedPages={installedPages}
+                onOpenInstalledPage={(id) =>
+                  navigate({ page: 'installed', installedPageId: id })
+                }
               />
             )}
-            {page === 'assistant' && <AssistantPage />}
-            {page === 'review' && <ReviewPage />}
-            {page === 'ai-factory' && <AiFactoryPage />}
-            {page === 'marketplace' && <MarketplacePage />}
-            {page === 'processes' && <ProcessesPage />}
-            {page === 'whatsnew' && <WhatsnewPage />}
-            {page === 'settings' && (
-              <SettingsPage mobileRoute={mobileRoute} onForgetDevice={onForgetDevice} />
+            {route.kind === 'core' && route.page === 'ai-coding' && (
+              <AiCodingPage
+                initialSection={aiCodingSection}
+                pendingSessionId={pendingSession}
+                onConsumedPendingSession={() => setPendingSession(null)}
+              />
             )}
+            {route.kind === 'core' && route.page === 'ai-factory' && <AiFactoryPage />}
+            {route.kind === 'core' && route.page === 'whatsnew' && <WhatsnewPage />}
+            {route.kind === 'core' && route.page === 'settings' && (
+              <SettingsPage
+                mobileRoute={mobileRoute}
+                onForgetDevice={onForgetDevice}
+                onOpenProfile={() => setProfileOpen(true)}
+                onOpenSidebarSettings={() => setSidebarSettingsOpen(true)}
+                onOpenWhatsNew={() => navigate({ page: 'whatsnew' })}
+              />
+            )}
+            {route.kind === 'installed' && route.id === 'web-scraper' && <WebScraperPage />}
           </div>
         </main>
+
         {mobileRoute && (
           <nav className='border-t border-border bg-card/95 backdrop-blur'>
-            <div className='mx-auto max-w-[1400px] px-3 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3'>
-              <div className='grid grid-cols-3 gap-2'>
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const active = item.id === page;
-                return (
-                  <button
-                    key={item.id}
-                    type='button'
-                    onClick={() => setPage(item.id)}
-                    className={cn(
-                      'flex min-h-[68px] w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-2 text-[11px] font-medium transition-colors',
-                      active
-                        ? 'border-primary/35 bg-accent text-foreground'
-                        : 'border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-                    )}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    <Icon
-                      className={cn('h-4 w-4', active ? 'text-primary' : 'text-current')}
-                      aria-hidden='true'
-                    />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-              </div>
+            <div className='mx-auto max-w-[1400px] px-3 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-1'>
+              <button
+                type='button'
+                onClick={() => setNavCollapsed((value) => !value)}
+                aria-label={navCollapsed ? 'Show tabs' : 'Hide tabs'}
+                aria-expanded={!navCollapsed}
+                className='mx-auto flex w-20 items-center justify-center py-2'
+              >
+                <span className='h-1.5 w-10 rounded-full bg-muted-foreground/40' />
+              </button>
+              {navCollapsed ? (
+                <button
+                  type='button'
+                  onClick={() => setNavCollapsed(false)}
+                  className='flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/35 bg-accent px-3 py-2.5 text-sm font-medium text-foreground'
+                >
+                  <ActiveNavIcon className='h-4 w-4 text-primary' aria-hidden='true' />
+                  <span>{activeLabel}</span>
+                  <ChevronUp className='h-4 w-4 text-muted-foreground' aria-hidden='true' />
+                </button>
+              ) : (
+                <div className='grid grid-cols-3 gap-2 motion-safe:animate-in motion-safe:slide-in-from-bottom-2'>
+                  {mobileItems.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                      route.kind === 'core' && route.page === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type='button'
+                        onClick={() => {
+                          navigateRoute({ kind: 'core', page: item.id });
+                          setNavCollapsed(true);
+                        }}
+                        className={cn(
+                          'flex min-h-[64px] w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-2 text-[11px] font-medium transition-colors',
+                          active
+                            ? 'border-primary/35 bg-accent text-foreground'
+                            : 'border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                        )}
+                        aria-current={active ? 'page' : undefined}
+                      >
+                        <Icon
+                          className={cn('h-4 w-4', active ? 'text-primary' : 'text-current')}
+                          aria-hidden='true'
+                        />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </nav>
         )}
       </div>
+
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        onNavigate={(p) => setPage(p)}
+        onNavigate={navigate}
         onOpenProfile={() => setProfileOpen(true)}
       />
-      <ProfileHub open={profileOpen} onClose={() => setProfileOpen(false)} mobileRoute={mobileRoute} />
+      <ProfileHub
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        mobileRoute={mobileRoute}
+      />
+      <SidebarSettings
+        open={sidebarSettingsOpen}
+        onClose={() => setSidebarSettingsOpen(false)}
+        installedPages={installedPages}
+      />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <CaptureButton />
     </div>

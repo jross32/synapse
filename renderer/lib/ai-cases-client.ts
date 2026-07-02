@@ -92,13 +92,18 @@ export async function stopAiCase(caseId: string): Promise<any> {
 export async function openProjectInAiOs(
   projectId: string,
   neighborProjectIds: string[] = [],
-  caseId?: string | null
+  caseId?: string | null,
+  benchmarkRunId?: string | null
 ): Promise<OpenAiOsResponse> {
   return apiFetch<OpenAiOsResponse>(
     `/projects/${encodeURIComponent(projectId)}/open-ai-os`,
     {
       method: 'POST',
-      body: { neighbor_project_ids: neighborProjectIds, case_id: caseId ?? null },
+      body: {
+        neighbor_project_ids: neighborProjectIds,
+        case_id: caseId ?? null,
+        benchmark_run_id: benchmarkRunId ?? null,
+      },
     }
   );
 }

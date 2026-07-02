@@ -11,7 +11,7 @@ import { useDaemon } from '@shared/daemon-context';
 import { launchProject } from '@shared/projects-client';
 import { formatLocal } from '@shared/format-time';
 import type { Project } from '@shared/generated-types';
-import type { PageId } from '@shared/nav';
+import type { NavigationIntent } from '@shared/nav';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { PageHeader } from '../components/PageHeader';
@@ -20,7 +20,7 @@ import { FeaturedSlideshow } from '../components/FeaturedSlideshow';
 const FEATURED_CAP = 5;
 
 export interface HomePageProps {
-  onNavigate: (page: PageId) => void;
+  onNavigate: (intent: NavigationIntent) => void;
 }
 
 export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
@@ -97,7 +97,7 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           projects={featured}
           busyId={launchBusyId}
           onLaunch={(p) => void handleLaunch(p)}
-          onView={() => onNavigate('apps')}
+          onView={() => onNavigate({ page: 'apps', section: 'projects' })}
         />
       ) : (
         <Card className='flex flex-col items-center gap-3 border-dashed p-10 text-center'>
@@ -106,7 +106,7 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
             Add your first project — or scan a folder and let auto-discovery find them all —
             and it'll headline here.
           </p>
-          <Button onClick={() => onNavigate('apps')}>Go to Apps</Button>
+          <Button onClick={() => onNavigate({ page: 'apps', section: 'projects' })}>Go to Apps</Button>
         </Card>
       )}
 
@@ -198,17 +198,40 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
             Launch + manage your projects, watch what's running, or wire up a tool.
           </p>
           <div className='mt-1 flex flex-col gap-2'>
-            <Button variant='secondary' className='justify-start' onClick={() => onNavigate('apps')}>
+            <Button
+              variant='secondary'
+              className='justify-start'
+              onClick={() => onNavigate({ page: 'apps', section: 'projects' })}
+            >
               Open Apps
             </Button>
-            <Button variant='secondary' className='justify-start' onClick={() => onNavigate('sessions')}>
+            <Button
+              variant='secondary'
+              className='justify-start'
+              onClick={() => onNavigate({ page: 'ai-coding', section: 'sessions' })}
+            >
               Sessions (Claude / Codex / shells)
             </Button>
-            <Button variant='secondary' className='justify-start' onClick={() => onNavigate('processes')}>
-              Live Processes
+            <Button
+              variant='secondary'
+              className='justify-start'
+              onClick={() => onNavigate({ page: 'apps', section: 'running' })}
+            >
+              Running Now
             </Button>
-            <Button variant='secondary' className='justify-start' onClick={() => onNavigate('tools')}>
-              Tools
+            <Button
+              variant='secondary'
+              className='justify-start'
+              onClick={() => onNavigate({ page: 'tools', section: 'tools', toolsTab: 'installed' })}
+            >
+              My Tools
+            </Button>
+            <Button
+              variant='secondary'
+              className='justify-start'
+              onClick={() => onNavigate({ page: 'whatsnew' })}
+            >
+              What&apos;s New &amp; Roadmap
             </Button>
           </div>
         </Card>
@@ -229,7 +252,11 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           live without sifting through individual endpoints.
         </p>
         <div className='flex flex-wrap gap-2'>
-          <Button variant='secondary' size='sm' onClick={() => onNavigate('sessions')}>
+          <Button
+            variant='secondary'
+            size='sm'
+            onClick={() => onNavigate({ page: 'ai-coding', section: 'sessions' })}
+          >
             Open a coder session
           </Button>
         </div>

@@ -25,7 +25,11 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { PageHeader } from '../components/PageHeader';
 
-export function ReviewPage(): JSX.Element {
+export interface ReviewPageProps {
+  headerless?: boolean;
+}
+
+export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element {
   const { subscribeRaw } = useDaemon();
   const [inbox, setInbox] = useState<ReviewInbox | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +63,7 @@ export function ReviewPage(): JSX.Element {
   );
 
   const count = inbox?.count ?? 0;
-  const header = (
+  const header = headerless ? null : (
     <PageHeader
       title='Review'
       subtitle='Work your AI workforce handed back — approve it, send it back with feedback, or block it.'

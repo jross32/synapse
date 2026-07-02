@@ -46,6 +46,10 @@ function initialFields(entry: ToolEntry): Record<string, string> {
   const values: Record<string, string> = {};
   for (const f of entry.manifest.fields) {
     const seed = f.default;
+    if (f.type === 'boolean') {
+      values[f.key] = seed === true ? 'true' : 'false';
+      continue;
+    }
     values[f.key] = seed === undefined || seed === null ? '' : String(seed);
   }
   return values;
@@ -316,17 +320,36 @@ export function ToolCard({
                 {f.label}
                 {f.required && <span className='ml-1 text-destructive'>*</span>}
               </span>
-              <Input
-                type={f.type === 'number' ? 'number' : 'text'}
-                value={fields[f.key] ?? ''}
-                min={f.min ?? undefined}
-                max={f.max ?? undefined}
-                placeholder={f.placeholder ?? undefined}
-                disabled={!manifest.runnable || busyKey !== null}
-                onChange={(e) =>
-                  setFields((prev) => ({ ...prev, [f.key]: e.target.value }))
-                }
-              />
+              {f.type === 'boolean' ? (
+                <label className='flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm'>
+                  <input
+                    type='checkbox'
+                    checked={(fields[f.key] ?? 'false') === 'true'}
+                    disabled={!manifest.runnable || busyKey !== null}
+                    onChange={(e) =>
+                      setFields((prev) => ({
+                        ...prev,
+                        [f.key]: e.target.checked ? 'true' : 'false',
+                      }))
+                    }
+                  />
+                  <span className='text-muted-foreground'>
+                    {(fields[f.key] ?? 'false') === 'true' ? 'Enabled' : 'Disabled'}
+                  </span>
+                </label>
+              ) : (
+                <Input
+                  type={f.type === 'number' ? 'number' : 'text'}
+                  value={fields[f.key] ?? ''}
+                  min={f.min ?? undefined}
+                  max={f.max ?? undefined}
+                  placeholder={f.placeholder ?? undefined}
+                  disabled={!manifest.runnable || busyKey !== null}
+                  onChange={(e) =>
+                    setFields((prev) => ({ ...prev, [f.key]: e.target.value }))
+                  }
+                />
+              )}
               {f.help && <span className='text-xs text-muted-foreground'>{f.help}</span>}
             </label>
           ))}

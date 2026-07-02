@@ -10,6 +10,8 @@ import {
 import {
   Activity,
   ArrowRight,
+  BrainCircuit,
+  Bot,
   Boxes,
   CornerDownLeft,
   Download,
@@ -17,10 +19,13 @@ import {
   FolderSearch,
   Globe,
   Home,
+  Inbox,
   Plus,
+  Rocket,
   Search,
   Settings as SettingsIcon,
   Smartphone,
+  Sparkles,
   Square,
   SunMoon,
   Triangle,
@@ -33,7 +38,7 @@ import { launchProject, stopProject } from '@shared/projects-client';
 import { exportSnapshot } from '@shared/snapshot-client';
 import { openExternal } from '@shared/electron-bridge';
 import type { Project } from '@shared/generated-types';
-import type { PageId } from '@shared/nav';
+import type { NavigationIntent } from '@shared/nav';
 import { applyTheme, getStoredTheme, setStoredTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { Modal } from './ui/modal';
@@ -61,7 +66,7 @@ function isRunning(p: Project): boolean {
 
 function buildCommands(args: {
   projects: Project[];
-  navigate: (page: PageId) => void;
+  navigate: (intent: NavigationIntent) => void;
   openProfile: () => void;
   onProjectLaunched: (p: Project) => void;
   onProjectStopped: (p: Project) => void;
@@ -71,13 +76,91 @@ function buildCommands(args: {
   const list: Command[] = [];
 
   // Pages
-  const pages: Array<{ id: PageId; label: string; icon: IconCmp }> = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'apps', label: 'Apps', icon: Boxes },
-    { id: 'tools', label: 'Tools', icon: Wrench },
-    { id: 'sessions', label: 'Sessions', icon: Search },
-    { id: 'processes', label: 'Processes', icon: Activity },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  const pages: Array<{
+    id: string;
+    label: string;
+    icon: IconCmp;
+    searchString: string;
+    intent: NavigationIntent;
+  }> = [
+    { id: 'home', label: 'Home', icon: Home, searchString: 'home dashboard', intent: { page: 'home' } },
+    {
+      id: 'apps-projects',
+      label: 'Apps',
+      icon: Boxes,
+      searchString: 'apps projects launch manage',
+      intent: { page: 'apps', section: 'projects' },
+    },
+    {
+      id: 'apps-running',
+      label: 'Running Now',
+      icon: Activity,
+      searchString: 'running now processes active',
+      intent: { page: 'apps', section: 'running' },
+    },
+    {
+      id: 'tools',
+      label: 'My Tools',
+      icon: Wrench,
+      searchString: 'my tools installed marketplace mcp',
+      intent: { page: 'tools', section: 'tools', toolsTab: 'installed' },
+    },
+    {
+      id: 'tools-marketplace',
+      label: 'Marketplace',
+      icon: Wrench,
+      searchString: 'marketplace discover tools models bundles workers squads',
+      intent: { page: 'tools', section: 'marketplace', marketplaceSection: 'tools' },
+    },
+    {
+      id: 'tools-mcp',
+      label: 'MCP Servers',
+      icon: Wrench,
+      searchString: 'mcp servers tools',
+      intent: { page: 'tools', section: 'mcp' },
+    },
+    {
+      id: 'ai-coding-sessions',
+      label: 'Coder Workspace',
+      icon: Sparkles,
+      searchString: 'sessions coder workspace terminals coding',
+      intent: { page: 'ai-coding', section: 'sessions' },
+    },
+    {
+      id: 'ai-coding-assistant',
+      label: 'Assistant',
+      icon: Bot,
+      searchString: 'assistant local llm chat',
+      intent: { page: 'ai-coding', section: 'assistant' },
+    },
+    {
+      id: 'ai-coding-review',
+      label: 'Review Inbox',
+      icon: Inbox,
+      searchString: 'review inbox approvals ai coding',
+      intent: { page: 'ai-coding', section: 'review' },
+    },
+    {
+      id: 'ai-factory',
+      label: 'AI Factory',
+      icon: BrainCircuit,
+      searchString: 'ai factory cases workers intelligence',
+      intent: { page: 'ai-factory' },
+    },
+    {
+      id: 'whatsnew',
+      label: "What's New",
+      icon: Rocket,
+      searchString: 'whats new roadmap changelog updates',
+      intent: { page: 'whatsnew' },
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsIcon,
+      searchString: 'settings profile navigation account theme',
+      intent: { page: 'settings' },
+    },
   ];
   for (const p of pages) {
     list.push({
@@ -85,8 +168,8 @@ function buildCommands(args: {
       label: `Go to ${p.label}`,
       hint: 'Page',
       icon: p.icon,
-      searchString: `go to ${p.label} page navigate`,
-      run: () => navigate(p.id),
+      searchString: `go to ${p.label} page navigate ${p.searchString}`,
+      run: () => navigate(p.intent),
     });
   }
 
@@ -97,7 +180,7 @@ function buildCommands(args: {
     hint: 'Action',
     icon: Plus,
     searchString: 'add project new create register',
-    run: () => navigate('apps'),
+    run: () => navigate({ page: 'apps', section: 'projects' }),
   });
   list.push({
     id: 'action:scan',
@@ -105,7 +188,7 @@ function buildCommands(args: {
     hint: 'Action',
     icon: FolderSearch,
     searchString: 'scan discover find folder auto-discovery',
-    run: () => navigate('apps'),
+    run: () => navigate({ page: 'apps', section: 'projects' }),
   });
   list.push({
     id: 'action:pair',
@@ -113,7 +196,7 @@ function buildCommands(args: {
     hint: 'Action',
     icon: Smartphone,
     searchString: 'pair device phone mobile code',
-    run: () => navigate('settings'),
+    run: () => navigate({ page: 'settings' }),
   });
   list.push({
     id: 'action:snapshot',
@@ -240,7 +323,7 @@ function filterCommands(commands: Command[], query: string): Command[] {
 export interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
-  onNavigate: (page: PageId) => void;
+  onNavigate: (intent: NavigationIntent) => void;
   onOpenProfile: () => void;
 }
 
@@ -266,8 +349,8 @@ export function CommandPalette({ open, onClose, onNavigate, onOpenProfile }: Com
     () =>
       buildCommands({
         projects,
-        navigate: (p) => {
-          onNavigate(p);
+        navigate: (intent) => {
+          onNavigate(intent);
           onClose();
         },
         openProfile: () => {

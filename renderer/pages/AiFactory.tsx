@@ -9,8 +9,19 @@ import { useDaemon } from '@shared/daemon-context';
 import { cn } from '@shared/utils';
 import { createAiCase, getAiCaseMeta, listAiCases, openProjectInAiOs, runAiCase, stopAiCase } from '@shared/ai-cases-client';
 import { getAiFactoryCatalog, type AiFactoryCatalogResponse } from '@shared/ai-factory-client';
+import {
+  createBenchmarkRun,
+  exportBenchmarkRun,
+  getBenchmarkRun,
+  launchBenchmarkRun,
+  listBenchmarkRuns,
+  listBenchmarkSpecs,
+  rescoreBenchmarkRun,
+  type BenchmarkRunDetail,
+  type BenchmarkSpecBundle,
+} from '@shared/benchmarks-client';
 
-type FactoryTab = 'recipes' | 'components' | 'sources' | 'bundles' | 'cases';
+type FactoryTab = 'recipes' | 'components' | 'sources' | 'bundles' | 'cases' | 'benchmarks';
 
 const TABS: Array<{ id: FactoryTab; label: string; icon: typeof BookTemplate }> = [
   { id: 'recipes', label: 'Recipes', icon: BookTemplate },
@@ -18,11 +29,15 @@ const TABS: Array<{ id: FactoryTab; label: string; icon: typeof BookTemplate }> 
   { id: 'sources', label: 'Sources', icon: FolderSearch },
   { id: 'bundles', label: 'Bundles', icon: Bot },
   { id: 'cases', label: 'Runs', icon: GitBranchPlus },
+  { id: 'benchmarks', label: 'Benchmarks', icon: Aperture },
 ];
 
 export function AiFactoryPage(): JSX.Element {
   const { projects, subscribeRaw } = useDaemon();
   const [catalog, setCatalog] = useState<AiFactoryCatalogResponse | null>(null);
+  const [benchmarkSpecs, setBenchmarkSpecs] = useState<BenchmarkSpecBundle[]>([]);
+  const [benchmarkRuns, setBenchmarkRuns] = useState<any[]>([]);
+  const [benchmarkDetail, setBenchmarkDetail] = useState<BenchmarkRunDetail | null>(null);
   const [meta, setMeta] = useState<any>(null);
   const [cases, setCases] = useState<any[]>([]);
   const [tab, setTab] = useState<FactoryTab>('recipes');
@@ -36,6 +51,15 @@ export function AiFactoryPage(): JSX.Element {
     goal: '',
     success: '',
   });
+  const [benchmarkForm, setBenchmarkForm] = useState({
+    specId: 'coder-workspace-v1',
+    scenarioId: 'static-app-mini',
+    runtimeId: 'codex',
+    provider: 'openai',
+    model: 'codex',
+    surfaceKind: 'synapse_coder_thread',
+    repeatCount: 3,
+  });
   const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,14 +71,18 @@ export function AiFactoryPage(): JSX.Element {
   }, [projects]);
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [catalogRes, metaRes, casesRes] = await Promise.all([
+    const [catalogRes, metaRes, casesRes, specsRes, runsRes] = await Promise.all([
       getAiFactoryCatalog(),
       getAiCaseMeta(),
       listAiCases(),
+      listBenchmarkSpecs(),
+      listBenchmarkRuns(),
     ]);
     setCatalog(catalogRes);
     setMeta(metaRes);
     setCases(casesRes.cases ?? []);
+    setBenchmarkSpecs(specsRes.specs ?? []);
+    setBenchmarkRuns(runsRes.runs ?? []);
     if (!form.missionProfileId && metaRes.mission_profiles?.length) {
       setForm((current) => ({
         ...current,
@@ -62,17 +90,31 @@ export function AiFactoryPage(): JSX.Element {
         caseMode: current.missionProfileId ? current.caseMode : metaRes.mission_profiles[0].case_mode,
       }));
     }
+    if (!benchmarkForm.specId && specsRes.specs?.length) {
+      const spec = specsRes.specs[0];
+      setBenchmarkForm((current) => ({
+        ...current,
+        specId: spec.spec.id,
+        scenarioId: current.scenarioId || spec.scenarios[0]?.id || '',
+        repeatCount: spec.spec.default_repeat_count || 3,
+      }));
+    }
   }, [form.missionProfileId]);
 
   const missionProfiles = meta?.mission_profiles ?? [];
+  const selectedBenchmarkSpec = useMemo(
+    () => benchmarkSpecs.find((item) => item.spec.id === benchmarkForm.specId) ?? benchmarkSpecs[0] ?? null,
+    [benchmarkForm.specId, benchmarkSpecs]
+  );
   const listItems = useMemo(() => {
     if (!catalog) return [];
     if (tab === 'recipes') return catalog.catalog.recipes;
     if (tab === 'components') return catalog.catalog.components;
     if (tab === 'sources') return catalog.catalog.sources;
     if (tab === 'bundles') return catalog.bundles;
+    if (tab === 'benchmarks') return benchmarkRuns;
     return cases;
-  }, [catalog, cases, tab]);
+  }, [benchmarkRuns, catalog, cases, tab]);
   const selected = useMemo(
     () => listItems.find((item: any) => item.id === selectedId) ?? listItems[0] ?? null,
     [listItems, selectedId]
@@ -85,12 +127,22 @@ export function AiFactoryPage(): JSX.Element {
   useEffect(
     () =>
       subscribeRaw((event) => {
-        if (event.name.startsWith('v1.ai_case.')) {
+        if (event.name.startsWith('v1.ai_case.') || event.name.startsWith('v1.pty.')) {
           void refresh();
         }
       }),
     [refresh, subscribeRaw]
   );
+
+  useEffect(() => {
+    if (tab !== 'benchmarks' || !selectedId) {
+      setBenchmarkDetail(null);
+      return;
+    }
+    void getBenchmarkRun(selectedId)
+      .then(setBenchmarkDetail)
+      .catch(() => setBenchmarkDetail(null));
+  }, [selectedId, tab]);
 
   function onMissionProfileChange(profileId: string): void {
     const profile = missionProfiles.find((item: any) => item.id === profileId);
@@ -164,6 +216,84 @@ export function AiFactoryPage(): JSX.Element {
       setTab('cases');
       setSelectedId(caseId);
       setFlash('Case stopped.');
+    } catch (error) {
+      setFlash((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createBenchmark(): Promise<void> {
+    if (!form.projectId || !benchmarkForm.specId || !benchmarkForm.scenarioId) return;
+    setBusy(true);
+    try {
+      const spec = benchmarkSpecs.find((item) => item.spec.id === benchmarkForm.specId);
+      const created = await createBenchmarkRun({
+        spec_id: benchmarkForm.specId,
+        project_id: form.projectId,
+        title: `Benchmark / ${projects.find((item) => item.id === form.projectId)?.name || form.projectId} / ${benchmarkForm.scenarioId}`,
+        repeat_count: benchmarkForm.repeatCount,
+        matrix: [
+          {
+            scenario_id: benchmarkForm.scenarioId,
+            runtime_id: benchmarkForm.runtimeId,
+            provider: benchmarkForm.provider,
+            model: benchmarkForm.model,
+            surface_kind: benchmarkForm.surfaceKind as
+              | 'direct_cli'
+              | 'synapse_coder_thread'
+              | 'synapse_workbench'
+              | 'synapse_raw_pty',
+          },
+        ],
+        metadata: { spec_name: spec?.spec.name },
+      });
+      await refresh();
+      setTab('benchmarks');
+      setSelectedId(created.id);
+      setFlash('Benchmark run created.');
+    } catch (error) {
+      setFlash((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function launchSelectedBenchmark(): Promise<void> {
+    if (!selected?.id) return;
+    setBusy(true);
+    try {
+      await launchBenchmarkRun(selected.id, {});
+      await refresh();
+      setBenchmarkDetail(await getBenchmarkRun(selected.id));
+      setFlash('Benchmark attempt launched.');
+    } catch (error) {
+      setFlash((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rescoreSelectedBenchmark(): Promise<void> {
+    if (!selected?.id) return;
+    setBusy(true);
+    try {
+      await rescoreBenchmarkRun(selected.id);
+      setBenchmarkDetail(await getBenchmarkRun(selected.id));
+      setFlash('Benchmark rescored.');
+    } catch (error) {
+      setFlash((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportSelectedBenchmarkReport(): Promise<void> {
+    if (!selected?.id) return;
+    setBusy(true);
+    try {
+      const exported = await exportBenchmarkRun(selected.id);
+      setFlash(`Benchmark exported to ${exported.md_path}`);
     } catch (error) {
       setFlash((error as Error).message);
     } finally {
@@ -292,6 +422,107 @@ export function AiFactoryPage(): JSX.Element {
             <div className='grid grid-cols-1 gap-2'>
               <MetricCard label='Installed bundles' value={String(catalog?.counts.installed_bundles ?? 0)} />
             </div>
+
+            <div className='rounded-2xl border border-border bg-secondary/30 p-4'>
+              <p className='text-xs font-semibold uppercase tracking-[0.2em] text-primary/85'>Benchmark wizard</p>
+              <p className='mt-1 text-sm text-muted-foreground'>
+                Materialize a benchmark run against the new Coder Workspace, workbench, raw PTY, or direct-ingest baseline.
+              </p>
+              <div className='mt-4 grid gap-3'>
+                <label className='grid gap-2 text-sm'>
+                  <span className='text-muted-foreground'>Benchmark spec</span>
+                  <select
+                    className='rounded-lg border border-border bg-background px-3 py-2'
+                    value={benchmarkForm.specId}
+                    onChange={(e) =>
+                      setBenchmarkForm((current) => ({
+                        ...current,
+                        specId: e.target.value,
+                        scenarioId:
+                          benchmarkSpecs.find((item) => item.spec.id === e.target.value)?.scenarios[0]?.id || '',
+                      }))
+                    }
+                  >
+                    {benchmarkSpecs.map((spec) => (
+                      <option key={spec.spec.id} value={spec.spec.id}>
+                        {spec.spec.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className='grid gap-2 text-sm'>
+                  <span className='text-muted-foreground'>Scenario</span>
+                  <select
+                    className='rounded-lg border border-border bg-background px-3 py-2'
+                    value={benchmarkForm.scenarioId}
+                    onChange={(e) => setBenchmarkForm((current) => ({ ...current, scenarioId: e.target.value }))}
+                  >
+                    {(selectedBenchmarkSpec?.scenarios ?? []).map((scenario) => (
+                      <option key={scenario.id} value={scenario.id}>
+                        {scenario.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className='grid grid-cols-2 gap-3'>
+                  <label className='grid gap-2 text-sm'>
+                    <span className='text-muted-foreground'>Runtime</span>
+                    <select
+                      className='rounded-lg border border-border bg-background px-3 py-2'
+                      value={benchmarkForm.runtimeId}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setBenchmarkForm((current) => ({
+                          ...current,
+                          runtimeId: value,
+                          provider:
+                            value === 'claude' ? 'anthropic' : value === 'copilot' ? 'github' : value === 'ollama' ? 'ollama' : 'openai',
+                          model: value,
+                        }));
+                      }}
+                    >
+                      <option value='codex'>Codex</option>
+                      <option value='claude'>Claude</option>
+                      <option value='copilot'>Copilot</option>
+                      <option value='ollama'>Local model</option>
+                    </select>
+                  </label>
+                  <label className='grid gap-2 text-sm'>
+                    <span className='text-muted-foreground'>Surface</span>
+                    <select
+                      className='rounded-lg border border-border bg-background px-3 py-2'
+                      value={benchmarkForm.surfaceKind}
+                      onChange={(e) => setBenchmarkForm((current) => ({ ...current, surfaceKind: e.target.value }))}
+                    >
+                      <option value='synapse_coder_thread'>Coder Workspace</option>
+                      <option value='synapse_workbench'>Workbench</option>
+                      <option value='synapse_raw_pty'>Raw PTY</option>
+                      <option value='direct_cli'>Direct ingest</option>
+                    </select>
+                  </label>
+                </div>
+                <label className='grid gap-2 text-sm'>
+                  <span className='text-muted-foreground'>Repeats</span>
+                  <input
+                    className='rounded-lg border border-border bg-background px-3 py-2'
+                    type='number'
+                    min={1}
+                    max={9}
+                    value={benchmarkForm.repeatCount}
+                    onChange={(e) =>
+                      setBenchmarkForm((current) => ({
+                        ...current,
+                        repeatCount: Math.max(1, Math.min(9, Number(e.target.value) || 1)),
+                      }))
+                    }
+                  />
+                </label>
+                <Button disabled={busy || !form.projectId || !benchmarkForm.scenarioId} onClick={() => void createBenchmark()}>
+                  <Aperture className='mr-2 h-4 w-4' />
+                  Create benchmark run
+                </Button>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -374,7 +605,60 @@ export function AiFactoryPage(): JSX.Element {
           <div className='grid gap-4 p-5'>
             {selected ? (
               <>
-                {'case' in selected ? (
+                {tab === 'benchmarks' && 'spec_id' in selected && !('case' in selected) ? (
+                  <>
+                    <InspectorLine label='Spec' value={selected.spec_id} />
+                    <InspectorLine label='Status' value={selected.status} />
+                    <InspectorLine label='Mode' value={selected.execution_mode} />
+                    <InspectorLine label='Repeats' value={String(selected.repeat_count)} />
+                    <p className='rounded-2xl border border-border bg-secondary/40 p-4 text-sm text-muted-foreground'>
+                      {benchmarkDetail?.report?.official_quality_ranking?.length
+                        ? `Leader: ${String(benchmarkDetail.report.official_quality_ranking[0]?.candidate_key ?? 'n/a')}`
+                        : 'No scored benchmark data yet.'}
+                    </p>
+                    {benchmarkDetail?.report?.official_quality_ranking?.length ? (
+                      <div className='grid gap-2'>
+                        {benchmarkDetail.report.official_quality_ranking.slice(0, 3).map((item: any) => (
+                          <div key={String(item.candidate_key)} className='rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm'>
+                            <div className='flex items-center justify-between gap-3'>
+                              <strong>{String(item.candidate_key)}</strong>
+                              <Badge variant='outline'>{String(item.confidence_label)}</Badge>
+                            </div>
+                            <p className='mt-1 text-muted-foreground'>
+                              Quality {String(item.median_quality_score_100 ?? 'n/a')} · Tokens {String(item.median_total_tokens ?? 'n/a')}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className='grid gap-2'>
+                      <Button disabled={busy} onClick={() => void launchSelectedBenchmark()}>
+                        <Aperture className='mr-2 h-4 w-4' />
+                        Launch next attempt
+                      </Button>
+                      <Button variant='secondary' disabled={busy} onClick={() => void rescoreSelectedBenchmark()}>
+                        <Sparkles className='mr-2 h-4 w-4' />
+                        Rescore run
+                      </Button>
+                      <Button variant='outline' disabled={busy} onClick={() => void exportSelectedBenchmarkReport()}>
+                        <GitBranchPlus className='mr-2 h-4 w-4' />
+                        Export report
+                      </Button>
+                      <Button
+                        variant='outline'
+                        disabled={busy || !selected.project_id}
+                        onClick={async () => {
+                          const launch = await openProjectInAiOs(selected.project_id, [], null, selected.id);
+                          const { openExternal } = await import('@shared/electron-bridge');
+                          await openExternal(launch.url);
+                        }}
+                      >
+                        <BrainCircuit className='mr-2 h-4 w-4' />
+                        Open benchmark board
+                      </Button>
+                    </div>
+                  </>
+                ) : 'case' in selected ? (
                   <>
                     <InspectorLine label='Mode' value={selected.case.case_mode} />
                     <InspectorLine label='Mission profile' value={selected.case.mission_profile_id || 'n/a'} />
