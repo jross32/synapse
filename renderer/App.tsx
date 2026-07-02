@@ -220,11 +220,12 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const [pendingSession, setPendingSession] = useState<string | null>(null);
   const [installedPages, setInstalledPages] = useState<InstalledPageView[]>([]);
   const seenMcpEventId = useRef(0);
-  const [navCollapsed, setNavCollapsed] = useState(
-    () =>
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('synapse:mobile-nav-collapsed') === '1'
-  );
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    // Default to COLLAPSED on mobile so the nav never eats half the screen --
+    // only stay expanded if the user explicitly opened it before.
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem('synapse:mobile-nav-collapsed') !== '0';
+  });
 
   async function refreshInstalledPages(): Promise<void> {
     try {
