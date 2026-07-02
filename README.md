@@ -1,154 +1,90 @@
 # Synapse — by The WhatIf Company
 
-A modular developer command center: one always-on hub for launching projects, managing tools, monitoring live processes, and remoting in from your phone.
+**Synapse is a command center for building apps with AI.** It runs on your computer, lets you put multiple AI coding assistants — like **Claude**, **Codex**, and **GitHub Copilot** — to work on your projects, and lets you watch and steer all of it, even from your phone.
 
-> **Status:** `v0.1.36-dev` — **ADR-0003 workbench expansion complete (Phases A–F) + mobile parity / WAN follow-up verified + first-party Profile hub landed + the AI Factory / AI Operating System advanced case engine is live.** Every project has a **Files** surface: drag-drop or pick, browser-side magic-byte inspection before upload, always-on AV via Windows Defender (POSIX: ClamAV) before the bytes land for real. Workbench PTY exits persist their scrollback as transcripts. **ChatGPT export.zip -> markdown**: drop the official OpenAI export into the Apps page header button; each conversation lands as a deterministic `.md` under the auto-created `imported-chatgpt` project, deduped by sha256. **AI Quick-actions** rail on Sessions: one click opens a Claude session in the `scratch` project with the templated prompt pre-loaded as `PROMPT.md` + `SYNAPSE_QUICK_ACTION_PROMPT`. Sessions now also includes a first-pass **Agent Squads** mode: durable planner / implementer / reviewer / researcher templates, explicit handoffs that append to `.synapse-ai-context.md`, and helper workers that stay real PTY sessions instead of hidden background jobs. **AI Factory** now lives in the main shell as a native page for recipes, sources, profiles, bundles, and structured case setup, while **AI OS** is a dedicated local board for live case runs, isolated worktrees, child-case graphs, and verdict/handoff artifacts. Marketplace now also ships **AI Bundles**: installable AI-first packs of roles, personalities, quick actions, and factory assets published by **The WhatIf Company**, with overlap readouts and installer-time bundle selection support. It also now ships **Fast Money**: a one-run launcher that installs a client-ops AI bundle, scaffolds a private/local-first SaaS starter under `data/projects/fast-money-client-ops`, and opens a live build session in that generated project. `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), with paired-device auth, a touch-friendly two-row nav, a one-click LAN -> Cloudtap WAN handoff via **Use on this phone**, and `scripts/remote-recovery.ps1` as a Codex-friendly rescue path that starts/reuses the daemon, opens WAN, and prints the `/mobile` link plus pairing code. Tools → **Discover** now has a viewport-safe category rail with profile-backed favorites/history, and the shell now exposes an optional **Profile hub** for Synapse Accounts native sign-in, Google-ready linking/sign-in, connected-service readiness, host inventory, and synced catalog preferences. `synapse.cmd` now owns full dev restarts end to end, the desktop app self-heals local-token drift instead of sticking on 401s, the packaged daemon now builds into `installer/daemon-dist`, and the daemon resolves bundled tools/templates/mobile assets cleanly from packaged resources. Double-click `synapse.cmd` to launch. Agent Squads now has a guided **Team Builder wizard**, a `boss` / `supervisor` / `worker` role hierarchy with 11 seeded roles, and a **Stop all** kill switch; the Profile hub shows an honest "sync is optional" state when no accounts service is reachable. **528 tests pass + 12 skipped.** Next: deepen browser/scraper-backed intake, bundle authoring/publishing, and the case-native headless job runner, then return to Milestone J packaging polish. See [`PROGRESS.md`](./PROGRESS.md) and [`CHANGELOG.md`](./CHANGELOG.md).
+Think of it as **mission control** for your projects and your AI helpers, all in one window.
 
-## What it is
+> **Status:** early development (`v0.1.36-dev`). It already launches projects, runs AI coding sessions, and connects from your phone. We're actively building the unified "AI coding cockpit," a shared plan that every AI follows, and a one-click installer. **528 automated tests pass.**
 
-Synapse is the **nucleus** of your dev environment. Instead of juggling terminals to start `wbscrper`, an Ollama chat server, a Cloudflare tunnel, and whatever else, you launch Synapse once at boot and everything is one click away — from your desktop or your phone on the same Wi-Fi.
+---
 
-- **Desktop app** (Electron + React + TypeScript) — primary workstation UI with a system tray icon.
-- **Mobile Web UI** — full renderer-backed phone shell served by the daemon at `/mobile`; mirrors desktop pages in real time and works over LAN or a Cloudtap tunnel.
-- **Optional Synapse account hub** — bottom-rail profile surface for first-party Synapse Accounts sign-in, connected-service readiness, host inventory, and synced favorites/history without making Synapse cloud-only.
-- **Sessions-centric agent squads** — one visible lead plus helper PTY workers, explicit handoffs, shared project AI memory, and runtime preference routing across Claude / Codex / Copilot-style CLIs.
-- **AI Factory + AI Operating System + AI Bundles** — author reusable recipes/sources/policies in Synapse, install AI-first bundles from the Marketplace, then launch structured AI cases into a dedicated local run board with isolated worktrees, child-case graphs, and case exports.
-- **Fast Money launcher** — one click installs the bundled Fast Money AI pack, creates a private/local-first client-ops SaaS starter project, and opens a live AI build session in it.
-- **Decoupled Execution Layer** — a Python (FastAPI) daemon owns every spawned process. Close the desktop window, lose your phone connection: everything keeps running.
-- **Plugin layout** — new tools drop in as a folder + a `manifest.json`. No UI surgery required.
-- **Editable from the UI** — every project, tool, env var, icon, and setting has an in-app editor. No "edit the JSON file by hand" UX anywhere.
-- **Live status feedback** — every action surfaces `idle → launching → launched → stopped → error` in real time over WebSocket. Never wonder "did it work?"
+## What can I do with it?
 
-## Architecture (one paragraph)
+- **🚀 Launch & manage your projects** — one place to start, stop, and watch every app or tool you're working on. Close the window and everything keeps running.
+- **🤖 Put AI to work** — run Claude, Codex, or Copilot on your code from inside Synapse. Give them a task; they build it. A shared **plan** keeps them all on the same page — one can even hand off to another.
+- **👥 Build AI teams ("squads")** — assemble a team of AI workers, each with a **role** (designer, reviewer, tester…) and a **personality**, so they actually collaborate and debate instead of echoing each other.
+- **🛒 A marketplace** — install tools, local AI models, MCP servers, workers, and ready‑made teams with one click.
+- **📱 Control it from your phone** — pair your phone once, then drive everything remotely over Wi‑Fi (or securely over the internet). Check in or kick off work from anywhere.
+- **🧠 A built‑in local AI** — an optional on‑device assistant (via Ollama) so you can work privately, and for free.
 
-The Python daemon (port `7878`) is the only stateful actor. It registers projects, spawns them as detached child processes, monitors them via `psutil`, enforces health-checks + restart policies, and broadcasts heartbeat events over a WebSocket with an event-id cursor and a 1 000-event replay ring buffer. The Electron desktop app and the mobile Web UI are dumb clients — they render whatever the daemon sends and POST commands back. Either client can die at any time without affecting running work.
+## How it works (the simple version)
 
-## v0.1 features (planned, in roadmap order)
+Synapse has two parts that talk to each other:
 
-- Project launcher (tiles for `wbscrper` and any future app)
-- Live process monitor (PID, start time, uptime, CPU%, RAM, kill button)
-- Nucleus + Synapses UI (center workspace + peripheral tool cards)
-- Featured slideshow on Home (Microsoft-Store-inspired)
-- **Cloudtap** — first built-in tool: enter a port, get a Cloudflare tunnel URL
-- Mobile Web UI accessible at `http://<pc-lan-ip>:7878/mobile` with direct pairing or LAN -> WAN handoff through Cloudtap
-- Universal `Ctrl+K` search palette
-- Auto-start on Windows login, hide-to-tray, right-click → Quit
-- `synapse` CLI for shell users (mirrors REST 1-to-1)
-- Snapshot / restore (single JSON dump → fresh-install portability)
+1. **The engine** — a small, always‑on background program (a Python "daemon") that does the real work: it launches your apps, runs the AI sessions, and keeps everything alive on port `7878`.
+2. **The windows** — the desktop app and the phone view are just *screens* into that engine. You can close them anytime and your work keeps running; open them back up and you're right where you left off.
 
-## Design contracts (28)
+That's why Synapse is dependable: the screens can come and go, but the engine never drops your work.
 
-Every milestone honours all 28 contracts. Full spec lives in [`AGENTS.md`](./AGENTS.md); summary here:
+## Getting started
 
-**Round 1 — fundamentals (`v0.1.0.5` docs · `v0.1.1` code):**
+**Just want to use it?** Double‑click **`synapse.cmd`** — it starts everything and opens the window. Close the window and it tucks into your system tray; right‑click the tray icon → **Quit Synapse** to fully close. To put a shortcut on your desktop, run **`install-shortcut.cmd`** once.
 
-1. Everything editable from the UI · 2. Live status feedback · 3. Log capture per managed process · 4. Single error envelope · 5. WebSocket reconnect + replay protocol · 6. Daemon orphan reconciliation · 7. Versioned API (`/api/v1`) · 8. Single schema source of truth (Pydantic → TS) · 9. DB migrations from day 1 · 10. Naming conventions · 11. Audit log · 12. Confirm-before-destructive · 13. Empty states everywhere · 14. Theming via CSS tokens · 15. No telemetry by default · 16. Refuse Administrator
+**Connecting your phone:** in the app open **Settings → Phone Access**, then scan the QR code with your phone. That's it — you're connected.
 
-**Round 2 — operational depth (`v0.1.1.5` docs · `v0.1.2` code):**
+---
 
-17. Health-check protocol per project · 18. Restart policy per project · 19. Resource observability (CPU + RAM per process) · 20. Project dependencies (topological launch) · 21. Universal search / `Ctrl+K` palette · 22. Native system notifications · 23. Accessibility minimums (WCAG AA + keyboard nav + ARIA) · 24. Timestamps UTC in DB, local in UI · 25. Secrets management (DPAPI on Windows, never logged) · 26. Hot manifest reload · 27. CLI surface · 28. Snapshot / restore
+## For developers
 
-## Tech stack
+```powershell
+# one-time setup
+npm install
+pip install -e ".[dev]"
+
+# checks
+npm run typecheck                 # TypeScript passes
+(cd daemon && python -m pytest -q) # 528 tests pass + 12 skipped
+
+# run the dev stack (daemon + Vite + Electron)
+synapse.cmd
+```
+
+Before any AI coder (or you) starts a change, run `pwsh -NoProfile -File scripts/preflight.ps1` — it prints the next ADR/migration numbers to claim and flags if the uncommitted diff is getting too big to be one clean commit.
 
 | Layer | Stack |
 |---|---|
-| Desktop UI | Electron 31 · Vite · React 18 · TypeScript · Tailwind CSS · shadcn/ui |
-| Execution layer | Python 3.11+ · FastAPI · uvicorn · psutil · Pydantic · watchdog · cryptography |
-| Storage | SQLite (stdlib) with numbered migrations |
-| Comms | WebSocket + REST on `localhost:7878`, prefixed `/api/v1` |
-| Tunnels | `cloudflared` (shelled out) |
-| Packaging | PyInstaller (daemon) · electron-builder (app) · NSIS (installer) |
+| Desktop UI | Electron 31 · Vite · React 18 · TypeScript · Tailwind · shadcn/ui |
+| Engine | Python 3.11+ · FastAPI · uvicorn · psutil · Pydantic · SQLite (numbered migrations) |
+| Comms | REST + WebSocket on `localhost:7878`, prefixed `/api/v1` |
+| Tunnels | Cloudflare (`cloudflared`) for phone‑over‑internet |
+| Packaging | PyInstaller (engine) · electron‑builder + NSIS (installer) |
 
-## Getting started (dev)
+- **Repo conventions, the 28 design contracts, and the cross‑AI workflow** → [`AGENTS.md`](./AGENTS.md)
+- **Architecture decisions** → [`docs/adr/`](./docs/adr/) (latest: ADR‑0022, one Synapse + the coding cockpit + the usage‑aware auto‑router)
+- **What shipped** → [`CHANGELOG.md`](./CHANGELOG.md) · **Where we are** → [`PROGRESS.md`](./PROGRESS.md) · **Where we're headed** → [`docs/roadmap.json`](./docs/roadmap.json) (also shown in‑app under **What's New**)
 
-```powershell
-# One-time setup
-npm install
-pip install -e ".[dev]"
-python scripts/gen-icon.py          # generate tray + window icons (idempotent)
+### Repo layout
 
-# Verify toolchain
-npm run typecheck                    # TypeScript checks pass
-python -m pytest -q                  # 528 tests pass + 12 skipped
-
-# Launch (no PowerShell) — double-click synapse.cmd in Explorer, or:
-synapse.cmd
-
-# One-time: put a clickable shortcut on your Desktop
-install-shortcut.cmd
-
-# PowerShell dev variants are still available:
-.\scripts\dev.ps1 -DaemonOnly        # just the daemon (foreground, see boot logs)
+```
+electron/   Desktop app shell (Electron main + preload)
+renderer/   The React UI (desktop + the phone view)
+daemon/     The Python engine — owns all the real work + state
+tools/      Drop-in plugins (a folder + a manifest.json, no UI surgery)
+docs/       Architecture decisions (adr/), API notes, roadmap
+scripts/    Dev, recovery, build, and preflight helpers
+installer/  Packaging config
 ```
 
-`synapse.cmd` boots the daemon + Vite + Electron, waits for health checks, and opens the Synapse window. Close the window — it hides to the tray. Right-click the tray icon → **Quit Synapse** to fully exit. Logs land in `data/daemon-runtime.log` and `data/vite-runtime.log`.
+### Recovering phone access without the desktop app
 
-### Remote recovery from Codex
-
-If the desktop UI is down but a Codex session still has access to this Windows machine, run the recovery helper. It starts or reuses the daemon, opens Cloudtap on port `7878`, waits for the WAN `/mobile` URL, and prints a fresh pairing code.
+If the desktop UI is down but you still have shell access to the machine:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\remote-recovery.ps1
-
-# First-use helper when cloudflared is missing:
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\remote-recovery.ps1 -InstallCloudflared
+# add -InstallCloudflared the first time if cloudflared isn't installed
 ```
 
-Packaged builds ship the same helper under `resources\scripts\remote-recovery.ps1` so a local automation session can recover WAN phone access without opening the desktop app first.
-
-### Inspecting the live Electron app
-
-`scripts/inspect-electron.js` attaches to a running Electron app over the Chrome DevTools Protocol — screenshot it, read its console, click elements. Launch with inspection enabled, then drive it:
-
-```powershell
-npx electron . --inspect-renderer          # or set SYNAPSE_INSPECT=1
-node scripts/inspect-electron.js screenshot shot.png --full
-node scripts/inspect-electron.js console error
-node scripts/inspect-electron.js click "Launch"
-```
-
-It's app-agnostic — works against any Electron app started with a remote-debugging port.
-
-After Milestone J ships, end users will install a single `.exe` instead of running scripts.
-
-## Repo layout
-
-```
-electron/      Electron main + preload (TypeScript)
-renderer/      React UI shown inside Electron
-mobile/        Responsive Web UI served by the daemon to phones
-daemon/        Python (FastAPI) execution layer — owns all state
-tools/         Plugin manifests (drop in a folder, no UI surgery needed)
-docs/          api-changes.md, security.md, adr/
-installer/     PyInstaller + electron-builder + NSIS configs (Milestone J)
-scripts/       PowerShell helpers (dev mode, version bump, type gen, WAN recovery)
-```
-
-See [`AGENTS.md`](./AGENTS.md) for repo conventions (commit rules, version bumps, AI-coding guardrails, plugin layout, design contracts).
-
-## Roadmap
-
-| Milestone | Outcome | Status |
-|---|---|---|
-| A | Repo scaffolding | ✅ done (`v0.1.0-alpha.1`) |
-| ⌁ | Round 1 design contracts (#1–#16) | ✅ done (`v0.1.0.5` docs · `v0.1.1` code) |
-| ⌁ | Round 2 design contracts (#17–#28) | ✅ done (`v0.1.1.5` docs · `v0.1.2` code) |
-| ⌁ | Commit-rule hardening + README sync | ✅ done (`v0.1.2.5`) |
-| B | Daemon skeleton (FastAPI on `:7878`, `/health`, WS echo, SQLite + migration runner) | ✅ done (`v0.1.3`) |
-| C | Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done (`v0.1.4`) |
-| D | Project registry + launcher (full CRUD UI) | ✅ done (`v0.1.5`) |
-| ⌁ | Clickable launcher + Electron CDP inspector | ✅ done (`v0.1.6`) |
-| E | Live process monitor (psutil heartbeat + crash detect + auto-restart) | ✅ done (`v0.1.7`) |
-| F | Nucleus + Synapses UI (sidebar, shadcn, plugin system, slideshow) | ✅ done (`v0.1.8` shell · `v0.1.8.5` discovery · `v0.1.9` plugin system · `v0.1.10` slideshow · `v0.1.10.5` snapshot) |
-| G | Cloudtap tool (port → tunnel URL) | ✅ done (`v0.1.9`) |
-| H | Mobile Web UI (responsive, served by daemon on LAN) | ✅ done (`v0.1.11` device auth · `v0.1.12` mobile UI) |
-| I | Auto-start + tray polish (login items, daemon attach-or-spawn, full tray menu) | ✅ done (`v0.1.13`) |
-| ⌁ | Polish wave (`Ctrl+K` palette, Apps filter, Open-in-VS-Code / Terminal, audit log, theming, responsive sidebar) | ✅ done (`v0.1.14`–`v0.1.20`) |
-| ⌁ | ADR-0001 tool marketplace (hot reload + primitives + Browse + install / uninstall) | ✅ done (`v0.1.21`–`v0.1.24`) |
-| ⌁ | ADR-0002 AI workbench (PTY foundation, xterm.js, Claude/Codex bundles, install dialog, *Open in workbench*, `/ai/context`) | ✅ done (`v0.1.25`–`v0.1.29`) |
-| ⌁ | ADR-0003 workbench expansion (project files, transcripts, inspection, AV scan, ChatGPT import, AI quick-actions) | ✅ done (`v0.1.30`–`v0.1.34`) |
-| J | Packaging (PyInstaller + electron-builder + NSIS installer) | ⚪ pending |
-| K | `v0.1.0` release (tag, GitHub release, README screenshots, desktop shortcut) | ⚪ pending |
+It starts (or reuses) the engine, opens a Cloudflare tunnel on `7878`, and prints the phone URL + a fresh pairing code.
 
 ## License
 
@@ -156,4 +92,4 @@ All rights reserved — see [`LICENSE`](./LICENSE).
 
 ---
 
-**Synapse** is a product of **The WhatIf Company**.
+**Synapse** is a product of **The WhatIf Company** — building the tools that let anyone create software with AI.
