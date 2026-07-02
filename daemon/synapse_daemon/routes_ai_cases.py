@@ -41,6 +41,7 @@ _AI_OS_PORT = 4312
 class OpenAiOsRequest(BaseModel):
     neighbor_project_ids: list[str] = Field(default_factory=list)
     case_id: str | None = None
+    benchmark_run_id: str | None = None
 
 
 def build_ai_cases_router(
@@ -404,6 +405,8 @@ def build_ai_cases_router(
         url = f"http://127.0.0.1:{_AI_OS_PORT}/?primary_project_id={project_id}"
         if body.case_id:
             url += f"&case_id={body.case_id}"
+        if body.benchmark_run_id:
+            url += f"&benchmark_run_id={body.benchmark_run_id}"
         if body.neighbor_project_ids:
             neighbors = ",".join(pid for pid in body.neighbor_project_ids if pid and pid != project_id)
             if neighbors:

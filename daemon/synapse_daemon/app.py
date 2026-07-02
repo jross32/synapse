@@ -51,6 +51,8 @@ from .routes_pty import build_pty_router
 from .routes_workbench import build_workbench_router
 from .routes_auth import build_auth_router
 from .routes_ai_cases import build_ai_cases_router, subscribe_ai_case_events
+from .routes_benchmarks import build_benchmarks_router
+from .routes_coder_workspace import build_coder_workspace_router, subscribe_coder_workspace_events
 from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
@@ -59,6 +61,7 @@ from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
 from .routes_capture import build_capture_router
+from .routes_installed_pages import build_installed_pages_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .mcp_servers import McpServerManager
 from .routes_about import build_about_router
@@ -118,12 +121,14 @@ def build_app(
     profile_manager = ProfileManager(storage)
     with storage.transaction() as conn:
         from .agent_squads import seed_default_role_templates
+        from .benchmarks import seed_default_specs
         from .ai_factory import seed_default_catalog
         from .personalities import seed_default_personalities
 
         seed_default_role_templates(conn)
         seed_default_personalities(conn)
         seed_default_catalog(conn)
+        seed_default_specs(conn)
 
     app = FastAPI(
         title="Synapse daemon",
@@ -225,6 +230,12 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    app.include_router(
+        build_coder_workspace_router(storage, pty_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    subscribe_coder_workspace_events(storage, bus)
     # ADR-0003 Phase A files (v0.1.30): per-project + shared uploads.
     app.include_router(
         build_files_router(storage),
@@ -267,6 +278,11 @@ def build_app(
     )
     app.include_router(
         build_ai_factory_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_benchmarks_router(storage, pty_manager),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -315,6 +331,11 @@ def build_app(
     app.router.on_shutdown.append(mcp_manager.shutdown)
     app.include_router(
         build_mcp_servers_router(storage, mcp_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_installed_pages_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

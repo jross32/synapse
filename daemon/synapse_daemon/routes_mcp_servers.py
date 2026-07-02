@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from .api_versions import event_name
 from . import mcp_servers as mcp
 from .audit import AuditRecord, audit
 from .mcp_servers import (
@@ -26,6 +27,12 @@ def build_mcp_servers_router(storage: Storage, manager: McpServerManager) -> API
         installed = {s.id for s in mcp.list_servers(storage.conn)}
         return mcp.load_catalog(installed)
 
+    async def _publish(request: Request, reason: str, payload: dict[str, Any]) -> None:
+        await request.app.state.bus.publish(
+            event_name("mcp_server", "updated"),
+            {"reason": reason, **payload},
+        )
+
     @router.get("/registry", response_model=McpCatalog)
     async def registry() -> McpCatalog:
         return _catalog()
@@ -35,7 +42,7 @@ def build_mcp_servers_router(storage: Storage, manager: McpServerManager) -> API
         return McpServerList(servers=await mcp.server_views(storage.conn, manager))
 
     @router.post("/install", response_model=None, status_code=201)
-    async def install(payload: McpServerInstallRequest) -> dict[str, Any]:
+    async def install(payload: McpServerInstallRequest, request: Request) -> dict[str, Any]:
         with storage.transaction() as conn:
             server = mcp.install_server(conn, payload, _catalog())
             audit(
@@ -49,30 +56,62 @@ def build_mcp_servers_router(storage: Storage, manager: McpServerManager) -> API
                     details={"transport": server.transport.value},
                 ),
             )
+        await _publish(
+            request,
+            "installed",
+            {"server_id": server.id, "server": mcp.client_dump(server)},
+        )
         return mcp.client_dump(server)
 
     @router.patch("/{server_id}", response_model=None)
-    async def update(server_id: str, payload: McpServerUpdate) -> dict[str, Any]:
+    async def update(server_id: str, payload: McpServerUpdate, request: Request) -> dict[str, Any]:
         with storage.transaction() as conn:
             server = mcp.update_server(conn, server_id, payload)
+        await _publish(
+            request,
+            "updated",
+            {"server_id": server.id, "server": mcp.client_dump(server)},
+        )
         return mcp.client_dump(server)
 
     @router.post("/{server_id}/start", response_model=None)
-    async def start(server_id: str) -> dict[str, Any]:
+    async def start(server_id: str, request: Request) -> dict[str, Any]:
         server = mcp.get_server(storage.conn, server_id)
         started = manager.start(server)
         status, detail = await manager.status(server)
+        await _publish(
+            request,
+            "started",
+            {
+                "server_id": server.id,
+                "started": started,
+                "status": status.value,
+                "detail": detail,
+            },
+        )
         return {"started": started, "status": status.value, "detail": detail}
 
     @router.post("/{server_id}/stop", response_model=None)
-    async def stop(server_id: str) -> dict[str, Any]:
+    async def stop(server_id: str, request: Request) -> dict[str, Any]:
         mcp.get_server(storage.conn, server_id)  # 404 if missing
-        return {"stopped": manager.stop(server_id)}
+        stopped = manager.stop(server_id)
+        await _publish(
+            request,
+            "stopped",
+            {"server_id": server_id, "stopped": stopped},
+        )
+        return {"stopped": stopped}
 
     @router.delete("/{server_id}", status_code=204, response_model=None)
-    async def uninstall(server_id: str) -> None:
+    async def uninstall(server_id: str, request: Request) -> None:
         manager.stop(server_id)
         with storage.transaction() as conn:
+            server = mcp.get_server(conn, server_id)
             mcp.delete_server(conn, server_id)
+        await _publish(
+            request,
+            "uninstalled",
+            {"server_id": server.id, "server": mcp.client_dump(server)},
+        )
 
     return router

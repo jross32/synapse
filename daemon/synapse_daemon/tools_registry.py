@@ -35,6 +35,7 @@ from .models import EntityStatus, ToolActionScope, ToolManifest, ToolState
 from .storage import Storage
 from .tools import ToolHandler
 from .tools.cloudtap import CloudtapTool
+from .tools.fast_money import FastMoneyTool
 from .tools_primitives import is_known_primitive, run_primitive
 from .ws import EventBus
 
@@ -49,6 +50,7 @@ log = logging.getLogger(__name__)
 # constructed with ``(bus, storage)``.
 _BUILTIN_HANDLER_FACTORIES: dict[str, type[ToolHandler]] = {
     "cloudtap": CloudtapTool,
+    "fast-money": FastMoneyTool,
 }
 
 

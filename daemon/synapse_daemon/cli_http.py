@@ -129,6 +129,11 @@ def request(
             f"Could not reach daemon at {daemon_base()}: {exc.reason}. "
             "Is Synapse running?"
         )
+    except TimeoutError:
+        raise SynapseCliError(
+            f"Could not reach daemon at {daemon_base()}: timed out. "
+            "Is Synapse running?"
+        )
 
 
 # ── helpers used by multiple CLI commands ────────────────────────────────

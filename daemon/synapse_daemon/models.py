@@ -269,6 +269,8 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import errors as _errors
     from . import agent_squads as _agents
     from . import assistant as _assistant
+    from . import benchmarks as _benchmarks
+    from . import coder_workspace as _coder_workspace
     from . import model_market as _market
     from . import review as _review
     from . import capture as _capture
@@ -277,6 +279,7 @@ def model_registry() -> dict[str, type[BaseModel]]:
     from . import personalities as _personalities
     from . import project_records as _records
     from . import health as _health
+    from . import installed_pages as _installed_pages
     from . import notifications as _notif
     from . import profile as _profile
     from . import resources as _res
@@ -332,6 +335,40 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "AssistantChat": _assistant.AssistantChat,
         "AssistantChatDetail": _assistant.AssistantChatDetail,
         "AssistantAnswer": _assistant.AssistantAnswer,
+        # Chat-first coder workspace
+        "CoderThreadStatus": _coder_workspace.CoderThreadStatus,  # type: ignore[dict-item]
+        "CoderMessageRole": _coder_workspace.CoderMessageRole,  # type: ignore[dict-item]
+        "CoderReviewPassStatus": _coder_workspace.CoderReviewPassStatus,  # type: ignore[dict-item]
+        "CoderRunStatus": _coder_workspace.CoderRunStatus,  # type: ignore[dict-item]
+        "CoderWorkspacePreferences": _coder_workspace.CoderWorkspacePreferences,
+        "CoderThread": _coder_workspace.CoderThread,
+        "CoderThreadSummary": _coder_workspace.CoderThreadSummary,
+        "CoderThreadDetail": _coder_workspace.CoderThreadDetail,
+        "CoderMessage": _coder_workspace.CoderMessage,
+        "CoderRuntimeSwitch": _coder_workspace.CoderRuntimeSwitch,
+        "CoderReviewPass": _coder_workspace.CoderReviewPass,
+        "CoderRun": _coder_workspace.CoderRun,
+        "CoderWorkspaceContext": _coder_workspace.CoderWorkspaceContext,
+        # Benchmark surfaces + runs
+        "BenchmarkSurfaceKind": _benchmarks.BenchmarkSurfaceKind,  # type: ignore[dict-item]
+        "BenchmarkExecutionMode": _benchmarks.BenchmarkExecutionMode,  # type: ignore[dict-item]
+        "BenchmarkRunStatus": _benchmarks.BenchmarkRunStatus,  # type: ignore[dict-item]
+        "BenchmarkAttemptStatus": _benchmarks.BenchmarkAttemptStatus,  # type: ignore[dict-item]
+        "BenchmarkTokenProvenance": _benchmarks.BenchmarkTokenProvenance,  # type: ignore[dict-item]
+        "BenchmarkTokenSource": _benchmarks.BenchmarkTokenSource,  # type: ignore[dict-item]
+        "BenchmarkConfidenceLabel": _benchmarks.BenchmarkConfidenceLabel,  # type: ignore[dict-item]
+        "BenchmarkEnvFingerprint": _benchmarks.BenchmarkEnvFingerprint,
+        "BenchmarkArtifact": _benchmarks.BenchmarkArtifact,
+        "BenchmarkScore": _benchmarks.BenchmarkScore,
+        "BenchmarkFailure": _benchmarks.BenchmarkFailure,
+        "BenchmarkScenario": _benchmarks.BenchmarkScenario,
+        "BenchmarkSpec": _benchmarks.BenchmarkSpec,
+        "BenchmarkSpecBundle": _benchmarks.BenchmarkSpecBundle,
+        "BenchmarkRun": _benchmarks.BenchmarkRun,
+        "BenchmarkAttempt": _benchmarks.BenchmarkAttempt,
+        "BenchmarkComparison": _benchmarks.BenchmarkComparison,
+        "BenchmarkCandidateSummary": _benchmarks.BenchmarkCandidateSummary,
+        "BenchmarkRunReport": _benchmarks.BenchmarkRunReport,
         # Local-model marketplace (ADR-0014 Phase M)
         "ModelCatalogEntry": _market.ModelCatalogEntry,
         "ModelCatalog": _market.ModelCatalog,
@@ -353,6 +390,11 @@ def model_registry() -> dict[str, type[BaseModel]]:
         "McpServer": _mcp.McpServer,
         "McpServerView": _mcp.McpServerView,
         "McpServerList": _mcp.McpServerList,
+        # Installed dedicated pages (curated v1)
+        "InstalledPageStatus": _installed_pages.InstalledPageStatus,  # type: ignore[dict-item]
+        "InstalledPageView": _installed_pages.InstalledPageView,
+        "InstalledPageList": _installed_pages.InstalledPageList,
+        "WebScraperOverview": _installed_pages.WebScraperOverview,
         # What's New + Roadmap (ADR-0019)
         "ChangelogSection": _about.ChangelogSection,
         "ChangelogVersion": _about.ChangelogVersion,

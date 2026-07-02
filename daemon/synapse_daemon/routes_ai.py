@@ -24,6 +24,8 @@ from . import agent_squads as agent_squads_module
 from . import ai_bundles as ai_bundles_module
 from . import ai_cases as ai_cases_module
 from . import ai_factory as ai_factory_module
+from . import benchmarks as benchmarks_module
+from . import coder_workspace as coder_workspace_module
 from .ai_context_memory import ai_context_metadata
 from .files_storage import list_for_project
 from .storage import Storage
@@ -142,6 +144,42 @@ def build_ai_router(
                     "updated_at": case.updated_at,
                 }
             )
+        coder_threads = []
+        for project in projects_module.list_projects(storage.conn):
+            for summary in coder_workspace_module.list_threads(storage.conn, project.id):
+                coder_threads.append(
+                    {
+                        "id": summary.thread.id,
+                        "project_id": summary.thread.project_id,
+                        "title": summary.thread.title,
+                        "status": summary.thread.status.value,
+                        "active_runtime_id": summary.thread.active_runtime_id,
+                        "active_provider": summary.thread.active_provider,
+                        "active_model": summary.thread.active_model,
+                        "workspace_context_mode": summary.thread.workspace_context_mode,
+                        "message_count": summary.message_count,
+                        "run_count": summary.run_count,
+                        "review_pass_count": summary.review_pass_count,
+                        "last_message_preview": summary.last_message_preview,
+                        "updated_at": summary.thread.updated_at,
+                    }
+                )
+        benchmark_runs = []
+        for run in benchmarks_module.list_runs(storage.conn):
+            attempts = benchmarks_module.list_attempts_for_run(storage.conn, run.id)
+            benchmark_runs.append(
+                {
+                    "id": run.id,
+                    "spec_id": run.spec_id,
+                    "project_id": run.project_id,
+                    "title": run.title,
+                    "status": run.status.value,
+                    "execution_mode": run.execution_mode.value,
+                    "repeat_count": run.repeat_count,
+                    "attempt_count": len(attempts),
+                    "updated_at": run.updated_at,
+                }
+            )
         factory_counts = ai_factory_module.counts(storage.conn)
         installed_bundle_ids = set(ai_bundles_module.list_installed_bundle_ids(storage.conn))
 
@@ -178,6 +216,8 @@ def build_ai_router(
             "sessions": sessions,
             "agent_squads": agent_squads,
             "ai_cases": ai_cases,
+            "coder_threads": coder_threads,
+            "benchmark_runs": benchmark_runs,
             "agent_role_templates": [
                 role.model_dump(mode="json")
                 for role in agent_squads_module.list_role_templates(storage.conn)
@@ -213,6 +253,21 @@ def build_ai_router(
                     "purpose": "open a coder pre-cd'd into a project",
                     "method": "POST",
                     "path": "/api/v1/projects/{id}/workbench",
+                },
+                {
+                    "purpose": "list project-scoped coder threads and create a new one",
+                    "method": "GET | POST",
+                    "path": "/api/v1/projects/{id}/coder-threads",
+                },
+                {
+                    "purpose": "read, update, delete, and inspect thread context",
+                    "method": "GET | PATCH | DELETE | POST",
+                    "path": "/api/v1/coder-threads/{id} | /messages | /runtime | /review-passes | /review-passes/{reviewId}/launch | /context | /dispatch",
+                },
+                {
+                    "purpose": "read or update coder workspace preferences",
+                    "method": "GET | PATCH",
+                    "path": "/api/v1/coder-workspace/preferences",
                 },
                 {
                     "purpose": "list installed tools (declarative + handler tiers)",
@@ -253,6 +308,11 @@ def build_ai_router(
                     "purpose": "browse and manage the AI Factory catalog",
                     "method": "GET | POST | PATCH | DELETE",
                     "path": "/api/v1/ai-factory/catalog | /api/v1/ai-components | /api/v1/ai-recipes | /api/v1/ai-sources",
+                },
+                {
+                    "purpose": "list benchmark specs, create runs, launch benchmark attempts, ingest direct runs, and export reports",
+                    "method": "GET | POST",
+                    "path": "/api/v1/benchmarks/specs | /api/v1/benchmarks/runs | /api/v1/benchmarks/runs/{id} | /launch | /rescore | /export | /api/v1/benchmarks/ingest-direct",
                 },
                 {
                     "purpose": "install or inspect AI-first bundles for roles, personalities, quick actions, and factory assets",

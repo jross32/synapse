@@ -80,6 +80,7 @@ class PtySessionSummary:
     exit_code: int | None
     rows: int
     cols: int
+    project_id: str | None = None
 
 
 # ── platform backends ──────────────────────────────────────────────────────
@@ -179,11 +180,19 @@ class _WindowsBackend:
         self.proc: Any | None = None
         self._read_thread: threading.Thread | None = None
         self._closed = threading.Event()
+        self._enter_needs_crlf = False
 
     def spawn(self, argv: list[str], cwd: str | None, env: dict[str, str]) -> None:
         from winpty import PtyProcess  # type: ignore[import-not-found]
+        from winpty.enums import Backend  # type: ignore[import-not-found]
 
-        self.proc = PtyProcess.spawn(argv, cwd=cwd, env=env)
+        # On this stack, pywinpty's default ConPTY path can render initial
+        # output but silently drop stdin writes, which makes both xterm typing
+        # and the mobile/desktop command pad feel dead. WinPTY keeps sessions
+        # fully interactive, so prefer it until the ConPTY path is trustworthy.
+        head = Path(argv[0]).stem.lower() if argv else ""
+        self._enter_needs_crlf = head in {"powershell", "pwsh"}
+        self.proc = PtyProcess.spawn(argv, cwd=cwd, env=env, backend=Backend.WinPTY)
 
     def fileno(self) -> int:
         return -1  # not used on Windows; the manager treats reads via thread
@@ -202,6 +211,8 @@ class _WindowsBackend:
     def write(self, data: bytes) -> None:
         if self.proc is None:
             return
+        if self._enter_needs_crlf:
+            data = _normalize_windows_input(data)
         # pywinpty's .write() wants str; encode-decode round-trip is safe
         # because the renderer sends UTF-8 from the keyboard.
         self.proc.write(data.decode("utf-8", errors="replace"))
@@ -239,6 +250,25 @@ class _WindowsBackend:
 
 def _make_backend() -> _PosixBackend | _WindowsBackend:
     return _WindowsBackend() if sys.platform == "win32" else _PosixBackend()
+
+
+def _normalize_windows_input(data: bytes) -> bytes:
+    """Expand lone carriage returns to CRLF for shells that need it.
+
+    WinPTY-backed PowerShell sessions do not reliably execute a line on a
+    lone ``\\r`` even though xterm emits exactly that for Enter. ``cmd.exe``
+    is happy with the raw ``\\r``, so callers opt into this normalization only
+    for PowerShell-family runtimes.
+    """
+
+    out = bytearray()
+    for index, value in enumerate(data):
+        out.append(value)
+        if value == 13:  # '\r'
+            next_value = data[index + 1] if index + 1 < len(data) else None
+            if next_value != 10:  # '\n'
+                out.append(10)
+    return bytes(out)
 
 
 # ── session ────────────────────────────────────────────────────────────────
@@ -299,6 +329,7 @@ class PtySession:
                 "cwd": self.cwd,
                 "rows": self.rows,
                 "cols": self.cols,
+                "project_id": self.project_id,
             },
         )
 
@@ -347,6 +378,13 @@ class PtySession:
 
     async def write(self, data: bytes) -> None:
         await asyncio.to_thread(self._backend.write, data)
+        await self._bus.publish(
+            event_name("pty", "session_input"),
+            {
+                "session_id": self.session_id,
+                "bytes": len(data),
+            },
+        )
 
     async def resize(self, rows: int, cols: int) -> None:
         self.rows = max(1, int(rows))
@@ -443,6 +481,7 @@ class PtySession:
             exit_code=self.exit_code,
             rows=self.rows,
             cols=self.cols,
+            project_id=self.project_id,
         )
 
 
