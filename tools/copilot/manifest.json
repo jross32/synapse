@@ -1,0 +1,20 @@
+{
+  "id": "copilot",
+  "name": "GitHub Copilot CLI",
+  "icon": "wrench",
+  "description": "Live Copilot CLI session under a real PTY.",
+  "version": "1.0.0",
+  "actions": [
+    {
+      "id": "open",
+      "label": "Open Copilot session",
+      "primary": true,
+      "primitive": "pty.spawn",
+      "params": {
+        "argv": [
+          "copilot"
+        ]
+      }
+    }
+  ]
+}

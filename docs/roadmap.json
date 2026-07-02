@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-06-27",
+  "generated_at": "2026-06-29",
   "items": [
     {
       "id": "local-llm",
@@ -97,6 +97,14 @@
       "phase": "AI-coding power",
       "adr": "ADR-0021",
       "summary": "Install AI-first role, workflow, quick-action, and factory packs from the Marketplace, including bundle overlap readouts and installer-time bundle choices."
+    },
+    {
+      "id": "fast-money",
+      "title": "Fast Money launcher",
+      "status": "shipped",
+      "phase": "AI-coding power",
+      "adr": "ADR-0021",
+      "summary": "One click installs the Fast Money AI pack, scaffolds a private/local-first client-ops SaaS starter, and opens a live build session in the generated project."
     },
     {
       "id": "squad-presets",

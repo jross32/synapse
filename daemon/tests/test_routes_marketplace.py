@@ -89,6 +89,7 @@ def test_marketplace_bundled_handlers_load_with_valid_shape(
         "claude",
         "codex",
         "copilot",
+        "fast-money",
         "open-folder",
         "open-vscode-insiders",
         "open-cursor",

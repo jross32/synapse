@@ -11,6 +11,18 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Fast Money launcher + AI bundle.** Synapse now ships a built-in
+  `fast-money` tool, a bundled Marketplace entry, and a paired AI bundle
+  that installs client-ops revenue roles, an operator-style personality, a
+  client-ops recipe, monetization/source notes, and the `fast-money-launch`
+  quick action. Launching the tool creates or reuses the target project
+  (default `data/projects/fast-money-client-ops`), writes
+  `FAST_MONEY_BRIEF.md` + `PROMPT.md`, scaffolds a runnable private/local-first
+  client-ops SaaS proof app (landing page, pricing page, auth shell, customer
+  portal, operator console, optional catalog editor, billing/auth seams,
+  README, architecture note, monetization note, seed/demo data), and opens a
+  PTY session in that project using runtime precedence `codex -> claude ->
+  copilot`.
 - **AI personalities — a worker = role + personality (ADR-0018 MW3).** New
   `personalities` table (migration 015) + CRUD + REST at `/personalities`, with
   five seeded built-ins (Pragmatist, Perfectionist, Skeptic, Visionary,
@@ -48,6 +60,10 @@ Every commit must append an entry under the in-progress version header.
   squad builder now resolves bundle-installed roles/personalities when present.
 
 ### Fixed
+- **CLI doctor now degrades cleanly on raw socket timeouts.** A half-open or
+  slow responder on `127.0.0.1:7878` no longer crashes `synapse doctor` with a
+  bare `TimeoutError`; the CLI now reports the same friendly "could not reach
+  daemon" failure shape it already used for normal connection errors.
 - **Consistent Synapse icon everywhere.** The window/taskbar + tray now use the
   crisp multi-resolution `synapse.ico` (was a 936-byte low-res PNG), and the
   in-app brand mark (sidebar), boot splash, and `icon.svg` favicon were realigned
@@ -62,6 +78,9 @@ Every commit must append an entry under the in-progress version header.
   run/stop state stays honest without a manual reload.
 
 ### Changed
+- **Generic tool cards now render boolean fields as real toggles.** Manifest
+  booleans no longer fall back to plain text inputs, which keeps bundled tools
+  like Fast Money honest in the Tools page.
 - **Bundled AI bundle prompts are tighter and less repetitive.** The fallback
   Marketplace bundle catalog (`docs/ai-bundles-sample.json`) was
   pressure-tested against live AI-case installs and then trimmed so the

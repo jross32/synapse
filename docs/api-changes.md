@@ -119,6 +119,18 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-06-22 | `AgentRoleTemplate.role_tier` | additive | New field on role templates: `boss` / `supervisor` / `worker`. Drives the Team Builder hierarchy. Existing installs gain it via migration `011_squad_hierarchy.sql` (default `worker`; the original seeds are re-tiered). |
 | 2026-06-22 | `ProfileSummary.account_backend_reachable` | additive | New boolean on the profile summary. `false` when no Synapse Accounts service is reachable, so the UI hides native sign-in and shows a "sync is optional / not configured" state instead of forms that always error. |
 
+### Shipped in v0.1.36-dev (Installed Pages + Web Scraper)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-06-28 | `GET /api/v1/installed-pages` | additive | Returns the curated dedicated-page registry currently available to the user. v1 ships only the `web-scraper` page, surfaced when an installed HTTP MCP server is recognized as the owner's scraper. |
+| 2026-06-28 | `GET /api/v1/installed-pages/web-scraper` | additive | Returns `WebScraperOverview`: install/runtime status, source id, UI/docs URLs, and scraper capability counts when connected. |
+| 2026-06-28 | `GET /api/v1/installed-pages/web-scraper/saves` | additive | Daemon-side proxy to the installed scraper's saves feed. The renderer never talks to the MCP origin directly. |
+| 2026-06-28 | `GET /api/v1/installed-pages/web-scraper/schedules` | additive | Daemon-side proxy to the installed scraper's schedules feed. |
+| 2026-06-28 | `GET /api/v1/installed-pages/web-scraper/active` | additive | Daemon-side proxy to the installed scraper's active-job feed. |
+| 2026-06-28 | `POST /api/v1/installed-pages/web-scraper/scrape-url` | additive | Daemon-side proxy to the installed scraper's quick-scrape action. Body is passed through as JSON. |
+| 2026-06-28 | `v1.mcp_server.updated` | additive | Broadcast on install/update/start/stop/uninstall so desktop surfaces such as Installed Pages and MCP management can refresh without polling. |
+
 ### Shipped in v0.1.36-dev (AI Factory + advanced case engine foundation)
 
 | Date | Endpoint or event | Kind | Notes |
@@ -140,3 +152,16 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-06-27 | `POST /api/v1/agent-work-items/{id}/launch` (extended) | additive | Body now also accepts `cwd_override` and `env` so case-owned workers can execute inside an isolated worktree while keeping their original project/squad ownership and transcript linkage. |
 | 2026-06-27 | `GET /api/v1/ai/context` (extended) | additive | Gains top-level `ai_cases`, `ai_factory` counts, installed AI bundles, and the AI Factory / AI-case / AI-bundle endpoint list so autonomous workers can discover and operate the new substrate directly from Synapse. |
 | 2026-06-27 | `GET /api/v1/quick-actions` (extended) | additive | Quick-action listing and launch now merge installed bundle-owned templates from the daemon data directory with the bundled template catalog. |
+
+### Shipped in v0.1.36-dev (Coder Workspace + benchmark foundation)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-06-28 | `GET|POST /api/v1/projects/{id}/coder-threads` | additive | Durable thread-first workspace surface for the new chat-style coder experience. Threads are project-scoped, carry active runtime provenance, and survive UI changes. |
+| 2026-06-28 | `GET|PATCH|DELETE /api/v1/coder-threads/{id}` | additive | Returns one thread plus its messages, runtime switches, review passes, and linked runs; updates title/runtime/archive state; deletes the thread and its children. |
+| 2026-06-28 | `GET|POST /api/v1/coder-threads/{id}/messages` / `POST /api/v1/coder-threads/{id}/runtime` / `POST /api/v1/coder-threads/{id}/review-passes` / `GET /api/v1/coder-threads/{id}/context` | additive | Adds durable message history, explicit runtime-switch events, structured review-pass records, and a project-aware context bundle (files, records, linked runs, workspace preferences). |
+| 2026-06-28 | `GET /api/v1/ai/context` (extended) | additive | Now also includes top-level `coder_threads` and `benchmark_runs`, plus the new coder-thread and benchmark endpoint discovery entries. |
+| 2026-06-28 | `v1.pty.session_input` | additive | PTY write-side lifecycle event. Used to determine whether a linked coder run was ever interacted with, not just launched. |
+| 2026-06-28 | `GET|POST /api/v1/benchmarks/specs` / `GET|POST /api/v1/benchmarks/runs` / `GET /api/v1/benchmarks/runs/{id}` | additive | Benchmark spec catalog plus durable runs and materialized attempts for `direct_cli`, `synapse_coder_thread`, `synapse_workbench`, and `synapse_raw_pty`. A default mixed mini-suite is seeded automatically. |
+| 2026-06-28 | `POST /api/v1/benchmarks/runs/{id}/launch` / `POST /api/v1/benchmarks/ingest-direct` / `POST /api/v1/benchmarks/runs/{id}/rescore` / `POST /api/v1/benchmarks/runs/{id}/export` | additive | Launches the next benchmark attempt through the selected Synapse surface, ingests direct/no-Synapse runs, recomputes derived metrics, and exports `BENCHMARK.json`, `BENCHMARK.md`, and `BENCHMARK_LESSONS.json`. |
+| 2026-06-28 | `POST /api/v1/projects/{id}/open-ai-os` (extended) | additive | Body now also accepts `benchmark_run_id`, so AI OS can open directly on a benchmark leaderboard/report without depending on an AI case id. |

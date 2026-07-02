@@ -296,6 +296,137 @@
       "notes_md": "Designed to improve output quality for generated apps without forcing a rigid visual style."
     },
     {
+      "id": "fast-money",
+      "name": "Fast Money",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "Optimizes Synapse for generating a sellable private/local-first client-ops SaaS with clear monetization seams, operator workflows, and a one-click launcher path.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 17,
+      "tags": ["generate", "saas", "client-ops", "revenue", "monetization"],
+      "recommended_case_modes": ["generate", "hybrid", "benchmark"],
+      "recommended_mission_profiles": ["new-app-from-brief", "vertical-b2b-saas", "client-ops-revenue"],
+      "asset_refs": [
+        {"kind": "recipe", "id": "client-ops-revenue-board", "label": "Client Ops Revenue Board", "summary": "Keeps landing, portal, ops, and billing seams together."},
+        {"kind": "source", "id": "fast-money-monetization-notes", "label": "Fast Money monetization notes", "summary": "Bundles the pricing/default-moat guidance behind the launcher."},
+        {"kind": "quick_action", "id": "fast-money-launch", "label": "Fast Money launch", "summary": "Kicks off the app-building run from a monetization-aware brief."}
+      ],
+      "overlap_report": [
+        {"bundle_id": "fullstack-app-factory", "similarity_percent": 46, "summary": "Both help create apps, but Fast Money is narrower and more business-model aware for client-ops SaaS.", "complementary": true},
+        {"bundle_id": "deep-research-council", "similarity_percent": 24, "summary": "Useful together when the vertical needs research before the build hardens.", "complementary": true}
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Pushes the first pass toward a real sellable workflow SaaS instead of a thin generic AI wrapper.",
+        "token_savings_summary": "Preloads roles, monetization guidance, and the expected surface area so the builder does not need the same framing every run.",
+        "speed_gain_summary": "Shortens the path from idea to a runnable landing page, portal shell, ops console, and billing-ready seam.",
+        "best_for": ["vertical B2B SaaS generation", "client-ops workflow products", "monetization-aware MVP scaffolds"],
+        "caveats": ["This bundle assumes the goal is a private/local-first sellable starter, not a generic internal dashboard."]
+      },
+      "roles": [
+        {
+          "id": "revenue-architect",
+          "name": "Revenue Architect",
+          "description": "Shapes the product so the workflow, packaging, and moat support a sellable SaaS business.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "lead",
+          "context_mode": "standard",
+          "role_tier": "supervisor",
+          "can_delegate": true,
+          "prompt_preamble_md": "Design for durable vertical workflow value, not a shallow seat-only AI wrapper. Keep the path to monetization explicit.",
+          "enabled": true,
+          "sort_order": 14
+        },
+        {
+          "id": "client-ops-operator",
+          "name": "Client Ops Operator",
+          "description": "Keeps the customer portal, operator console, and lead-to-renewal flow grounded in real operations.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Protect the operational flow: lead, quote, approval, engagement or job, invoice, and renewal handoff should stay visible and coherent.",
+          "enabled": true,
+          "sort_order": 30
+        },
+        {
+          "id": "billing-seam-planner",
+          "name": "Billing Seam Planner",
+          "description": "Turns pricing strategy into adapter seams, config placeholders, and implementation-ready billing notes.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Keep billing realistic: base subscription plus usage/overage for AI-heavy actions, with config placeholders instead of live secrets.",
+          "enabled": true,
+          "sort_order": 34
+        }
+      ],
+      "personalities": [
+        {
+          "id": "revenue-operator",
+          "name": "The Revenue Operator",
+          "blurb": "Thinks like someone who has to ship the workflow and keep renewals healthy.",
+          "traits": ["commercial", "operational", "grounded"],
+          "prompt_preamble_md": "Stay close to how revenue actually moves through the system. Favor clear packaging, visible handoffs, and operator-friendly workflows.",
+          "voice": "focused",
+          "sort_order": 60
+        }
+      ],
+      "recipes": [
+        {
+          "id": "client-ops-revenue-board",
+          "name": "Client Ops Revenue Board",
+          "description": "A sellable client-ops SaaS recipe with room for landing, pricing, portal, operator, and billing surfaces.",
+          "archetype": "board",
+          "nav_model": "left_rail",
+          "interaction_model": "drawers",
+          "visual_language": "premium_saas",
+          "data_behavior": "fullstack_crud",
+          "density_rule": "density-no-scroll",
+          "component_ids": ["nav-left-rail", "interaction-drawers", "visual-premium-saas", "quality-default", "deploy-local-runner", "density-no-scroll"],
+          "default_directives": {"generation_mode": "local_fullstack", "recipe_selection_mode": "manual", "deployment_posture": "private_local_first"},
+          "tags": ["generate", "client-ops", "saas", "revenue"],
+          "builtin": false
+        }
+      ],
+      "sources": [
+        {
+          "id": "fast-money-monetization-notes",
+          "label": "Fast Money monetization notes",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Bundle-local notes distilling the pricing and moat guidance named in the Fast Money launcher brief.",
+          "metadata": {
+            "bundle_id": "fast-money",
+            "references": [
+              "https://stripe.com/resources/more/usage-based-pricing-strategy-for-saas",
+              "https://stripe.com/resources/more/ai-saas-pricing-models",
+              "https://www.alixpartners.com/insights/102myic/ai-disruption-in-european-saas-understanding-distress-signals-and-what-it-takes/"
+            ]
+          },
+          "notes_md": "Use hybrid pricing by default: a base subscription for the workspace plus usage or overage for AI-heavy actions. Bias toward vertical, workflow, and data moats instead of a generic seat-only AI wrapper. Keep the first build local-first and billing-ready, not pre-keyed.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "fast-money-launch",
+          "name": "Fast Money launch",
+          "description": "Kick off a monetization-aware client-ops SaaS build in the current or newly created Synapse project.",
+          "prompt": "Use Synapse context first if it is available. Create or reuse the target project, then build a private/local-first client-ops SaaS with a landing page, pricing page, auth shell, customer portal, operator or admin console, and one core flow from lead to quote to approval to engagement or job to invoice and renewal handoff. Keep billing and auth as adapter seams with config placeholders, ship README plus architecture and monetization notes, include seed or demo data, and default the business model to a base subscription plus variable usage or overage for AI-heavy features.",
+          "icon": "rocket",
+          "category": "workflows",
+          "tags": ["generate", "saas", "client-ops", "revenue"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "Best when the human wants Synapse to spin up something actually sellable quickly: the launcher makes the project, this bundle carries the revenue and workflow framing, and the AI runtime deepens the app from there."
+    },
+    {
       "id": "repo-rescue-lab",
       "name": "Repo Rescue Lab",
       "publisher": "The WhatIf Company",

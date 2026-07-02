@@ -6,11 +6,16 @@ import asyncio
 import base64
 import os
 import sys
+import types
 from pathlib import Path
 
 import pytest
 
-from synapse_daemon.pty_sessions import PtySessionManager
+from synapse_daemon.pty_sessions import (
+    PtySessionManager,
+    _WindowsBackend,
+    _normalize_windows_input,
+)
 from synapse_daemon.ws import Event, EventBus
 
 # Windows uses pywinpty which isn't installed in the Linux CI we run. The end
@@ -162,6 +167,78 @@ async def test_windows_copilot_spawn_wraps_through_powershell(
         "-Command",
         "& 'c:\\users\\justi\\appdata\\roaming\\npm\\copilot.cmd'",
     ]
+
+
+def test_windows_backend_forces_winpty_for_interactive_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    forced_backend = object()
+    seen: dict[str, object] = {}
+
+    class FakePtyProcess:
+        @staticmethod
+        def spawn(argv, cwd=None, env=None, backend=None):  # type: ignore[no-untyped-def]
+            seen["argv"] = argv
+            seen["cwd"] = cwd
+            seen["env"] = env
+            seen["backend"] = backend
+            return object()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "winpty",
+        types.SimpleNamespace(PtyProcess=FakePtyProcess),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "winpty.enums",
+        types.SimpleNamespace(Backend=types.SimpleNamespace(WinPTY=forced_backend)),
+    )
+
+    backend = _WindowsBackend()
+    backend.spawn(["powershell.exe", "-NoLogo"], cwd=r"C:\Users\justi", env={"PATH": r"C:\Windows"})
+
+    assert backend.proc is not None
+    assert seen["argv"] == ["powershell.exe", "-NoLogo"]
+    assert seen["cwd"] == r"C:\Users\justi"
+    assert seen["env"] == {"PATH": r"C:\Windows"}
+    assert seen["backend"] is forced_backend
+
+
+def test_normalize_windows_input_expands_only_lone_carriage_returns() -> None:
+    assert _normalize_windows_input(b"alpha\rbeta\r\ngamma") == b"alpha\r\nbeta\r\ngamma"
+
+
+def test_windows_backend_normalizes_enter_for_powershell() -> None:
+    writes: list[str] = []
+
+    class FakeProc:
+        def write(self, text: str) -> None:
+            writes.append(text)
+
+    backend = _WindowsBackend()
+    backend.proc = FakeProc()
+    backend._enter_needs_crlf = True
+
+    backend.write(b"Write-Output 'hi'\r")
+
+    assert writes == ["Write-Output 'hi'\r\n"]
+
+
+def test_windows_backend_leaves_cmd_input_unchanged() -> None:
+    writes: list[str] = []
+
+    class FakeProc:
+        def write(self, text: str) -> None:
+            writes.append(text)
+
+    backend = _WindowsBackend()
+    backend.proc = FakeProc()
+    backend._enter_needs_crlf = False
+
+    backend.write(b"echo hi\r")
+
+    assert writes == ["echo hi\r"]
 
 
 async def test_close_unknown_session_is_false() -> None:

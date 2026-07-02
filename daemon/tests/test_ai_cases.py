@@ -226,6 +226,24 @@ def test_open_ai_os_route_registers_managed_project(tmp_path: Path, monkeypatch:
         assert created.status_code == 200, created.text
 
 
+def test_open_ai_os_route_accepts_benchmark_run_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _app, client, _storage, pm = _harness(tmp_path)
+
+    async def _fake_launch(project_id: str, *_, **__) -> None:
+        return None
+
+    monkeypatch.setattr(pm, "launch", _fake_launch)
+    with client as c:
+        res = c.post(
+            "/api/v1/projects/demo-project/open-ai-os",
+            json={"benchmark_run_id": "bench-123"},
+        )
+        assert res.status_code == 200, res.text
+        assert "benchmark_run_id=bench-123" in res.json()["url"]
+
+
 def test_install_ai_bundle_registers_assets_and_quick_action(
     tmp_path: Path,
 ) -> None:

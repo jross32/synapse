@@ -3,6 +3,7 @@ const state = {
   meta: null,
   projects: [],
   currentCase: null,
+  currentBenchmark: null,
   currentBundle: null,
   currentGraph: null,
   pollHandle: null,
@@ -36,6 +37,8 @@ const els = {
   minorityCopy: document.getElementById("minority-copy"),
   verdictCopy: document.getElementById("verdict-copy"),
   scorecardList: document.getElementById("scorecard-list"),
+  benchmarkLeaderboard: document.getElementById("benchmark-leaderboard"),
+  benchmarkComparisons: document.getElementById("benchmark-comparisons"),
   similarityList: document.getElementById("similarity-list"),
   blastRadius: document.getElementById("blast-radius"),
   handoffPack: document.getElementById("handoff-pack"),
@@ -66,6 +69,7 @@ async function bootstrap() {
   await refreshProjects();
   renderMetaOptions();
   await loadInitialCase();
+  await loadInitialBenchmarkRun();
   startPolling();
 }
 
@@ -181,6 +185,15 @@ async function loadInitialCase() {
   }
 }
 
+async function loadInitialBenchmarkRun() {
+  const benchmarkRunId = state.query.get("benchmark_run_id");
+  if (!benchmarkRunId) {
+    renderBenchmarkRun();
+    return;
+  }
+  await refreshBenchmarkRun(benchmarkRunId);
+}
+
 async function createCase() {
   try {
     const payload = {
@@ -261,6 +274,12 @@ async function refreshCurrentCase(caseId) {
   renderCurrentCase(detail);
 }
 
+async function refreshBenchmarkRun(runId) {
+  const detail = await api(`/benchmarks/runs/${encodeURIComponent(runId)}`);
+  state.currentBenchmark = detail;
+  renderBenchmarkRun();
+}
+
 function renderCurrentCase(detail) {
   const caseData = detail?.case || state.currentCase;
   const bundle = state.currentBundle;
@@ -288,6 +307,7 @@ function renderCurrentCase(detail) {
     els.claimList.innerHTML = '<div class="empty">No claim cards yet.</div>';
     els.contradictionList.innerHTML = '<div class="empty">No contradictions recorded yet.</div>';
     els.scorecardList.innerHTML = '<div class="empty">No scorecard recorded yet.</div>';
+    renderBenchmarkRun();
     els.similarityList.innerHTML = '<div class="empty">No similarity report recorded yet.</div>';
     els.claimCount.textContent = "0";
     els.contradictionCount.textContent = "0 open";
@@ -313,6 +333,7 @@ function renderCurrentCase(detail) {
   els.claimList.innerHTML = renderClaims(bundle.claim_cards);
   els.contradictionList.innerHTML = renderContradictions(bundle.contradiction_docket);
   els.scorecardList.innerHTML = renderScorecard(bundle.scorecard);
+  renderBenchmarkRun();
   els.similarityList.innerHTML = renderSimilarity(bundle.similarity_report);
   els.claimCount.textContent = String(bundle.claim_cards.length);
   const openContradictions = bundle.contradiction_docket.filter((item) => item.status !== "resolved").length;
@@ -337,6 +358,43 @@ function renderCurrentCase(detail) {
     ...bundle.handoff_pack.rollback_notes.map((item) => `Rollback: ${item}`),
     ...bundle.handoff_pack.unresolved_questions.map((item) => `Open question: ${item}`),
   ]);
+}
+
+function renderBenchmarkRun() {
+  const report = state.currentBenchmark?.report;
+  if (!report?.official_quality_ranking?.length) {
+    els.benchmarkLeaderboard.innerHTML = '<div class="empty">No benchmark run loaded yet.</div>';
+    els.benchmarkComparisons.innerHTML = '<div class="empty">No benchmark comparisons loaded yet.</div>';
+    return;
+  }
+  els.benchmarkLeaderboard.innerHTML = report.official_quality_ranking
+    .map(
+      (item, index) => `
+        <article class="card-item">
+          <div class="section-head">
+            <h3>#${index + 1} ${escapeHtml(String(item.candidate_key || "candidate"))}</h3>
+            <span class="pill">${escapeHtml(String(item.confidence_label || "n/a"))}</span>
+          </div>
+          <p>Quality ${escapeHtml(String(item.median_quality_score_100 ?? "n/a"))} · Tokens ${escapeHtml(String(item.median_total_tokens ?? "n/a"))} · Elapsed ${escapeHtml(String(item.median_elapsed_seconds ?? "n/a"))}</p>
+          <small>Pass rate ${escapeHtml(String(item.pass_rate ?? "n/a"))}${item.efficiency_frontier ? " · Pareto frontier" : ""}</small>
+        </article>
+      `
+    )
+    .join("");
+  els.benchmarkComparisons.innerHTML = (report.comparisons || [])
+    .map(
+      (item) => `
+        <article class="card-item">
+          <div class="section-head">
+            <h3>${escapeHtml(String(item.scenario_id || "scenario"))} / ${escapeHtml(String(item.runtime_id || "runtime"))}</h3>
+            <span class="pill">${escapeHtml(String(item.confidence_label || "n/a"))}</span>
+          </div>
+          <p>Winner: ${escapeHtml(String(item.winner_candidate_key || "n/a"))}</p>
+          <small>${item.noisy ? "Noisy comparison -- avoid strong token claims." : "Stable comparison."}${item.notes ? " " + escapeHtml(String(item.notes)) : ""}</small>
+        </article>
+      `
+    )
+    .join("") || '<div class="empty">No benchmark comparisons loaded yet.</div>';
 }
 
 function renderTimeline(entries, graph) {
@@ -448,9 +506,14 @@ function renderListGroup(items) {
 function startPolling() {
   if (state.pollHandle) window.clearInterval(state.pollHandle);
   state.pollHandle = window.setInterval(async () => {
-    if (!state.currentCase) return;
     try {
-      await refreshCurrentCase(state.currentCase.id);
+      if (state.currentCase) {
+        await refreshCurrentCase(state.currentCase.id);
+      }
+      const benchmarkRunId = state.query.get("benchmark_run_id");
+      if (benchmarkRunId) {
+        await refreshBenchmarkRun(benchmarkRunId);
+      }
       setRuntime("Connected to Synapse");
     } catch {
       setRuntime("Reconnecting…", true);

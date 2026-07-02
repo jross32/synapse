@@ -96,6 +96,21 @@ def test_cli_http_request_without_token_raises(
         request("GET", "/health")
 
 
+def test_cli_http_timeout_is_reported_cleanly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from synapse_daemon import cli_http
+
+    monkeypatch.setenv("SYNAPSE_TOKEN", "timeout-token-123")
+
+    def _timeout(*_args, **_kwargs):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(cli_http.urllib_request, "urlopen", _timeout)
+    with pytest.raises(cli_http.SynapseCliError, match="Could not reach daemon"):
+        cli_http.request("GET", "/health", timeout=0.01)
+
+
 def test_cli_doctor_reports_token_state(
     tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

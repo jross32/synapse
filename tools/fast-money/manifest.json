@@ -1,0 +1,87 @@
+{
+  "id": "fast-money",
+  "name": "Fast Money",
+  "category": "workflows",
+  "icon": "terminal",
+  "description": "Spin up a private/local-first client-ops SaaS starter, install the Fast Money AI bundle, and open an AI build session in one run.",
+  "version": "1.0.0",
+  "fields": [
+    {
+      "key": "app_name",
+      "type": "text",
+      "label": "App name",
+      "required": true,
+      "default": "Fast Money Client Ops",
+      "placeholder": "Fast Money Client Ops",
+      "help": "Customer-facing name for the generated SaaS."
+    },
+    {
+      "key": "brief",
+      "type": "text",
+      "label": "Brief",
+      "required": true,
+      "default": "Build a private/local-first client-ops SaaS for service businesses that turns leads into quotes, approvals, jobs, invoices, and renewals.",
+      "placeholder": "Who is this for and what should it sell?",
+      "help": "Short product brief for the AI build session."
+    },
+    {
+      "key": "output_path",
+      "type": "path",
+      "label": "Output path",
+      "required": false,
+      "placeholder": "Leave blank for Synapse data/projects/fast-money-client-ops",
+      "help": "Optional project folder. Blank creates the reference app under Synapse's data directory."
+    },
+    {
+      "key": "pricing_model",
+      "type": "text",
+      "label": "Pricing model",
+      "required": true,
+      "default": "hybrid",
+      "placeholder": "hybrid",
+      "help": "Recommended default is hybrid: base subscription plus AI-heavy usage overage."
+    },
+    {
+      "key": "include_customer_portal",
+      "type": "boolean",
+      "label": "Include customer portal",
+      "required": false,
+      "default": true,
+      "help": "Create the customer-facing portal shell and navigation."
+    },
+    {
+      "key": "include_employee_console",
+      "type": "boolean",
+      "label": "Include employee console",
+      "required": false,
+      "default": true,
+      "help": "Create the operator/admin console shell and workflow dashboard."
+    },
+    {
+      "key": "include_catalog_editor",
+      "type": "boolean",
+      "label": "Include catalog editor",
+      "required": false,
+      "default": false,
+      "help": "Add a catalog editor shell when the business needs editable services or packages."
+    },
+    {
+      "key": "preferred_runtime",
+      "type": "text",
+      "label": "Preferred runtime",
+      "required": false,
+      "default": "auto",
+      "placeholder": "auto | codex | claude | copilot",
+      "help": "auto picks codex -> claude -> copilot."
+    }
+  ],
+  "actions": [
+    {
+      "id": "launch",
+      "label": "Build With AI",
+      "handler": "fast-money:launch",
+      "primary": true,
+      "scope": "tool"
+    }
+  ]
+}
