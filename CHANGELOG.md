@@ -10,7 +10,30 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.5] -- 2026-07-03
+
 ### Added
+- **`README.md` rewritten, extensively.** Now leads with "built for AI, not
+  just for a human" framing (`GET /api/v1/ai/context`, versioned REST/WS as
+  the primary interface), a non-technical explainer aimed at a
+  non-developer reader, a drift/memory comparison table, a "build a
+  business with Synapse" section (Fast Money, e-commerce/resale use
+  cases), an extensive Web Scraper MCP usage section with concrete tool
+  examples grouped by use case, a "how any AI can connect to Synapse"
+  section (simple + developer terms), and a real benchmark section.
+- **`benchmarks/makeup-business-demo/`** -- a real, reproducible benchmark:
+  the same small business site spec ("Glow Studio") built once through a
+  real Synapse project + Claude Code session, once by a single memory-less
+  AI session with no Synapse involvement. Nested folders: `apps/` (both
+  full source trees), `results/tokens/`, `results/quality/` (one file per
+  scored dimension -- UI/UX, visual design, code quality, backend
+  correctness, usability/accessibility, adversarial bug hunt -- plus a
+  `summary.md`), `screenshots/` (desktop + mobile, both apps), and
+  `raw-logs/` (chronological real timestamps for both runs). See
+  `benchmarks/makeup-business-demo/methodology.md`.
+- **`AGENTS.md`**: added a `benchmarks/` doc-sync trigger to the commit
+  rules, and an explicit note that the doc-sync obligation applies to
+  every AI coder touching this repo, not only Claude.
 - **Fast Money launcher + AI bundle.** Synapse now ships a built-in
   `fast-money` tool, a bundled Marketplace entry, and a paired AI bundle
   that installs client-ops revenue roles, an operator-style personality, a
@@ -88,6 +111,19 @@ Every commit must append an entry under the in-progress version header.
   provides. Quick-action prompts were also shortened to keep the quality bar
   intact while cutting low-signal prompt overhead for research, generation,
   rescue, and harvest/bakeoff runs.
+
+### Notes
+- **Real bug found while dogfooding Agent Squads on Windows**: any PTY spawn
+  with a multi-element `argv` for a `.CMD`-shimmed runtime (e.g.
+  `claude.CMD --mcp-config <path>`) fails silently -- the child never
+  receives its arguments and `cmd.exe` reports the second argv element as
+  "not recognized." Practical impact: on a machine with any MCP server
+  enabled, every squad-launched `claude` work item currently fails this way
+  (`routes_agent_squads.py`, `launch_work_item` always appends
+  `--mcp-config` in that case). Root cause not yet fixed -- see
+  `benchmarks/makeup-business-demo/methodology.md` for the full repro and
+  the filed follow-up task. The benchmark itself worked around it via the
+  single-arg workbench launcher.
 
 ## [0.1.36-dev] -- 2026-06-22
 

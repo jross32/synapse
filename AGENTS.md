@@ -84,6 +84,18 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
      add a `coming` item). This feeds the in-app **What's New** surface (ADR-0019),
      so a stale roadmap = a stale "path" shown to the user. Keep ADR + CHANGELOG +
      roadmap consistent when an idea changes the plan.
+   - **A new or re-run benchmark → `benchmarks/<name>/`** (nested: `apps/`,
+     `results/tokens/`, `results/quality/`, `screenshots/`, `raw-logs/` — see
+     `benchmarks/makeup-business-demo/` for the shape) **and** the README's
+     Benchmarks section. Only commit numbers you actually observed from a real
+     run; never hand-wave a score.
+
+This rule is not Claude-specific — it applies to every AI coder that touches this
+repo (see the audience line at the top of this file). If you are Codex, Copilot,
+Cursor, a local model, or anything else editing Synapse: the same doc-sync
+obligation applies to you. A commit that changes behavior without updating the
+docs that describe that behavior is an incomplete commit, regardless of which AI
+made it.
 6. **Commit author:** `jross32 <justinwross32@gmail.com>`. Don't change git config.
 7. **Commit to the current branch.** Never switch branches without being asked.
 8. **Commit message format:**
