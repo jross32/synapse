@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.1.36.5`
+`0.1.36.6`
 
 ## Current milestone
 
@@ -63,6 +63,7 @@
 | `0.1.35` | Polish + LAN exposure: status legend, port doc, sidebar editable, tray Exit/Restart, mobile QR, file preview, terminal search, PTY default cwd → ~, Modal/StatusLegend focus traps, Stop-all on Processes, NetworkPanel | ✅ done |
 | `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped -> not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, full mobile shell parity + LAN/WAN handoff, Sessions-centric Agent Squads mode, ADRs 0006/0007/0008 drafted | ⏳ in progress |
 | `0.1.36.5` | Docs-only: README rewrite (AI-first framing, drift/memory, Web Scraper MCP guide), `benchmarks/makeup-business-demo/` real Synapse-vs-baseline benchmark, AGENTS.md doc-sync rule for benchmarks + any-AI note | ✅ done |
+| `0.1.36.6` | Docs-only: README squad worked example (Skeptic vs. Pragmatist reviewer) + autonomous "AI boss" self-improvement bullet | ✅ done |
 
 ## What's done
 
@@ -384,4 +385,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by the v0.1.36.5 README + benchmark pass._
+_Last updated by the v0.1.36.6 README follow-up pass._

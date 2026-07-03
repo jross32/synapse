@@ -6,7 +6,7 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.36.5`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. We're actively building the unified AI coding cockpit, a shared cross-AI plan, and a one-click installer. **528 automated tests pass.**
+> **Status:** early development (`v0.1.36.6`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. We're actively building the unified AI coding cockpit, a shared cross-AI plan, and a one-click installer. **528 automated tests pass.**
 
 ---
 
@@ -54,8 +54,12 @@ If that's all you needed to know, skip to **[Getting started](#getting-started)*
 - **🤖 Put AI to work** — run Claude, Codex, or Copilot directly on your code from inside Synapse. Give a task; the AI builds it. A shared **cross-AI plan** (`.synapse/plan.md` per project) keeps every AI on the same page — one can hand off to another mid-task and the new one won't repeat work or contradict earlier decisions.
   *Why it's better:* in a plain chat tool, "context" dies with the tab. In Synapse, the plan is a durable file the *project* owns — any AI, in any session, reads and updates the same document.
 
-- **👥 Build AI teams ("squads")** — assemble a team of AI workers, each with a **role** (boss, planner, designer, reviewer, tester…) and a **personality**, so they collaborate and challenge each other's decisions instead of one model rubber-stamping itself. A boss can delegate to a supervisor, who delegates to workers, and each hands off with a structured summary — not a vague "done!".
+- **👥 Build AI teams ("squads")** — assemble a team of AI workers, each with a **role** (`boss` / `supervisor` / `worker` tier — planner, designer, reviewer, tester…) and a **personality** (five shipped built-ins: Pragmatist, Perfectionist, Skeptic, Visionary, Mediator), so they collaborate and challenge each other's decisions instead of one model rubber-stamping itself. A boss delegates to a supervisor, who delegates to workers, and each hands off with a structured summary — not a vague "done!".
   *Why it's better:* a single chatbot session is one voice checking its own work. A squad has a reviewer role whose whole job is to disagree when something's wrong, the same reason human teams do code review.
+  *A worked example:* add the same `reviewer` role twice to a squad — once with the **Skeptic** personality, once with **Pragmatist** — and you get two AIs that read the same code and *disagree on purpose*: the Skeptic hunts for what's broken or unverified, the Pragmatist argues for shipping what's good enough now. That built-in tension is exactly what caught nothing in our own benchmark below — a lesson we're applying, not just describing.
+
+- **🧑‍💼 An autonomous "AI boss"** *(ADR-0013)* — give it a goal from the Sessions quick-actions rail and it orients itself (`GET /api/v1/ai/context`), decides or creates the project, posts a visible plan, staffs and launches its own workers, prefers installing an existing marketplace tool over writing one from scratch, and records its decisions as project ADRs. Full autonomy, bounded by one thing: a **kill switch** (`POST /api/v1/agent-squads/{id}/stop`) that stops everything instantly.
+  *Why it's better:* it doesn't just execute a task and forget — it writes durable ADRs and updates `.synapse-ai-context.md` as it goes, so the **next** run (next week, a different AI) starts smarter instead of re-deriving the same plan from zero. That's Synapse improving its own working knowledge, not just shipping one app.
 
 - **🛒 A marketplace** — install tools, local AI models, MCP servers, workers, and ready-made teams with one click. Point-and-click for a human; a single `POST /api/v1/marketplace/install/{id}` for an AI.
   *Why it's better:* extending a chatbot means copy-pasting instructions into every new chat. Extending Synapse means installing a tool once — every future AI session (yours or a teammate's) sees it.

@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.6] -- 2026-07-03
+
+### Added
+- **`README.md`**: expanded the "Build AI teams" bullet with a concrete worked
+  example (same `reviewer` role run twice with different personalities --
+  Skeptic vs. Pragmatist -- to show deliberate disagreement in action), and
+  added a new **autonomous "AI boss"** bullet (ADR-0013) explaining how it
+  writes durable ADRs and `.synapse-ai-context.md` updates as it works, so the
+  *next* run starts smarter -- Synapse improving its own working knowledge,
+  not just shipping one app.
+
 ## [0.1.36.5] -- 2026-07-03
 
 ### Added
