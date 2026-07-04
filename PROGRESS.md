@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.1.36.6`
+`0.1.36.7`
 
 ## Current milestone
 
@@ -70,6 +70,7 @@ A one-time audit checked whether any product decision from the **origin build se
 | `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped -> not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, full mobile shell parity + LAN/WAN handoff, Sessions-centric Agent Squads mode, ADRs 0006/0007/0008 drafted | ⏳ in progress |
 | `0.1.36.5` | Docs-only: README rewrite (AI-first framing, drift/memory, Web Scraper MCP guide), `benchmarks/makeup-business-demo/` real Synapse-vs-baseline benchmark, AGENTS.md doc-sync rule for benchmarks + any-AI note | ✅ done |
 | `0.1.36.6` | Docs-only: README squad worked example (Skeptic vs. Pragmatist reviewer) + autonomous "AI boss" self-improvement bullet | ✅ done |
+| `0.1.36.7` | Docs/config: AGENTS.md commit-before-limit rule + commit-rule #11 (commit+push per logical change) + gitignore daemon/auth-token | ✅ done |
 
 ## What's done
 
@@ -391,4 +392,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by the v0.1.36.6 README follow-up pass._
+_Last updated by the v0.1.36.7 commit-discipline pass._

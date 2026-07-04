@@ -10,6 +10,30 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.7] -- 2026-07-04
+
+### Added
+- **`AGENTS.md` — commit-before-limit rule** (Golden rule): when usage/tokens run
+  low for *any* AI coder, the last action must be to bring the current unit to a
+  working state and commit + push it (still running the standard fast
+  version-bump + one-line CHANGELOG/PROGRESS ceremony) — never leave the app
+  half-done because credits ran out.
+- **`AGENTS.md` — commit rule #11:** commit AND push after every logical change,
+  green-then-push (typecheck + pytest, plus E2E per Rule #6 for code bumps),
+  don't batch unrelated changes; push-vs-concurrency defers to
+  `docs/MULTI-AI-WORKFLOW.md`.
+
+### Changed
+- `.gitignore`: ignore `daemon/auth-token` (a per-launch runtime token file that
+  was noise in every `git status`).
+
+### Notes
+- Also recorded (in `PROGRESS.md`, prior commit) a 2026-07-04 **decision-coverage
+  audit** confirming the origin build session left no decisions uncaptured in the
+  durable docs. That audit note was committed without a version bump, which is
+  out of step with commit-rule #1; this `0.1.36.7` bump restores the
+  version/CHANGELOG lock-step going forward.
+
 ## [0.1.36.6] -- 2026-07-03
 
 ### Added

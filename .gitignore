@@ -37,6 +37,8 @@ dist/
 # Daemon runtime data (per-user, never committed)
 daemon/data/
 /data/
+# runtime token, written per-launch
+daemon/auth-token
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

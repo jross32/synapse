@@ -22,6 +22,15 @@ multi-thousand-line uncommitted dump across many half-built features; land each
 **complete, compiling, tested** piece as its own commit as you go. (Both of these
 drifted recently and had to be reconciled — this rule prevents a repeat.)
 
+**Never leave the app half-done at a usage limit.** When usage/tokens run low —
+for *any* AI coder (Claude, Codex, Copilot, local) — the last action before
+stopping must be to bring the current unit to a working, tested state and
+**commit + push** it. Never stop mid-edit leaving the app broken because credits
+ran out. The emergency commit still runs the standard ceremony (it's fast):
+`version-bump.ps1` + a one-line `CHANGELOG.md` + `PROGRESS.md` entry — do not
+silently skip it. Prefer smaller units that each land green so there's always a
+safe point to stop at.
+
 ---
 
 ## Repo layout (high level)
@@ -114,6 +123,7 @@ made it.
    ```
 9. **Run `npm run typecheck && pytest` before committing.** CI will catch you if you skip.
 10. **Never force-push.** Never `reset --hard`. Never bypass hooks (`--no-verify`).
+11. **Commit AND push after every logical change** (a feature, a bug fix, a UI/UX change) — once it's green (typecheck + pytest per #9, plus the E2E pass per Rule #6 for code bumps). **Green then push.** Don't batch unrelated changes into one commit. Push frequency vs. concurrent-edit safety defers to [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md).
 
 ### Docs-sync pre-flight (run mentally before every commit)
 
