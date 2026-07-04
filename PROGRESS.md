@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.1.36.10`
+`0.1.36.11`
 
 ## Current milestone
 
@@ -395,4 +395,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by the v0.1.36.10 Windows squad-launch fix._
+_Last updated by the v0.1.36.11 benchmark reviewer pass (re-score pending / usage limit)._

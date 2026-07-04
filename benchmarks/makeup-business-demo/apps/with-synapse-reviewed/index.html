@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Glow Studio — Beauty Artistry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header id="site-header">
+    <nav class="nav-inner">
+      <div class="logo">Glow Studio</div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="#services">Services</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="#contact" class="nav-btn">Book Now</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-orb hero-orb-1"></div>
+    <div class="hero-orb hero-orb-2"></div>
+    <div class="hero-content">
+      <p class="hero-eyebrow">&#10022; Beauty Artistry Studio &#10022;</p>
+      <h1>Glow Studio</h1>
+      <p class="tagline">Where beauty meets artistry — every look, perfectly yours.</p>
+      <a href="#contact" class="btn">Book Now</a>
+    </div>
+    <div class="hero-scroll">&#8595;</div>
+  </section>
+
+  <section id="services" class="services">
+    <div class="container">
+      <p class="section-label">What We Offer</p>
+      <h2>Our Services</h2>
+      <div class="divider"></div>
+      <div class="services-grid">
+
+        <div class="service-card">
+          <div class="service-icon">&#10022;</div>
+          <h3>Bridal Glam</h3>
+          <p>Full bridal makeup with airbrush finish, long-wear setting, and a complimentary trial session included.</p>
+          <span class="price">$250</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-icon">&#10022;</div>
+          <h3>Classic Full Face</h3>
+          <p>Foundation, contour, sculpted eyes, and lips tailored to your skin tone and the occasion at hand.</p>
+          <span class="price">$95</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-icon">&#10022;</div>
+          <h3>Lash Extensions</h3>
+          <p>Classic or volume sets applied individually for a seamless look — from natural flutter to full drama.</p>
+          <span class="price">$150</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-icon">&#10022;</div>
+          <h3>Brow Design</h3>
+          <p>Precision shaping, tinting, and lamination for bold, defined brows that frame and elevate your features.</p>
+          <span class="price">$65</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-icon">&#10022;</div>
+          <h3>Glow Facial</h3>
+          <p>A pre-event hydration treatment that preps and perfects skin for the most flawless makeup application.</p>
+          <span class="price">$75</span>
+        </div>
+
+        <div class="service-card">
+          <div class="service-icon">&#10022;</div>
+          <h3>Editorial Look</h3>
+          <p>High-fashion, creative makeup for photoshoots, campaigns, and performances. Bring your vision to life.</p>
+          <span class="price">$180</span>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section id="about" class="about">
+    <div class="container about-inner">
+      <div class="about-image">
+        <div class="image-placeholder">
+          <div class="image-monogram">GS</div>
+        </div>
+      </div>
+      <div class="about-text">
+        <p class="section-label">Our Story</p>
+        <h2>About Us</h2>
+        <div class="divider divider-left"></div>
+        <p>Glow Studio was founded by Sofia Reyes, a licensed esthetician and makeup artist with over a decade of experience in bridal, editorial, and everyday beauty. We believe every client deserves to feel radiant and confident, no matter the occasion — whether you're saying "I do" or simply treating yourself. Our studio is a calm, welcoming space in the heart of the city where artistry and genuine self-care come beautifully together.</p>
+        <a href="#contact" class="btn btn-outline">Meet Sofia</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="contact">
+    <div class="container">
+      <p class="section-label">Get In Touch</p>
+      <h2>Book an Appointment</h2>
+      <div class="divider"></div>
+      <p class="contact-sub">Fill out the form below and we'll be in touch within 24 hours.</p>
+
+      <form id="contact-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Your full name" required>
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="your@email.com" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="5" placeholder="Tell us about the service you're interested in and your preferred date..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-full">Send Message</button>
+      </form>
+
+      <div id="success-message" class="success-message hidden">
+        <div class="success-icon">&#10022;</div>
+        <h3>Message Received!</h3>
+        <p>Thank you for reaching out. Sofia will be in touch within 24 hours to confirm your appointment details.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <div class="logo">Glow Studio</div>
+        <p class="footer-tagline">Beauty is not a standard. It's a feeling.</p>
+      </div>
+      <div class="footer-hours">
+        <h4>Studio Hours</h4>
+        <ul>
+          <li><span>Mon &ndash; Fri</span> 9am &ndash; 7pm</li>
+          <li><span>Saturday</span> 10am &ndash; 6pm</li>
+          <li><span>Sunday</span> By appointment</li>
+        </ul>
+      </div>
+      <div class="footer-social">
+        <h4>Follow Along</h4>
+        <ul>
+          <li><a href="#">Instagram</a></li>
+          <li><a href="#">TikTok</a></li>
+          <li><a href="#">Pinterest</a></li>
+          <li><a href="#">Facebook</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 Glow Studio. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

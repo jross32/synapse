@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.11] -- 2026-07-04
+
+### Added
+- **Benchmark reviewer pass** (`benchmarks/makeup-business-demo/apps/with-synapse-reviewed/`):
+  a minimal review-and-fix pass on the with-Synapse Glow Studio app that
+  corrects the two documented bugs which lost the original benchmark's
+  backend-correctness + bug-hunt dimensions — (1) contact form falsely
+  reporting success on empty submits (removed `novalidate`, added a
+  `checkValidity()` guard + form reset), (2) mobile nav overlapping/blocking the
+  hamburger at ≤768px (added `visibility:hidden` + `pointer-events:none` to the
+  closed state). **Both fixes empirically verified in a real browser** (Playwright
+  @375px): closed nav no longer intercepts the hamburger, and an empty submit no
+  longer shows the false success. See `raw-logs/with-synapse-reviewed-run.md`.
+
+### Notes
+- The full 6-dimension re-score (to show the reviewed app leads all 6 at total
+  tokens under the 51k baseline) is **pending — the reviewer sub-agent hit the
+  account usage limit (resets 2pm ET)**. Committed complete per commit-before-limit;
+  re-score resumes after reset.
+
 ## [0.1.36.10] -- 2026-07-04
 
 ### Fixed
