@@ -134,6 +134,19 @@ the *cause* of version collisions, not the fix.
   — possibly a different CLI — picks up the thread.
 - **Error envelope, status enum, audit log, timestamps:** Contracts #4, #2,
   #11, #24 in AGENTS.md. Don't invent parallel shapes.
+- **AI Council Review — don't work alone (ADR-0023).** For meaningful work,
+  run a **pre-work council** (a small panel of reviewers critiques your plan
+  before you build) and a **post-work council** (they hunt bugs/gaps before
+  you claim done); synthesize their prioritized findings, revise, repeat.
+  **Adaptive size:** 2 reviewers for tiny tasks, 3–5 for a normal feature/fix/
+  doc, 6–10 only for complex/risky/architectural/benchmark/security/automation
+  work. Lenses: Architect · Skeptic · Tester/QA · Security · UX/UI ·
+  Performance/Token-Efficiency · Product · DevOps · MCP/Tooling · Documentation.
+  Ask for **critical / important / optional** findings only; you synthesize,
+  you don't blindly follow. **Mechanism:** run the reviewers yourself as
+  parallel/sequential prompt passes (the always-available path) — **do NOT
+  spawn reviewer squad-workers on Windows** until the multi-arg `.CMD`
+  squad-launch bug is fixed. Launchable as the `ai-council-review` quick-action.
 
 ---
 

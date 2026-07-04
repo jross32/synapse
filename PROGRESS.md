@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.1.36.8`
+`0.1.36.9`
 
 ## Current milestone
 
@@ -72,6 +72,7 @@ A one-time audit checked whether any product decision from the **origin build se
 | `0.1.36.6` | Docs-only: README squad worked example (Skeptic vs. Pragmatist reviewer) + autonomous "AI boss" self-improvement bullet | ✅ done |
 | `0.1.36.7` | Docs/config: AGENTS.md commit-before-limit rule + commit-rule #11 (commit+push per logical change) + gitignore daemon/auth-token | ✅ done |
 | `0.1.36.8` | Docs: `docs/screenshots/` UI gallery (Home + cockpit, live-captured) + AGENTS.md screenshot-refresh rule; verified cockpit is project-scoped-only (no project-free New chat) | ✅ done |
+| `0.1.36.9` | AI Council Review workflow (ADR-0023): `ai-council-review` quick-action + MULTI-AI-WORKFLOW/AGENTS/roadmap docs — pre/post multi-reviewer gate, adaptive 2–10, prompt-pass mechanism (no squad-workers on Windows yet) | ✅ done |
 
 ## What's done
 
@@ -393,4 +394,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by the v0.1.36.8 screenshot-gallery pass._
+_Last updated by the v0.1.36.9 AI Council Review pass._

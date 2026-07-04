@@ -31,6 +31,15 @@ ran out. The emergency commit still runs the standard ceremony (it's fast):
 silently skip it. Prefer smaller units that each land green so there's always a
 safe point to stop at.
 
+**Don't work alone — run an AI Council Review on meaningful work (ADR-0023).**
+Before building, run a **pre-work council** (a small panel of reviewer lenses
+critiques your plan); after building, a **post-work council** (they hunt
+bugs/gaps before you claim done). Adaptive size: 2 reviewers for tiny tasks,
+3–5 normal, 6–10 only for complex/risky/architectural work. You synthesize the
+prioritized (critical/important/optional) findings — you don't blindly follow.
+Full discipline + mechanism in [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md);
+launchable as the `ai-council-review` quick-action.
+
 ---
 
 ## Repo layout (high level)

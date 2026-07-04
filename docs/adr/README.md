@@ -53,3 +53,4 @@ What did we choose? Be specific.
 
 - [`0001-tool-marketplace.md`](./0001-tool-marketplace.md) — two-tier (declarative + curated handler) marketplace for distributing third-party + first-party tools through a registry, with hot install/uninstall and an in-app Browse / Install from URL flow. (Proposed, v0.1.19.)
 - [`0020-ai-factory-case-engine.md`](./0020-ai-factory-case-engine.md) — keeps Synapse as the single runtime while splitting AI work into a native AI Factory authoring surface and a separate AI Operating System execution board, backed by structured advanced AI cases. (Accepted, v0.1.36-dev.)
+- [`0023-ai-council-review.md`](./0023-ai-council-review.md) — "AI Council Review": a pre/post multi-perspective review gate (adaptive 2–10 reviewers, prioritized findings, synthesis) shipped as a launchable quick-action + workflow discipline for any AI, distinct from the case-engine `challenge` mode. (Accepted, v0.1.36.9.)

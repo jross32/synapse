@@ -3,6 +3,14 @@
   "generated_at": "2026-06-29",
   "items": [
     {
+      "id": "ai-council-review",
+      "title": "AI Council Review",
+      "status": "in_progress",
+      "phase": "Quality",
+      "adr": "ADR-0023",
+      "summary": "Before and after meaningful work, the AI consults a small panel of expert reviewers (2-10, by task size) and synthesizes their feedback — so it doesn't work alone. Ships as a launchable workflow + discipline; a native council engine is a later step."
+    },
+    {
       "id": "local-llm",
       "title": "Local AI assistant",
       "status": "shipped",

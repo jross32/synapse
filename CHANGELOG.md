@@ -10,6 +10,27 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.9] -- 2026-07-04
+
+### Added
+- **AI Council Review — first-class workflow + discipline (ADR-0023).** A primary
+  AI no longer works alone: a **pre-work council** critiques its plan and a
+  **post-work council** hunts bugs/gaps before it claims done, with an **adaptive
+  2–10 reviewer** panel (by task size), prioritized critical/important/optional
+  findings, and synthesis (not blind-follow). Shipped as:
+  - `templates/quick-actions/ai-council-review.json` — a launchable quick-action
+    (Plan → Council → Build → Council → Verify). Runs reviewers as prompt passes
+    by default; **does not spawn reviewer squad-workers on Windows** until the
+    Phase 2 multi-arg `.CMD` squad-launch bug is fixed.
+  - `docs/adr/0023-ai-council-review.md` (accepted) + index entry.
+  - a canonical-pattern section in `docs/MULTI-AI-WORKFLOW.md` and a pointer rule
+    in `AGENTS.md` (Golden rule).
+  - a `docs/roadmap.json` item (status `in_progress`).
+- Honest scope: v1 is a launchable prompt + discipline, **not** a daemon council
+  engine (deferred; see ADR-0023 follow-ups). Dogfood proof: real councils this
+  session caught a decision-audit recall gap (~66% miss) and a commit about to
+  violate the version-bump rule.
+
 ## [0.1.36.8] -- 2026-07-04
 
 ### Added
