@@ -98,6 +98,12 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
      `benchmarks/makeup-business-demo/` for the shape) **and** the README's
      Benchmarks section. Only commit numbers you actually observed from a real
      run; never hand-wave a score.
+   - **A change that alters a user-visible surface (new panel, redesign, notable
+     UI/UX change) → refresh the affected image(s) in `docs/screenshots/`** (real
+     Playwright captures of the running renderer at 1280 + 375, per the E2E rule
+     below) in the same commit, and update any README references. The gallery is
+     meant to evolve *with* the app — a stale screenshot is a stale "this is what
+     Synapse looks like."
 
 This rule is not Claude-specific — it applies to every AI coder that touches this
 repo (see the audience line at the top of this file). If you are Codex, Copilot,

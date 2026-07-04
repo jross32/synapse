@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.8] -- 2026-07-04
+
+### Added
+- **`docs/screenshots/` — a real UI screenshot gallery** (Home desktop + mobile,
+  the AI Coding cockpit), captured from the running renderer via Playwright, with
+  a README that evolves as the UI does. Linked from the top of `README.md`.
+- **`AGENTS.md` docs-sync rule:** a change that alters a user-visible surface must
+  refresh the affected `docs/screenshots/` image(s) in the same commit.
+
+### Notes
+- **Live E2E state verified (2026-07-04):** launched against the running stack
+  (daemon `:7878` + Vite `:5173`); Home + AI Coding render with 0 console errors
+  (only a benign token-less-browser WS warning). **Finding:** the AI Coding
+  cockpit works but is **project-scoped only** — no project-free "New chat"
+  (you must pick a registered project before starting a thread). This confirms
+  the flagged cockpit gap (project-free New chat) and feeds that upcoming work.
+
 ## [0.1.36.7] -- 2026-07-04
 
 ### Added

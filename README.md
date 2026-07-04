@@ -6,7 +6,9 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.36.6`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. We're actively building the unified AI coding cockpit, a shared cross-AI plan, and a one-click installer. **528 automated tests pass.**
+> **Status:** early development (`v0.1.36.8`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. We're actively building the unified AI coding cockpit, a shared cross-AI plan, and a one-click installer. **528 automated tests pass.**
+>
+> 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit), refreshed as the UI evolves.
 
 ---
 
