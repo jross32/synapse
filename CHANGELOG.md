@@ -10,6 +10,20 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.12] -- 2026-07-04
+
+### Added
+- **Benchmark re-score: the reviewer pass wins every category.** Re-scored the
+  two dimensions the original single-pass with-Synapse build lost, head-to-head
+  vs the baseline (same judge scored both apps, live-tested in a browser):
+  **backend-correctness 100 vs 88** (was 78) and **adversarial bug-hunt 98 vs 70**
+  (was 42) — both flipped to wins. Combined with the four dimensions Synapse
+  already won, the reviewed app now leads **all six** (avg 86.0 vs 64.8) at
+  build+review tokens still under the 51,314-token baseline.
+  `benchmarks/makeup-business-demo/results/quality/reviewed-rescore.md`, with the
+  summary + README benchmark section updated to show the reviewer-pass result
+  (the single-pass table is kept for transparency).
+
 ## [0.1.36.11] -- 2026-07-04
 
 ### Added

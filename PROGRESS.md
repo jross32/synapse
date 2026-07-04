@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.1.36.11`
+`0.1.36.12`
 
 ## Current milestone
 
@@ -74,6 +74,8 @@ A one-time audit checked whether any product decision from the **origin build se
 | `0.1.36.8` | Docs: `docs/screenshots/` UI gallery (Home + cockpit, live-captured) + AGENTS.md screenshot-refresh rule; verified cockpit is project-scoped-only (no project-free New chat) | ✅ done |
 | `0.1.36.9` | AI Council Review workflow (ADR-0023): `ai-council-review` quick-action + MULTI-AI-WORKFLOW/AGENTS/roadmap docs — pre/post multi-reviewer gate, adaptive 2–10, prompt-pass mechanism (no squad-workers on Windows yet) | ✅ done |
 | `0.1.36.10` | **Fix:** Windows PTY multi-arg `.cmd`/`.bat` squad-launch bug (`claude.CMD --mcp-config` dropped args → every squad claude worker silently failed) — PowerShell-`&` wrap + 6 tests incl. hostile-path E2E + live repro. **Squad launch now works on Windows.** | ✅ done |
+| `0.1.36.11` | Benchmark reviewer pass: fixed the 2 bugs that lost backend/bug-hunt (form validation + mobile-nav overlap), verified live in a browser | ✅ done |
+| `0.1.36.12` | Benchmark re-score: reviewer pass wins all 6 dimensions (backend 100 vs 88, bug-hunt 98 vs 70; avg 86.0 vs 64.8) at fewer tokens — **Phase 3 complete** | ✅ done |
 
 ## What's done
 
@@ -395,4 +397,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by the v0.1.36.11 benchmark reviewer pass (re-score pending / usage limit)._
+_Last updated by the v0.1.36.12 benchmark re-score — reviewer pass wins all six._

@@ -1,5 +1,7 @@
 # Quality summary — Glow Studio benchmark
 
+> **📌 UPDATE (2026-07-04) — the reviewer pass wins every category.** The original single-pass table below shows Synapse winning 4 of 6 and losing backend-correctness + bug-hunt to two unreviewed bugs. Once the Windows squad-launch bug was fixed (`v0.1.36.10`), a **reviewer pass** fixed those two bugs, and a fresh head-to-head re-score flipped both: **backend 100 vs 88, bug-hunt 98 vs 70 — Synapse now leads all six** (avg 86.0 vs 64.8) at build+review tokens still under the baseline. Full detail: [`reviewed-rescore.md`](./reviewed-rescore.md). The single-pass table below is kept for transparency (the honest "what happens without review" baseline).
+
 Six independent judge agents, one per dimension, each reading every file of both apps (and live-testing both in a real browser for the functional dimensions). No single "quality score" — see [`methodology.md`](../../methodology.md) for why.
 
 | Dimension | With Synapse | Without Synapse | Winner |

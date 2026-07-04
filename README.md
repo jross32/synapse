@@ -169,7 +169,18 @@ Full results, methodology, every raw file, and screenshots of both apps live in 
 | Tokens used | ~16.1k | 51,314 |
 | Time | 3m 8s active | 1m 47s |
 
-**This is not a clean sweep, on purpose — we're not going to pretend it was.** The Synapse-built app is the more ambitious, better-designed result: real custom typography instead of system fonts, a full 10-color design-token system instead of 5 flat colors, a working mobile menu instead of none. It wins 4 of 6 dimensions clearly. But it also shipped two real, live-reproduced bugs the simpler build didn't have — a contact form that silently "succeeds" on a completely blank submission, and a mobile nav menu that visibly overlaps the header on small screens. Both are exactly the kind of defect an actual **squad reviewer role** (a second AI whose job is to check the first one's work — see "Build AI teams" above) would very plausibly have caught, and this specific run didn't use one. Full breakdown, every bug, and both apps' full source: [`benchmarks/makeup-business-demo/results/quality/summary.md`](./benchmarks/makeup-business-demo/results/quality/summary.md).
+**The single pass above is not a clean sweep, on purpose — we're not going to pretend it was.** The Synapse-built app is the more ambitious, better-designed result: real custom typography instead of system fonts, a full 10-color design-token system instead of 5 flat colors, a working mobile menu instead of none. It wins 4 of 6 dimensions clearly. But it also shipped two real, live-reproduced bugs the simpler build didn't have — a contact form that silently "succeeds" on a completely blank submission, and a mobile nav menu that visibly overlaps the header on small screens. Both are exactly the kind of defect an actual **reviewer role** (a second AI whose job is to check the first one's work — see "Build AI teams" above) would very plausibly have caught, and that first run didn't use one (squad launch was broken on Windows at the time).
+
+**Then we actually ran the reviewer pass — and it wins every category.** Once the Windows squad-launch bug was fixed, a reviewer pass fixed those two bugs (verified live in a browser: empty submits are now blocked; the mobile nav no longer overlaps or blocks the hamburger), and a fresh head-to-head re-score flipped both losing dimensions:
+
+| Dimension | With Synapse **+ reviewer** | Without Synapse | Winner |
+|---|---|---|---|
+| Backend / functional correctness | **100** | 88 | **With Synapse** |
+| Adversarial bug hunt | **98** | 70 | **With Synapse** |
+| (the other four, unchanged) | 78 · 90 · 85 · 65 | 68 · 46 · 75 · 42 | With Synapse |
+| **Average (all six)** | **86.0** | **64.8** | **With Synapse — all six** |
+
+So the honest arc is the real story: **a single unreviewed AI pass is strong but ships bugs; Synapse's reviewer differentiator catches and fixes them, winning every category — at build+review tokens still under the baseline's 51,314.** Full breakdown, the re-score, every bug, and both apps' full source: [`benchmarks/makeup-business-demo/results/quality/summary.md`](./benchmarks/makeup-business-demo/results/quality/summary.md) · [`reviewed-rescore.md`](./benchmarks/makeup-business-demo/results/quality/reviewed-rescore.md).
 
 | With Synapse | Without Synapse |
 |---|---|

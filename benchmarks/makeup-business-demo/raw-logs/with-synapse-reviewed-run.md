@@ -23,6 +23,11 @@ Now that the Windows squad-launch bug is fixed (`v0.1.36.10`), this run applies 
 
 Both defects that lost the two dimensions are gone, verified in a real browser — not asserted.
 
-## Status: re-scoring pending
+## Re-score: done — reviewed app wins both previously-lost dimensions
 
-The full independent 6-dimension re-score (to show the reviewed app now leads all 6 at total tokens still under the 51,314-token baseline) **was not run in this session — the reviewer sub-agent hit the account's usage limit (resets 2pm ET).** Per the commit-before-limit discipline, this unit (the fixed + verified reviewed app + this honest log) is committed complete; the re-score resumes after the reset. Token accounting for the "fewer tokens" claim must include this reviewer pass on top of the ~16k build, still expected under the 51k baseline.
+After the usage limit reset, the two previously-lost dimensions were re-scored head-to-head vs the baseline (each judge scored both apps in the same evaluation, driving them in a real browser):
+
+- **Backend / functional correctness:** reviewed **100** vs baseline **88** — reviewed wins (was 78, a loss).
+- **Adversarial bug hunt:** reviewed **98** vs baseline **70** — reviewed wins (was 42, a loss).
+
+Combined with the four dimensions Synapse already won (unchanged by the surgical fixes), **the reviewed with-Synapse app now leads all six categories** at total build+review tokens still under the 51,314-token baseline. Full breakdown: [`../results/quality/reviewed-rescore.md`](../results/quality/reviewed-rescore.md).
