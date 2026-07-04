@@ -504,31 +504,75 @@ class PtySessionManager:
 
         return "'" + value.replace("'", "''") + "'"
 
-    def _spawn_argv_for_runtime(self, argv: list[str]) -> list[str]:
-        """Adjust platform-specific runtimes while keeping the public argv stable.
+    def _powershell_wrap(self, argv: list[str], *, lowercase_arg0: bool) -> list[str] | None:
+        """Wrap ``argv`` to launch through PowerShell's ``&`` call operator so a
+        ``.cmd``/``.bat`` shim (or Copilot) receives ALL its arguments intact
+        under winpty. Returns ``None`` if ``powershell.exe`` can't be resolved,
+        so the caller decides the fallback.
 
-        GitHub Copilot CLI on Windows is documented and tested as a PowerShell
-        experience. Launching the raw ``copilot.exe`` directly under winpty can
-        hang for a few seconds and then exit with ``unknown option
-        '--no-warnings'``. Wrapping just that runtime through PowerShell keeps
-        the session interactive while the UI still sees the real Copilot argv.
+        ``_powershell_quote`` is a SECURITY BOUNDARY: a single-quoted PowerShell
+        literal does no interpolation (``$(...)``, backticks, ``;`` ``%`` ``"``
+        and newlines are all inert) and doubling the internal ``'`` is the
+        complete escape. Do NOT "simplify" it to double quotes or raw
+        concatenation. (The concrete squad arg — a daemon-generated
+        ``--mcp-config`` path — is trusted, but this wrapper carries arbitrary
+        argv, so treat quoting as the boundary.)
+        """
+
+        powershell = resolve_command("powershell.exe")
+        if powershell is None:
+            return None
+        head = argv[0].lower() if lowercase_arg0 else argv[0]
+        parts = [head, *argv[1:]]
+        command = "& " + " ".join(self._powershell_quote(part) for part in parts)
+        return [powershell, "-NoLogo", "-Command", command]
+
+    def _spawn_argv_for_runtime(self, argv: list[str]) -> list[str]:
+        """Adjust platform-specific Windows runtimes while keeping the public
+        argv (``display_argv`` / ``self.argv``) stable — only ``spawn_argv`` is
+        rewritten, so the UI + transcript still show the real runtime argv.
+
+        Two Windows runtimes need a PowerShell ``&`` wrapper under winpty:
+
+        - **GitHub Copilot CLI** is a documented PowerShell experience; the raw
+          ``copilot.exe`` under winpty hangs then exits with ``unknown option
+          '--no-warnings'``.
+        - **``.cmd``/``.bat`` shims WITH arguments** (e.g. ``claude.CMD
+          --mcp-config <path>``): winpty drops the trailing args (cmd.exe reports
+          the 2nd token as "not recognized"), so EVERY squad-launched ``claude``
+          worker silently failed whenever an MCP server was enabled and
+          ``--mcp-config`` was appended. Routing through PowerShell's ``&`` makes
+          the ``.cmd`` shim forward its args via ``%*``.
+
+        Scoped to the broken case (``.cmd``/``.bat`` with >1 element): a bare
+        single-arg ``.cmd`` already launches correctly via raw winpty, so it is
+        deliberately left on that proven path (locked by a test) to keep the
+        blast radius minimal on this fragile file. ``cmd.exe /c`` wrapping and a
+        backend-level fix were rejected — cmd quoting (carets, ``%``, ``&``,
+        spaced paths) is materially harder to get right than PowerShell's
+        single-quote literal, and ``WinPtyBackend`` should stay a dumb spawn
+        primitive rather than learn runtime-shim policy.
         """
 
         if sys.platform != "win32" or not argv:
             return list(argv)
-        if Path(argv[0]).stem.lower() != "copilot":
-            return list(argv)
-        powershell = resolve_command("powershell.exe")
-        if powershell is None:
-            return list(argv)
-        # On Windows, ``shutil.which`` can hand back the Copilot WinGet path
-        # with an upper-case ``.EXE`` suffix. Launching that exact casing
-        # through PowerShell reproducibly trips Copilot's ``--no-warnings``
-        # startup failure; the same absolute path in lower-case stays
-        # interactive. Normalise just the executable path before quoting.
-        runtime_argv = [argv[0].lower(), *argv[1:]]
-        command = "& " + " ".join(self._powershell_quote(part) for part in runtime_argv)
-        return [powershell, "-NoLogo", "-Command", command]
+        # Copilot must stay the FIRST branch so a hypothetical ``copilot.cmd``
+        # keeps its (lower-cased) semantics instead of the generic path.
+        if Path(argv[0]).stem.lower() == "copilot":
+            wrapped = self._powershell_wrap(argv, lowercase_arg0=True)
+            return wrapped if wrapped is not None else list(argv)
+        # ``.cmd``/``.bat`` shim WITH arguments -> the squad-launch bug. Wrap it.
+        if Path(argv[0]).suffix.lower() in (".cmd", ".bat") and len(argv) > 1:
+            wrapped = self._powershell_wrap(argv, lowercase_arg0=False)
+            if wrapped is None:
+                # Do NOT fall back to the known-broken raw argv (it hangs the
+                # work item silently). Fail loudly so the caller surfaces it.
+                raise RuntimeError(
+                    "powershell.exe is required to launch a .cmd/.bat runtime "
+                    "with arguments on Windows, but it was not found on PATH"
+                )
+            return wrapped
+        return list(argv)
 
     async def spawn(
         self,

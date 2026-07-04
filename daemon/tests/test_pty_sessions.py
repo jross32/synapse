@@ -169,6 +169,143 @@ async def test_windows_copilot_spawn_wraps_through_powershell(
     ]
 
 
+# ── Windows .cmd/.bat multi-arg squad-launch fix (regression for the bug where
+#    `claude.CMD --mcp-config <path>` dropped its args under winpty) ──────────
+
+_PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+_CLAUDE = r"C:\Users\justi\AppData\Roaming\npm\claude.CMD"
+
+
+def _win_resolver(extra: dict[str, str] | None = None):
+    table = {"powershell.exe": _PS}
+    if extra:
+        table.update(extra)
+    return lambda cmd: table.get(cmd)
+
+
+async def _capture_spawn_argv(monkeypatch, resolver, argv):
+    """Spawn with PtySession.start stubbed; return (session, captured spawn_argv)."""
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+    seen: dict[str, list[str] | None] = {"argv": None}
+
+    async def fake_start(self) -> None:  # type: ignore[no-untyped-def]
+        seen["argv"] = list(self._spawn_argv)
+
+    monkeypatch.setattr("synapse_daemon.pty_sessions.sys.platform", "win32")
+    monkeypatch.setattr("synapse_daemon.pty_sessions.resolve_command", resolver)
+    monkeypatch.setattr("synapse_daemon.pty_sessions.PtySession.start", fake_start)
+    session = await manager.spawn(argv)
+    return session, seen["argv"]
+
+
+async def test_windows_cmd_runtime_with_args_wraps_through_powershell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The squad-launch bug: `claude.CMD --mcp-config <path>` must wrap through
+    PowerShell so the .cmd shim forwards ALL args via %*. Full-equality assert
+    (not a partial `in`) so an arg-dropping regression can't slip through — that
+    dropping is exactly what failed live."""
+
+    cfg = r"C:\Users\justi\synapse\data\mcp\claude-mcp.json"
+    session, spawn_argv = await _capture_spawn_argv(
+        monkeypatch, _win_resolver({"claude": _CLAUDE}), ["claude", "--mcp-config", cfg]
+    )
+    # Public argv (UI + transcript) is preserved with ORIGINAL casing + all args.
+    assert session.argv == [_CLAUDE, "--mcp-config", cfg]
+    # spawn_argv wraps through PowerShell with BOTH args single-quoted; the .cmd
+    # path casing is preserved (NOT lower-cased like the copilot branch).
+    assert spawn_argv == [
+        _PS,
+        "-NoLogo",
+        "-Command",
+        f"& '{_CLAUDE}' '--mcp-config' '{cfg}'",
+    ]
+
+
+async def test_windows_single_arg_cmd_stays_unwrapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deliberate divergence, locked by test: a bare single-arg .cmd already
+    launches via raw winpty, so it is NOT wrapped (minimal blast radius)."""
+
+    _, spawn_argv = await _capture_spawn_argv(
+        monkeypatch, _win_resolver({"claude": _CLAUDE}), ["claude"]
+    )
+    assert spawn_argv == [_CLAUDE]  # unwrapped — raw winpty path
+
+
+async def test_windows_copilot_with_args_still_routes_copilot_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The new .cmd branch must not shadow copilot: a copilot.cmd (even with
+    args) keeps the copilot branch's lower-cased path semantics."""
+
+    copilot = r"C:\Users\justi\AppData\Roaming\npm\copilot.cmd"
+    _, spawn_argv = await _capture_spawn_argv(
+        monkeypatch, _win_resolver({"copilot": copilot}), ["copilot", "--banner", "false"]
+    )
+    assert spawn_argv == [
+        _PS,
+        "-NoLogo",
+        "-Command",
+        f"& '{copilot.lower()}' '--banner' 'false'",
+    ]
+
+
+async def test_windows_cmd_with_args_raises_loudly_when_powershell_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If powershell.exe can't be resolved we must NOT fall back to the
+    known-broken raw argv (which hangs the work item silently) — fail loud."""
+
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+    monkeypatch.setattr("synapse_daemon.pty_sessions.sys.platform", "win32")
+    # Resolver knows claude but NOT powershell.exe.
+    monkeypatch.setattr(
+        "synapse_daemon.pty_sessions.resolve_command", _win_resolver({"claude": _CLAUDE, "powershell.exe": None})  # type: ignore[dict-item]
+    )
+    with pytest.raises(RuntimeError, match="powershell.exe is required"):
+        await manager.spawn(["claude", "--mcp-config", "x"])
+
+
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32", reason="real .cmd %* forwarding is a Windows-only path"
+)
+
+
+@windows_only
+async def test_windows_cmd_forwards_hostile_path_args_end_to_end(
+    tmp_path: Path,
+) -> None:
+    """The proof the unit tests can't give: spawn a REAL .cmd that echoes its
+    args, with an mcp-config path containing a space AND parens (the exact
+    hostile case winpty's command-line joining + the cmd.exe %* re-parse must
+    survive). This is the test that would have caught the live bug."""
+
+    echo_cmd = tmp_path / "echo_args.cmd"
+    echo_cmd.write_text("@echo off\r\necho ARGS:%*\r\n", encoding="ascii")
+    hostile_dir = tmp_path / "a b (x86)"
+    hostile_dir.mkdir()
+    cfg = hostile_dir / "mcp.json"
+    cfg.write_text("{}", encoding="ascii")
+
+    bus = EventBus()
+    manager = PtySessionManager(bus)
+    session = await manager.spawn([str(echo_cmd), "--mcp-config", str(cfg)])
+    try:
+        got = await _wait_for(lambda: b"ARGS:" in session.scrollback_bytes(), timeout=20.0)
+        text = session.scrollback_bytes().decode("utf-8", "replace")
+        assert got, f"child never echoed its args; scrollback={text!r}"
+        # Both the flag and the full spaced/paren path survived both parser hops.
+        assert "--mcp-config" in text
+        assert "a b (x86)" in text
+        assert "mcp.json" in text
+    finally:
+        await manager.close(session.session_id)
+
+
 def test_windows_backend_forces_winpty_for_interactive_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

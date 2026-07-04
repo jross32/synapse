@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.10] -- 2026-07-04
+
+### Fixed
+- **Windows squad-launch bug: multi-arg `.cmd`/`.bat` runtimes now forward their
+  arguments (`daemon/synapse_daemon/pty_sessions.py`).** A PTY spawn like
+  `claude.CMD --mcp-config <path>` dropped its args under winpty (cmd.exe
+  reported the 2nd token as "not recognized"), so **every squad-launched
+  `claude` worker silently failed whenever an MCP server was enabled** — the
+  process exited but the work item stayed "running." Fix: generalize the proven
+  Copilot PowerShell-`&` wrapper (`_spawn_argv_for_runtime` via a new
+  `_powershell_wrap` helper) to `.cmd`/`.bat` shims with arguments, so the shim
+  forwards args via `%*`. Only `spawn_argv` is wrapped — the UI/transcript still
+  show the real `claude.CMD` argv. Scoped to the broken multi-arg case
+  (single-arg `.cmd` stays on its proven raw-winpty path, locked by a test); if
+  `powershell.exe` is missing it now **fails loudly** instead of silently
+  hanging. `cmd.exe /c` and backend-level fixes were rejected (quoting-safety /
+  layering).
+
+### Notes
+- Reviewed pre-work by a 4-member AI council (Architect / Skeptic / Tester /
+  Security). The Skeptic (REVISE) caught that the wrapper was only proven for
+  space-free args — so the fix is now proven with a **hostile-path integration
+  test** (a real `.cmd` echoing `%*` with a `--mcp-config` path containing a
+  space and parens, `a b (x86)`) plus a **live repro**: `claude.CMD --version`
+  now prints `2.1.185 (Claude Code)` where it previously errored. 6 new tests.
+- Versioning: this session is solo (no concurrent agent), so per the
+  `docs/MULTI-AI-WORKFLOW.md` version policy the multi-agent `-dev` collision
+  risk doesn't apply; kept a clean monotonic `0.1.36.N` sequence.
+
 ## [0.1.36.9] -- 2026-07-04
 
 ### Added
