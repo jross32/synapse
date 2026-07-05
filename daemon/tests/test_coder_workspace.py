@@ -176,7 +176,34 @@ def test_dispatch_review_and_preferences_routes(tmp_path: Path, monkeypatch) -> 
         assert review_body["run"]["surface_kind"] == "coder-review-pass"
         assert review_body["session"]["session_id"] == "fake-2"
 
+        verdict = c.post(
+            f"/api/v1/coder-review-passes/{review_id}/verdict",
+            json={
+                "summary_md": "Launch path is still broken.",
+                "verdict": {
+                    "blocking": True,
+                    "severity": "critical",
+                    "surface_ids": ["apps.projects-grid"],
+                    "contract_ids": ["project-launch-action"],
+                    "recommended_next_step": "Fix the launch path and attach browser proof.",
+                    "summary": "Launch still regresses.",
+                    "findings": [
+                        {
+                            "title": "Launch button no-op",
+                            "severity": "critical",
+                            "summary": "The launch action did not complete successfully.",
+                            "surface_id": "apps.projects-grid",
+                            "contract_id": "project-launch-action",
+                        }
+                    ],
+                },
+            },
+        )
+        assert verdict.status_code == 200, verdict.text
+        assert verdict.json()["gate"]["gate_kind"] == "ui-review"
+
         detail = c.get(f"/api/v1/coder-threads/{thread_id}")
         assert detail.status_code == 200, detail.text
         linked_runs = detail.json()["linked_runs"]
         assert len(linked_runs) == 2
+        assert detail.json()["review_passes"][0]["verdict"]["blocking"] is True

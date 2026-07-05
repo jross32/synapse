@@ -133,6 +133,7 @@ export function Modal({
       <div
         ref={panelRef}
         tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           'flex max-h-[90vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-lg',
           'border border-border bg-card p-6 shadow-xl outline-none',

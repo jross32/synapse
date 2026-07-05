@@ -2,7 +2,7 @@
 
 Real screenshots of the running app, captured from the live renderer (Vite `:5173` + daemon `:7878`) via Playwright. **These evolve as Synapse is built** — when a change alters a user-visible surface, the affected image here is refreshed in the same commit (see the screenshot rule in `AGENTS.md`).
 
-_Captured 2026-07-04 against daemon `v0.1.36.6`, 27 registered projects, 0 console errors (only a benign token-less-browser WS warning)._
+_Captured 2026-07-05 against daemon `v0.1.36.12`, 27 registered projects, with a connected local Web Scraper verification server. Browser console stayed clean aside from the existing benign token-less-browser WS warning._
 
 ## Home — mission control (desktop, 1280×800)
 
@@ -18,8 +18,18 @@ Featured-app slideshow, running/not-running/errored counts, live recent-activity
 
 ![AI Coding cockpit](./cockpit-ai-coding-desktop.png)
 
-Project-thread workspace with a runtime picker (Codex / Claude / Copilot, all "ready"), thread tools (context / files / records / reviews / terminal), and the Assistant + Review tabs.
+Project-thread workspace focused on the bundled **Synapse Self** project, showing the self-improvement cockpit and the review-driven coding surface where UX/QA/token-efficiency/judge passes live.
 
-### Verified finding (2026-07-04) — feeds the cockpit work
+## Web Scraper — design harvest workspace (desktop, 1280×800)
 
-The cockpit **works** (renders, connects, runtimes ready) but is **project-scoped only**: the left column is the list of registered projects, and you must select one before you can start a thread. There is **no project-free "New chat"** — no way to just start coding/chatting without first picking a project (or a "choose folder" / "General" bucket). This is exactly the gap flagged for the cockpit fix (project-free New chat), and it's captured in the session plan + `project-synapse-general-scope` memory. Not broken — missing the friction-free entry.
+![Web Scraper harvest desktop](./web-scraper-harvest-desktop.png)
+
+The dedicated installed-page workspace for reference capture, provenance/adaptation labeling, generated component previews, and adopted project artifacts.
+
+## Web Scraper — design harvest workspace (mobile, 375×812)
+
+![Web Scraper harvest mobile](./web-scraper-harvest-mobile.png)
+
+### Verified finding (2026-07-05) — feeds the cockpit work
+
+The cockpit still **works** but remains **project-scoped only**: you pick a registered project first, then start a thread inside it. The new Synapse Self project makes that workable for self-improvement, but the project-free "New chat" idea is still a real future polish target rather than something this wave solved.

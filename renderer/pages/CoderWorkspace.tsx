@@ -57,6 +57,7 @@ import { Input } from '../components/ui/input';
 import { Modal } from '../components/ui/modal';
 
 type RuntimeId = 'codex' | 'claude' | 'copilot';
+type ReviewPresetId = 'general' | 'ux' | 'qa' | 'token-efficiency' | 'judge';
 type ContextTab = 'context' | 'files' | 'records' | 'reviews' | 'terminal';
 
 interface RuntimeOption {
@@ -65,6 +66,15 @@ interface RuntimeOption {
   provider: string;
   model: string;
   connectionProvider: string;
+}
+
+interface ReviewPreset {
+  id: ReviewPresetId;
+  label: string;
+  title: string;
+  summary: string;
+  reason: string;
+  focusPoints: string[];
 }
 
 const RUNTIME_OPTIONS: RuntimeOption[] = [
@@ -91,6 +101,49 @@ const RUNTIME_OPTIONS: RuntimeOption[] = [
   },
 ];
 
+const REVIEW_PRESETS: ReviewPreset[] = [
+  {
+    id: 'general',
+    label: 'General review',
+    title: 'General review',
+    summary: 'Review the latest direction, implementation risks, and missing tests.',
+    reason: 'A second set of eyes can catch regressions before the main thread hardens the change.',
+    focusPoints: ['Implementation risks', 'Missing tests', 'Next best step'],
+  },
+  {
+    id: 'ux',
+    label: 'UX pass',
+    title: 'UX pass',
+    summary: 'Audit clarity, hierarchy, responsiveness, interaction quality, and provenance risk.',
+    reason: 'This thread touched user-facing work and needs a targeted UX pass before escalating further.',
+    focusPoints: ['Hierarchy and clarity', 'Responsive friction', 'Originality and provenance cues'],
+  },
+  {
+    id: 'qa',
+    label: 'QA pass',
+    title: 'QA pass',
+    summary: 'Hunt for bugs, regressions, verification gaps, and missing coverage.',
+    reason: 'Risk is high enough that a concrete bug-hunt is cheaper than discovering failures later.',
+    focusPoints: ['Behavior regressions', 'Missing verification', 'Runtime or contract risk'],
+  },
+  {
+    id: 'token-efficiency',
+    label: 'Token efficiency',
+    title: 'Token-efficiency pass',
+    summary: 'Judge whether the loop is spending more tokens than the task risk justifies.',
+    reason: 'We want the cheapest next pass that preserves quality, not an automatic full rebuild.',
+    focusPoints: ['Cheaper next step', 'Escalation threshold', 'Avoidable overhead'],
+  },
+  {
+    id: 'judge',
+    label: 'Judge pass',
+    title: 'Judge pass',
+    summary: 'Judge the current result across quality, evidence, and token-cost tradeoffs.',
+    reason: 'The thread needs an explicit winner or escalation decision before more work is spent.',
+    focusPoints: ['Quality tradeoffs', 'Evidence strength', 'Escalate or stop'],
+  },
+];
+
 const TEXT_DECODER = new TextDecoder();
 
 function canonicalRuntimeId(value: string | null | undefined): RuntimeId {
@@ -113,6 +166,11 @@ function decodeBase64Text(value: string): string {
   } catch {
     return '';
   }
+}
+
+function metadataString(source: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = source?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function connectionStatus(
@@ -447,25 +505,41 @@ export function CoderWorkspacePage({
     }
   }
 
-  async function handleQuickReview(runtime: RuntimeOption): Promise<void> {
+  async function handleQuickReview(runtime: RuntimeOption, preset: ReviewPreset = REVIEW_PRESETS[0]!): Promise<void> {
     if (!selectedThreadId) {
       setError('Create or select a thread before launching a review pass.');
       return;
     }
-    setBusy(`review:${runtime.id}`);
+    setBusy(`review:${runtime.id}:${preset.id}`);
     setError(null);
     try {
       const review = await createCoderReviewPass(selectedThreadId, {
         requested_runtime_id: runtime.id,
         requested_provider: runtime.provider,
         requested_model: runtime.model,
-        title: `${runtime.label} review`,
-        summary_md: 'Review the latest direction, implementation risks, and missing tests.',
+        title: `${runtime.label} ${preset.title}`,
+        summary_md: preset.summary,
+        metadata: {
+          preset_id: preset.id,
+          preset_label: preset.label,
+          review_kind: preset.id,
+          reason: preset.reason,
+          focus_points: preset.focusPoints,
+          escalation_policy: 'cheap-first-targeted-review',
+        },
       });
       const launched = await launchCoderReviewPass(selectedThreadId, review.id, {
         runtime_id: runtime.id,
         provider: runtime.provider,
         model: runtime.model,
+        metadata: {
+          preset_id: preset.id,
+          preset_label: preset.label,
+          review_kind: preset.id,
+          reason: preset.reason,
+          focus_points: preset.focusPoints,
+          escalation_policy: 'cheap-first-targeted-review',
+        },
       });
       setDetail(launched.detail);
       await Promise.all([refreshThreads(), refreshThreadState(selectedThreadId)]);
@@ -750,6 +824,7 @@ export function CoderWorkspacePage({
             context={context}
             selectedProject={selectedProject}
             selectedThreadSummary={selectedThreadSummary}
+            selectedRuntime={runtimeOptionFor(detail?.thread.active_runtime_id ?? runtimeId)}
             contextTab={contextTab}
             availableTabs={availableTabs}
             preferences={preferences}
@@ -758,7 +833,7 @@ export function CoderWorkspacePage({
             onSelectTab={setContextTab}
             onToggleAdvancedTerminal={handleToggleAdvancedTerminal}
             onOpenLegacy={openLegacy}
-            onQuickReview={(runtime) => void handleQuickReview(runtime)}
+            onQuickReview={(runtime, preset) => void handleQuickReview(runtime, preset)}
           />
         </div>
       </div>
@@ -812,6 +887,7 @@ export function CoderWorkspacePage({
           context={context}
           selectedProject={selectedProject}
           selectedThreadSummary={selectedThreadSummary}
+          selectedRuntime={runtimeOptionFor(detail?.thread.active_runtime_id ?? runtimeId)}
           contextTab={contextTab}
           availableTabs={availableTabs}
           preferences={preferences}
@@ -820,7 +896,7 @@ export function CoderWorkspacePage({
           onSelectTab={setContextTab}
           onToggleAdvancedTerminal={handleToggleAdvancedTerminal}
           onOpenLegacy={openLegacy}
-          onQuickReview={(runtime) => void handleQuickReview(runtime)}
+          onQuickReview={(runtime, preset) => void handleQuickReview(runtime, preset)}
         />
       </Modal>
 
@@ -1209,6 +1285,9 @@ function RunOutputCard({
   }, [recentEvents, run.pty_session_id]);
 
   const runtime = runtimeOptionFor(run.runtime_id);
+  const runReason = metadataString(run.metadata as Record<string, unknown>, 'reason');
+  const presetLabel = metadataString(run.metadata as Record<string, unknown>, 'preset_label');
+  const benchmarkAttemptId = run.benchmark_attempt_id;
   const statusTone =
     run.status === 'completed'
       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
@@ -1246,6 +1325,17 @@ function RunOutputCard({
           )}
         </div>
       </div>
+      <div className='mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground'>
+        {presetLabel && <Badge variant='outline'>{presetLabel}</Badge>}
+        {benchmarkAttemptId && <Badge variant='outline'>Benchmark linked</Badge>}
+        <Badge variant='outline'>{run.provider || 'unknown provider'}</Badge>
+        <Badge variant='outline'>{run.workspace_overhead_bytes} context bytes</Badge>
+      </div>
+      {runReason && (
+        <p className='mt-2 text-xs text-muted-foreground'>
+          Why this pass ran: {runReason}
+        </p>
+      )}
       <div className='mt-3 rounded-xl border border-border bg-background/70 p-3 text-xs'>
         {loading ? (
           <div className='flex items-center gap-2 text-muted-foreground'>
@@ -1268,6 +1358,7 @@ function WorkspaceContextPane({
   context,
   selectedProject,
   selectedThreadSummary,
+  selectedRuntime,
   contextTab,
   availableTabs,
   preferences,
@@ -1282,6 +1373,7 @@ function WorkspaceContextPane({
   context: CoderWorkspaceContext | null;
   selectedProject: { id: string; name: string } | null;
   selectedThreadSummary: CoderThreadSummary | null;
+  selectedRuntime: RuntimeOption;
   contextTab: ContextTab;
   availableTabs: ContextTab[];
   preferences: CoderWorkspacePreferences | null;
@@ -1290,7 +1382,7 @@ function WorkspaceContextPane({
   onSelectTab: (tab: ContextTab) => void;
   onToggleAdvancedTerminal: (enabled: boolean) => Promise<void>;
   onOpenLegacy: (sessionId?: string | null) => void;
-  onQuickReview: (runtime: RuntimeOption) => void;
+  onQuickReview: (runtime: RuntimeOption, preset?: ReviewPreset) => void;
 }): JSX.Element {
   return (
     <Card className='flex h-full min-h-0 flex-col overflow-hidden'>
@@ -1337,6 +1429,21 @@ function WorkspaceContextPane({
                 </div>
               )}
             </Card>
+
+            {selectedProject?.id === 'synapse-self' && (
+              <Card className='border-dashed p-4'>
+                <p className='font-medium'>Self-improvement cockpit</p>
+                <p className='mt-1 text-xs text-muted-foreground'>
+                  This project is the bundled Synapse self-workspace. Keep the loop explicit: improve, review, benchmark when needed, then record the result in project memory.
+                </p>
+                <div className='mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground'>
+                  <Badge variant='outline'>{detail?.thread.thread_kind ?? 'chat'} thread</Badge>
+                  <Badge variant='outline'>{context?.records_summary.adrs ?? 0} ADRs visible</Badge>
+                  <Badge variant='outline'>{context?.records_summary.backlog ?? 0} backlog items</Badge>
+                  <Badge variant='outline'>{context?.files_count ?? 0} files in scope</Badge>
+                </div>
+              </Card>
+            )}
 
             <Card className='border-dashed p-4'>
               <div className='flex items-center justify-between gap-3'>
@@ -1431,10 +1538,10 @@ function WorkspaceContextPane({
                       type='button'
                       variant='outline'
                       size='sm'
-                      disabled={busy === `review:${option.id}`}
-                      onClick={() => onQuickReview(option)}
+                      disabled={busy === `review:${option.id}:general`}
+                      onClick={() => onQuickReview(option, REVIEW_PRESETS[0]!)}
                     >
-                      {busy === `review:${option.id}` ? (
+                      {busy === `review:${option.id}:general` ? (
                         <Loader2 className='h-4 w-4 animate-spin' />
                       ) : (
                         <Play className='h-4 w-4' />
@@ -1443,6 +1550,34 @@ function WorkspaceContextPane({
                     </Button>
                   );
                 })}
+              </div>
+            </Card>
+
+            <Card className='border-dashed p-4'>
+              <p className='font-medium'>Synapse UX Lab presets</p>
+              <p className='mt-1 text-xs text-muted-foreground'>
+                Start cheap with targeted review, then escalate only when the thread or benchmark evidence says it is worth it.
+              </p>
+              <div className='mt-3 flex flex-col gap-2'>
+                {REVIEW_PRESETS.filter((preset) => preset.id !== 'general').map((preset) => (
+                  <button
+                    key={preset.id}
+                    type='button'
+                    disabled={busy === `review:${selectedRuntime.id}:${preset.id}`}
+                    onClick={() => onQuickReview(selectedRuntime, preset)}
+                    className='rounded-xl border border-border bg-secondary/20 px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60'
+                  >
+                    <div className='flex items-center justify-between gap-3'>
+                      <p className='font-medium'>{preset.label}</p>
+                      {busy === `review:${selectedRuntime.id}:${preset.id}` ? (
+                        <Loader2 className='h-4 w-4 animate-spin text-primary' />
+                      ) : (
+                        <Badge variant='outline'>{selectedRuntime.label}</Badge>
+                      )}
+                    </div>
+                    <p className='mt-1 text-xs text-muted-foreground'>{preset.reason}</p>
+                  </button>
+                ))}
               </div>
             </Card>
 
@@ -1463,6 +1598,21 @@ function WorkspaceContextPane({
                         <p className='mt-1 text-muted-foreground'>
                           {runtimeOptionFor(reviewPass.requested_runtime_id).label} · {formatLocal(reviewPass.created_at, 'relative')}
                         </p>
+                        <div className='mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground'>
+                          {metadataString(reviewPass.metadata as Record<string, unknown>, 'preset_label') && (
+                            <Badge variant='outline'>
+                              {metadataString(reviewPass.metadata as Record<string, unknown>, 'preset_label')}
+                            </Badge>
+                          )}
+                          {run?.benchmark_attempt_id && <Badge variant='outline'>Benchmark linked</Badge>}
+                          {run && <Badge variant='outline'>{run.provider || 'unknown provider'}</Badge>}
+                        </div>
+                        {metadataString(reviewPass.metadata as Record<string, unknown>, 'reason') && (
+                          <p className='mt-2 text-muted-foreground'>
+                            Why this pass ran:{' '}
+                            {metadataString(reviewPass.metadata as Record<string, unknown>, 'reason')}
+                          </p>
+                        )}
                         {reviewPass.summary_md && (
                           <p className='mt-2 whitespace-pre-wrap text-foreground'>{reviewPass.summary_md}</p>
                         )}
@@ -1496,6 +1646,9 @@ function WorkspaceContextPane({
                   <Badge variant='outline'>{context.records_summary.adrs ?? 0} ADRs</Badge>
                   <Badge variant='outline'>{context.records_summary.backlog ?? 0} backlog</Badge>
                 </div>
+                <p className='mt-3 text-xs text-muted-foreground'>
+                  Preferred loop: targeted reviewer first, stronger judge only when the risk or benchmark calls for it.
+                </p>
               </Card>
             )}
           </div>

@@ -14,6 +14,7 @@ from . import coder_workspace
 from . import files_storage
 from . import project_records
 from . import projects as projects_module
+from . import quality_os
 from .errors import invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
@@ -74,11 +75,24 @@ def _terminal_run_finished(status: benchmarks.BenchmarkAttemptStatus) -> bool:
     }
 
 
+def _run_has_blocking_gates(conn, run_id: str) -> bool:  # noqa: ANN001
+    for attempt in benchmarks.list_attempts_for_run(conn, run_id):
+        if quality_os.has_blocking_gates(conn, "benchmark_attempt", attempt.id):
+            return True
+    return False
+
+
 def _update_run_completion(conn, run_id: str) -> None:
     attempts = benchmarks.list_attempts_for_run(conn, run_id)
     statuses = {attempt.status for attempt in attempts}
     now = to_iso(utc_now())
     if attempts and all(_terminal_run_finished(status) for status in statuses):
+        if _run_has_blocking_gates(conn, run_id):
+            conn.execute(
+                "UPDATE benchmark_runs SET status = ?, completed_at = NULL, updated_at = ? WHERE id = ?",
+                (benchmarks.BenchmarkRunStatus.RUNNING.value, now, run_id),
+            )
+            return
         conn.execute(
             "UPDATE benchmark_runs SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?",
             (benchmarks.BenchmarkRunStatus.COMPLETED.value, now, now, run_id),
@@ -371,6 +385,11 @@ def build_benchmarks_router(storage: Storage, pty_manager: PtySessionManager) ->
     async def export_run(run_id: str) -> dict[str, Any]:
         with storage.transaction() as conn:
             _update_run_completion(conn, run_id)
+            if _run_has_blocking_gates(conn, run_id):
+                raise invalid(
+                    "benchmark_run",
+                    "This benchmark still has blocking quality gates on one or more attempts.",
+                )
         paths = benchmarks.export_run_report(storage.data_dir, storage.conn, run_id)
         return {
             "json_path": str(paths.json_path),

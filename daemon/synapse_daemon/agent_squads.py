@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .errors import invalid, not_found
 from .models import AuditSource
+from .quality_os import ReviewVerdict
 from .runtime_resolution import resolve_command
 from .time_utils import from_iso, to_iso, utc_now
 
@@ -138,6 +139,7 @@ class AgentWorkItem(BaseModel):
     blockers_md: str | None = None
     files_touched: list[str] = Field(default_factory=list)
     suggested_next_role: str | None = None
+    verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
     transcript_file_id: str | None = None
     opened_in_tab: bool = False
     created_at: datetime = Field(default_factory=utc_now)
@@ -179,6 +181,7 @@ class AgentWorkItemHandoffRequest(BaseModel):
     blockers_md: str | None = None
     files_touched: list[str] = Field(default_factory=list)
     suggested_next_role: str | None = None
+    verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
     source: AuditSource = AuditSource.DESKTOP
 
 
@@ -247,6 +250,7 @@ def _row_to_work_item(row: sqlite3.Row) -> AgentWorkItem:
         blockers_md=row["blockers_md"],
         files_touched=_loads_list(row["files_touched_json"]),
         suggested_next_role=row["suggested_next_role"],
+        verdict=ReviewVerdict.model_validate(_loads_dict(row["verdict_json"])),
         transcript_file_id=row["transcript_file_id"],
         opened_in_tab=bool(row["opened_in_tab"]),
         created_at=from_iso(row["created_at"]),
@@ -263,6 +267,16 @@ def _loads_list(payload: str | None) -> list[str]:
     except json.JSONDecodeError:
         return []
     return [str(item) for item in raw] if isinstance(raw, list) else []
+
+
+def _loads_dict(payload: str | None) -> dict[str, Any]:
+    if not payload:
+        return {}
+    try:
+        raw = json.loads(payload)
+    except json.JSONDecodeError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
 
 def _seed_time() -> str:
@@ -438,6 +452,96 @@ def seed_default_role_templates(conn: sqlite3.Connection) -> None:
                 "unsafe defaults, with concrete severity and a recommended fix."
             ),
             sort_order=90,
+        ),
+        AgentRoleTemplateCreate(
+            id="interaction-contract-steward",
+            name="Interaction Contract Steward",
+            description="Promotes real interaction bugs into durable UI contracts and blocking gates.",
+            preferred_runtimes=["claude", "codex", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "When you find a real UI interaction bug, describe the failing contract, the exact "
+                "surface and action it belongs to, and what browser proof should prevent it from returning."
+            ),
+            sort_order=95,
+        ),
+        AgentRoleTemplateCreate(
+            id="surface-cartographer",
+            name="Surface Cartographer",
+            description="Maps changed files to affected routes, dialogs, cards, and dependent views.",
+            preferred_runtimes=["codex", "claude", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.MINIMAL,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Think in blast radius. Identify what surfaces changed directly, what linked surfaces "
+                "should be rechecked, and which UI contracts ought to rerun."
+            ),
+            sort_order=100,
+        ),
+        AgentRoleTemplateCreate(
+            id="launch-verifier",
+            name="Launch Verifier",
+            description="Checks launch, stop, save, and dismiss flows with a skepticism-first mindset.",
+            preferred_runtimes=["claude", "codex", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Prioritize critical controls. A launch, stop, close, or save button that looks right "
+                "but does nothing is a release blocker until browser proof says otherwise."
+            ),
+            sort_order=105,
+        ),
+        AgentRoleTemplateCreate(
+            id="responsive-accessibility-critic",
+            name="Responsive Accessibility Critic",
+            description="Hunts for small UI fit-and-finish failures across viewport, focus, spacing, and dismissal behavior.",
+            preferred_runtimes=["claude", "codex", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Look for visual strain, focus problems, double-scroll layouts, modal escape failures, "
+                "misalignment, and density issues that make the product feel unfinished."
+            ),
+            sort_order=110,
+        ),
+        AgentRoleTemplateCreate(
+            id="ui-judge",
+            name="UI Judge",
+            description="Compares candidate UI outcomes and explains why the winner should actually be trusted.",
+            preferred_runtimes=["claude", "codex", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.SUPERVISOR,
+            can_delegate=True,
+            prompt_preamble_md=(
+                "Judge with evidence, not vibes. Compare quality, regressions, token cost, and proof artifacts "
+                "before declaring a winner."
+            ),
+            sort_order=115,
+        ),
+        AgentRoleTemplateCreate(
+            id="project-flow-steward",
+            name="Project Flow Steward",
+            description="Protects one-window project targeting, inline creation, and return-to-caller continuation paths.",
+            preferred_runtimes=["codex", "claude", "copilot"],
+            default_visibility=AgentVisibility.HELPER,
+            context_mode=AgentContextMode.STANDARD,
+            role_tier=AgentRoleTier.WORKER,
+            can_delegate=False,
+            prompt_preamble_md=(
+                "Watch for workflow dead ends. Users should be able to choose or create the right project "
+                "without being bounced away from the task they are already doing."
+            ),
+            sort_order=120,
         ),
     ]
     for item in defaults:
@@ -655,8 +759,8 @@ def create_work_item(
         INSERT INTO agent_work_items (
             id, squad_id, parent_id, title, instructions_md, status, assigned_role_id, personality_id,
             preferred_runtime, pty_session_id, summary_md, blockers_md, files_touched_json,
-            suggested_next_role, transcript_file_id, opened_in_tab, created_at, updated_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, NULL, 0, ?, ?, NULL)
+            suggested_next_role, verdict_json, transcript_file_id, opened_in_tab, created_at, updated_at, completed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?, NULL, 0, ?, ?, NULL)
         """,
         (
             work_item_id,
@@ -669,6 +773,7 @@ def create_work_item(
             payload.personality_id,
             payload.preferred_runtime,
             json.dumps([]),
+            json.dumps(ReviewVerdict().model_dump(mode="json")),
             to_iso(now),
             to_iso(now),
         ),
@@ -720,7 +825,7 @@ def handoff_work_item(
         """
         UPDATE agent_work_items
         SET status = ?, summary_md = ?, blockers_md = ?, files_touched_json = ?,
-            suggested_next_role = ?, updated_at = ?, completed_at = COALESCE(?, completed_at)
+            suggested_next_role = ?, verdict_json = ?, updated_at = ?, completed_at = COALESCE(?, completed_at)
         WHERE id = ?
         """,
         (
@@ -729,6 +834,7 @@ def handoff_work_item(
             payload.blockers_md,
             json.dumps(payload.files_touched),
             payload.suggested_next_role,
+            json.dumps(payload.verdict.model_dump(mode="json")),
             to_iso(now),
             completed_at,
             work_item_id,

@@ -1,0 +1,13 @@
+{
+  "id": "make-this-mine",
+  "name": "Make this mine",
+  "description": "Use authorized references as inspiration, then adapt the output into a more original fit for the target project and brand.",
+  "icon": "palette",
+  "category": "workflows",
+  "tags": ["design", "adaptation", "branding", "originality"],
+  "default_argv": ["claude"],
+  "launch_mode": "coder-thread",
+  "thread_title": "Make This Mine",
+  "prompt_filename": "MAKE-THIS-MINE.md",
+  "prompt": "Take the supplied reference as authorized input, but do not stop at resemblance. Extract the layout or interaction strengths, then restyle and restructure the result so it belongs to the target project: its content hierarchy, tokens, motion, copy tone, and product intent. Record the provenance mode, spell out what changed from the source, save the artifacts into the project, and finish with a judge-ready summary of why the output is now meaningfully its own."
+}

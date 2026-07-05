@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from synapse_daemon import projects as projects_module
-from synapse_daemon.seed import WBSCRPER_PROJECT_ID, seed_default_projects
+from synapse_daemon.seed import (
+    SYNAPSE_SELF_PROJECT_ID,
+    WBSCRPER_PROJECT_ID,
+    seed_default_projects,
+)
 from synapse_daemon.storage import Storage
 
 
@@ -21,10 +25,14 @@ def test_seed_creates_wbscrper_when_missing(tmp_path: Path) -> None:
     try:
         created = seed_default_projects(s, parent_dir=tmp_path)
         assert WBSCRPER_PROJECT_ID in created
+        assert SYNAPSE_SELF_PROJECT_ID in created
         project = projects_module.get(s.conn, WBSCRPER_PROJECT_ID)
         assert project.name == "Web Scraper"
         assert project.launch_cmd == "npm start"
         assert project.health.kind == "http"
+        synapse_self = projects_module.get(s.conn, SYNAPSE_SELF_PROJECT_ID)
+        assert synapse_self.name == "Synapse Self"
+        assert synapse_self.launch_cmd == "synapse.cmd"
     finally:
         s.close()
 
@@ -35,6 +43,7 @@ def test_seed_is_idempotent(tmp_path: Path) -> None:
         first = seed_default_projects(s, parent_dir=tmp_path)
         second = seed_default_projects(s, parent_dir=tmp_path)
         assert WBSCRPER_PROJECT_ID in first
+        assert SYNAPSE_SELF_PROJECT_ID in first
         assert second == []  # already present, nothing seeded
     finally:
         s.close()

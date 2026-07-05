@@ -11,17 +11,19 @@ from typing import Iterator
 
 from fastapi.testclient import TestClient
 
+from synapse_daemon import projects as projects_module
 from synapse_daemon.app import build_app
+from synapse_daemon.projects import Project
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
 
-def _harness(tmp_path: Path) -> TestClient:
+def _harness(tmp_path: Path) -> tuple[TestClient, Storage]:
     storage = Storage(tmp_path / "data")
     storage.open()
     storage.migrate()
     app = build_app(storage, EventBus())
-    return TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    return TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token}), storage
 
 
 @contextmanager
@@ -61,7 +63,7 @@ def _json_server(routes: dict[tuple[str, str], tuple[int, object]]) -> Iterator[
 
 
 def test_installed_pages_lists_known_web_scraper_even_when_offline(tmp_path: Path) -> None:
-    client = _harness(tmp_path)
+    client, _ = _harness(tmp_path)
     installed = client.post(
         "/api/v1/mcp-servers/install",
         json={
@@ -87,7 +89,7 @@ def test_installed_pages_drops_known_id_when_fingerprint_is_wrong(tmp_path: Path
             ("GET", "/api/mcp-meta"): (200, {"server": {"name": "not-web-scraper"}}),
         }
     ) as base_url:
-        client = _harness(tmp_path)
+        client, _ = _harness(tmp_path)
         installed = client.post(
             "/api/v1/mcp-servers/install",
             json={
@@ -122,9 +124,10 @@ def test_web_scraper_routes_proxy_through_synapse(tmp_path: Path) -> None:
             ("GET", "/api/schedules"): (200, {"items": [{"id": "sch-1"}]}),
             ("GET", "/api/active"): (200, {"items": [{"id": "job-1", "status": "running"}]}),
             ("POST", "/api/scrape_url"): (200, {"save_id": "save-2"}),
+            ("POST", "/api/generate_react"): (200, {"component": "export function Card(){ return <div />; }"}),
         }
     ) as base_url:
-        client = _harness(tmp_path)
+        client, _ = _harness(tmp_path)
         installed = client.post(
             "/api/v1/mcp-servers/install",
             json={
@@ -151,3 +154,55 @@ def test_web_scraper_routes_proxy_through_synapse(tmp_path: Path) -> None:
         )
         assert scrape.status_code == 200, scrape.text
         assert scrape.json()["save_id"] == "save-2"
+
+        action = client.post(
+            "/api/v1/installed-pages/web-scraper/actions/generate_react",
+            json={"url": "https://example.com"},
+        )
+        assert action.status_code == 200, action.text
+        assert "component" in action.json()
+
+
+def test_web_scraper_harvest_save_persists_project_files(tmp_path: Path) -> None:
+    client, storage = _harness(tmp_path)
+    with storage.transaction() as conn:
+        projects_module.create(
+            conn,
+            Project(
+                id="design-lab",
+                name="Design Lab",
+                path=str(tmp_path / "design-lab"),
+                launch_cmd="npm start",
+            ),
+        )
+
+    response = client.post(
+        "/api/v1/installed-pages/web-scraper/save-artifacts",
+        json={
+            "project_id": "design-lab",
+            "reference_urls": ["https://example.com"],
+            "provenance_mode": "regenerated-original-output",
+            "originality_notes": "Adapted into the project's own tone and spacing.",
+            "artifacts": [
+                {
+                    "name": "reference-brief.md",
+                    "kind": "reference-brief",
+                    "mime": "text/markdown",
+                    "content": "# Reference brief\n\nCaptured from an authorized source.",
+                },
+                {
+                    "name": "component-candidate.tsx",
+                    "kind": "component",
+                    "mime": "text/plain",
+                    "content": "export function Hero(){ return <section />; }",
+                },
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["project_id"] == "design-lab"
+    saved_names = [row["original_name"] for row in payload["saved"]]
+    assert "design-harvest-manifest.json" in saved_names
+    assert "reference-brief.md" in saved_names
+    assert "component-candidate.tsx" in saved_names

@@ -61,6 +61,7 @@ from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
 from .routes_capture import build_capture_router
+from .routes_coordination import build_coordination_router
 from .routes_installed_pages import build_installed_pages_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .mcp_servers import McpServerManager
@@ -68,9 +69,12 @@ from .routes_about import build_about_router
 from .routes_personalities import build_personalities_router
 from .mcp_connector import build_mcp_info_router, build_mcp_router
 from .routes_profile import build_profile_router
+from .routes_quality_os import build_quality_os_router
 from .routes_snapshot import build_snapshot_router
+from .routes_synapse_dev import build_synapse_dev_router
 from .routes_tools import build_tools_router
 from .storage import Storage
+from .synapse_dev import SynapseDevManager
 from .time_utils import to_iso, utc_now
 from .tools_registry import ToolRegistry
 from .ws import EventBus, WsHub
@@ -124,11 +128,13 @@ def build_app(
         from .benchmarks import seed_default_specs
         from .ai_factory import seed_default_catalog
         from .personalities import seed_default_personalities
+        from .quality_os import seed_default_quality_os
 
         seed_default_role_templates(conn)
         seed_default_personalities(conn)
         seed_default_catalog(conn)
         seed_default_specs(conn)
+        seed_default_quality_os(conn)
 
     app = FastAPI(
         title="Synapse daemon",
@@ -260,9 +266,20 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
-    # AI-facing digest -- what a Claude session in a tab should read first.
+    synapse_dev_manager = SynapseDevManager(storage.data_dir)
     app.include_router(
-        build_ai_router(storage, tool_registry, pty_manager),
+        build_synapse_dev_router(storage, synapse_dev_manager),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_ai_router(
+            storage,
+            tool_registry,
+            pty_manager,
+            synapse_dev_manager=synapse_dev_manager,
+            started_at=started_at,
+        ),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -316,6 +333,17 @@ def build_app(
     # Needs-Review / approval inbox -- cross-squad handoffs + blocked items (ADR-0016).
     app.include_router(
         build_review_router(storage, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_quality_os_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Native multi-AI coordination -- presence + advisory file lanes (ADR-0024).
+    app.include_router(
+        build_coordination_router(storage, bus),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -406,6 +434,7 @@ def build_app(
     app.state.auth = auth
     app.state.profile_manager = profile_manager
     app.state.started_at = started_at
+    app.state.synapse_dev_manager = synapse_dev_manager
 
     return app
 

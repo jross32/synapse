@@ -14,6 +14,7 @@ from . import agent_squads as squads
 from . import ai_bundles
 from . import ai_cases
 from . import ai_factory
+from . import quality_os
 from . import project_records as records
 from . import projects as projects_module
 from .ai_context_memory import append_capture_note, ensure_ai_context_file, write_role_prompt
@@ -180,6 +181,7 @@ def build_ai_cases_router(
         )
         case_phase = _phase_for_run(case.case_mode)
         prepared_children: list[ai_cases.AiCase] = []
+        opened_gates: list[quality_os.QualityGate] = []
 
         with storage.transaction() as conn:
             case, bundle, prepared_children = _prepare_mode_specific_case_plan(
@@ -286,6 +288,21 @@ def build_ai_cases_router(
                 last_error_code=None,
                 last_error_message=None,
             )
+            opened_gates = quality_os.open_policy_gates_for_subject(
+                conn,
+                subject_type="ai_case",
+                subject_id=case.id,
+                quality_profile_id=case.policies.quality_profile_id,
+                review_policy_id=case.policies.review_policy_id,
+                evidence_policy_id=case.policies.evidence_policy_id,
+                project_policy_id=case.policies.project_policy_id,
+                ux_policy_id=case.policies.ux_policy_id,
+                audit_details={
+                    "case_mode": case.case_mode.value,
+                    "mission_profile_id": case.mission_profile_id,
+                    "primary_project_id": case.primary_project_id,
+                },
+            )
             audit(
                 conn,
                 AuditRecord(
@@ -321,6 +338,7 @@ def build_ai_cases_router(
         detail = _case_detail(storage, manager, case)
         return {
             "case": detail.model_dump(mode="json"),
+            "opened_gates": [gate.model_dump(mode="json") for gate in opened_gates],
             "session": {
                 **session.summary().__dict__,
                 "work_item_id": lead_item.id,
@@ -420,6 +438,7 @@ def build_ai_cases_router(
     @router.post("/ai-cases/{case_id}/export/{kind}", response_model=None)
     async def export_ai_case(case_id: str, kind: str) -> dict[str, Any]:
         case = ai_cases.get_case(storage.conn, case_id)
+        quality_os.assert_subject_can_complete(storage.conn, "ai_case", case_id)
         primary = projects_module.get(storage.conn, case.primary_project_id)
         bundle = ai_cases.load_bundle(storage.data_dir, case.id)
         kind = kind.lower()
@@ -1319,17 +1338,28 @@ async def subscribe_ai_case_events(storage: Storage, bus: EventBus) -> None:
                     if item.status in {ai_cases.AiJobStatus.STARTING, ai_cases.AiJobStatus.RUNNING, ai_cases.AiJobStatus.REVIEWING, ai_cases.AiJobStatus.TESTING}
                 ]
                 if not active_jobs and case.status == ai_cases.AiCaseStatus.RUNNING:
-                    next_status = ai_cases.AiCaseStatus.COMPLETED if exit_code in (0, None) else ai_cases.AiCaseStatus.ERROR
-                    next_phase = ai_cases.AiCasePhase.HANDOFF if next_status == ai_cases.AiCaseStatus.COMPLETED else ai_cases.AiCasePhase.ERROR
-                    case = ai_cases.update_case(
-                        conn,
-                        case.id,
-                        status=next_status,
-                        phase=next_phase,
-                        completed_at=utc_now() if next_status == ai_cases.AiCaseStatus.COMPLETED else None,
-                        last_error_code=None if next_status == ai_cases.AiCaseStatus.COMPLETED else "case.job_failed",
-                        last_error_message=None if next_status == ai_cases.AiCaseStatus.COMPLETED else "A case-owned job exited with a non-zero status.",
-                    )
+                    if exit_code in (0, None) and quality_os.has_blocking_gates(conn, "ai_case", case.id):
+                        case = ai_cases.update_case(
+                            conn,
+                            case.id,
+                            status=ai_cases.AiCaseStatus.RUNNING,
+                            phase=ai_cases.AiCasePhase.REVIEW,
+                            completed_at=None,
+                            last_error_code=None,
+                            last_error_message=None,
+                        )
+                    else:
+                        next_status = ai_cases.AiCaseStatus.COMPLETED if exit_code in (0, None) else ai_cases.AiCaseStatus.ERROR
+                        next_phase = ai_cases.AiCasePhase.HANDOFF if next_status == ai_cases.AiCaseStatus.COMPLETED else ai_cases.AiCasePhase.ERROR
+                        case = ai_cases.update_case(
+                            conn,
+                            case.id,
+                            status=next_status,
+                            phase=next_phase,
+                            completed_at=utc_now() if next_status == ai_cases.AiCaseStatus.COMPLETED else None,
+                            last_error_code=None if next_status == ai_cases.AiCaseStatus.COMPLETED else "case.job_failed",
+                            last_error_message=None if next_status == ai_cases.AiCaseStatus.COMPLETED else "A case-owned job exited with a non-zero status.",
+                        )
             await bus.publish("v1.ai_case.updated", {"case_id": job.case_id})
             return
         if event.name != event_name("agent_run", "ended"):

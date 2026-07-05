@@ -178,6 +178,8 @@ class AiCasePolicies(BaseModel):
     budget_policy_id: str | None = "budget-balanced"
     parallelism_policy_id: str | None = "parallelism-moderate"
     review_policy_id: str | None = "review-required"
+    project_policy_id: str | None = None
+    ux_policy_id: str | None = None
 
 
 class AiCaseTarget(BaseModel):
@@ -240,6 +242,9 @@ class AiCaseCreate(BaseModel):
     goal_md: str = ""
     selected_recipe_id: str | None = None
     quality_profile_id: str | None = None
+    review_policy_id: str | None = None
+    project_policy_id: str | None = None
+    ux_policy_id: str | None = None
 
     @model_validator(mode="after")
     def _normalize(self) -> "AiCaseCreate":
@@ -255,6 +260,12 @@ class AiCaseCreate(BaseModel):
             self.directives.selected_recipe_id = self.selected_recipe_id
         if self.quality_profile_id and not self.policies.quality_profile_id:
             self.policies.quality_profile_id = self.quality_profile_id
+        if self.review_policy_id and not self.policies.review_policy_id:
+            self.policies.review_policy_id = self.review_policy_id
+        if self.project_policy_id and not self.policies.project_policy_id:
+            self.policies.project_policy_id = self.project_policy_id
+        if self.ux_policy_id and not self.policies.ux_policy_id:
+            self.policies.ux_policy_id = self.ux_policy_id
         if not self.mission_profile_id:
             self.mission_profile_id = default_mission_profile_id(self.case_mode)
         if not self.targets.primary_project_id:

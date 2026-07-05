@@ -10,6 +10,38 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.13] -- 2026-07-05
+
+### Added
+- **Synapse can now turn itself into a first-class improvement workspace.**
+  Added a bundled `synapse-self` project seed, an `improve-synapse` quick-action
+  that launches as a real coder thread, a guarded `GET /api/v1/ai/health-report`
+  diagnostic surface, and the first safe `SYNAPSE_DEV_ENABLED=1` developer-loop
+  endpoints: `POST /api/v1/synapse-dev/test/full` and
+  `POST /api/v1/synapse-dev/test/file`.
+- **Web Scraper graduated from a simple proxy page into a design-harvest
+  workspace.** The dedicated page now captures authorized references, tracks
+  provenance/adaptation mode, compares reference -> generated -> adopted output,
+  and saves generated artifacts back into normal project files through new
+  curated harvest routes under `/api/v1/installed-pages/web-scraper/*`.
+- **Token-efficient review tooling landed in the coder workspace.** Added
+  `ux`, `qa`, `token-efficiency`, and `judge` review presets, a new
+  `quality-loop-v1` benchmark spec, and a bundled `Synapse UX Lab` AI bundle for
+  self-improvement + harvest-driven review loops.
+- **Quality OS foundation (migration `019_quality_os.sql`).** A durable UI surface
+  map, UI contracts, blocking/waivable quality gates, and browser-proof evidence
+  records (plus `verdict_json` on work items + review passes) so multiple AI
+  runtimes share the same quality/evidence contracts (`quality_os.py`,
+  `routes_quality_os.py`).
+- **Native multi-AI coordination (ADR-0024, migration `020_coordination.sql`).**
+  A daemon-owned presence registry (`agent_sessions`) + advisory file-lane claims
+  (`file_lanes`) with automatic overlap detection, a git-working-tree collision
+  detector, and disk-truth migration/ADR numbering — served at
+  `/api/v1/coordination/*`, with an enforceable pre-commit gate
+  (`scripts/coordination-preflight.ps1`). Turns the manual "read the markdown,
+  notice the overlap, hold" dance between concurrent AI coders into an API call
+  plus a commit check. Cockpit panel + shared Plan to follow.
+
 ## [0.1.36.12] -- 2026-07-04
 
 ### Added

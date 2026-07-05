@@ -129,7 +129,21 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-06-28 | `GET /api/v1/installed-pages/web-scraper/schedules` | additive | Daemon-side proxy to the installed scraper's schedules feed. |
 | 2026-06-28 | `GET /api/v1/installed-pages/web-scraper/active` | additive | Daemon-side proxy to the installed scraper's active-job feed. |
 | 2026-06-28 | `POST /api/v1/installed-pages/web-scraper/scrape-url` | additive | Daemon-side proxy to the installed scraper's quick-scrape action. Body is passed through as JSON. |
+| 2026-07-05 | `GET /api/v1/installed-pages/web-scraper/harvest-capabilities` | additive | Returns the curated design-harvest action catalog plus supported provenance/adaptation modes for the dedicated harvest workspace. |
+| 2026-07-05 | `POST /api/v1/installed-pages/web-scraper/actions/{action}` | additive | Curated design-harvest proxy for `capture`, `research_url`, `to_markdown`, `extract_styles`, `extract_structure`, `generate_react`, `generate_css`, and `infer_schema`. Rejects unsupported actions with `422 web_scraper.unsupported_action`. |
+| 2026-07-05 | `POST /api/v1/installed-pages/web-scraper/save-artifacts` | additive | Saves harvest outputs into normal project files, writes a `design-harvest-manifest.json`, and optionally links saved artifacts to a benchmark attempt. |
 | 2026-06-28 | `v1.mcp_server.updated` | additive | Broadcast on install/update/start/stop/uninstall so desktop surfaces such as Installed Pages and MCP management can refresh without polling. |
+
+### Shipped in v0.1.36-dev (Self-improvement + review-loop foundation)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-07-05 | `GET /api/v1/ai/health-report` | additive | Returns a compact self-improver diagnostic report: version, uptime, schema migration, contracts, project counts, audit tail, cached test summary, and git summary. Intended for Synapse-native AI workbenches. |
+| 2026-07-05 | `POST /api/v1/synapse-dev/test/full` | additive | First guarded ADR-0007 developer-loop endpoint. Requires `SYNAPSE_DEV_ENABLED=1`; runs the full daemon/frontend typecheck + test loop and returns structured pytest/TypeScript results plus a cached summary for `ai/health-report`. |
+| 2026-07-05 | `POST /api/v1/synapse-dev/test/file` | additive | Guarded targeted-test endpoint. Requires `SYNAPSE_DEV_ENABLED=1` and only accepts paths under `daemon/tests/`; rejects out-of-repo or non-test paths with a structured error. |
+| 2026-07-05 | `GET /api/v1/quick-actions` (extended) | additive | Quick-action payloads now optionally expose `project_id`, `launch_mode`, `thread_title`, and `prompt_filename`, enabling project-targeted launches and coder-thread quick actions such as `improve-synapse`. |
+| 2026-07-05 | `POST /api/v1/quick-actions/{id}/launch` (extended) | additive | Launch now supports `launch_mode="coder-thread"`, may lazy-create the bundled `synapse-self` project, and returns `thread_id` + `coder_run_id` when a quick action launches as a real coder thread rather than a plain PTY. |
+| 2026-07-05 | `POST /api/v1/coder-threads/{id}/review-passes` / `POST /api/v1/coder-review-passes/{id}/launch` (metadata extended) | additive | Review-pass metadata may now carry `review_kind`, `preset_label`, `reason`, `focus_points`, and `escalation_policy`, which the coder workspace surfaces as explicit "why this pass ran" context for UX/QA/token-efficiency/judge loops. |
 
 ### Shipped in v0.1.36-dev (AI Factory + advanced case engine foundation)
 

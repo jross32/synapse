@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from . import agent_squads as squads
 from . import projects
+from . import quality_os
 from .agent_squads import AgentWorkItem, AgentWorkItemStatus
 from .time_utils import to_iso, utc_now
 
@@ -52,6 +53,7 @@ class ReviewItem(BaseModel):
 class ReviewInbox(BaseModel):
     items: list[ReviewItem] = Field(default_factory=list)
     count: int = 0
+    quality_gates: list[quality_os.QualityGate] = Field(default_factory=list)
 
 
 class ReviewActionRequest(BaseModel):
@@ -87,12 +89,21 @@ def build_inbox(conn: sqlite3.Connection) -> ReviewInbox:
                 items.append(_to_item(work_item, squad, project_names.get(squad.project_id)))
     # Most recently touched first -- ISO timestamps sort lexicographically.
     items.sort(key=lambda i: i.updated_at, reverse=True)
-    return ReviewInbox(items=items, count=len(items))
+    return ReviewInbox(
+        items=items,
+        count=len(items),
+        quality_gates=quality_os.list_gates(
+            conn,
+            status=quality_os.QualityGateStatus.OPEN,
+            blocking=True,
+        ),
+    )
 
 
 def approve(conn: sqlite3.Connection, work_item_id: str) -> AgentWorkItem:
     """Accept the handoff -- mark the work item completed."""
     squads.get_work_item(conn, work_item_id)  # raises not_found if missing
+    quality_os.assert_subject_can_complete(conn, "agent_work_item", work_item_id)
     return squads.update_work_item_status(conn, work_item_id, AgentWorkItemStatus.COMPLETED)
 
 

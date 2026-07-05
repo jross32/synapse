@@ -1,0 +1,13 @@
+{
+  "id": "remix-component",
+  "name": "Remix component",
+  "description": "Take an authorized reference component, regenerate the idea into the project's own visual language, and document the adaptation trail.",
+  "icon": "wand-2",
+  "category": "workflows",
+  "tags": ["harvest", "remix", "component", "design"],
+  "default_argv": ["claude"],
+  "launch_mode": "coder-thread",
+  "thread_title": "Remix Component",
+  "prompt_filename": "REMIX-BRIEF.md",
+  "prompt": "Use an authorized reference plus the project's existing files and records to create a clearly-adapted component, not an unexamined copy. Capture provenance, summarize what should stay versus what should change, and regenerate the component in the destination project's own tone, spacing, and interaction language. Save artifacts into normal project files and end with a short originality note, a QA checklist, and a recommendation about whether the result needs a judge or token-efficiency pass."
+}

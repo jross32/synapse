@@ -12,6 +12,7 @@ from . import agent_squads as squads
 from . import mcp_servers as mcp_servers_module
 from . import personalities as personalities_module
 from . import projects as projects_module
+from . import quality_os
 from .agent_squads import (
     AgentRoleTemplateCreate,
     AgentRoleTemplateUpdate,
@@ -437,7 +438,51 @@ def build_agent_squads_router(
             role_name = None
             if item.assigned_role_id:
                 role_name = squads.get_role_template(conn, item.assigned_role_id).name
-            item = squads.handoff_work_item(conn, work_item_id, payload)
+            adjusted_payload = payload
+            if payload.verdict.blocking and payload.status == squads.AgentWorkItemStatus.COMPLETED:
+                adjusted_payload = payload.model_copy(
+                    update={"status": squads.AgentWorkItemStatus.HANDOFF}
+                )
+            if adjusted_payload.status == squads.AgentWorkItemStatus.COMPLETED:
+                quality_os.assert_subject_can_complete(conn, "agent_work_item", work_item_id)
+            item = squads.handoff_work_item(conn, work_item_id, adjusted_payload)
+            gate = None
+            if payload.verdict.blocking:
+                gate = quality_os.create_gate(
+                    conn,
+                    quality_os.QualityGateCreate(
+                        subject_type="agent_work_item",
+                        subject_id=work_item_id,
+                        gate_kind="ui-review",
+                        title=payload.summary_md or item.title,
+                        blocking=True,
+                        required_evidence=["review-verdict"],
+                        linked_surface_ids=payload.verdict.surface_ids,
+                        linked_contract_ids=payload.verdict.contract_ids,
+                        audit_details={
+                            "severity": payload.verdict.severity.value,
+                            "recommended_next_step": payload.verdict.recommended_next_step,
+                            "squad_id": squad.id,
+                        },
+                    ),
+                )
+            else:
+                for existing in quality_os.list_gates(
+                    conn,
+                    subject_type="agent_work_item",
+                    subject_id=work_item_id,
+                    status=quality_os.QualityGateStatus.OPEN,
+                ):
+                    if existing.gate_kind == "ui-review":
+                        quality_os.resolve_gate(
+                            conn,
+                            existing.id,
+                            quality_os.QualityGateResolveRequest(
+                                status=quality_os.QualityGateStatus.PASSED,
+                                resolved_by="squad-handoff",
+                                note=payload.summary_md or "Non-blocking handoff cleared the review gate.",
+                            ),
+                        )
             append_work_item_handoff(
                 data_dir=storage.data_dir,
                 project_id=project.id,
@@ -445,10 +490,10 @@ def build_agent_squads_router(
                 squad_name=squad.name,
                 work_item_title=item.title,
                 role_name=role_name,
-                summary_md=payload.summary_md,
-                blockers_md=payload.blockers_md,
-                files_touched=payload.files_touched,
-                suggested_next_role=payload.suggested_next_role,
+                summary_md=adjusted_payload.summary_md,
+                blockers_md=adjusted_payload.blockers_md,
+                files_touched=adjusted_payload.files_touched,
+                suggested_next_role=adjusted_payload.suggested_next_role,
             )
             audit(
                 conn,
@@ -456,13 +501,16 @@ def build_agent_squads_router(
                     entity_type="agent_work_item",
                     entity_id=work_item_id,
                     action="handoff",
-                    source=payload.source,
+                    source=adjusted_payload.source,
                     result="success",
                     details={"status": item.status.value, "suggested_next_role": item.suggested_next_role},
                 ),
             )
         await bus.publish(event_name("agent_work_item", "handoff"), {"work_item": item.model_dump(mode="json")})
-        return item.model_dump(mode="json")
+        return {
+            **item.model_dump(mode="json"),
+            "gate": gate.model_dump(mode="json") if gate else None,
+        }
 
     @router.post("/agent-work-items/{work_item_id}/status", response_model=None)
     async def update_work_item_status(
@@ -470,6 +518,8 @@ def build_agent_squads_router(
         payload: AgentWorkItemStatusRequest,
     ) -> dict[str, Any]:
         with storage.transaction() as conn:
+            if payload.status == squads.AgentWorkItemStatus.COMPLETED:
+                quality_os.assert_subject_can_complete(conn, "agent_work_item", work_item_id)
             item = squads.update_work_item_status(conn, work_item_id, payload.status)
             audit(
                 conn,

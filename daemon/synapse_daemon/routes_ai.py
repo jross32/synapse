@@ -15,10 +15,12 @@ linked by id so the AI can fetch on demand.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter
 
+from . import __version__
 from . import projects as projects_module
 from . import agent_squads as agent_squads_module
 from . import ai_bundles as ai_bundles_module
@@ -26,10 +28,13 @@ from . import ai_cases as ai_cases_module
 from . import ai_factory as ai_factory_module
 from . import benchmarks as benchmarks_module
 from . import coder_workspace as coder_workspace_module
+from . import quality_os as quality_os_module
 from .ai_context_memory import ai_context_metadata
 from .files_storage import list_for_project
 from .storage import Storage
 from .pty_sessions import PtySessionManager
+from .synapse_dev import SynapseDevManager
+from .time_utils import utc_now
 from .tools_registry import ToolRegistry
 
 #: Cap inlined files per project so the AI context payload stays small.
@@ -52,8 +57,68 @@ def build_ai_router(
     storage: Storage,
     registry: ToolRegistry,
     manager: PtySessionManager,
+    *,
+    synapse_dev_manager: SynapseDevManager | None = None,
+    started_at: datetime | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/ai", tags=["ai"])
+
+    @router.get("/health-report", response_model=None)
+    async def health_report() -> dict[str, Any]:
+        projects = projects_module.list_projects(storage.conn)
+        cursor = storage.conn.execute(
+            "SELECT id, timestamp_utc, entity_type, entity_id, action, source, result, error_code, details_json "
+            "FROM audit_log WHERE result = 'error' OR error_code IS NOT NULL "
+            "ORDER BY id DESC LIMIT 5"
+        )
+        audit_tail = []
+        for row in cursor.fetchall():
+            details = json.loads(row["details_json"]) if row["details_json"] else None
+            audit_tail.append(
+                {
+                    "id": row["id"],
+                    "at": row["timestamp_utc"],
+                    "entity_type": row["entity_type"],
+                    "entity_id": row["entity_id"],
+                    "action": row["action"],
+                    "source": row["source"],
+                    "result": row["result"],
+                    "error_code": row["error_code"],
+                    "details": details,
+                }
+            )
+        now = utc_now()
+        uptime_s = 0.0
+        if started_at is not None:
+            uptime_s = max(0.0, (now - started_at).total_seconds())
+        return {
+            "version": __version__,
+            "uptime_s": round(uptime_s, 3),
+            "daemon": {
+                "schema_migration": storage.schema_migration(),
+                "contracts_honoured": list(range(1, 29)),
+            },
+            "projects": {
+                "total": len(projects),
+                "launched": sum(1 for project in projects if project.status.value == "launched"),
+                "errored": sum(
+                    1
+                    for project in projects
+                    if project.status.value == "error" or project.last_error is not None
+                ),
+            },
+            "audit_tail": audit_tail,
+            "tests": synapse_dev_manager.tests_summary() if synapse_dev_manager is not None else {
+                "last_run_ok": None,
+                "last_run_at": None,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "mode": None,
+            },
+            "git": synapse_dev_manager.git_summary() if synapse_dev_manager is not None else {},
+            "quality": quality_os_module.quality_summary(storage.conn),
+        }
 
     @router.get("/context", response_model=None)
     async def context() -> dict[str, Any]:
@@ -141,6 +206,11 @@ def build_ai_router(
                     "squad_id": case.squad_id,
                     "branch_name": case.branch_name,
                     "worktree_path": case.worktree_path,
+                    "blocking_gate_count": len(
+                        quality_os_module.blocking_gates_for_subject(
+                            storage.conn, "ai_case", case.id
+                        )
+                    ),
                     "updated_at": case.updated_at,
                 }
             )
@@ -160,6 +230,11 @@ def build_ai_router(
                         "message_count": summary.message_count,
                         "run_count": summary.run_count,
                         "review_pass_count": summary.review_pass_count,
+                        "blocking_gate_count": len(
+                            quality_os_module.blocking_gates_for_subject(
+                                storage.conn, "coder_thread", summary.thread.id
+                            )
+                        ),
                         "last_message_preview": summary.last_message_preview,
                         "updated_at": summary.thread.updated_at,
                     }
@@ -167,6 +242,14 @@ def build_ai_router(
         benchmark_runs = []
         for run in benchmarks_module.list_runs(storage.conn):
             attempts = benchmarks_module.list_attempts_for_run(storage.conn, run.id)
+            attempt_gate_count = sum(
+                len(
+                    quality_os_module.blocking_gates_for_subject(
+                        storage.conn, "benchmark_attempt", attempt.id
+                    )
+                )
+                for attempt in attempts
+            )
             benchmark_runs.append(
                 {
                     "id": run.id,
@@ -177,6 +260,7 @@ def build_ai_router(
                     "execution_mode": run.execution_mode.value,
                     "repeat_count": run.repeat_count,
                     "attempt_count": len(attempts),
+                    "blocking_gate_count": attempt_gate_count,
                     "updated_at": run.updated_at,
                 }
             )
@@ -238,11 +322,23 @@ def build_ai_router(
             },
             "shared_files": [_file_to_inline(f) for f in shared_files],
             "audit_tail": audit_tail,
+            "quality": {
+                **quality_os_module.quality_summary(storage.conn),
+                "ui_surfaces": [
+                    surface.model_dump(mode="json")
+                    for surface in quality_os_module.list_surfaces(storage.conn)
+                ],
+            },
             "endpoints_for_ai": [
                 {
                     "purpose": "list registered projects",
                     "method": "GET",
                     "path": "/api/v1/projects",
+                },
+                {
+                    "purpose": "read the current daemon, git, and last-test health report for Synapse itself",
+                    "method": "GET",
+                    "path": "/api/v1/ai/health-report",
                 },
                 {
                     "purpose": "launch / stop a project",
@@ -275,6 +371,16 @@ def build_ai_router(
                     "path": "/api/v1/tools",
                 },
                 {
+                    "purpose": "run gated Synapse self-improvement test loops",
+                    "method": "POST",
+                    "path": "/api/v1/synapse-dev/test/full | /api/v1/synapse-dev/test/file",
+                },
+                {
+                    "purpose": "inspect or resolve durable quality gates, browser proof, and UI contracts",
+                    "method": "GET | POST",
+                    "path": "/api/v1/quality-gates | /api/v1/ui-contracts | /api/v1/ui-contracts/{id}/run | /api/v1/ui-impact-audit | /api/v1/ui-surface-map",
+                },
+                {
                     "purpose": "run an action on a tool",
                     "method": "POST",
                     "path": "/api/v1/tools/{id}/actions/{action}",
@@ -293,6 +399,11 @@ def build_ai_router(
                     "purpose": "list or create AI squads for a project",
                     "method": "GET | POST",
                     "path": "/api/v1/agent-squads",
+                },
+                {
+                    "purpose": "harvest authorized references, proxy design-oriented web-scraper actions, and save artifacts into a project",
+                    "method": "GET | POST",
+                    "path": "/api/v1/installed-pages/web-scraper | /harvest-capabilities | /actions/{action} | /save-artifacts",
                 },
                 {
                     "purpose": "create, launch, hand off, or update agent work items",

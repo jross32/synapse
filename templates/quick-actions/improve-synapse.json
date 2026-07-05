@@ -1,0 +1,14 @@
+{
+  "id": "improve-synapse",
+  "name": "Improve Synapse",
+  "description": "Open a Synapse-native self-improvement thread in the local Synapse repo and follow the standard build, review, benchmark, and record loop.",
+  "icon": "sparkles",
+  "category": "workflows",
+  "tags": ["synapse", "self-improvement", "review", "benchmark"],
+  "default_argv": ["claude"],
+  "project_id": "synapse-self",
+  "launch_mode": "coder-thread",
+  "thread_title": "Improve Synapse",
+  "prompt_filename": "IMPROVEMENT-BRIEF.md",
+  "prompt": "You are operating inside Synapse's own repo. Improve Synapse through Synapse-native workflow, not by improvising a separate process. Start by reading AGENTS.md, PROGRESS.md, and any directly relevant ADRs or docs. Make the improvement brief visible and concrete, then work this loop: build -> targeted review -> benchmark or compare if the change affects quality or UX -> record the outcome in the project's ADR/backlog/version memory surfaces -> prepare a branch/PR handoff. Keep commit or PR execution behind explicit opt-in. Never auto-merge to main. Prefer a focused, finished improvement with proof over a large unfinished wave. If you touch a user-visible surface, capture evidence and note why the pass ran."
+}

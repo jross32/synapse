@@ -16,12 +16,38 @@ from pathlib import Path
 
 from . import projects as projects_module
 from .health import HealthProbe
-from .projects import Project
+from .projects import Project, ProjectKind
+from .runtime_paths import repo_root
 from .storage import Storage
 
 log = logging.getLogger(__name__)
 
 WBSCRPER_PROJECT_ID = "wbscrper"
+SYNAPSE_SELF_PROJECT_ID = "synapse-self"
+
+
+def _looks_like_synapse_repo(path: Path) -> bool:
+    return (
+        (path / "AGENTS.md").exists()
+        and (path / "package.json").exists()
+        and (path / "daemon").is_dir()
+        and (path / "renderer").is_dir()
+    )
+
+
+def resolve_synapse_self_path(*, parent_dir: Path | None = None) -> Path:
+    candidates: list[Path] = [repo_root(), Path.cwd()]
+    if parent_dir is not None:
+        candidates.append(parent_dir / "synapse")
+    candidates.append(Path("C:/Users/justi/synapse"))
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if _looks_like_synapse_repo(resolved):
+            return resolved
+    return repo_root()
 
 
 def seed_default_projects(storage: Storage, *, parent_dir: Path | None = None) -> list[str]:
@@ -56,5 +82,31 @@ def seed_default_projects(storage: Storage, *, parent_dir: Path | None = None) -
             projects_module.create(conn, project)
         created.append(WBSCRPER_PROJECT_ID)
         log.info("Seeded default project: %s at %s", WBSCRPER_PROJECT_ID, wbscrper_path)
+
+    synapse_self_path = resolve_synapse_self_path(parent_dir=parent_dir)
+    if projects_module.get_or_none(storage.conn, SYNAPSE_SELF_PROJECT_ID) is None:
+        project = Project(
+            id=SYNAPSE_SELF_PROJECT_ID,
+            name="Synapse Self",
+            description=(
+                "The local Synapse repo wired as the default self-improvement "
+                "workspace for workbenches, coder threads, and benchmark passes."
+            ),
+            category="apps",
+            icon="sparkles",
+            path=str(synapse_self_path),
+            launch_cmd="synapse.cmd",
+            expected_port=7878,
+            kind=ProjectKind.OTHER,
+            health=HealthProbe(
+                kind="http",
+                target="http://127.0.0.1:7878/api/v1/health",
+                interval_seconds=15,
+            ),
+        )
+        with storage.transaction() as conn:
+            projects_module.create(conn, project)
+        created.append(SYNAPSE_SELF_PROJECT_ID)
+        log.info("Seeded default project: %s at %s", SYNAPSE_SELF_PROJECT_ID, synapse_self_path)
 
     return created

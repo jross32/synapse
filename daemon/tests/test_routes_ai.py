@@ -48,6 +48,7 @@ def test_ai_context_returns_versioned_digest(tmp_path: Path) -> None:
         # Endpoints list is non-empty -- this is the "how do I do X" pointer
         # for AI sessions.
         assert any(e["path"] == "/api/v1/projects" for e in body["endpoints_for_ai"])
+        assert any(e["path"] == "/api/v1/ai/health-report" for e in body["endpoints_for_ai"])
 
 
 def test_ai_context_requires_auth(tmp_path: Path) -> None:

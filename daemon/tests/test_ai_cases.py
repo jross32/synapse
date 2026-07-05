@@ -159,6 +159,40 @@ def test_run_case_creates_isolated_worktree_and_launches_lead(tmp_path: Path) ->
         assert stopped.status_code == 200, stopped.text
 
 
+def test_run_case_with_ui_policies_opens_quality_gates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, client, _storage, _pm = _harness(tmp_path)
+    _patch_fake_spawn(monkeypatch, app)
+    with client as c:
+        created = c.post(
+            "/api/v1/ai-cases",
+            json={
+                "primary_project_id": "demo-project",
+                "goal_md": "Fix the shell and prove the launch path works.",
+                "case_mode": "repair",
+                "policies": {
+                    "quality_profile_id": "quality-critical-ui",
+                    "review_policy_id": "review-ui-blocking",
+                    "evidence_policy_id": "evidence-browser-proof",
+                },
+            },
+        )
+        assert created.status_code == 201, created.text
+        case_id = created.json()["case"]["id"]
+
+        launched = c.post(
+            f"/api/v1/ai-cases/{case_id}/run",
+            json={"preferred_runtime": "codex", "open_in_tab": False},
+        )
+        assert launched.status_code == 200, launched.text
+        payload = launched.json()
+        assert len(payload["opened_gates"]) >= 3
+        listed = c.get("/api/v1/quality-gates", params={"subject_type": "ai_case", "subject_id": case_id})
+        assert listed.status_code == 200, listed.text
+        assert len(listed.json()["gates"]) >= 3
+
+
 def test_export_case_creates_records_and_memory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -60,6 +60,7 @@ def test_inbox_aggregates_handoff_and_blocked(tmp_path: Path) -> None:
     assert by_id[ids["handoff"]]["squad_name"] == "Build Crew"
     assert by_id[ids["handoff"]]["files_touched"] == ["login.tsx"]
     assert by_id[ids["blocked"]]["kind"] == "blocked"
+    assert data["quality_gates"] == []
 
 
 def test_approve_clears_item(tmp_path: Path) -> None:
@@ -95,6 +96,31 @@ def test_unknown_item_is_404(tmp_path: Path) -> None:
     assert client.post("/api/v1/review/items/nope/approve").status_code == 404
 
 
+def test_approve_respects_blocking_quality_gate(tmp_path: Path) -> None:
+    client, ids = _harness(tmp_path)
+    gate = client.post(
+        "/api/v1/quality-gates",
+        json={
+            "subject_type": "agent_work_item",
+            "subject_id": ids["handoff"],
+            "gate_kind": "ui-review",
+            "title": "Blocking review gate",
+            "blocking": True,
+        },
+    )
+    assert gate.status_code == 201, gate.text
+    blocked = client.post(f"/api/v1/review/items/{ids['handoff']}/approve")
+    assert blocked.status_code == 422, blocked.text
+
+    cleared = client.post(
+        f"/api/v1/quality-gates/{gate.json()['id']}/resolve",
+        json={"status": "passed", "resolved_by": "test"},
+    )
+    assert cleared.status_code == 200, cleared.text
+    approved = client.post(f"/api/v1/review/items/{ids['handoff']}/approve")
+    assert approved.status_code == 200, approved.text
+
+
 def test_empty_inbox(tmp_path: Path) -> None:
     storage = Storage(tmp_path / "empty")
     storage.open()
@@ -103,4 +129,4 @@ def test_empty_inbox(tmp_path: Path) -> None:
     client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
     res = client.get("/api/v1/review/inbox")
     assert res.status_code == 200
-    assert res.json() == {"items": [], "count": 0}
+    assert res.json() == {"items": [], "count": 0, "quality_gates": []}

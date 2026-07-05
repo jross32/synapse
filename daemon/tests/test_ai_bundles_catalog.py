@@ -8,6 +8,7 @@ _EXPECTED_BUNDLES = {
     "fast-money",
     "repo-rescue-lab",
     "parallel-harvest-bakeoff",
+    "synapse-ux-lab",
 }
 
 
@@ -42,3 +43,19 @@ def test_fast_money_bundle_exposes_launch_assets() -> None:
     assert quick_action_ids == {"fast-money-launch"}
     assert bundle.personalities[0].id == "revenue-operator"
     assert bundle.recipes[0].id == "client-ops-revenue-board"
+
+
+def test_synapse_ux_lab_bundle_exposes_review_loop_assets() -> None:
+    bundle = ai_bundles.bundle_by_id("synapse-ux-lab")
+    role_ids = {role.id for role in bundle.roles}
+    personality_ids = {personality.id for personality in bundle.personalities}
+    quick_action_ids = {action.id for action in bundle.quick_actions}
+
+    assert {
+        "design-harvest-lead",
+        "skeptic-reviewer",
+        "qa-hunter",
+        "token-steward",
+    } <= role_ids
+    assert {"craft-director", "friction-hunter", "cost-keeper"} <= personality_ids
+    assert quick_action_ids == {"synapse-ux-lab-kickoff"}

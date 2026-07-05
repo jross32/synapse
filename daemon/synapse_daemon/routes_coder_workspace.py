@@ -12,6 +12,7 @@ from . import coder_workspace
 from . import files_storage
 from . import project_records
 from . import projects as projects_module
+from . import quality_os
 from .errors import invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
@@ -85,12 +86,29 @@ def _review_prompt(
     review_pass: coder_workspace.CoderReviewPass,
 ) -> str:
     recent = coder_workspace.list_messages(conn, thread.id)[-10:]
+    metadata = review_pass.metadata or {}
+    review_kind = str(metadata.get("review_kind") or metadata.get("preset_id") or "general").strip().lower()
+    reason = str(metadata.get("reason") or "").strip()
+    focus_points = metadata.get("focus_points")
+    focus_lines: list[str] = []
+    if isinstance(focus_points, list):
+        focus_lines = [str(item).strip() for item in focus_points if str(item).strip()]
+    escalation_policy = str(metadata.get("escalation_policy") or "").strip()
     lines: list[str] = [
         "You are a sidecar reviewer for a Synapse coder thread.",
         f"Thread title: {thread.title}",
         f"Primary runtime: {thread.active_runtime_id or 'unknown'}",
         f"Review focus: {review_pass.title}",
     ]
+    if review_kind:
+        lines.append(f"Review kind: {review_kind}")
+    if reason:
+        lines.append(f"Why this pass ran: {reason}")
+    if escalation_policy:
+        lines.append(f"Escalation policy: {escalation_policy}")
+    if focus_lines:
+        lines.extend(["", "Focus points:"])
+        lines.extend([f"- {item}" for item in focus_lines])
     if review_pass.summary_md.strip():
         lines.extend(["", "Review instructions:", review_pass.summary_md.strip()])
     lines.extend(["", "Recent thread messages:"])
@@ -99,13 +117,43 @@ def _review_prompt(
             lines.append(f"- {message.role.value}: {message.content_md.strip()[:800]}")
     else:
         lines.append("- No prior messages yet.")
-    lines.extend(
-        [
-            "",
-            "Please critique the direction, identify bugs or regressions, call out missing tests,",
-            "and suggest the strongest next step for the main thread.",
-        ]
-    )
+    lines.append("")
+    if review_kind == "ux":
+        lines.extend(
+            [
+                "Audit the interaction, hierarchy, responsiveness, clarity, and overall product feel.",
+                "Flag provenance or originality risks if the thread used harvested references.",
+                "Recommend the lightest next pass that would materially improve UX quality.",
+            ]
+        )
+    elif review_kind == "qa":
+        lines.extend(
+            [
+                "Hunt for bugs, regressions, missing tests, flaky assumptions, and verification gaps.",
+                "Call out the concrete proof that is still missing before the main thread can claim done.",
+            ]
+        )
+    elif review_kind in {"token-efficiency", "token_efficiency"}:
+        lines.extend(
+            [
+                "Evaluate whether the current loop is spending more tokens than needed for the risk level.",
+                "Suggest a cheaper next pass when quality can be preserved with tighter scope or targeted review.",
+            ]
+        )
+    elif review_kind == "judge":
+        lines.extend(
+            [
+                "Judge the current direction with explicit tradeoffs between quality, evidence, and token cost.",
+                "State whether escalation to a stronger reviewer or multi-candidate bakeoff is justified.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "Please critique the direction, identify bugs or regressions, call out missing tests,",
+                "and suggest the strongest next step for the main thread.",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -267,6 +315,56 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
         with storage.transaction() as conn:
             review_pass = coder_workspace.create_review_pass(conn, thread_id, payload)
         return review_pass.model_dump(mode="json")
+
+    @router.post("/coder-review-passes/{review_pass_id}/verdict", response_model=None)
+    async def publish_review_pass_verdict(
+        review_pass_id: str,
+        payload: coder_workspace.CoderReviewPassVerdictRequest,
+    ) -> dict[str, Any]:
+        with storage.transaction() as conn:
+            updated = coder_workspace.update_review_pass_verdict(conn, review_pass_id, payload)
+            gate = None
+            if payload.verdict.blocking:
+                gate = quality_os.create_gate(
+                    conn,
+                    quality_os.QualityGateCreate(
+                        subject_type="coder_review_pass",
+                        subject_id=review_pass_id,
+                        gate_kind="ui-review",
+                        title=payload.summary_md or updated.title or "Blocking review findings",
+                        blocking=True,
+                        required_evidence=["review-verdict"],
+                        linked_surface_ids=payload.verdict.surface_ids,
+                        linked_contract_ids=payload.verdict.contract_ids,
+                        audit_details={
+                            "severity": payload.verdict.severity.value,
+                            "recommended_next_step": payload.verdict.recommended_next_step,
+                        },
+                    ),
+                )
+            else:
+                for existing in quality_os.list_gates(
+                    conn,
+                    subject_type="coder_review_pass",
+                    subject_id=review_pass_id,
+                    status=quality_os.QualityGateStatus.OPEN,
+                ):
+                    if existing.gate_kind == "ui-review":
+                        quality_os.resolve_gate(
+                            conn,
+                            existing.id,
+                            quality_os.QualityGateResolveRequest(
+                                status=quality_os.QualityGateStatus.PASSED,
+                                resolved_by="review-verdict",
+                                note=payload.summary_md or "Structured review verdict cleared the review gate.",
+                            ),
+                        )
+            thread_id = updated.thread_id
+        return {
+            "review_pass": updated.model_dump(mode="json"),
+            "gate": gate.model_dump(mode="json") if gate else None,
+            "detail": _thread_detail(storage.conn, thread_id),
+        }
 
     @router.post(
         "/coder-threads/{thread_id}/review-passes/{review_pass_id}/launch",

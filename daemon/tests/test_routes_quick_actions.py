@@ -10,7 +10,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from synapse_daemon import coder_workspace as coder_workspace_module
 from synapse_daemon import projects as projects_module
+from synapse_daemon import routes_quick_actions as routes_quick_actions_module
 from synapse_daemon.app import build_app
 from synapse_daemon.pty_sessions import PtySessionManager
 from synapse_daemon.storage import Storage
@@ -42,6 +44,7 @@ def test_list_quick_actions_returns_bundled_templates(tmp_path: Path) -> None:
     ids = [a["id"] for a in body["actions"]]
     assert "new-mcp-server" in ids
     assert "new-synapse-tool" in ids
+    assert "improve-synapse" in ids
     # Each action exposes the prompt directly so the renderer can preview it.
     for a in body["actions"]:
         assert a["prompt"].strip()
@@ -175,3 +178,43 @@ def test_launch_reuses_existing_scratch_project_across_calls(
     assert calls == ["scratch", "scratch"]
     # Only one project row was ever created.
     assert projects_module.get_or_none(storage.conn, "scratch") is not None
+
+
+def test_launch_improve_synapse_creates_thread_in_synapse_self(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, storage, _ = _harness(tmp_path)
+    captured: dict[str, Any] = {}
+
+    async def fake_spawn(self, *, argv, cwd, env=None, rows=24, cols=80, project_id=None):  # type: ignore[override]
+        captured["argv"] = argv
+        captured["cwd"] = cwd
+        captured["env"] = env
+        captured["project_id"] = project_id
+        return _FakeSession(session_id="self-000001", cwd=cwd, argv=tuple(argv))
+
+    async def fake_write_prompt(_session, prompt_md: str) -> None:
+        captured["prompt"] = prompt_md
+
+    monkeypatch.setattr(PtySessionManager, "spawn", fake_spawn)
+    monkeypatch.setattr(routes_quick_actions_module, "_write_prompt_to_session", fake_write_prompt)
+
+    with client as c:
+        res = c.post("/api/v1/quick-actions/improve-synapse/launch")
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["project_id"] == "synapse-self"
+    assert body["launch_mode"] == "coder-thread"
+    assert body["thread_id"]
+    assert body["coder_run_id"]
+    assert body["prompt_file"].endswith("IMPROVEMENT-BRIEF.md")
+    project = projects_module.get(storage.conn, "synapse-self")
+    assert project.name == "Synapse Self"
+    detail = coder_workspace_module.thread_detail(storage.conn, body["thread_id"])
+    assert detail.thread.thread_kind == "quick-action"
+    assert detail.messages[-1].content_md.startswith("You are operating inside Synapse's own repo.")
+    assert detail.linked_runs[-1].pty_session_id == "self-000001"
+    assert captured["project_id"] == "synapse-self"
+    assert captured["env"]["SYNAPSE_QUICK_ACTION_PROJECT_ID"] == "synapse-self"
+    assert "build -> targeted review" in captured["prompt"]

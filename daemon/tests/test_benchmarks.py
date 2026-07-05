@@ -63,6 +63,16 @@ class _FakeSession:
         )
 
 
+def test_default_benchmark_specs_include_quality_loop(tmp_path: Path) -> None:
+    _app, client, _storage = _harness(tmp_path)
+    with client as c:
+        response = c.get("/api/v1/benchmarks/specs")
+    assert response.status_code == 200, response.text
+    spec_ids = {bundle["spec"]["id"] for bundle in response.json()["specs"]}
+    assert "coder-workspace-v1" in spec_ids
+    assert "quality-loop-v1" in spec_ids
+
+
 def test_benchmark_run_launches_thread_surface(tmp_path: Path) -> None:
     app, client, _storage = _harness(tmp_path)
 

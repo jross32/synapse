@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-06-29",
+  "generated_at": "2026-07-05",
   "items": [
     {
       "id": "ai-council-review",
@@ -105,6 +105,38 @@
       "phase": "AI-coding power",
       "adr": "ADR-0021",
       "summary": "Install AI-first role, workflow, quick-action, and factory packs from the Marketplace, including bundle overlap readouts and installer-time bundle choices."
+    },
+    {
+      "id": "synapse-self-improver",
+      "title": "Synapse improves Synapse",
+      "status": "in_progress",
+      "phase": "AI-coding power",
+      "adr": "ADR-0007",
+      "summary": "A bundled Synapse Self workspace, an Improve Synapse quick-action, guarded health/test endpoints, and explicit review/benchmark/record loop scaffolding so Synapse can improve itself through Synapse-native workflows."
+    },
+    {
+      "id": "design-harvest-workspace",
+      "title": "Design harvest workspace",
+      "status": "in_progress",
+      "phase": "AI-coding power",
+      "adr": "ADR-0022",
+      "summary": "A dedicated Web Scraper page for reference capture, provenance/adaptation labeling, component generation, and reference -> generated -> adopted comparison with save-back into project files."
+    },
+    {
+      "id": "token-efficient-review-loop",
+      "title": "Token-efficient review loop",
+      "status": "in_progress",
+      "phase": "Quality",
+      "adr": "ADR-0007",
+      "summary": "Targeted UX/QA/token-efficiency/judge passes, quality-loop benchmark specs, and the Synapse UX Lab bundle help spend more tokens only when the risk or benchmark evidence says the escalation is worth it."
+    },
+    {
+      "id": "native-multi-ai-coordination",
+      "title": "Native multi-AI coordination",
+      "status": "in_progress",
+      "phase": "AI-coding power",
+      "adr": "ADR-0024",
+      "summary": "When two AI coders share one repo, Synapse holds one live picture of who's editing what: a presence registry, advisory file-lane claims with overlap detection, a git collision detector, disk-truth migration/ADR numbering, and a pre-commit gate. Cockpit panel + shared Plan to follow."
     },
     {
       "id": "fast-money",

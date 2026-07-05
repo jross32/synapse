@@ -28,8 +28,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass, field
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .runtime_paths import bundled_quick_actions_dir
@@ -59,6 +59,10 @@ class QuickAction:
     category: str | None = None
     tags: list[str] = field(default_factory=list)
     default_argv: list[str] = field(default_factory=list)
+    project_id: str | None = None
+    launch_mode: str = "pty"
+    thread_title: str | None = None
+    prompt_filename: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -70,6 +74,10 @@ class QuickAction:
             "category": self.category,
             "tags": list(self.tags),
             "default_argv": list(self.default_argv),
+            "project_id": self.project_id,
+            "launch_mode": self.launch_mode,
+            "thread_title": self.thread_title,
+            "prompt_filename": self.prompt_filename,
         }
 
 
@@ -107,6 +115,29 @@ def _parse(raw: object, source: str) -> QuickAction:
     category = raw.get("category")
     if category is not None and not isinstance(category, str):
         raise QuickActionError(f"{source}: category must be a string when set.")
+    project_id = raw.get("project_id")
+    if project_id is not None and not isinstance(project_id, str):
+        raise QuickActionError(f"{source}: project_id must be a string when set.")
+    launch_mode = str(raw.get("launch_mode") or "pty").strip().lower()
+    if launch_mode not in {"pty", "coder-thread"}:
+        raise QuickActionError(f"{source}: launch_mode must be 'pty' or 'coder-thread'.")
+    thread_title = raw.get("thread_title")
+    if thread_title is not None and not isinstance(thread_title, str):
+        raise QuickActionError(f"{source}: thread_title must be a string when set.")
+    prompt_filename = raw.get("prompt_filename")
+    if prompt_filename is not None:
+        if not isinstance(prompt_filename, str):
+            raise QuickActionError(f"{source}: prompt_filename must be a string when set.")
+        normalized = prompt_filename.strip()
+        if (
+            not normalized
+            or any(sep in normalized for sep in ("/", "\\", "\x00"))
+            or len(normalized) > 128
+        ):
+            raise QuickActionError(
+                f"{source}: prompt_filename must be a simple filename without path separators."
+            )
+        prompt_filename = normalized
     return QuickAction(
         id=action_id,
         name=str(raw["name"]).strip(),
@@ -116,6 +147,10 @@ def _parse(raw: object, source: str) -> QuickAction:
         category=(category.strip().lower() if isinstance(category, str) and category.strip() else None),
         tags=_normalize_tags(raw.get("tags")),
         default_argv=[str(p) for p in default_argv],
+        project_id=project_id.strip() if isinstance(project_id, str) and project_id.strip() else None,
+        launch_mode=launch_mode,
+        thread_title=thread_title.strip() if isinstance(thread_title, str) and thread_title.strip() else None,
+        prompt_filename=prompt_filename,
     )
 
 

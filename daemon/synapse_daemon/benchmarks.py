@@ -488,8 +488,17 @@ def _row_to_artifact(row: sqlite3.Row) -> BenchmarkArtifact:
     )
 
 
-def seed_default_specs(conn: sqlite3.Connection) -> None:
-    if conn.execute("SELECT 1 FROM benchmark_specs WHERE id = ?", ("coder-workspace-v1",)).fetchone():
+def _seed_spec_if_missing(
+    conn: sqlite3.Connection,
+    *,
+    spec_id: str,
+    name: str,
+    description: str,
+    primary_surface: BenchmarkSurfaceKind,
+    metadata: dict[str, Any],
+    scenarios: list[dict[str, Any]],
+) -> None:
+    if conn.execute("SELECT 1 FROM benchmark_specs WHERE id = ?", (spec_id,)).fetchone():
         return
     now = to_iso(utc_now())
     conn.execute(
@@ -501,54 +510,20 @@ def seed_default_specs(conn: sqlite3.Connection) -> None:
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            "coder-workspace-v1",
-            "Coder Workspace v1",
-            "Mixed mini-suite for chat-first workspace, workbench, raw PTY, and direct CLI comparisons.",
-            BenchmarkSurfaceKind.SYNAPSE_CODER_THREAD.value,
+            spec_id,
+            name,
+            description,
+            primary_surface.value,
             3,
             70.0,
             20.0,
             10.0,
             "matching-provenance",
-            _dumps({"suite": "mixed-mini"}),
+            _dumps(metadata),
             now,
             now,
         ),
     )
-    scenarios = [
-        {
-            "id": "static-app-mini",
-            "name": "Static app mini",
-            "description": "Very small app with layout, content structure, and basic polish.",
-            "objective_weight": 60.0,
-            "rubric_weight": 40.0,
-            "time_budget_seconds": 900,
-        },
-        {
-            "id": "stateful-app-mini",
-            "name": "Stateful app mini",
-            "description": "Small app with local state and interactive behavior.",
-            "objective_weight": 60.0,
-            "rubric_weight": 40.0,
-            "time_budget_seconds": 900,
-        },
-        {
-            "id": "repo-fix-mini",
-            "name": "Repo fix mini",
-            "description": "Small targeted bug-fix task inside an existing repo.",
-            "objective_weight": 70.0,
-            "rubric_weight": 30.0,
-            "time_budget_seconds": 1500,
-        },
-        {
-            "id": "repo-extend-mini",
-            "name": "Repo extend mini",
-            "description": "Small feature extension in an existing repo with tests and verification.",
-            "objective_weight": 70.0,
-            "rubric_weight": 30.0,
-            "time_budget_seconds": 1500,
-        },
-    ]
     for raw in scenarios:
         prompt = (
             f"Benchmark scenario: {raw['name']}\n\n"
@@ -566,7 +541,7 @@ def seed_default_specs(conn: sqlite3.Connection) -> None:
             """,
             (
                 raw["id"],
-                "coder-workspace-v1",
+                spec_id,
                 raw["name"],
                 raw["description"],
                 prompt,
@@ -577,11 +552,108 @@ def seed_default_specs(conn: sqlite3.Connection) -> None:
                 raw["time_budget_seconds"],
                 raw["objective_weight"],
                 raw["rubric_weight"],
-                _dumps({"scenario_family": raw["id"]}),
+                _dumps({**raw.get("metadata", {}), "scenario_family": raw["id"]}),
                 now,
                 now,
             ),
         )
+
+
+def seed_default_specs(conn: sqlite3.Connection) -> None:
+    _seed_spec_if_missing(
+        conn,
+        spec_id="coder-workspace-v1",
+        name="Coder Workspace v1",
+        description="Mixed mini-suite for chat-first workspace, workbench, raw PTY, and direct CLI comparisons.",
+        primary_surface=BenchmarkSurfaceKind.SYNAPSE_CODER_THREAD,
+        metadata={"suite": "mixed-mini"},
+        scenarios=[
+            {
+                "id": "static-app-mini",
+                "name": "Static app mini",
+                "description": "Very small app with layout, content structure, and basic polish.",
+                "objective_weight": 60.0,
+                "rubric_weight": 40.0,
+                "time_budget_seconds": 900,
+            },
+            {
+                "id": "stateful-app-mini",
+                "name": "Stateful app mini",
+                "description": "Small app with local state and interactive behavior.",
+                "objective_weight": 60.0,
+                "rubric_weight": 40.0,
+                "time_budget_seconds": 900,
+            },
+            {
+                "id": "repo-fix-mini",
+                "name": "Repo fix mini",
+                "description": "Small targeted bug-fix task inside an existing repo.",
+                "objective_weight": 70.0,
+                "rubric_weight": 30.0,
+                "time_budget_seconds": 1500,
+            },
+            {
+                "id": "repo-extend-mini",
+                "name": "Repo extend mini",
+                "description": "Small feature extension in an existing repo with tests and verification.",
+                "objective_weight": 70.0,
+                "rubric_weight": 30.0,
+                "time_budget_seconds": 1500,
+            },
+        ],
+    )
+    _seed_spec_if_missing(
+        conn,
+        spec_id="quality-loop-v1",
+        name="Quality Loop v1",
+        description=(
+            "Compares cheaper targeted-review loops against heavier second-pass "
+            "and harvest-plus-judge flows for self-improvement and design remix work."
+        ),
+        primary_surface=BenchmarkSurfaceKind.SYNAPSE_CODER_THREAD,
+        metadata={
+            "suite": "quality-loop",
+            "escalation_policy": "cheap-first-targeted-review",
+        },
+        scenarios=[
+            {
+                "id": "single-pass-build",
+                "name": "Single-pass build",
+                "description": "One build pass with no reviewer or harvest assist.",
+                "objective_weight": 65.0,
+                "rubric_weight": 35.0,
+                "time_budget_seconds": 1200,
+                "metadata": {"comparison_mode": "single-pass-build"},
+            },
+            {
+                "id": "build-targeted-review",
+                "name": "Build plus targeted reviewer",
+                "description": "Primary build with one focused review pass instead of a full rebuild.",
+                "objective_weight": 65.0,
+                "rubric_weight": 35.0,
+                "time_budget_seconds": 1400,
+                "metadata": {"comparison_mode": "build-targeted-review"},
+            },
+            {
+                "id": "harvest-build",
+                "name": "Harvest plus build",
+                "description": "Authorized reference harvest feeding a single implementation pass.",
+                "objective_weight": 60.0,
+                "rubric_weight": 40.0,
+                "time_budget_seconds": 1500,
+                "metadata": {"comparison_mode": "harvest-build"},
+            },
+            {
+                "id": "harvest-build-judge",
+                "name": "Harvest plus build plus judge",
+                "description": "Reference harvest feeding implementation plus a final judging pass.",
+                "objective_weight": 60.0,
+                "rubric_weight": 40.0,
+                "time_budget_seconds": 1800,
+                "metadata": {"comparison_mode": "harvest-build-judge"},
+            },
+        ],
+    )
 
 
 def list_spec_bundles(conn: sqlite3.Connection) -> list[BenchmarkSpecBundle]:

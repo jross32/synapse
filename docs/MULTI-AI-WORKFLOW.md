@@ -129,9 +129,16 @@ the *cause* of version collisions, not the fix.
   CWD, which is `electron/` when Electron spawns it, so the lookup silently
   finds nothing. This bug bit both Claude and Codex independently; the
   resolver is the cure.
-- **Cross-AI session memory:** `.synapse-ai-context.md` per project
-  (ADR-0006). Append a short handoff note when you finish so the next agent
-  — possibly a different CLI — picks up the thread.
+- **Cross-AI session memory / LIVE COORDINATION CHANNEL:**
+  `.synapse-ai-context.md` per project (ADR-0006). **For work on the Synapse
+  repo itself the live channel is
+  [`data/projects/synapse/.synapse-ai-context.md`](../data/projects/synapse/.synapse-ai-context.md)**
+  (gitignored runtime data — `cat` it directly; it won't show in `git status`).
+  **Read it BEFORE you edit** to see what another agent is mid-flight on, which
+  file lanes are claimed, and which migration/ADR numbers are taken; **append a
+  short handoff note when you finish** so the next agent — possibly a different
+  CLI — picks up the thread. This file is the authoritative place two concurrent
+  agents agree on lanes, numbering, and commit order.
 - **Error envelope, status enum, audit log, timestamps:** Contracts #4, #2,
   #11, #24 in AGENTS.md. Don't invent parallel shapes.
 - **AI Council Review — don't work alone (ADR-0023).** For meaningful work,

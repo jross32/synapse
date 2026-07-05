@@ -143,6 +143,44 @@ def test_handoff_appends_to_project_ai_context_file(tmp_path: Path) -> None:
         assert "Suggested next role" in contents
 
 
+def test_blocking_handoff_opens_gate_and_stays_in_handoff(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="launch-verifier")
+
+        handoff = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/handoff",
+            json={
+                "status": "completed",
+                "summary_md": "Launch still misfires because the tile parent catches the click.",
+                "files_touched": ["renderer/components/ProjectTile.tsx"],
+                "verdict": {
+                    "blocking": True,
+                    "severity": "critical",
+                    "surface_ids": ["apps.projects-grid"],
+                    "contract_ids": ["project-launch-action"],
+                    "recommended_next_step": "Remove the parent click ambiguity and re-run browser proof.",
+                    "summary": "Launch is still broken.",
+                    "findings": [
+                        {
+                            "title": "Launch button reopens the parent card",
+                            "severity": "critical",
+                            "summary": "The card-level click target still interferes with Launch.",
+                            "surface_id": "apps.projects-grid",
+                            "contract_id": "project-launch-action",
+                        }
+                    ],
+                },
+            },
+        )
+        assert handoff.status_code == 200, handoff.text
+        body = handoff.json()
+        assert body["status"] == "handoff"
+        assert body["verdict"]["blocking"] is True
+        assert body["gate"]["gate_kind"] == "ui-review"
+
+
 @posix_only
 def test_launch_stores_session_and_injects_squad_env_vars(tmp_path: Path) -> None:
     app, client = _harness(tmp_path)

@@ -1,0 +1,13 @@
+{
+  "id": "ux-audit-current-screen",
+  "name": "UX audit current screen",
+  "description": "Audit the current screen or surface with a UX, QA, and token-efficiency lens, then recommend the lightest next pass that would materially improve quality.",
+  "icon": "scan-search",
+  "category": "workflows",
+  "tags": ["ux", "audit", "qa", "review"],
+  "default_argv": ["claude"],
+  "launch_mode": "coder-thread",
+  "thread_title": "UX Audit Current Screen",
+  "prompt_filename": "UX-AUDIT-BRIEF.md",
+  "prompt": "Audit the current screen with concrete evidence. Call out clarity issues, layout friction, responsiveness problems, accessibility gaps, provenance ambiguity, and any quality risks that would justify escalation. Prefer the cheapest meaningful next step: targeted review before full rebuild, stronger judge only when risk or the benchmark rules require it, and multi-candidate bakeoffs only for UX-heavy or high-risk work. Save the audit as a project artifact or thread note so the next pass inherits the reasoning."
+}

@@ -660,6 +660,145 @@
         }
       ],
       "notes_md": "This bundle is strongest when the output should be reusable by future runs, not only consumed once."
+    },
+    {
+      "id": "synapse-ux-lab",
+      "name": "Synapse UX Lab",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "Optimizes Synapse for self-improvement, design harvest, targeted review, and token-aware quality escalation instead of defaulting to a full second build pass.",
+      "featured": false,
+      "verified": true,
+      "sort_rank": 32,
+      "tags": ["ux", "harvest", "self-improvement", "benchmark", "token-efficiency"],
+      "recommended_case_modes": ["harvest", "benchmark", "repair", "challenge"],
+      "recommended_mission_profiles": ["self-improve-synapse", "design-harvest", "ux-refresh", "token-efficient-review"],
+      "asset_refs": [
+        {"kind": "component", "id": "provenance-aware", "label": "Provenance aware", "summary": "Keeps harvested reference work auditable and adaptation-conscious."},
+        {"kind": "component", "id": "similarity-advisory", "label": "Similarity advisory", "summary": "Reminds the loop to compare inspiration against originality before adoption."},
+        {"kind": "component", "id": "workflow-bakeoff", "label": "Workflow bakeoff", "summary": "Useful for benchmark-led comparison between cheaper and more exhaustive loops."}
+      ],
+      "overlap_report": [
+        {"bundle_id": "parallel-harvest-bakeoff", "similarity_percent": 48, "summary": "Both care about harvest and comparison, but UX Lab is narrower and more self-improvement oriented.", "complementary": true},
+        {"bundle_id": "repo-rescue-lab", "similarity_percent": 22, "summary": "Both use review discipline, but UX Lab biases toward design/quality optimization instead of repo rescue.", "complementary": true},
+        {"bundle_id": "deep-research-council", "similarity_percent": 19, "summary": "Low overlap; this bundle is execution and review-loop oriented, not research-verdict oriented.", "complementary": true}
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Raises UX and implementation quality by inserting harvest, skeptic review, QA, and judge passes only when the evidence says they are worth it.",
+        "token_savings_summary": "Starts with the cheapest targeted reviewer and escalates only when the task risk, benchmark, or judge result justifies a stronger pass.",
+        "speed_gain_summary": "Shortens improvement loops by making provenance, review reasons, and benchmark comparison reusable defaults instead of repeated setup.",
+        "best_for": ["self-improvement runs", "design remix passes", "UX-heavy benchmarks", "review before rewrite"],
+        "caveats": ["This bundle is review-heavy; pair it with a generation bundle when the task is net-new product construction."]
+      },
+      "roles": [
+        {
+          "id": "design-harvest-lead",
+          "name": "Design Harvest Lead",
+          "description": "Converts authorized references into project-ready briefs, components, and adaptation notes.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Capture provenance, turn references into reusable project artifacts, and keep originality notes explicit.",
+          "enabled": true,
+          "sort_order": 34
+        },
+        {
+          "id": "skeptic-reviewer",
+          "name": "Skeptic Reviewer",
+          "description": "Pushes back on weak evidence, fragile UX decisions, and unnecessary escalation.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Assume the current pass missed something important. Hunt for risk, weak proof, and the cheaper next move.",
+          "enabled": true,
+          "sort_order": 36
+        },
+        {
+          "id": "qa-hunter",
+          "name": "QA Hunter",
+          "description": "Looks for regressions, broken states, and verification gaps before a self-improvement run claims success.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Break the happy path, verify the touched surface, and surface the smallest missing proof that still matters.",
+          "enabled": true,
+          "sort_order": 38
+        },
+        {
+          "id": "token-steward",
+          "name": "Token Steward",
+          "description": "Decides whether the loop should stop, escalate, or compare more candidates based on risk versus spend.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "lead",
+          "context_mode": "standard",
+          "role_tier": "supervisor",
+          "can_delegate": true,
+          "prompt_preamble_md": "Prefer the cheapest pass that still protects quality. Escalate only when the evidence or benchmark says to.",
+          "enabled": true,
+          "sort_order": 20
+        }
+      ],
+      "personalities": [
+        {
+          "id": "craft-director",
+          "name": "The Craft Director",
+          "blurb": "Protects polish, hierarchy, and visual intention.",
+          "traits": ["tasteful", "clear", "intentional"],
+          "prompt_preamble_md": "Push for stronger visual hierarchy and a more deliberate UX without drifting into generic UI.",
+          "voice": "measured",
+          "sort_order": 60
+        },
+        {
+          "id": "friction-hunter",
+          "name": "The Friction Hunter",
+          "blurb": "Treats every confusing click, dead end, or vague label as a bug.",
+          "traits": ["critical", "observant", "practical"],
+          "prompt_preamble_md": "Find the places a human or AI operator would hesitate, misread, or waste effort.",
+          "voice": "direct",
+          "sort_order": 61
+        },
+        {
+          "id": "cost-keeper",
+          "name": "The Cost Keeper",
+          "blurb": "Optimizes for quality per token instead of prestige per pass.",
+          "traits": ["efficient", "strategic", "frugal"],
+          "prompt_preamble_md": "Favor targeted review and benchmarked escalation over expensive default second passes.",
+          "voice": "steady",
+          "sort_order": 62
+        }
+      ],
+      "sources": [
+        {
+          "id": "synapse-ux-lab-playbook",
+          "label": "Synapse UX Lab playbook",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Bundle note for harvest-aware self-improvement and token-efficient review loops.",
+          "metadata": {"bundle_id": "synapse-ux-lab"},
+          "notes_md": "Use this when the run should improve a real product surface, keep provenance explicit, and justify every escalation with evidence.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "synapse-ux-lab-kickoff",
+          "name": "Synapse UX Lab kickoff",
+          "description": "Start a self-improvement or harvest-driven UX pass with provenance, targeted review, and benchmark escalation already loaded.",
+          "prompt": "Start a Synapse UX Lab run. Capture the goal, gather evidence, prefer the cheapest targeted reviewer first, escalate only when the judge or benchmark rules require it, and end with a clear winner plus durable project memory updates.",
+          "icon": "sparkles",
+          "category": "workflows",
+          "tags": ["ux", "harvest", "benchmark", "token-efficiency"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "This bundle is the reusable version of the Synapse self-improver + design-harvest loop: harvest references when useful, review intentionally, benchmark the tradeoffs, and keep the project memory current."
     }
   ]
 }

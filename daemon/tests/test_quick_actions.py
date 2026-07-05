@@ -116,6 +116,8 @@ def test_to_dict_round_trips_fields(tmp_path: Path) -> None:
     assert d["icon"] == "wand"
     assert d["category"] == "workflows"
     assert d["tags"] == ["demo", "setup"]
+    assert d["launch_mode"] == "pty"
+    assert d["project_id"] is None
 
 
 _EXPECTED_BUNDLED = {
@@ -123,6 +125,11 @@ _EXPECTED_BUNDLED = {
     "new-synapse-tool",
     "explain-this-project",
     "diagnose-failing-test",
+    "improve-synapse",
+    "harvest-ui-patterns",
+    "remix-component",
+    "ux-audit-current-screen",
+    "make-this-mine",
 }
 
 

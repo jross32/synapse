@@ -1,0 +1,13 @@
+{
+  "id": "harvest-ui-patterns",
+  "name": "Harvest UI patterns",
+  "description": "Collect authorized reference URLs, capture their structure and style, and turn the findings into reusable component candidates for a target project.",
+  "icon": "globe",
+  "category": "workflows",
+  "tags": ["harvest", "design", "scraper", "components"],
+  "default_argv": ["claude"],
+  "launch_mode": "coder-thread",
+  "thread_title": "Harvest UI Patterns",
+  "prompt_filename": "HARVEST-BRIEF.md",
+  "prompt": "Use Synapse's installed Web Scraper page and project-file surfaces as the system of record. Gather one or more authorized reference URLs, capture screenshots or structure summaries, record provenance and adaptation mode, and save the resulting artifacts into the right project. Produce a reference brief, structure and style notes, at least one component candidate, and originality or adaptation notes. After the harvest, recommend whether the next pass should be implementation, UX review, QA review, token-efficiency review, or a judge pass."
+}

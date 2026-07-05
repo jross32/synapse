@@ -29,6 +29,7 @@ Key invariants:
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
 import os
 import secrets
@@ -214,6 +215,48 @@ def finalize_after_scan(
     final_path = dest_dir / blob.on_disk_name
     os.replace(blob.quarantine_path, final_path)
     return final_path
+
+
+def save_generated_file(
+    conn: sqlite3.Connection,
+    data_dir: Path,
+    *,
+    project_id: str | None,
+    original_name: str,
+    content: bytes,
+    mime: str = "text/plain",
+    source_session: str | None = None,
+) -> FileRow:
+    """Persist server-generated content through the same project-files path.
+
+    Phase 1 design-harvest artifacts should land in normal project files, not
+    in a side store, so this helper reuses the quarantine/finalize flow while
+    marking the row as a Synapse-generated upload.
+    """
+
+    blob = write_streaming_with_hash(
+        io.BytesIO(content),
+        original_name=original_name,
+        data_dir=data_dir,
+    )
+    finalize_after_scan(blob, data_dir, project_id=project_id)
+    insert_file_row(
+        conn,
+        file_id=blob.file_id,
+        project_id=project_id,
+        original_name=original_name,
+        on_disk_name=blob.on_disk_name,
+        mime=mime,
+        size_bytes=blob.size_bytes,
+        sha256=blob.sha256,
+        source="upload",
+        source_session=source_session,
+        scan_result="clean",
+        scan_engine="synapse-generated",
+    )
+    row = get_file(conn, blob.file_id)
+    assert row is not None
+    return row
 
 
 # ── DB ────────────────────────────────────────────────────────────────────

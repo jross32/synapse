@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .errors import not_found
+from .quality_os import ReviewVerdict
 from .time_utils import from_iso, to_iso, utc_now
 
 
@@ -121,6 +122,7 @@ class CoderReviewPass(BaseModel):
     status: CoderReviewPassStatus = CoderReviewPassStatus.PENDING
     title: str = "Review pass"
     summary_md: str = ""
+    verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
     coder_run_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
@@ -229,7 +231,13 @@ class CoderReviewPassCreate(BaseModel):
     requested_model: str | None = None
     title: str = "Review pass"
     summary_md: str = ""
+    verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CoderReviewPassVerdictRequest(BaseModel):
+    verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
+    summary_md: str | None = None
 
 
 class CoderWorkspacePreferencesUpdate(BaseModel):
@@ -370,6 +378,7 @@ def _row_to_review_pass(row: sqlite3.Row) -> CoderReviewPass:
         status=CoderReviewPassStatus(row["status"]),
         title=row["title"] or "Review pass",
         summary_md=row["summary_md"] or "",
+        verdict=ReviewVerdict.model_validate(_loads_dict(row["verdict_json"])),
         coder_run_id=row["coder_run_id"],
         metadata=_loads_dict(row["metadata_json"]),
         created_at=from_iso(row["created_at"]),
@@ -682,8 +691,8 @@ def create_review_pass(
         """
         INSERT INTO coder_review_passes (
             id, thread_id, requested_runtime_id, requested_provider, requested_model,
-            status, title, summary_md, coder_run_id, metadata_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+            status, title, summary_md, verdict_json, coder_run_id, metadata_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
         """,
         (
             pass_id,
@@ -694,6 +703,7 @@ def create_review_pass(
             CoderReviewPassStatus.PENDING.value,
             payload.title.strip() or "Review pass",
             payload.summary_md,
+            _dumps(payload.verdict.model_dump(mode="json")),
             _dumps(payload.metadata),
             now,
             now,
@@ -802,6 +812,29 @@ def attach_run_to_review_pass(conn: sqlite3.Connection, review_pass_id: str, run
         "UPDATE coder_review_passes SET coder_run_id = ?, status = ?, updated_at = ? WHERE id = ?",
         (run_id, CoderReviewPassStatus.RUNNING.value, now, review_pass_id),
     )
+
+
+def update_review_pass_verdict(
+    conn: sqlite3.Connection,
+    review_pass_id: str,
+    payload: CoderReviewPassVerdictRequest,
+) -> CoderReviewPass:
+    current = get_review_pass(conn, review_pass_id)
+    now = utc_now()
+    conn.execute(
+        """
+        UPDATE coder_review_passes
+        SET verdict_json = ?, summary_md = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            _dumps(payload.verdict.model_dump(mode="json")),
+            payload.summary_md if payload.summary_md is not None else current.summary_md,
+            to_iso(now),
+            review_pass_id,
+        ),
+    )
+    return get_review_pass(conn, review_pass_id)
 
 
 def record_run_input(conn: sqlite3.Connection, session_id: str) -> CoderRun | None:
