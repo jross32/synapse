@@ -139,6 +139,14 @@
       "summary": "When two AI coders share one repo, Synapse holds one live picture of who's editing what: a presence registry, advisory file-lane claims with overlap detection, a git collision detector, disk-truth migration/ADR numbering, and a pre-commit gate. Cockpit panel + shared Plan to follow."
     },
     {
+      "id": "qa-bug-hunt-team",
+      "title": "QA & Bug-Hunt agent team",
+      "status": "in_progress",
+      "phase": "AI-coding power",
+      "adr": "ADR-0025",
+      "summary": "A token-efficient bug-finding team: browser-driving agents act like real mobile/desktop users, hunt UI/UX/accessibility bugs, and file screenshot-proof findings as Quality OS gates. Per-role MCP binding + a lean role/persona bundle + a launchable Bug-Hunt Squad shipped; per-worker token accounting + a topology benchmark next."
+    },
+    {
       "id": "fast-money",
       "title": "Fast Money launcher",
       "status": "shipped",

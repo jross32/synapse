@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.16] -- 2026-07-06
+
+### Added
+- **Launchable `bug-hunt-squad` quick-action + ADR-0025 (Plan 3 Phase 1 complete for the MVP).**
+  Point it at a running app URL: it assembles the QA & Bug-Hunt Squad, claims a coordination
+  lane per surface (ADR-0024) so hunters don't overlap, launches browser hunters that drive the
+  app via the Playwright MCP as distinct personas/viewports, and records findings as Quality OS
+  evidence + auto-opened blocking gates. Modeled on `autonomous-boss` (a launchable prompt, not a
+  daemon engine). ADR-0025 documents the feature + an honest maturity boundary: the per-worker
+  token accounting, the topology benchmark, auto-spawn + budgets, and the live browser E2E are the
+  next phases.
+
 ## [0.1.36.15] -- 2026-07-05
 
 ### Added
