@@ -492,6 +492,9 @@ export interface AgentRoleTemplate {
   prompt_preamble_md: string;
   enabled: boolean;
   sort_order: number;
+  // MCP servers this role's workers receive (ADR-0025): null/undefined -> all
+  // enabled; [] -> none; [ids] -> only those.
+  mcp_server_ids?: string[] | null;
   created_at: string;
   updated_at: string;
 }

@@ -271,11 +271,17 @@ def delete_server(conn: sqlite3.Connection, server_id: str) -> None:
     conn.execute("DELETE FROM mcp_servers WHERE id = ?", (server_id,))
 
 
-def build_mcp_config(servers: list[McpServer]) -> dict:
-    """A Claude-compatible ``.mcp.json`` from the user's enabled servers."""
+def build_mcp_config(servers: list[McpServer], allow_ids: list[str] | None = None) -> dict:
+    """A Claude-compatible ``.mcp.json`` from the user's enabled servers.
+
+    ``allow_ids`` scopes which servers to include (per-role binding, ADR-0025):
+    ``None`` -> all enabled (default); a list -> only servers whose id is in it
+    (so an empty list yields no servers)."""
     out: dict[str, dict] = {}
     for s in servers:
         if not s.enabled:
+            continue
+        if allow_ids is not None and s.id not in allow_ids:
             continue
         if s.transport == McpTransport.HTTP and s.url:
             out[s.id] = {"type": "http", "url": s.url}

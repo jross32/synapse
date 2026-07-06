@@ -39,15 +39,20 @@ from .storage import Storage
 from .ws import Event, EventBus
 
 
-def _write_mcp_config(storage: Storage) -> Path | None:
+def _write_mcp_config(storage: Storage, role=None) -> Path | None:
     """Generate a Claude ``--mcp-config`` file from the user's enabled MCP
-    servers (ADR-0017 MW2). Returns the path, or None if there's nothing to wire
-    in. Lives in the data dir, so a project's own ``.mcp.json`` is untouched."""
+    servers (ADR-0017 MW2), scoped to the role's binding (ADR-0025): a role's
+    ``mcp_server_ids`` of None -> all enabled; [] -> none; [ids] -> only those.
+    Returns the path, or None if there's nothing to wire in. Lives in the data
+    dir (project's own ``.mcp.json`` untouched); the filename is keyed by role
+    so different roles don't clobber each other's config."""
     servers = [s for s in mcp_servers_module.list_servers(storage.conn) if s.enabled]
-    config = mcp_servers_module.build_mcp_config(servers)
+    allow_ids = role.mcp_server_ids if role is not None else None
+    config = mcp_servers_module.build_mcp_config(servers, allow_ids)
     if not config.get("mcpServers"):
         return None
-    path = storage.data_dir / "mcp" / "claude-mcp.json"
+    slug = role.id if role is not None else "all"
+    path = storage.data_dir / "mcp" / f"claude-mcp-{slug}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     return path
@@ -288,7 +293,7 @@ def build_agent_squads_router(
             # MW2). `--mcp-config` merges additively, so the project's own
             # `.mcp.json` (if any) is left untouched.
             if chosen_runtime == "claude":
-                mcp_config_path = _write_mcp_config(storage)
+                mcp_config_path = _write_mcp_config(storage, role)
                 if mcp_config_path is not None:
                     argv = [*argv, "--mcp-config", str(mcp_config_path)]
             session_id = squads._new_id()

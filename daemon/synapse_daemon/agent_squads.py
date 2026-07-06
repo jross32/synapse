@@ -64,6 +64,9 @@ class AgentRoleTemplate(BaseModel):
     prompt_preamble_md: str = ""
     enabled: bool = True
     sort_order: int = 0
+    # MCP servers this role's workers receive (ADR-0025): None -> all enabled
+    # (backward-compatible default); [] -> none; [ids] -> only those.
+    mcp_server_ids: list[str] | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -80,6 +83,7 @@ class AgentRoleTemplateCreate(BaseModel):
     prompt_preamble_md: str = ""
     enabled: bool = True
     sort_order: int = 0
+    mcp_server_ids: list[str] | None = None
 
 
 class AgentRoleTemplateUpdate(BaseModel):
@@ -93,6 +97,7 @@ class AgentRoleTemplateUpdate(BaseModel):
     prompt_preamble_md: str | None = None
     enabled: bool | None = None
     sort_order: int | None = None
+    mcp_server_ids: list[str] | None = None
 
 
 class AgentSquad(BaseModel):
@@ -215,6 +220,11 @@ def _row_to_role(row: sqlite3.Row) -> AgentRoleTemplate:
         prompt_preamble_md=row["prompt_preamble_md"] or "",
         enabled=bool(row["enabled"]),
         sort_order=row["sort_order"],
+        mcp_server_ids=(
+            _loads_list_or_none(row["mcp_server_ids_json"])
+            if "mcp_server_ids_json" in row.keys()
+            else None
+        ),
         created_at=from_iso(row["created_at"]),
         updated_at=from_iso(row["updated_at"]),
     )
@@ -267,6 +277,13 @@ def _loads_list(payload: str | None) -> list[str]:
     except json.JSONDecodeError:
         return []
     return [str(item) for item in raw] if isinstance(raw, list) else []
+
+
+def _loads_list_or_none(payload: str | None) -> list[str] | None:
+    """NULL column -> None (inherit-all); otherwise the parsed list (incl []-> none)."""
+    if payload is None:
+        return None
+    return _loads_list(payload)
 
 
 def _loads_dict(payload: str | None) -> dict[str, Any]:
@@ -596,8 +613,8 @@ def create_role_template(
         INSERT INTO agent_role_templates (
             id, name, description, preferred_runtimes_json, default_visibility,
             context_mode, role_tier, can_delegate, prompt_preamble_md, enabled, sort_order,
-            created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            mcp_server_ids_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             payload.id,
@@ -611,6 +628,7 @@ def create_role_template(
             payload.prompt_preamble_md,
             1 if payload.enabled else 0,
             payload.sort_order,
+            json.dumps(payload.mcp_server_ids) if payload.mcp_server_ids is not None else None,
             to_iso(now),
             to_iso(now),
         ),
@@ -634,7 +652,7 @@ def update_role_template(
         UPDATE agent_role_templates
         SET name = ?, description = ?, preferred_runtimes_json = ?, default_visibility = ?,
             context_mode = ?, role_tier = ?, can_delegate = ?, prompt_preamble_md = ?, enabled = ?,
-            sort_order = ?, updated_at = ?
+            sort_order = ?, mcp_server_ids_json = ?, updated_at = ?
         WHERE id = ?
         """,
         (
@@ -648,6 +666,7 @@ def update_role_template(
             updated.prompt_preamble_md,
             1 if updated.enabled else 0,
             updated.sort_order,
+            json.dumps(updated.mcp_server_ids) if updated.mcp_server_ids is not None else None,
             to_iso(now),
             role_id,
         ),

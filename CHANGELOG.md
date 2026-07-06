@@ -10,6 +10,20 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.14] -- 2026-07-05
+
+### Added
+- **Per-role MCP binding (Plan 3 Phase 1, migration `021`).** A squad role can now
+  scope which MCP servers its workers receive via `agent_role_templates.mcp_server_ids`:
+  `null` -> all enabled (backward-compatible), `[]` -> none (token-lean roles),
+  `[ids]` -> only those (e.g. a browser-testing role gets just Playwright). The
+  `--mcp-config` written at launch is keyed per role so different roles don't clobber.
+
+### Fixed
+- **Every Claude squad worker no longer receives every enabled MCP server** — that
+  was a token cost + attack surface. Non-browser roles can run with no servers at all
+  (and skip the `--mcp-config` flag entirely); browser roles get only what they need.
+
 ## [0.1.36.13] -- 2026-07-05
 
 ### Added
