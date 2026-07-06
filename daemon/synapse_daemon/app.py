@@ -62,6 +62,7 @@ from .model_market import ModelPullManager
 from .routes_review import build_review_router
 from .routes_capture import build_capture_router
 from .routes_coordination import build_coordination_router
+from .routes_token_ledger import build_token_ledger_router
 from .routes_installed_pages import build_installed_pages_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .mcp_servers import McpServerManager
@@ -344,6 +345,12 @@ def build_app(
     # Native multi-AI coordination -- presence + advisory file lanes (ADR-0024).
     app.include_router(
         build_coordination_router(storage, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Per-work-item token accounting -- squad-worker token roll-up (ADR-0025).
+    app.include_router(
+        build_token_ledger_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

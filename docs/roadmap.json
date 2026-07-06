@@ -144,7 +144,7 @@
       "status": "in_progress",
       "phase": "AI-coding power",
       "adr": "ADR-0025",
-      "summary": "A token-efficient bug-finding team: browser-driving agents act like real mobile/desktop users, hunt UI/UX/accessibility bugs, and file screenshot-proof findings as Quality OS gates. Per-role MCP binding + a lean role/persona bundle + a launchable Bug-Hunt Squad shipped; per-worker token accounting + a topology benchmark next."
+      "summary": "A token-efficient bug-finding team: browser-driving agents act like real mobile/desktop users, hunt UI/UX/accessibility bugs, and file screenshot-proof findings as Quality OS gates. Per-role MCP binding + a lean role/persona bundle + a launchable Bug-Hunt Squad + per-worker token accounting shipped; a topology benchmark + the live browser E2E next."
     },
     {
       "id": "fast-money",

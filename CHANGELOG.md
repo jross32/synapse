@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.19] -- 2026-07-06
+
+### Added
+- **Per-work-item token accounting (Plan 3 Phase 2, migration `022`).** A squad worker can now
+  report its own token usage (`POST /agent-work-items/{id}/tokens`) and Synapse rolls it up per
+  squad grouped by role (`GET /agent-squads/{id}/token-usage`), reusing the benchmark engine's
+  provenance/source vocabulary (`reported` / `runtime_self_report`). This is the load-bearing
+  enabler for honestly proving "fewer tokens than a non-Synapse agent" -- PTY squad workers
+  reported zero tokens before. New `token_ledger` module + `routes_token_ledger`.
+
 ## [0.1.36.18] -- 2026-07-06
 
 ### Added
