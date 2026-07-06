@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.15] -- 2026-07-05
+
+### Added
+- **QA & Bug-Hunt Squad bundle (Plan 3 Phase 1).** An installable AI bundle shipping a
+  token-efficient bug-finding team: **9 roles** — browser-driving `user-simulator`,
+  `edge-case-hunter`, `state-corruptor`, `ux-critic`, `a11y-auditor` + coordination
+  `qa-lead` / `triage-steward` / `bug-report-synthesist` / `token-steward` — and **12
+  user personas** (impatient, mobile-thumb, rage-clicker, form-abuser, screen-reader-mimic,
+  first-timer, power-user, …). Browser roles carry only the Playwright MCP; coordination
+  roles carry none (dogfooding the v0.1.36.14 role->MCP binding). Findings are meant to land
+  as Quality OS evidence + gates. Ships a `qa-bug-hunt-kickoff` quick-action.
+
 ## [0.1.36.14] -- 2026-07-05
 
 ### Added

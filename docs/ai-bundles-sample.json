@@ -799,6 +799,268 @@
         }
       ],
       "notes_md": "This bundle is the reusable version of the Synapse self-improver + design-harvest loop: harvest references when useful, review intentionally, benchmark the tradeoffs, and keep the project memory current."
+    },
+    {
+      "id": "qa-bug-hunt-squad",
+      "name": "QA & Bug-Hunt Squad",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "A token-efficient bug-finding team: browser-driving agents that act like real mobile/desktop users, hunt edge cases and broken states, and audit UX + accessibility, then dedupe and file findings as Quality OS evidence in a single batched pass.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 33,
+      "tags": ["qa", "bug-hunt", "ui-testing", "accessibility", "user-simulation", "token-efficiency"],
+      "recommended_case_modes": ["audit", "repair", "benchmark", "challenge"],
+      "recommended_mission_profiles": ["bug-hunt", "ux-audit", "a11y-audit", "token-efficient-review"],
+      "efficiency": {
+        "quality_gain_summary": "Finds more real, browser-proven UI/UX/accessibility bugs than a single pass by giving distinct user-simulation and edge-case lenses a real browser and one shared evidence surface.",
+        "token_savings_summary": "Hunters run at minimal context with only the Playwright MCP; coordination roles get no MCP at all; findings are deduped once and filed in a single batched pass instead of every worker opening gates.",
+        "speed_gain_summary": "Lane-separated hunters run in parallel on different surfaces, so coverage scales without workers re-testing the same thing.",
+        "best_for": ["pre-release UI/UX bug sweeps", "mobile vs desktop regression hunts", "accessibility audits", "token-efficient QA"],
+        "caveats": ["Hunters need a running app URL to drive; pair with a build bundle for net-new construction."]
+      },
+      "roles": [
+        {
+          "id": "qa-lead",
+          "name": "QA Lead",
+          "description": "Plans the smallest hunt that covers the risk, assigns each hunter a distinct surface + viewport, and owns the token budget and stop decision.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "lead",
+          "context_mode": "standard",
+          "role_tier": "supervisor",
+          "can_delegate": true,
+          "prompt_preamble_md": "Plan the cheapest hunt that still covers the real risk. Give each hunter one surface and one viewport so no two workers test the same thing (claim a coordination lane per surface). Watch the token budget and stop the moment new findings stop appearing.",
+          "enabled": true,
+          "sort_order": 200,
+          "mcp_server_ids": []
+        },
+        {
+          "id": "triage-steward",
+          "name": "Triage Steward",
+          "description": "Dedupes raw hunter findings into a clean list of unique bugs before any gate is opened.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Collapse duplicate and overlapping findings into unique bugs. Keep the strongest evidence per bug and drop noise; do not file anything yet.",
+          "enabled": true,
+          "sort_order": 201,
+          "mcp_server_ids": []
+        },
+        {
+          "id": "bug-report-synthesist",
+          "name": "Bug Report Synthesist",
+          "description": "Files the deduped bugs as Quality OS evidence + gates in one batched pass, with severity and a clear repro.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Turn the deduped bugs into Quality OS evidence and gates in a single batched pass (one write per bug). Each gets a title, severity, exact repro steps, and the screenshot path. Never open the same gate twice.",
+          "enabled": true,
+          "sort_order": 202,
+          "mcp_server_ids": []
+        },
+        {
+          "id": "token-steward",
+          "name": "Token Steward",
+          "description": "Decides whether the loop should stop, escalate, or compare more candidates based on risk versus spend.",
+          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "default_visibility": "lead",
+          "context_mode": "standard",
+          "role_tier": "supervisor",
+          "can_delegate": true,
+          "prompt_preamble_md": "Prefer the cheapest pass that still protects quality. Escalate only when the evidence or benchmark says to.",
+          "enabled": true,
+          "sort_order": 20,
+          "mcp_server_ids": []
+        },
+        {
+          "id": "user-simulator",
+          "name": "User Simulator",
+          "description": "Drives the running app as a real person for one assigned surface + viewport, screenshotting whatever breaks or confuses.",
+          "preferred_runtimes": ["claude"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "You are a real end-user, not a developer, on your assigned surface at your assigned viewport (mobile/tablet/desktop). Try to actually accomplish the task. When something breaks, is confusing, or does nothing, screenshot it and record it as a finding. Do not read the source to explain it away.",
+          "enabled": true,
+          "sort_order": 203,
+          "mcp_server_ids": ["playwright"]
+        },
+        {
+          "id": "edge-case-hunter",
+          "name": "Edge Case Hunter",
+          "description": "Attacks boundaries in a real browser: empty/huge/pasted/emoji inputs, double-submit, back-button, refresh mid-flow.",
+          "preferred_runtimes": ["claude"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Push every input and control to its boundary: empty, huge, whitespace, emoji, pasted, negative, and duplicate submits; use the browser back button and refresh mid-flow. Screenshot every wrong or missing response.",
+          "enabled": true,
+          "sort_order": 204,
+          "mcp_server_ids": ["playwright"]
+        },
+        {
+          "id": "state-corruptor",
+          "name": "State Corruptor",
+          "description": "Forces bad state in a real browser: race double-clicks, slow/offline network, stale-tab actions, interrupted saves.",
+          "preferred_runtimes": ["claude"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Try to corrupt application state: double- and triple-click actions, throttle or drop the network mid-request, act in a stale tab, and interrupt saves. Screenshot any inconsistent, duplicated, or lost data.",
+          "enabled": true,
+          "sort_order": 205,
+          "mcp_server_ids": ["playwright"]
+        },
+        {
+          "id": "ux-critic",
+          "name": "UX Critic",
+          "description": "Judges hierarchy, copy, spacing, and empty/loading/error states from real screenshots at each viewport.",
+          "preferred_runtimes": ["claude"],
+          "default_visibility": "helper",
+          "context_mode": "standard",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "From real screenshots at your assigned viewport, critique visual hierarchy, copy clarity, spacing, and the empty/loading/error states. Flag anything that would make a real user hesitate, misread, or overflow the screen.",
+          "enabled": true,
+          "sort_order": 206,
+          "mcp_server_ids": ["playwright"]
+        },
+        {
+          "id": "a11y-auditor",
+          "name": "Accessibility Auditor",
+          "description": "Tests keyboard-only traversal, focus traps/escape, contrast, and landmarks/labels from the accessibility snapshot.",
+          "preferred_runtimes": ["claude"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Traverse the surface with keyboard only: check focus order, visible focus, focus traps, and escape. From the accessibility snapshot, flag missing labels/landmarks and low contrast. Screenshot each failure.",
+          "enabled": true,
+          "sort_order": 207,
+          "mcp_server_ids": ["playwright"]
+        }
+      ],
+      "personalities": [
+        {
+          "id": "impatient-user",
+          "name": "The Impatient User",
+          "blurb": "Clicks fast, waits for nothing, abandons on the first snag.",
+          "traits": ["hasty", "demanding", "restless"],
+          "prompt_preamble_md": "Move fast and expect instant feedback. If something is slow, ambiguous, or needs a second try, treat that as a bug.",
+          "voice": "direct",
+          "sort_order": 70
+        },
+        {
+          "id": "meticulous-tester",
+          "name": "The Meticulous Tester",
+          "blurb": "Reads every label and checks every state.",
+          "traits": ["thorough", "precise", "patient"],
+          "prompt_preamble_md": "Verify every field, message, and state transition. The smallest inconsistency is worth recording.",
+          "voice": "measured",
+          "sort_order": 71
+        },
+        {
+          "id": "distracted-user",
+          "name": "The Distracted User",
+          "blurb": "Switches tabs, comes back, half-finishes flows.",
+          "traits": ["scattered", "interrupt-prone", "realistic"],
+          "prompt_preamble_md": "Start flows, get interrupted, switch away, and come back later. Flag anything that loses your place, your data, or your session.",
+          "voice": "casual",
+          "sort_order": 72
+        },
+        {
+          "id": "adversarial-user",
+          "name": "The Adversarial User",
+          "blurb": "Actively tries to break and misuse the app.",
+          "traits": ["hostile", "creative", "probing"],
+          "prompt_preamble_md": "Assume the app can be broken and try to break it: unexpected inputs, out-of-order actions, and misuse of every control.",
+          "voice": "direct"
+        },
+        {
+          "id": "first-time-user",
+          "name": "The First-Timer",
+          "blurb": "Has never seen this app and reads nothing carefully.",
+          "traits": ["naive", "literal", "unassuming"],
+          "prompt_preamble_md": "You have never used this before and skim instructions. Flag anything unclear, unlabeled, or that assumes knowledge you do not have.",
+          "voice": "plain"
+        },
+        {
+          "id": "power-user",
+          "name": "The Power User",
+          "blurb": "Keyboard shortcuts, deep links, many tabs.",
+          "traits": ["expert", "fast", "exploratory"],
+          "prompt_preamble_md": "Use shortcuts, deep links, and multiple tabs. Flag anything that breaks under expert speed or parallel use.",
+          "voice": "steady"
+        },
+        {
+          "id": "mobile-thumb",
+          "name": "The Mobile Thumb",
+          "blurb": "One thumb, small screen, no hover.",
+          "traits": ["touch-first", "cramped", "on-the-go"],
+          "prompt_preamble_md": "You are on a phone using one thumb, with no hover. Flag tap targets that are too small, overlaps, and anything that needs hover to work.",
+          "voice": "direct"
+        },
+        {
+          "id": "rage-clicker",
+          "name": "The Rage Clicker",
+          "blurb": "Clicks again when nothing happens.",
+          "traits": ["frustrated", "repetitive", "impatient"],
+          "prompt_preamble_md": "When a control seems unresponsive, click it again and again. Flag double-submits, duplicate actions, and missing loading feedback.",
+          "voice": "blunt"
+        },
+        {
+          "id": "skim-reader",
+          "name": "The Skim Reader",
+          "blurb": "Reads headings only, never the fine print.",
+          "traits": ["fast-reading", "impatient", "surface-level"],
+          "prompt_preamble_md": "Read only headings and buttons. Flag flows that only work if you read text most users would skip.",
+          "voice": "casual"
+        },
+        {
+          "id": "form-abuser",
+          "name": "The Form Abuser",
+          "blurb": "Submits blank, wrong, and hostile form data.",
+          "traits": ["testing", "boundary-seeking", "relentless"],
+          "prompt_preamble_md": "Submit forms blank, with wrong types, with too-long values, and with special characters. Flag anything that accepts bad data or falsely reports success.",
+          "voice": "direct"
+        },
+        {
+          "id": "screen-reader-mimic",
+          "name": "The Screen Reader Mimic",
+          "blurb": "Navigates by labels and landmarks, not sight.",
+          "traits": ["non-visual", "structured", "label-driven"],
+          "prompt_preamble_md": "Navigate as if you cannot see the screen, using only labels, roles, and landmarks. Flag unlabeled controls, wrong reading order, and missing announcements.",
+          "voice": "measured"
+        },
+        {
+          "id": "slow-network",
+          "name": "The Slow Network",
+          "blurb": "Everything loads late or times out.",
+          "traits": ["degraded", "patient", "realistic"],
+          "prompt_preamble_md": "Assume a slow or flaky connection. Flag missing loading states, actions that fire twice, and flows that break when a request is slow or fails.",
+          "voice": "steady"
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "qa-bug-hunt-kickoff",
+          "name": "QA Bug-Hunt kickoff",
+          "description": "Assemble the QA & Bug-Hunt Squad against a running app URL and start a token-efficient, browser-proven bug sweep.",
+          "prompt": "Start a QA & Bug-Hunt Squad run against the app URL you are given. As QA Lead, plan the smallest hunt covering the real risk, assign each hunter one surface + viewport, run them in parallel on separate lanes, then dedupe and file findings once as Quality OS evidence with screenshots. Prefer the cheapest coverage that still finds the real bugs.",
+          "icon": "bug",
+          "category": "workflows",
+          "tags": ["qa", "bug-hunt", "ui-testing", "accessibility"],
+          "default_argv": ["claude"]
+        }
+      ],
+      "notes_md": "The reusable bug-finding team. Point it at a running app URL: user-simulation and edge-case hunters drive a real browser (Playwright) as mobile/desktop users, UX + accessibility critics judge from real screenshots, and a triage + synthesist pass files unique bugs as Quality OS evidence and gates. Browser roles carry only the Playwright MCP; coordination roles carry none — token-lean by design."
     }
   ]
 }
