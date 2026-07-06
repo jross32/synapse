@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.1.36.17`
+`0.1.36.18`
 
 ## Current milestone
 

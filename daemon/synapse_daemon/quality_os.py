@@ -12,6 +12,7 @@ import secrets
 import sqlite3
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -676,6 +677,15 @@ def run_contract(
     payload: UiContractRunRequest,
 ) -> tuple[UiContract, QualityEvidence, QualityGate | None]:
     contract = get_contract(conn, contract_id)
+    metadata = dict(payload.metadata or {})
+    if payload.artifact_path:
+        artifact = Path(payload.artifact_path)
+        # Record whether the "browser-proof" screenshot actually exists so
+        # consumers can trust the evidence instead of a dangling path. A
+        # definitive check is only possible for absolute paths -- quality_os
+        # has no data_dir to resolve a relative one from, so those stay unflagged.
+        if artifact.is_absolute():
+            metadata["artifact_present"] = artifact.exists()
     evidence = add_evidence(
         conn,
         QualityEvidence(
@@ -692,7 +702,7 @@ def run_contract(
             selector=payload.selector,
             verdict=payload.verdict,
             artifact_path=payload.artifact_path,
-            metadata=payload.metadata,
+            metadata=metadata,
             created_at=utc_now(),
         ),
     )

@@ -104,6 +104,28 @@ def test_repeated_failure_keeps_one_open_gate(tmp_path: Path) -> None:
         assert c.get(f"/api/v1/quality-gates/{gate1['id']}").json()["status"] == "open"
 
 
+def test_evidence_records_whether_artifact_screenshot_exists(tmp_path: Path) -> None:
+    # Evidence honesty: a "browser-proof" screenshot path is checked at record time
+    # so consumers can trust the proof exists (absolute paths only).
+    client = _harness(tmp_path)
+    with client as c:
+        real = tmp_path / "real-shot.png"
+        real.write_bytes(b"\x89PNG\r\n")
+        present = c.post(
+            "/api/v1/ui-contracts/project-detail-close-button/run",
+            json={"subject_type": "ai_case", "subject_id": "case-art-present", "verdict": "fail", "artifact_path": str(real)},
+        )
+        assert present.status_code == 200, present.text
+        assert present.json()["evidence"]["metadata"]["artifact_present"] is True
+
+        missing = c.post(
+            "/api/v1/ui-contracts/project-detail-close-button/run",
+            json={"subject_type": "ai_case", "subject_id": "case-art-missing", "verdict": "fail", "artifact_path": str(tmp_path / "nope.png")},
+        )
+        assert missing.status_code == 200, missing.text
+        assert missing.json()["evidence"]["metadata"]["artifact_present"] is False
+
+
 def test_impact_audit_can_open_blocking_contract_gates(tmp_path: Path) -> None:
     client = _harness(tmp_path)
     with client as c:

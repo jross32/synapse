@@ -10,6 +10,14 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.18] -- 2026-07-06
+
+### Added
+- **Quality OS evidence honesty: `artifact_present` flag.** When a hunter records
+  "browser-proof" evidence with an absolute screenshot path, the daemon now checks and
+  records whether that file actually exists (`metadata.artifact_present`), so consumers
+  (the UI, the benchmark) can trust the proof instead of accepting a dangling path.
+
 ## [0.1.36.17] -- 2026-07-06
 
 ### Fixed
