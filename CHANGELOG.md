@@ -10,6 +10,14 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.20] -- 2026-07-06
+
+### Added
+- **Squad concurrency cap (Plan 3 Phase 3, migration `023`).** A squad can set `max_concurrent`
+  (0 = no cap, the default). The work-item launch path refuses to start a new worker (409
+  "concurrency cap reached") once that many are already running, so an autonomous boss can't
+  thrash a small machine. Relaunching an already-running item is exempt.
+
 ## [0.1.36.19] -- 2026-07-06
 
 ### Added

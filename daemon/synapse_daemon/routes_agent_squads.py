@@ -33,7 +33,7 @@ from .ai_context_memory import (
 )
 from .api_versions import event_name
 from .audit import AuditRecord, audit
-from .errors import invalid
+from .errors import conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
 from .ws import Event, EventBus
@@ -277,6 +277,19 @@ def build_agent_squads_router(
         with storage.transaction() as conn:
             work_item = squads.get_work_item(conn, work_item_id)
             squad = squads.get_squad(conn, work_item.squad_id)
+            # Concurrency cap (safety, ADR-0025): don't let a squad exceed its
+            # running-worker limit -- an autonomous boss could otherwise thrash the
+            # machine. 0 = no cap; relaunching an already-running item is exempt.
+            if squad.max_concurrent and work_item.status != squads.AgentWorkItemStatus.RUNNING:
+                running = squads.count_running_work_items(conn, squad.id)
+                if running >= squad.max_concurrent:
+                    raise conflict(
+                        "agent_squad",
+                        f"Squad concurrency cap reached ({running}/{squad.max_concurrent} workers running).",
+                        squad_id=squad.id,
+                        running=running,
+                        max_concurrent=squad.max_concurrent,
+                    )
             project = projects_module.get(conn, squad.project_id)
             role = squads.get_role_template(conn, work_item.assigned_role_id or squad.lead_role_id or "planner")
             # Layer in the worker's personality (ADR-0018 MW3) so two same-role

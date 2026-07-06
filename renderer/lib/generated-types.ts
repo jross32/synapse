@@ -506,6 +506,8 @@ export interface AgentSquad {
   goal_md: string;
   status: AgentSquadStatus;
   lead_role_id: string | null;
+  // Max workers allowed to run at once; 0 = no cap (ADR-0025 safety bound).
+  max_concurrent: number;
   created_at: string;
   updated_at: string;
   last_activity_at: string;
