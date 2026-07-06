@@ -43,6 +43,38 @@ def build_mcp_servers_router(storage: Storage, manager: McpServerManager) -> API
 
     @router.post("/install", response_model=None, status_code=201)
     async def install(payload: McpServerInstallRequest, request: Request) -> dict[str, Any]:
+        if payload.catalog_id == mcp.WEB_SCRAPER_SERVER_ID:
+            if mcp.find_known_web_scraper_server(storage.conn) is not None:
+                raise mcp.conflict(
+                    "mcp_server",
+                    "Web Scraper is already installed.",
+                )
+            install_root = mcp.ensure_web_scraper_checkout(storage.data_dir)
+            with storage.transaction() as conn:
+                server = mcp.ensure_bootstrap_web_scraper(conn, source_path=install_root)
+                if server is None:
+                    raise mcp.invalid(
+                        "mcp_server",
+                        "Could not finish installing the Web Scraper MCP.",
+                    )
+                audit(
+                    conn,
+                    AuditRecord(
+                        entity_type="mcp_server",
+                        entity_id=server.id,
+                        action="install",
+                        source=AuditSource.DESKTOP,
+                        result="success",
+                        details={"transport": server.transport.value, "bootstrap": "github"},
+                    ),
+                )
+            await _publish(
+                request,
+                "installed",
+                {"server_id": server.id, "server": mcp.client_dump(server)},
+            )
+            return mcp.client_dump(server)
+
         with storage.transaction() as conn:
             server = mcp.install_server(conn, payload, _catalog())
             audit(

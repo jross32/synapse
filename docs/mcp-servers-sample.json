@@ -71,6 +71,18 @@
       "recommended": false
     },
     {
+      "id": "web-scraper",
+      "name": "Web Scraper",
+      "publisher": "The WhatIf Company",
+      "description": "Download the first-party Web Scraper MCP + UI from GitHub, wire it into Synapse automatically, and auto-start it on Synapse launch.",
+      "transport": "http",
+      "url": "http://127.0.0.1:12345/mcp",
+      "launch_command": "npm",
+      "launch_args": ["run", "mcp:http"],
+      "tags": ["web", "browser", "research", "automation", "native"],
+      "recommended": true
+    },
+    {
       "id": "custom-http",
       "name": "Custom HTTP server (template)",
       "publisher": "You",

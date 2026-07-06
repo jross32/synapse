@@ -466,7 +466,8 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
             )}
             {route.kind === 'core' && route.page === 'ai-coding' && (
               <AiCodingPage
-                initialSection={aiCodingSection}
+                section={aiCodingSection}
+                onSectionChange={setAiCodingSection}
                 pendingSessionId={pendingSession}
                 onConsumedPendingSession={() => setPendingSession(null)}
               />

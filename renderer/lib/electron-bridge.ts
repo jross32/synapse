@@ -101,18 +101,27 @@ export async function exitApp(): Promise<boolean> {
  * In Electron this goes through the main process; in a browser, only URLs
  * are honoured (via window.open).
  */
-export async function openExternal(target: string): Promise<void> {
+export async function openExternal(
+  target: string
+): Promise<{ ok: boolean; error?: string }> {
   const b = bridge();
   if (b?.openExternal) {
-    await b.openExternal(target);
-    return;
+    return b.openExternal(target);
   }
   if (/^https?:\/\//i.test(target)) {
     const opened = typeof window.open === 'function'
       ? window.open(target, '_blank', 'noopener')
       : null;
     if (!opened) {
-      window.location.assign(target);
+      return {
+        ok: false,
+        error: 'Your browser blocked the new tab. Allow popups for Synapse and try again.',
+      };
     }
+    return { ok: true };
   }
+  return {
+    ok: false,
+    error: 'Opening local paths is only available in the desktop app.',
+  };
 }

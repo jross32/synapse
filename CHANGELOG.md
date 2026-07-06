@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.37] -- 2026-07-06
+
+### Added
+- **Experimental ChatGPT Companion inside AI Coding.** Added a new
+  `ChatGPT` sub-tab with browser-managed sign-in guidance, an embedded
+  desktop bridge, visible project/chat context capture, draft/revise
+  controls, and save-back of exchanges or live workspace snapshots into
+  normal project files.
+- **First-party Web Scraper MCP bootstrap/install path.** The MCP
+  catalog now ships a native `web-scraper` entry, marketplace install can
+  clone the official GitHub repo into Synapse data, install its
+  dependencies, register the HTTP MCP server, and mark it `enabled` +
+  `autorun`.
+
+### Changed
+- **Synapse startup now repairs and auto-starts the canonical Web Scraper
+  MCP entry** when it finds a trusted local checkout, so the owner's local
+  tool comes up with Synapse without manual reconfiguration.
+- **Release docs and screenshot gallery were refreshed** for the ChatGPT
+  companion and the first-party Web Scraper install/autorun flow.
+
+### Fixed
+- **The WebSocket replay test no longer assumes startup event ids begin at
+  `1`.** It now asserts against the seeded event ids directly, so new MCP
+  startup broadcasts do not break the suite.
+- **MCP server tests now cover the first-party Web Scraper HTTP shape and
+  bootstrap path,** including catalog presence, install-time autorun, and
+  canonical launch args.
+
+
 ## [0.1.36.21] -- 2026-07-06
 
 ### Added
@@ -2413,3 +2443,4 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
+

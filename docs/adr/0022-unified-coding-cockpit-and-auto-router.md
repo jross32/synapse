@@ -39,12 +39,16 @@ and it keeps working — cheaply — even across usage limits.
 5. **Auto-continue across limits.** On a usage limit, hand off to an available
    coder now, or schedule a resume at the detected reset time — no human prompt.
    The Plan makes resumption seamless.
-6. **Legit cheap/free access only.** Local LLM (unlimited) + owner's own free-tier
-   API keys (Gemini, Groq, Cerebras, OpenRouter, GitHub Models, NVIDIA NIM, …) +
-   the **OpenAI API** (`web_search` + Deep Research) as the sanctioned "ChatGPT
-   brain." **We do NOT automate the ChatGPT web UI** — it violates OpenAI's ToS
-   (even on paid Pro) and risks account bans; the API delivers the same capability
-   legitimately.
+6. **Legit cheap/free access first, with an explicit experimental browser bridge.**
+   Local LLM (unlimited) + owner's own free-tier API keys (Gemini, Groq,
+   Cerebras, OpenRouter, GitHub Models, NVIDIA NIM, …) + the **OpenAI API**
+   (`web_search` + Deep Research) remain the sanctioned default "ChatGPT brain."
+   In addition, Synapse may ship an **opt-in ChatGPT browser-session connector**
+   for the owner's own account/workflow when the goal is to reuse the user's live
+   ChatGPT projects, folders, and conversations inside Synapse. That connector
+   must stay browser-managed (no raw Apple/OpenAI credential material copied into
+   prompts, env files, or project memory), be clearly marked experimental, and be
+   safe to disable or clear at any time.
 7. **Fused automation MCP** (first-class installable): the owner's web-scraper +
    real mouse/keyboard/vision live control, used for testing/UX and asset
    acquisition, and to dogfood Synapse itself.
@@ -61,7 +65,8 @@ ADR is the architecture any coder builds toward — no divergent parallel produc
   reimplementation.
 - Codex's committed AI Factory / Case Engine is kept and **integrated** (its run
   board becomes the cockpit's Team/Changes surfaces); its separate app is retired.
-- Usage-aware routing + auto-continue = "code 24/7" within leg, ToS-clean bounds.
+- Usage-aware routing + auto-continue = "code 24/7" within the default
+  low-cost path, with any browser-session bridge kept explicit and opt-in.
 
 ## Follow-ups (tracked in the plan: Phases Z0–Z9 + U)
 Triage + integrate Codex's WIP; fold `ai_os` in; build the cockpit + Plan; the

@@ -66,6 +66,14 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const iconPath = path.join(__dirname, '..', 'electron', 'icons', 'synapse.ico');
 const iconPathPackaged = path.join(process.resourcesPath ?? '', 'electron', 'icons', 'synapse.ico');
+const CHATGPT_EMBED_ALLOWED_HOSTS = new Set([
+  'chatgpt.com',
+  'chat.openai.com',
+  'auth.openai.com',
+  'openai.com',
+  'appleid.apple.com',
+  'accounts.google.com',
+]);
 
 function resolveIconPath(): string {
   // In dev, __dirname is .../dist-electron, so the icons folder is at ../electron/icons/.
@@ -157,6 +165,28 @@ function buildDaemonLaunch(): { command: string; args: string[]; cwd: string } {
     args: ['-m', 'synapse_daemon', '--port', String(daemonPort), '--data-dir', 'data'],
     cwd: repoRoot,
   };
+}
+
+function shouldKeepPopupInApp(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    const host = url.hostname.toLowerCase();
+    if (CHATGPT_EMBED_ALLOWED_HOSTS.has(host)) return true;
+    return Array.from(CHATGPT_EMBED_ALLOWED_HOSTS).some(
+      (allowedHost) => host === allowedHost || host.endsWith(`.${allowedHost}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function shouldAllowEmbeddedChatgptUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === 'https:' && shouldKeepPopupInApp(rawUrl);
+  } catch {
+    return false;
+  }
 }
 
 function spawnDaemon(): ChildProcess {
@@ -430,6 +460,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webviewTag: true,
     },
   });
 
@@ -716,6 +747,50 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  app.on('web-contents-created', (_event, contents) => {
+    contents.on('will-attach-webview', (event, webPreferences, params) => {
+      delete webPreferences.preload;
+      webPreferences.nodeIntegration = false;
+      webPreferences.contextIsolation = true;
+      webPreferences.sandbox = true;
+      webPreferences.webSecurity = true;
+
+      const src = typeof params.src === 'string' ? params.src : '';
+      const partition =
+        typeof params.partition === 'string' ? params.partition : '';
+      if (
+        partition !== 'persist:synapse-chatgpt' ||
+        !shouldAllowEmbeddedChatgptUrl(src)
+      ) {
+        event.preventDefault();
+      }
+    });
+
+    contents.setWindowOpenHandler(({ url }) => {
+      if (contents.getType() === 'webview' && shouldKeepPopupInApp(url)) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            width: 1200,
+            height: 800,
+            minWidth: 960,
+            minHeight: 640,
+            backgroundColor: '#0b1020',
+            icon: resolveIconPath(),
+            webPreferences: {
+              contextIsolation: true,
+              nodeIntegration: false,
+              sandbox: false,
+            },
+          },
+        };
+      }
+      void shell.openExternal(url);
+      return { action: 'deny' };
+    });
+  });
+
   refuseAdminIfNeeded();
   let daemonBootError: Error | null = null;
 

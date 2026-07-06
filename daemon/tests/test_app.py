@@ -133,8 +133,8 @@ def test_cors_allows_vite_dev_origin(harness) -> None:
 def test_websocket_replay_handshake(harness) -> None:
     c, app, storage, bus = harness
 
-    _seed_event(bus, name="v1.tick", payload={"i": 1})
-    _seed_event(bus, name="v1.tick", payload={"i": 2})
+    first = _seed_event(bus, name="v1.tick", payload={"i": 1})
+    second = _seed_event(bus, name="v1.tick", payload={"i": 2})
 
     token = app.state.auth.local_token
     with c.websocket_connect("/api/v1/ws") as ws:
@@ -142,8 +142,8 @@ def test_websocket_replay_handshake(harness) -> None:
         message = ws.receive_json()
         assert message["type"] == "replay"
         replayed_ids = [e["id"] for e in message["events"]]
-        assert replayed_ids == [1, 2]
-        assert message["last_event_id"] == 2
+        assert replayed_ids[-2:] == [first.id, second.id]
+        assert message["last_event_id"] == second.id
 
 
 def test_websocket_replay_window_exceeded(harness) -> None:

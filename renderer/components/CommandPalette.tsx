@@ -20,6 +20,7 @@ import {
   Globe,
   Home,
   Inbox,
+  MessagesSquare,
   Plus,
   Rocket,
   Search,
@@ -139,6 +140,13 @@ function buildCommands(args: {
       icon: Inbox,
       searchString: 'review inbox approvals ai coding',
       intent: { page: 'ai-coding', section: 'review' },
+    },
+    {
+      id: 'ai-coding-chatgpt',
+      label: 'ChatGPT Companion',
+      icon: MessagesSquare,
+      searchString: 'chatgpt companion prompts save back browser login apple openai project memory',
+      intent: { page: 'ai-coding', section: 'chatgpt' },
     },
     {
       id: 'ai-factory',

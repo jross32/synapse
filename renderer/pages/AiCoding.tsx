@@ -1,35 +1,31 @@
-import { useEffect, useState } from 'react';
-import { Bot, Inbox, Sparkles } from 'lucide-react';
+import { Bot, Inbox, MessagesSquare, Sparkles } from 'lucide-react';
 
 import type { AiCodingSection } from '@shared/nav';
 import { cn } from '@shared/utils';
 import { PageHeader } from '../components/PageHeader';
 import { AssistantPage } from './Assistant';
+import { ChatgptCompanionPage } from './ChatgptCompanion';
 import { CoderWorkspacePage } from './CoderWorkspace';
 import { ReviewPage } from './Review';
 
 export interface AiCodingPageProps {
-  initialSection?: AiCodingSection;
+  section?: AiCodingSection;
+  onSectionChange?: (section: AiCodingSection) => void;
   pendingSessionId?: string | null;
   onConsumedPendingSession?: () => void;
 }
 
 export function AiCodingPage({
-  initialSection = 'sessions',
+  section = 'sessions',
+  onSectionChange,
   pendingSessionId,
   onConsumedPendingSession,
 }: AiCodingPageProps): JSX.Element {
-  const [section, setSection] = useState<AiCodingSection>(initialSection);
-
-  useEffect(() => {
-    setSection(initialSection);
-  }, [initialSection]);
-
   return (
-    <div className='flex flex-col gap-6'>
+    <div className='flex min-h-[72vh] flex-col gap-6'>
       <PageHeader
         title='AI Coding'
-        subtitle='Your coder workspace: project threads, live runtimes, your private assistant, and the review inbox in one place.'
+        subtitle='Your coder workspace: project threads, runtime switching, ChatGPT companion work, your private assistant, and the review inbox in one place.'
       />
 
       <div
@@ -39,21 +35,27 @@ export function AiCodingPage({
       >
         <TopTab
           active={section === 'sessions'}
-          onClick={() => setSection('sessions')}
+          onClick={() => onSectionChange?.('sessions')}
           icon={Sparkles}
           label='Workspace'
         />
         <TopTab
           active={section === 'assistant'}
-          onClick={() => setSection('assistant')}
+          onClick={() => onSectionChange?.('assistant')}
           icon={Bot}
           label='Assistant'
         />
         <TopTab
           active={section === 'review'}
-          onClick={() => setSection('review')}
+          onClick={() => onSectionChange?.('review')}
           icon={Inbox}
           label='Review'
+        />
+        <TopTab
+          active={section === 'chatgpt'}
+          onClick={() => onSectionChange?.('chatgpt')}
+          icon={MessagesSquare}
+          label='ChatGPT'
         />
       </div>
 
@@ -66,6 +68,7 @@ export function AiCodingPage({
       )}
       {section === 'assistant' && <AssistantPage headerless />}
       {section === 'review' && <ReviewPage headerless />}
+      {section === 'chatgpt' && <ChatgptCompanionPage headerless />}
     </div>
   );
 }
@@ -86,6 +89,7 @@ function TopTab({
       type='button'
       role='tab'
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={cn(
         'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',

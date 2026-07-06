@@ -33,7 +33,7 @@ export type AppsSection = 'projects' | 'running';
 export type ToolsSection = 'tools' | 'marketplace' | 'mcp' | 'installed-pages';
 export type ToolsTab = 'installed' | 'discover';
 export type MarketplaceSection = 'tools' | 'bundles' | 'models' | 'workers' | 'squads';
-export type AiCodingSection = 'sessions' | 'assistant' | 'review';
+export type AiCodingSection = 'sessions' | 'assistant' | 'review' | 'chatgpt';
 
 export type NavigationIntent =
   | { page: 'home' | 'ai-factory' | 'settings' | 'whatsnew' }
@@ -105,7 +105,7 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     id: 'ai-coding',
     label: 'AI Coding',
     icon: Sparkles,
-    description: 'Sessions, assistant, and review inbox',
+    description: 'Coder workspace, ChatGPT companion, assistant, and review inbox',
     section: 'ai',
   },
   {

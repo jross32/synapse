@@ -6,9 +6,9 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.36.12`, with a self-improver + design-harvest wave in the current working tree). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. The newest wave adds a bundled Synapse-self workspace, guarded self-improvement endpoints, a dedicated Web Scraper harvest workspace, and token-aware review presets. **540 automated tests pass.**
+> **Status:** early development (`v0.1.37`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. The newest shipped wave adds a bundled Synapse-self workspace, a dedicated Web Scraper harvest workspace, an experimental **ChatGPT Companion** in AI Coding, and a first-party **Web Scraper MCP** install/auto-start path. **589 automated tests pass.**
 >
-> 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit, and the Web Scraper harvest workspace), refreshed as the UI evolves.
+> 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit, the ChatGPT companion, and the Web Scraper harvest workspace), refreshed as the UI evolves.
 
 ---
 
@@ -58,6 +58,9 @@ If that's all you needed to know, skip to **[Getting started](#getting-started)*
 
 - **🛠 Improve Synapse from inside Synapse** — a bundled **Synapse Self** project points at the local repo, the **Improve Synapse** quick-action opens a real coder thread there, and guarded self-improvement endpoints expose a health report plus the first safe developer-loop test actions.
   *Why it's better:* the AI no longer needs a side-process or a fresh terminal ritual every time it wants to help Synapse itself. The same thread, review, benchmark, and project-record surfaces used for any other app can now be used on Synapse.
+
+- **💬 Use ChatGPT from inside Synapse** — the new experimental **ChatGPT Companion** keeps sign-in browser-managed, lets Synapse see the visible project/chat context, drafts prompts, captures visible replies, and saves the parts you choose back into the current Synapse project as normal files.
+  *Why it's better:* you keep the familiar ChatGPT workflow, but the useful output stops being trapped in one chat tab. Synapse turns it into durable project memory another AI can continue from.
 
 - **👥 Build AI teams ("squads")** — assemble a team of AI workers, each with a **role** (`boss` / `supervisor` / `worker` tier — planner, designer, reviewer, tester…) and a **personality** (five shipped built-ins: Pragmatist, Perfectionist, Skeptic, Visionary, Mediator), so they collaborate and challenge each other's decisions instead of one model rubber-stamping itself. A boss delegates to a supervisor, who delegates to workers, and each hands off with a structured summary — not a vague "done!".
   *Why it's better:* a single chatbot session is one voice checking its own work. A squad has a reviewer role whose whole job is to disagree when something's wrong, the same reason human teams do code review.
@@ -119,6 +122,8 @@ None of this requires you to know how to code. You describe the goal; the squad 
 ## Using the Web Scraper MCP through Synapse
 
 Synapse's **fused automation MCP** (ADR-0022) is the owner's own general-purpose web scraper, wired in as a first-class, installable marketplace tool. Once installed, *any* AI operating inside Synapse — not just the one you're chatting with — can call it directly. It's proxied through the daemon (`GET/POST /api/v1/installed-pages/web-scraper/...`), so the renderer and any AI session talk to one trusted origin instead of hitting arbitrary external MCP servers.
+
+The install/start path is now first-party too: on the owner's machine Synapse can detect a nearby trusted local checkout and auto-bootstrap it on startup; on a fresh GitHub install, Marketplace install can clone the official repo into `data/vendor/web-scraper`, install dependencies, register the MCP server, and auto-start it on later Synapse launches.
 
 There is now also a **dedicated Web Scraper harvest workspace inside Synapse itself**: paste one or more authorized reference URLs, capture structure/style notes, generate React/CSS candidates, record provenance and adaptation mode, compare **reference -> generated -> adopted**, and save the artifacts straight back into a normal project's files.
 
@@ -240,7 +245,7 @@ pip install -e ".[dev]"
 
 # checks
 npm run typecheck                 # TypeScript passes
-(cd daemon && python -m pytest -q) # 540 tests pass + 12 skipped
+(cd daemon && python -m pytest -q) # 589 tests pass + 12 skipped
 
 # run the dev stack (daemon + Vite + Electron)
 synapse.cmd

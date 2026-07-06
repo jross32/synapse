@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-07-05",
+  "generated_at": "2026-07-06",
   "items": [
     {
       "id": "ai-council-review",
@@ -72,7 +72,7 @@
       "status": "shipped",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0017",
-      "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically."
+      "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically, including a first-party Web Scraper entry that can download the official repo, configure it, and auto-start with Synapse."
     },
     {
       "id": "launch-art",
@@ -113,6 +113,14 @@
       "phase": "AI-coding power",
       "adr": "ADR-0007",
       "summary": "A bundled Synapse Self workspace, an Improve Synapse quick-action, guarded health/test endpoints, and explicit review/benchmark/record loop scaffolding so Synapse can improve itself through Synapse-native workflows."
+    },
+    {
+      "id": "chatgpt-companion",
+      "title": "ChatGPT companion",
+      "status": "in_progress",
+      "phase": "AI-coding power",
+      "adr": "ADR-0022",
+      "summary": "An experimental AI Coding sub-tab that keeps ChatGPT sign-in browser-managed, surfaces visible project/chat context, drafts prompts, captures visible replies, and saves exchanges or live workspace snapshots back into a chosen Synapse project."
     },
     {
       "id": "design-harvest-workspace",

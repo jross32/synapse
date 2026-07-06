@@ -18,14 +18,21 @@ import sqlite3
 import subprocess
 import sys
 from enum import Enum
+from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
 from .errors import conflict, invalid, not_found
-from .runtime_paths import bundled_mcp_servers_sample
+from .runtime_paths import bundled_mcp_servers_sample, repo_root
 from .secrets import SECRET_PLACEHOLDER
 from .time_utils import to_iso, utc_now
+
+WEB_SCRAPER_SERVER_ID = "web-scraper"
+WEB_SCRAPER_LEGACY_SERVER_ID = "wbscrper"
+WEB_SCRAPER_KNOWN_IDS = (WEB_SCRAPER_SERVER_ID, WEB_SCRAPER_LEGACY_SERVER_ID)
+WEB_SCRAPER_GIT_URL = "https://github.com/jross32/wbscrper.git"
+WEB_SCRAPER_DEFAULT_URL = "http://127.0.0.1:12345/mcp"
 
 
 class McpTransport(str, Enum):
@@ -115,6 +122,157 @@ class McpServerUpdate(BaseModel):
     launch_command: str | None = None
     launch_args: list[str] | None = None
     env: dict[str, str] | None = None
+
+
+def preferred_npm_command() -> str:
+    return "npm.cmd" if sys.platform == "win32" else "npm"
+
+
+def web_scraper_install_dir(data_dir: Path) -> Path:
+    return Path(data_dir) / "vendor" / "web-scraper"
+
+
+def looks_like_web_scraper_repo(path: Path) -> bool:
+    candidate = Path(path)
+    if not (candidate / "mcp-server.js").exists():
+        return False
+    package_json = candidate / "package.json"
+    if not package_json.exists():
+        return False
+    try:
+        payload = json.loads(package_json.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return False
+    scripts = payload.get("scripts")
+    return isinstance(scripts, dict) and isinstance(scripts.get("mcp:http"), str)
+
+
+def discover_local_web_scraper_repo() -> Path | None:
+    candidates = (
+        repo_root().parent / "wbscrper",
+        Path.home() / "wbscrper",
+        Path("C:/Users/justi/wbscrper"),
+    )
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if looks_like_web_scraper_repo(resolved):
+            return resolved
+    return None
+
+
+def find_known_web_scraper_server(conn: sqlite3.Connection) -> McpServer | None:
+    for server_id in WEB_SCRAPER_KNOWN_IDS:
+        row = conn.execute("SELECT * FROM mcp_servers WHERE id = ?", (server_id,)).fetchone()
+        if row is not None:
+            return _row_to_server(row)
+    return None
+
+
+def _run_setup_command(args: list[str], *, cwd: Path, step: str) -> None:
+    try:
+        completed = subprocess.run(  # noqa: S603 -- trusted bootstrap commands
+            args,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise invalid(
+            "mcp_server",
+            f"Could not {step} because `{args[0]}` is not installed or not on PATH.",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise invalid("mcp_server", f"Could not {step}: {exc}") from exc
+    if completed.returncode == 0:
+        return
+    tail = "\n".join(
+        line for line in (completed.stderr or completed.stdout or "").splitlines()[-8:] if line.strip()
+    )
+    detail = f" {tail}" if tail else ""
+    raise invalid("mcp_server", f"Could not {step}.{detail}")
+
+
+def ensure_web_scraper_checkout(data_dir: Path) -> Path:
+    target = web_scraper_install_dir(Path(data_dir))
+    if looks_like_web_scraper_repo(target):
+        return target
+    if target.exists() and any(target.iterdir()):
+        raise invalid(
+            "mcp_server",
+            f"The Web Scraper install folder already exists at {target}, but it does not look like the official repo.",
+        )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _run_setup_command(
+        ["git", "clone", WEB_SCRAPER_GIT_URL, str(target)],
+        cwd=target.parent,
+        step="download the Web Scraper MCP from GitHub",
+    )
+    if not looks_like_web_scraper_repo(target):
+        raise invalid(
+            "mcp_server",
+            f"The downloaded Web Scraper bundle at {target} is missing its MCP entrypoint.",
+        )
+    if not (target / "node_modules").exists():
+        _run_setup_command(
+            [preferred_npm_command(), "install"],
+            cwd=target,
+            step="install the Web Scraper MCP dependencies",
+        )
+    return target
+
+
+def web_scraper_install_request(source_path: Path) -> McpServerInstallRequest:
+    return McpServerInstallRequest(
+        id=WEB_SCRAPER_SERVER_ID,
+        name="Web Scraper",
+        publisher="The WhatIf Company",
+        description=(
+            "First-party Web Scraper MCP + UI, downloaded from GitHub and "
+            "wired into Synapse as a native installed page."
+        ),
+        transport=McpTransport.HTTP,
+        url=WEB_SCRAPER_DEFAULT_URL,
+        launch_command=preferred_npm_command(),
+        launch_args=["--prefix", str(source_path), "run", "mcp:http"],
+    )
+
+
+def ensure_bootstrap_web_scraper(
+    conn: sqlite3.Connection,
+    *,
+    source_path: Path | None = None,
+) -> McpServer | None:
+    source = source_path or discover_local_web_scraper_repo()
+    if source is None or not looks_like_web_scraper_repo(source):
+        return None
+
+    server = find_known_web_scraper_server(conn)
+    desired = web_scraper_install_request(source)
+    if server is None:
+        server = install_server(conn, desired, McpCatalog(servers=[]))
+    elif server.transport != McpTransport.HTTP:
+        delete_server(conn, server.id)
+        server = install_server(conn, desired, McpCatalog(servers=[]))
+
+    patch_kwargs: dict[str, object] = {}
+    if server.url != desired.url:
+        patch_kwargs["url"] = desired.url
+    if server.launch_command != desired.launch_command:
+        patch_kwargs["launch_command"] = desired.launch_command
+    if server.launch_args != desired.launch_args:
+        patch_kwargs["launch_args"] = desired.launch_args
+    if not server.enabled:
+        patch_kwargs["enabled"] = True
+    if not server.autorun:
+        patch_kwargs["autorun"] = True
+    if patch_kwargs:
+        server = update_server(conn, server.id, McpServerUpdate(**patch_kwargs))
+    return server
 
 
 def _loads(value: str | None, default):  # noqa: ANN001

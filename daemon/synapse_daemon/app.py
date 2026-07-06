@@ -378,9 +378,38 @@ def build_app(
     async def _autostart_mcp_servers() -> None:
         from . import mcp_servers as _mcp
 
+        bootstrapped_server = None
+        with storage.transaction() as conn:
+            bootstrapped_server = _mcp.ensure_bootstrap_web_scraper(conn)
+
+        if bootstrapped_server is not None:
+            await bus.publish(
+                event_name("mcp_server", "updated"),
+                {
+                    "reason": "bootstrapped",
+                    "server_id": bootstrapped_server.id,
+                    "server": _mcp.client_dump(bootstrapped_server),
+                },
+            )
+
         for server in _mcp.list_servers(storage.conn):
-            if server.enabled and server.autorun:
-                mcp_manager.start(server)
+            if not (server.enabled and server.autorun):
+                continue
+            status, detail = await mcp_manager.status(server)
+            started = False
+            if status == _mcp.McpServerStatus.STOPPED:
+                started = mcp_manager.start(server)
+                status, detail = await mcp_manager.status(server)
+            await bus.publish(
+                event_name("mcp_server", "updated"),
+                {
+                    "reason": "autorun",
+                    "server_id": server.id,
+                    "started": started,
+                    "status": status.value,
+                    "detail": detail,
+                },
+            )
     app.router.on_startup.append(_autostart_mcp_servers)
     # What's New + Roadmap surface (ADR-0019) -- serves the changelog + roadmap.
     app.include_router(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import socket
 from pathlib import Path
 
@@ -37,6 +38,16 @@ def _server(**kw) -> McpServer:
     return McpServer(**base)
 
 
+def _fake_web_scraper_repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "mcp-server.js").write_text("// fake web scraper mcp\n", encoding="utf-8")
+    (path / "package.json").write_text(
+        json.dumps({"name": "web-scraper-app", "scripts": {"mcp:http": "node mcp-server.js --http"}}),
+        encoding="utf-8",
+    )
+    return path
+
+
 # ── Catalog + CRUD via HTTP ──────────────────────────────────────────────────
 
 
@@ -46,6 +57,7 @@ def test_registry_lists_curated_servers(tmp_path: Path) -> None:
     assert res.status_code == 200, res.text
     by_id = {s["id"]: s for s in res.json()["servers"]}
     assert "filesystem" in by_id and by_id["filesystem"]["transport"] == "stdio"
+    assert "web-scraper" in by_id and by_id["web-scraper"]["transport"] == "http"
     assert "custom-http" in by_id and by_id["custom-http"]["transport"] == "http"
     assert by_id["filesystem"]["installed"] is False
 
@@ -62,6 +74,28 @@ def test_install_from_catalog_then_status(tmp_path: Path) -> None:
     installed = client.get("/api/v1/mcp-servers").json()["servers"]
     fs = next(s for s in installed if s["id"] == "filesystem")
     assert fs["status"] == "stdio_ready"
+
+
+def test_install_web_scraper_catalog_bootstraps_autorun(tmp_path: Path, monkeypatch) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    app = build_app(storage, EventBus())
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    checkout = _fake_web_scraper_repo(tmp_path / "checkout")
+    monkeypatch.setattr(mcp, "ensure_web_scraper_checkout", lambda data_dir: checkout)
+
+    res = client.post("/api/v1/mcp-servers/install", json={"catalog_id": "web-scraper"})
+    assert res.status_code == 201, res.text
+    payload = res.json()
+    assert payload["id"] == "web-scraper"
+    assert payload["autorun"] is True
+    assert payload["enabled"] is True
+
+    stored = mcp.get_server(storage.conn, "web-scraper")
+    assert stored.launch_command in {"npm", "npm.cmd"}
+    assert stored.launch_args[:2] == ["--prefix", str(checkout)]
+    assert stored.launch_args[-2:] == ["run", "mcp:http"]
 
 
 def test_install_duplicate_is_409(tmp_path: Path) -> None:
@@ -87,6 +121,22 @@ def test_custom_requires_id_and_name(tmp_path: Path) -> None:
     client = _harness(tmp_path)
     res = client.post("/api/v1/mcp-servers/install", json={"transport": "http", "url": "http://x"})
     assert res.status_code == 422
+
+
+def test_ensure_bootstrap_web_scraper_creates_autorun_server(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    checkout = _fake_web_scraper_repo(tmp_path / "wbscrper")
+
+    with storage.transaction() as conn:
+        server = mcp.ensure_bootstrap_web_scraper(conn, source_path=checkout)
+
+    assert server is not None
+    assert server.id == "web-scraper"
+    assert server.autorun is True
+    assert server.enabled is True
+    assert server.url == "http://127.0.0.1:12345/mcp"
 
 
 def test_patch_enable_autorun_and_delete(tmp_path: Path) -> None:

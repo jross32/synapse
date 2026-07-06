@@ -149,8 +149,9 @@ and create a `project_files` row tagged `source=transcript`.
 ### Phase E — ChatGPT data import (v0.1.33, opt-in feature)
 
 The user asked to "see folders / chats" of their ChatGPT and migrate
-into the dashboard. The honest scope is **the official export**, not
-browser scraping.
+into the dashboard. The shipped v0.1.33 scope here is **the official
+export**. That remains the clean baseline even though later product
+direction may also allow an explicit opt-in browser-session connector.
 
 The flow:
 
@@ -172,11 +173,11 @@ The flow:
 5. `/api/v1/ai/context` exposes them by id so a Claude session can be
    pointed at them on prompt 1.
 
-**What is NOT happening here:**
-- Browser-automation of `chat.openai.com` (against ToS, brittle, NO).
-- OpenAI's API hitting `/conversations` (no public docs for this, would
-  need a user-supplied session token, brittle, NO).
-- Live two-way sync with ChatGPT (NO -- one-shot import only).
+**What is NOT happening in this shipped v0.1.33 slice:**
+- No browser-session connector in this phase. This step is import-only.
+- No OpenAI API hitting `/conversations` in this phase.
+- No live two-way sync with ChatGPT in this phase; this is one-shot
+  export -> import.
 
 ### Phase F — AI-driven quick-actions (v0.1.34)
 
@@ -229,8 +230,8 @@ real provisioning, separate doc.
   test. Phase A ships without AV so the file UX gets exercised before
   the scan tax is added in Phase C.
 - The ChatGPT import is one-way. Users with a "live link to my ChatGPT"
-  mental model will be disappointed; we surface clearly that this is a
-  manual export → import.
+  mental model will still need a later connector surface; this phase is
+  intentionally the manual export -> import baseline.
 - Quick-actions feel magical but aren't. The button pre-fills a Claude
   prompt; Claude does the work. If the user expects "Synapse generates
   the MCP server entirely on its own," that's not what's shipping --
