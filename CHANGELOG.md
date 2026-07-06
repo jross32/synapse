@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.17] -- 2026-07-06
+
+### Fixed
+- **Quality OS: repeated contract failures no longer churn duplicate gates.** `run_contract`
+  used to resolve the open gate to FAILED and create a fresh one on every failing verdict, so
+  several bug-hunters (or personas) hitting the same broken surface spawned N gates for one bug.
+  Now an already-open blocking gate for a (contract, subject) keeps accumulating evidence and
+  stays open until a PASS resolves it -- one bug, one gate. Regression test added.
+
 ## [0.1.36.16] -- 2026-07-06
 
 ### Added

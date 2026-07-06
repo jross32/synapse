@@ -79,6 +79,31 @@ def test_contract_run_opens_and_resolves_quality_gate(tmp_path: Path) -> None:
         assert cleared.json()["status"] == "passed"
 
 
+def test_repeated_failure_keeps_one_open_gate(tmp_path: Path) -> None:
+    # Regression: several bug-hunters/personas hitting the SAME broken surface
+    # must accumulate on one open gate, not churn a fresh gate each time.
+    client = _harness(tmp_path)
+    with client as c:
+        first = c.post(
+            "/api/v1/ui-contracts/project-detail-close-button/run",
+            json={"subject_type": "ai_case", "subject_id": "case-dup", "verdict": "fail", "label": "hunter A"},
+        )
+        assert first.status_code == 200, first.text
+        gate1 = first.json()["gate"]
+        assert gate1["status"] == "open"
+
+        second = c.post(
+            "/api/v1/ui-contracts/project-detail-close-button/run",
+            json={"subject_type": "ai_case", "subject_id": "case-dup", "verdict": "fail", "label": "hunter B (same surface)"},
+        )
+        assert second.status_code == 200, second.text
+        gate2 = second.json()["gate"]
+        # One bug -> one gate: the second failure returns the SAME still-open gate.
+        assert gate2["id"] == gate1["id"]
+        assert gate2["status"] == "open"
+        assert c.get(f"/api/v1/quality-gates/{gate1['id']}").json()["status"] == "open"
+
+
 def test_impact_audit_can_open_blocking_contract_gates(tmp_path: Path) -> None:
     client = _harness(tmp_path)
     with client as c:

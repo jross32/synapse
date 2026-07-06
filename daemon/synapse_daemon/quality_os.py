@@ -740,29 +740,13 @@ def run_contract(
             ),
         )
     elif payload.verdict == QualityEvidenceVerdict.FAIL and matching_gate is not None:
-        matching_gate = resolve_gate(
-            conn,
-            matching_gate.id,
-            QualityGateResolveRequest(
-                status=QualityGateStatus.FAILED,
-                resolved_by="browser-proof",
-                note=f"Evidence {evidence.id} failed contract {contract.id}.",
-            ),
-        )
-        matching_gate = create_gate(
-            conn,
-            QualityGateCreate(
-                subject_type=payload.subject_type,
-                subject_id=payload.subject_id,
-                gate_kind=matching_gate.gate_kind,
-                title=matching_gate.title or f"{contract.title} failed",
-                blocking=matching_gate.blocking,
-                required_evidence=matching_gate.required_evidence,
-                linked_surface_ids=matching_gate.linked_surface_ids,
-                linked_contract_ids=matching_gate.linked_contract_ids,
-                audit_details={**matching_gate.audit_details, "reopened_by_evidence": evidence.id},
-            ),
-        )
+        # A blocking gate for this contract is already OPEN. A repeated failure
+        # (several bug-hunters or personas hitting the same broken surface)
+        # accumulates evidence against the SAME gate instead of churning a fresh
+        # FAILED+new-open pair each time -- one bug stays one gate until a PASS
+        # resolves it. The failing evidence is already recorded above; keep the
+        # existing open gate as the return value (no duplicate gates).
+        pass
     return contract, evidence, matching_gate
 
 
