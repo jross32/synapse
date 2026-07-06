@@ -109,6 +109,8 @@ class AgentSquad(BaseModel):
     lead_role_id: str | None = None
     # Max workers allowed to run at once; 0 = no cap (a safety bound on autonomy).
     max_concurrent: int = 0
+    # Max total recorded tokens the squad may spend; 0 = no budget.
+    token_budget: int = 0
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     last_activity_at: datetime = Field(default_factory=utc_now)
@@ -121,6 +123,7 @@ class AgentSquadCreate(BaseModel):
     status: AgentSquadStatus = AgentSquadStatus.ACTIVE
     lead_role_id: str | None = "planner"
     max_concurrent: int = 0
+    token_budget: int = 0
     source: AuditSource = AuditSource.DESKTOP
 
 
@@ -130,6 +133,7 @@ class AgentSquadUpdate(BaseModel):
     status: AgentSquadStatus | None = None
     lead_role_id: str | None = None
     max_concurrent: int | None = None
+    token_budget: int | None = None
     source: AuditSource = AuditSource.DESKTOP
 
 
@@ -243,6 +247,7 @@ def _row_to_squad(row: sqlite3.Row) -> AgentSquad:
         status=AgentSquadStatus(row["status"]),
         lead_role_id=row["lead_role_id"],
         max_concurrent=(row["max_concurrent"] if "max_concurrent" in row.keys() else 0) or 0,
+        token_budget=(row["token_budget"] if "token_budget" in row.keys() else 0) or 0,
         created_at=from_iso(row["created_at"]),
         updated_at=from_iso(row["updated_at"]),
         last_activity_at=from_iso(row["last_activity_at"]),
@@ -704,9 +709,9 @@ def create_squad(conn: sqlite3.Connection, payload: AgentSquadCreate) -> AgentSq
     conn.execute(
         """
         INSERT INTO agent_squads (
-            id, project_id, name, goal_md, status, lead_role_id, max_concurrent,
+            id, project_id, name, goal_md, status, lead_role_id, max_concurrent, token_budget,
             created_at, updated_at, last_activity_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             squad_id,
@@ -716,6 +721,7 @@ def create_squad(conn: sqlite3.Connection, payload: AgentSquadCreate) -> AgentSq
             payload.status.value,
             payload.lead_role_id,
             payload.max_concurrent,
+            payload.token_budget,
             to_iso(now),
             to_iso(now),
             to_iso(now),
@@ -734,7 +740,7 @@ def update_squad(
     conn.execute(
         """
         UPDATE agent_squads
-        SET name = ?, goal_md = ?, status = ?, lead_role_id = ?, max_concurrent = ?,
+        SET name = ?, goal_md = ?, status = ?, lead_role_id = ?, max_concurrent = ?, token_budget = ?,
             updated_at = ?, last_activity_at = ?
         WHERE id = ?
         """,
@@ -744,6 +750,7 @@ def update_squad(
             updated.status.value,
             updated.lead_role_id,
             updated.max_concurrent,
+            updated.token_budget,
             to_iso(now),
             to_iso(now),
             squad_id,

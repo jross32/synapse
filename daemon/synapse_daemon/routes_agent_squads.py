@@ -33,6 +33,7 @@ from .ai_context_memory import (
 )
 from .api_versions import event_name
 from .audit import AuditRecord, audit
+from . import token_ledger
 from .errors import conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
@@ -289,6 +290,18 @@ def build_agent_squads_router(
                         squad_id=squad.id,
                         running=running,
                         max_concurrent=squad.max_concurrent,
+                    )
+            # Token budget (safety, ADR-0025): refuse new workers once the squad's
+            # recorded token spend reaches its budget. 0 = no budget.
+            if squad.token_budget and work_item.status != squads.AgentWorkItemStatus.RUNNING:
+                spent = token_ledger.sum_squad_tokens(conn, squad.id).total_tokens
+                if spent >= squad.token_budget:
+                    raise conflict(
+                        "agent_squad",
+                        f"Squad token budget exhausted ({spent}/{squad.token_budget} tokens).",
+                        squad_id=squad.id,
+                        spent=spent,
+                        token_budget=squad.token_budget,
                     )
             project = projects_module.get(conn, squad.project_id)
             role = squads.get_role_template(conn, work_item.assigned_role_id or squad.lead_role_id or "planner")

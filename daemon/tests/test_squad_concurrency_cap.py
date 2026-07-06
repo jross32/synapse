@@ -13,7 +13,7 @@ from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
 
-def _setup(tmp_path: Path, max_concurrent: int):
+def _setup(tmp_path: Path, max_concurrent: int = 0, token_budget: int = 0):
     s = Storage(tmp_path / "data")
     s.open()
     s.migrate()
@@ -22,7 +22,10 @@ def _setup(tmp_path: Path, max_concurrent: int):
         create_project(conn, Project(id="p1", name="P1", path=str(tmp_path), launch_cmd="echo"))
         squad = squads.create_squad(
             conn,
-            squads.AgentSquadCreate(project_id="p1", name="Sq", lead_role_id="planner", max_concurrent=max_concurrent),
+            squads.AgentSquadCreate(
+                project_id="p1", name="Sq", lead_role_id="planner",
+                max_concurrent=max_concurrent, token_budget=token_budget,
+            ),
         )
         i1 = squads.create_work_item(conn, squad.id, squads.AgentWorkItemCreate(title="a", assigned_role_id="tester"))
         i2 = squads.create_work_item(conn, squad.id, squads.AgentWorkItemCreate(title="b", assigned_role_id="reviewer"))
@@ -56,3 +59,28 @@ def test_launch_blocked_when_cap_reached(tmp_path: Path) -> None:
         blocked = c.post(f"/api/v1/agent-work-items/{i2.id}/launch")
         assert blocked.status_code == 409, blocked.text
         assert "cap reached" in blocked.text.lower()
+
+
+def test_token_budget_roundtrip(tmp_path: Path) -> None:
+    s, squad, _i1, _i2 = _setup(tmp_path, token_budget=5000)
+    assert squads.get_squad(s.conn, squad.id).token_budget == 5000
+    with s.transaction() as conn:
+        squads.update_squad(conn, squad.id, squads.AgentSquadUpdate(token_budget=8000))
+    assert squads.get_squad(s.conn, squad.id).token_budget == 8000
+
+
+def test_launch_blocked_when_token_budget_exhausted(tmp_path: Path) -> None:
+    from synapse_daemon import token_ledger
+
+    # budget = 100, and 100 already recorded -> launching a new worker must 409.
+    s, squad, i1, i2 = _setup(tmp_path, token_budget=100)
+    with s.transaction() as conn:
+        token_ledger.record_tokens(
+            conn, i1.id, token_ledger.WorkItemTokenUsageCreate(input_tokens=60, output_tokens=40)
+        )
+    app = build_app(s, EventBus())
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    with client as c:
+        blocked = c.post(f"/api/v1/agent-work-items/{i2.id}/launch")
+        assert blocked.status_code == 409, blocked.text
+        assert "budget exhausted" in blocked.text.lower()

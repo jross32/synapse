@@ -508,6 +508,8 @@ export interface AgentSquad {
   lead_role_id: string | null;
   // Max workers allowed to run at once; 0 = no cap (ADR-0025 safety bound).
   max_concurrent: number;
+  // Max total recorded tokens the squad may spend; 0 = no budget (ADR-0025).
+  token_budget: number;
   created_at: string;
   updated_at: string;
   last_activity_at: string;

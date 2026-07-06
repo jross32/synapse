@@ -10,6 +10,14 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.36.21] -- 2026-07-06
+
+### Added
+- **Squad token budget (Plan 3 Phase 3, migration `024`).** A squad can set `token_budget`
+  (0 = none); the work-item launch path refuses to start a new worker (409 "token budget
+  exhausted") once the squad's recorded token spend reaches the budget, reusing the per-worker
+  token roll-up (`sum_squad_tokens`). Pairs with the concurrency cap (023) to bound autonomous spend.
+
 ## [0.1.36.20] -- 2026-07-06
 
 ### Added
