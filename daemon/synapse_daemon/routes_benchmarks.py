@@ -368,6 +368,11 @@ def build_benchmarks_router(storage: Storage, pty_manager: PtySessionManager) ->
             "artifacts": [item.model_dump(mode="json") for item in benchmarks.list_artifacts(storage.conn, updated.id)],
         }
 
+    @router.get("/bug-hunt-fixtures", response_model=None)
+    async def list_bug_hunt_fixtures() -> dict[str, Any]:
+        # Discoverability: which `fixture` names can be passed to /score-bug-hunt.
+        return {"fixtures": benchmarks.list_bug_hunt_fixtures()}
+
     @router.post("/score-bug-hunt", response_model=None)
     async def score_bug_hunt(payload: benchmarks.BugHuntScoreRequest) -> dict[str, Any]:
         # Stateless grader for the bug-hunt fixture (Plan 3 Phase 2). A squad's synthesist posts its

@@ -1104,6 +1104,32 @@ def load_fixture_answer_key(fixture: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def list_bug_hunt_fixtures() -> list[dict[str, Any]]:
+    """List shipped bug-hunt fixtures -- any ``benchmarks/<name>/answer-key.json``.
+
+    Lets an AI discover valid ``fixture`` names (and their bug counts) before calling
+    ``score_bug_hunt``. Returns ``[]`` when the build does not ship ``benchmarks/``.
+    """
+    root = repo_root() / "benchmarks"
+    fixtures: list[dict[str, Any]] = []
+    if not root.is_dir():
+        return fixtures
+    for key_path in sorted(root.glob("*/answer-key.json")):
+        try:
+            data = json.loads(key_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        fixtures.append(
+            {
+                "name": key_path.parent.name,
+                "fixture": data.get("fixture"),
+                "total_bugs": len(data.get("bugs", [])),
+                "description": data.get("description", ""),
+            }
+        )
+    return fixtures
+
+
 def ingest_direct_attempt(conn: sqlite3.Connection, payload: BenchmarkDirectIngestRequest) -> BenchmarkAttempt:
     attempt = get_attempt(conn, payload.attempt_id)
     now = to_iso(utc_now())

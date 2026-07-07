@@ -11,6 +11,8 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Bug-hunt fixture discovery.** `GET /benchmarks/bug-hunt-fixtures` lists the shipped fixtures
+  (`name` / `fixture` / `total_bugs`) so an AI can discover the valid `fixture` names before scoring.
 - **`score-bug-hunt` accepts a fixture name.** `POST /benchmarks/score-bug-hunt` now takes an
   optional `fixture` (e.g. `"bug-hunt-fixture"`) instead of a pasted `answer_key` — the daemon loads
   the shipped `benchmarks/<fixture>/answer-key.json` (path-validated single segment; 404 if a build

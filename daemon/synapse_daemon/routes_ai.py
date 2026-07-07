@@ -421,9 +421,9 @@ def build_ai_router(
                     "path": "/api/v1/ai-factory/catalog | /api/v1/ai-components | /api/v1/ai-recipes | /api/v1/ai-sources",
                 },
                 {
-                    "purpose": "list benchmark specs, create runs, launch benchmark attempts, ingest direct runs, export reports, and grade bug-hunt findings against a fixture answer key (returns bugs_per_1k_tokens)",
+                    "purpose": "list benchmark specs, create runs, launch benchmark attempts, ingest direct runs, export reports, list bug-hunt fixtures, and grade bug-hunt findings against a fixture answer key (returns bugs_per_1k_tokens)",
                     "method": "GET | POST",
-                    "path": "/api/v1/benchmarks/specs | /api/v1/benchmarks/runs | /api/v1/benchmarks/runs/{id} | /launch | /rescore | /export | /api/v1/benchmarks/ingest-direct | /api/v1/benchmarks/score-bug-hunt",
+                    "path": "/api/v1/benchmarks/specs | /api/v1/benchmarks/runs | /api/v1/benchmarks/runs/{id} | /launch | /rescore | /export | /api/v1/benchmarks/ingest-direct | /api/v1/benchmarks/bug-hunt-fixtures | /api/v1/benchmarks/score-bug-hunt",
                 },
                 {
                     "purpose": "install or inspect AI-first bundles for roles, personalities, quick actions, and factory assets",

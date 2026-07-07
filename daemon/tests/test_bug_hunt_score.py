@@ -148,3 +148,19 @@ def test_score_route_requires_key_or_fixture(tmp_path: Path) -> None:
     with _client(tmp_path) as c:
         r = c.post("/api/v1/benchmarks/score-bug-hunt", json={"findings": [], "total_tokens": 100})
         assert r.status_code >= 400
+
+
+def test_list_bug_hunt_fixtures_includes_shipped() -> None:
+    from synapse_daemon.benchmarks import list_bug_hunt_fixtures
+
+    names = {f["name"]: f for f in list_bug_hunt_fixtures()}
+    assert "bug-hunt-fixture" in names
+    assert names["bug-hunt-fixture"]["total_bugs"] == 12
+    assert names["bug-hunt-fixture"]["fixture"] == "buttermore-bakery"
+
+
+def test_list_bug_hunt_fixtures_route(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        r = c.get("/api/v1/benchmarks/bug-hunt-fixtures")
+        assert r.status_code == 200, r.text
+        assert any(f["name"] == "bug-hunt-fixture" for f in r.json()["fixtures"])
