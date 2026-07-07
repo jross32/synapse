@@ -4,7 +4,7 @@
 // resource snapshots, refresh. No own WebSocket.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Download, FolderSearch, HelpCircle, Plus, Search, X } from 'lucide-react';
+import { Activity, BookOpen, Download, FolderSearch, HelpCircle, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
@@ -24,6 +24,7 @@ import { ChatgptImportHelp } from '../components/ChatgptImportHelp';
 import { DiscoveryDialog } from '../components/DiscoveryDialog';
 import { LogViewer } from '../components/LogViewer';
 import { ProjectFormDialog, type ProjectFormMode } from '../components/ProjectFormDialog';
+import { ProjectRecordsSection } from '../components/ProjectRecordsSection';
 import { ProjectTile } from '../components/ProjectTile';
 import { PageHeader } from '../components/PageHeader';
 import { StatusLegend } from '../components/StatusLegend';
@@ -49,7 +50,7 @@ function matchesQuery(p: Project, q: string): boolean {
     .every((word) => haystack.includes(word));
 }
 
-type AppsSection = 'projects' | 'running';
+type AppsSection = 'projects' | 'running' | 'memory';
 
 interface FormState {
   mode: ProjectFormMode;
@@ -64,6 +65,7 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
   const { projects, resourcesById, refreshProjects, upsertProjectLocal, removeProjectLocal } =
     useDaemon();
   const [section, setSection] = useState<AppsSection>(initialSection);
+  const [memoryProjectId, setMemoryProjectId] = useState<string>('');
 
   const [form, setForm] = useState<FormState | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
@@ -150,6 +152,8 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
         subtitle={
           section === 'projects'
             ? 'Your registered projects. Each tile is a folder Synapse manages. Installable plugins live in My Tools.'
+            : section === 'memory'
+            ? 'Project Memory — ADRs, backlog, and version history for a project. Synapse stores these so any AI session can read and add to them.'
             : 'Everything Synapse is running right now, with live CPU and memory telemetry.'
         }
         action={
@@ -213,10 +217,47 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
           label='Running Now'
           icon={Activity}
         />
+        <TopTab
+          active={section === 'memory'}
+          onClick={() => {
+            setMemoryProjectId((prev) => prev || sorted[0]?.id || '');
+            setSection('memory');
+          }}
+          label='Memory'
+          icon={BookOpen}
+        />
       </div>
 
       {section === 'running' ? (
         <ProcessesPage headerless />
+      ) : section === 'memory' ? (
+        <div className='flex flex-col gap-4'>
+          {sorted.length === 0 ? (
+            <Card className='flex flex-col items-center gap-3 p-8 text-center'>
+              <BookOpen className='h-8 w-8 text-muted-foreground' />
+              <p className='text-sm text-muted-foreground'>No projects yet. Add one in Projects to start tracking decisions and backlog here.</p>
+            </Card>
+          ) : (
+            <>
+              <Card className='flex items-center gap-3 p-3'>
+                <label htmlFor='memory-project-select' className='text-sm font-medium whitespace-nowrap'>
+                  Project
+                </label>
+                <select
+                  id='memory-project-select'
+                  value={memoryProjectId}
+                  onChange={(e) => setMemoryProjectId(e.target.value)}
+                  className='flex-1 h-9 rounded-md border border-input bg-transparent px-3 text-sm'
+                >
+                  {sorted.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </Card>
+              {memoryProjectId && <ProjectRecordsSection projectId={memoryProjectId} />}
+            </>
+          )}
+        </div>
       ) : (
         <>
 

@@ -257,15 +257,18 @@ export interface SessionsPageProps {
    *  re-trigger on next mount. */
   onConsumedInitial?: () => void;
   headerless?: boolean;
+  /** Force the initial mode. 'squads' opens straight to Agent Squads. */
+  defaultMode?: 'direct' | 'squads';
 }
 
 export function SessionsPage({
   initialSessionId,
   onConsumedInitial,
   headerless = false,
+  defaultMode = 'direct',
 }: SessionsPageProps = {}): JSX.Element {
   const { recentEvents } = useDaemon();
-  const [mode, setMode] = useState<'direct' | 'squads'>('direct');
+  const [mode, setMode] = useState<'direct' | 'squads'>(defaultMode);
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [registry, setRegistry] = useState<PtySessionSummary[]>([]);

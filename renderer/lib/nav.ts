@@ -29,11 +29,11 @@ export type AppRoute =
   | { kind: 'core'; page: RoutePageId }
   | { kind: 'installed'; id: string };
 
-export type AppsSection = 'projects' | 'running';
+export type AppsSection = 'projects' | 'running' | 'memory';
 export type ToolsSection = 'tools' | 'marketplace' | 'mcp' | 'installed-pages';
 export type ToolsTab = 'installed' | 'discover';
 export type MarketplaceSection = 'tools' | 'bundles' | 'models' | 'workers' | 'squads';
-export type AiCodingSection = 'sessions' | 'assistant' | 'review' | 'chatgpt';
+export type AiCodingSection = 'sessions' | 'squads' | 'assistant' | 'review' | 'chatgpt';
 
 export type NavigationIntent =
   | { page: 'home' | 'ai-factory' | 'settings' | 'whatsnew' }

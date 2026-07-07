@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Aperture, BookTemplate, Bot, BrainCircuit, FolderSearch, GitBranchPlus, Layers3, Sparkles } from 'lucide-react';
+import { HelpIcon } from '../components/HelpIcon';
 
 import { PageHeader } from '../components/PageHeader';
 import { Badge } from '../components/ui/badge';
@@ -23,13 +24,38 @@ import {
 
 type FactoryTab = 'recipes' | 'components' | 'sources' | 'bundles' | 'cases' | 'benchmarks';
 
-const TABS: Array<{ id: FactoryTab; label: string; icon: typeof BookTemplate }> = [
-  { id: 'recipes', label: 'Recipes', icon: BookTemplate },
-  { id: 'components', label: 'Components', icon: Layers3 },
-  { id: 'sources', label: 'Sources', icon: FolderSearch },
-  { id: 'bundles', label: 'Bundles', icon: Bot },
-  { id: 'cases', label: 'Runs', icon: GitBranchPlus },
-  { id: 'benchmarks', label: 'Benchmarks', icon: Aperture },
+// Human-readable labels for case modes (replaces raw API code names in the UI).
+const CASE_MODE_LABELS: Record<string, string> = {
+  generate: 'Build something new',
+  research: 'Research & plan',
+  audit: 'Audit & improve',
+  repair: 'Fix & stabilize',
+  migrate: 'Upgrade dependencies',
+  harvest: 'Harvest inspiration',
+  benchmark: 'Compare approaches',
+  portfolio: 'Multi-project sweep',
+  challenge: 'Challenge assumptions',
+};
+
+const CASE_MODE_TIPS: Record<string, string> = {
+  generate: 'Start fresh — the AI designs and builds a new app or feature from your goal.',
+  research: 'Explore first — the AI maps the problem space and proposes a plan before writing code.',
+  audit: 'Assess existing work — the AI reviews the codebase for quality, risks, and improvements.',
+  repair: 'Fix a broken baseline — the AI stabilises failing tests and errors before any new work.',
+  migrate: 'Upgrade a dependency or platform version — the AI handles compatibility and migration notes.',
+  harvest: 'Gather inspiration from URLs — the AI extracts patterns and components from reference sites.',
+  benchmark: 'Run multiple AI approaches side-by-side and pick the best one.',
+  portfolio: 'Sweep several repos in parallel — one case coordinates the whole set.',
+  challenge: 'Force a credible alternative path before committing to the current direction.',
+};
+
+const TABS: Array<{ id: FactoryTab; label: string; icon: typeof BookTemplate; tip: string }> = [
+  { id: 'recipes', label: 'Recipes', icon: BookTemplate, tip: 'Reusable AI workflow blueprints. Anchor a case on a recipe to guide the AI toward a proven pattern.' },
+  { id: 'components', label: 'Components', icon: Layers3, tip: 'Atomic building blocks that recipes are composed from — prompts, constraints, and references.' },
+  { id: 'sources', label: 'Sources', icon: FolderSearch, tip: 'Reference URLs and files the AI can draw inspiration from. Provenance is tracked for every source.' },
+  { id: 'bundles', label: 'Bundles', icon: Bot, tip: 'Install curated packs of roles, personalities, quick-actions, and factory assets in one click.' },
+  { id: 'cases', label: 'AI Cases', icon: GitBranchPlus, tip: 'Live and completed AI OS runs. Each case is a boss AI in its own git worktree executing a mission.' },
+  { id: 'benchmarks', label: 'Benchmarks', icon: Aperture, tip: 'Side-by-side runs of AI runtimes against a standard scenario — measures quality and token cost.' },
 ];
 
 export function AiFactoryPage(): JSX.Element {
@@ -334,7 +360,10 @@ export function AiFactoryPage(): JSX.Element {
             </label>
 
             <label className='grid gap-2 text-sm'>
-              <span className='text-muted-foreground'>Mission profile</span>
+              <span className='flex items-center gap-1 text-muted-foreground'>
+                Mission profile
+                <HelpIcon content='A preset strategy that pre-fills the case mode, directives, and quality policies. Pick the one closest to your goal.' />
+              </span>
               <select
                 className='rounded-lg border border-border bg-background px-3 py-2'
                 value={form.missionProfileId}
@@ -349,7 +378,12 @@ export function AiFactoryPage(): JSX.Element {
             </label>
 
             <label className='grid gap-2 text-sm'>
-              <span className='text-muted-foreground'>Case mode</span>
+              <span className='flex items-center gap-1 text-muted-foreground'>
+                Case mode
+                <HelpIcon
+                  content={CASE_MODE_TIPS[form.caseMode] ?? 'Controls the AI\'s overall strategy and what kind of work it does.'}
+                />
+              </span>
               <select
                 className='rounded-lg border border-border bg-background px-3 py-2'
                 value={form.caseMode}
@@ -357,14 +391,17 @@ export function AiFactoryPage(): JSX.Element {
               >
                 {(meta?.case_modes ?? []).map((mode: string) => (
                   <option key={mode} value={mode}>
-                    {startCase(mode)}
+                    {CASE_MODE_LABELS[mode] ?? startCase(mode)}
                   </option>
                 ))}
               </select>
             </label>
 
             <label className='grid gap-2 text-sm'>
-              <span className='text-muted-foreground'>Seed recipe</span>
+              <span className='flex items-center gap-1 text-muted-foreground'>
+                Seed recipe
+                <HelpIcon content='An optional recipe blueprint that guides the AI toward a proven pattern. Leave empty for a fully autonomous run.' />
+              </span>
               <select
                 className='rounded-lg border border-border bg-background px-3 py-2'
                 value={form.recipeId}
@@ -390,7 +427,10 @@ export function AiFactoryPage(): JSX.Element {
             </label>
 
             <label className='grid gap-2 text-sm'>
-              <span className='text-muted-foreground'>Success criteria</span>
+              <span className='flex items-center gap-1 text-muted-foreground'>
+                Success criteria
+                <HelpIcon content='Optional. Describe what a clearly good result looks like. The boss AI reads this to know when its mission is done.' />
+              </span>
               <textarea
                 className='min-h-24 rounded-lg border border-border bg-background px-3 py-2'
                 value={form.success}
@@ -488,7 +528,13 @@ export function AiFactoryPage(): JSX.Element {
                     </select>
                   </label>
                   <label className='grid gap-2 text-sm'>
-                    <span className='text-muted-foreground'>Surface</span>
+                    <span className='flex items-center gap-1 text-muted-foreground'>
+                      Surface
+                      <HelpIcon
+                        content='How the AI is launched. Coder Workspace = structured thread with full audit trail. Workbench = project-aware PTY. Raw PTY = bare terminal. Direct ingest = results you ran yourself.'
+                        side='top'
+                      />
+                    </span>
                     <select
                       className='rounded-lg border border-border bg-background px-3 py-2'
                       value={benchmarkForm.surfaceKind}
@@ -502,7 +548,10 @@ export function AiFactoryPage(): JSX.Element {
                   </label>
                 </div>
                 <label className='grid gap-2 text-sm'>
-                  <span className='text-muted-foreground'>Repeats</span>
+                  <span className='flex items-center gap-1 text-muted-foreground'>
+                    Repeats
+                    <HelpIcon content='How many times to run this scenario. More runs = better statistics. 3 is the default; use 1 for a quick smoke-test.' />
+                  </span>
                   <input
                     className='rounded-lg border border-border bg-background px-3 py-2'
                     type='number'
@@ -537,6 +586,7 @@ export function AiFactoryPage(): JSX.Element {
                     key={item.id}
                     type='button'
                     onClick={() => setTab(item.id)}
+                    title={item.tip}
                     className={cn(
                       'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors',
                       active
@@ -588,8 +638,20 @@ export function AiFactoryPage(): JSX.Element {
               );
             })}
             {!listItems.length && (
-              <div className='rounded-2xl border border-dashed border-border p-8 text-sm text-muted-foreground'>
-                Nothing loaded here yet.
+              <div className='rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground'>
+                {tab === 'cases' ? (
+                  <>
+                    <p className='font-medium text-foreground'>No AI cases yet</p>
+                    <p className='mt-1'>Create a case in the Launch Studio to the left. The boss AI will run in its own git worktree and report back here.</p>
+                  </>
+                ) : tab === 'benchmarks' ? (
+                  <>
+                    <p className='font-medium text-foreground'>No benchmark runs yet</p>
+                    <p className='mt-1'>Use the Benchmark wizard in the Launch Studio to measure AI quality and token cost on a standard scenario.</p>
+                  </>
+                ) : (
+                  <p>Nothing here yet. Items appear as you create them.</p>
+                )}
               </div>
             )}
           </div>

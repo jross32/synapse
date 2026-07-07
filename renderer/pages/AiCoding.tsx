@@ -1,4 +1,4 @@
-import { Bot, Inbox, MessagesSquare, Sparkles } from 'lucide-react';
+import { Bot, Inbox, MessagesSquare, Sparkles, Users } from 'lucide-react';
 
 import type { AiCodingSection } from '@shared/nav';
 import { cn } from '@shared/utils';
@@ -7,6 +7,7 @@ import { AssistantPage } from './Assistant';
 import { ChatgptCompanionPage } from './ChatgptCompanion';
 import { CoderWorkspacePage } from './CoderWorkspace';
 import { ReviewPage } from './Review';
+import { SessionsPage } from './Sessions';
 
 export interface AiCodingPageProps {
   section?: AiCodingSection;
@@ -25,7 +26,8 @@ export function AiCodingPage({
     <div className='flex min-h-[72vh] flex-col gap-6'>
       <PageHeader
         title='AI Coding'
-        subtitle='Your coder workspace: project threads, runtime switching, ChatGPT companion work, your private assistant, and the review inbox in one place.'
+        subtitle='Your coder workspace: project threads, runtime switching, Agent Squads, assistant, and review inbox in one place.'
+        helpText='AI Coding is where you run AI coders (Claude, Codex, Copilot) on your projects. Use Workspace for structured threads, Squads to coordinate multiple AI workers, and Review to act on AI work that needs human sign-off.'
       />
 
       <div
@@ -38,6 +40,12 @@ export function AiCodingPage({
           onClick={() => onSectionChange?.('sessions')}
           icon={Sparkles}
           label='Workspace'
+        />
+        <TopTab
+          active={section === 'squads'}
+          onClick={() => onSectionChange?.('squads')}
+          icon={Users}
+          label='Squads'
         />
         <TopTab
           active={section === 'assistant'}
@@ -66,6 +74,7 @@ export function AiCodingPage({
           onConsumedInitial={onConsumedPendingSession}
         />
       )}
+      {section === 'squads' && <SessionsPage headerless defaultMode='squads' />}
       {section === 'assistant' && <AssistantPage headerless />}
       {section === 'review' && <ReviewPage headerless />}
       {section === 'chatgpt' && <ChatgptCompanionPage headerless />}

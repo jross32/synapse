@@ -113,22 +113,22 @@ def test_fast_money_launch_installs_bundle_and_creates_default_project(
     assert res.status_code == 200, res.text
     state = res.json()["state"]
     result = state["result"]
-    expected_path = (storage.data_dir / "projects" / "fast-money-client-ops").resolve()
+    expected_path = (storage.data_dir / "projects" / "listing-multiplier").resolve()
 
     assert state["status"] == "launched"
     assert result["bundle_id"] == "fast-money"
     assert result["chosen_runtime"] == "codex"
-    assert result["project_id"] == "fast-money-client-ops"
+    assert result["project_id"] == "listing-multiplier"
     assert Path(result["project_path"]) == expected_path
     assert result["session_id"] == "sid-1"
     assert result["reference_app_created"] is True
     assert "fast-money" in ai_bundles.list_installed_bundle_ids(storage.conn)
-    assert [project.id for project in list_projects(storage.conn)] == ["fast-money-client-ops"]
+    assert [project.id for project in list_projects(storage.conn)] == ["listing-multiplier"]
     assert expected_path.exists()
-    assert spawn_calls[0]["project_id"] == "fast-money-client-ops"
+    assert spawn_calls[0]["project_id"] == "listing-multiplier"
     assert spawn_calls[0]["argv"] == ["codex"]
     assert spawn_calls[0]["cwd"] == str(expected_path)
-    assert spawn_calls[0]["env"]["SYNAPSE_FAST_MONEY_BUNDLE_ID"] == "fast-money"
+    assert spawn_calls[0]["env"]["SYNAPSE_STARTER_BUNDLE_ID"] == "fast-money"
 
 
 def test_fast_money_launch_reuses_existing_project(
@@ -172,7 +172,7 @@ def test_fast_money_launch_writes_prompt_artifacts_and_scaffold(
             "/api/v1/tools/fast-money/actions/launch",
             json={
                 "fields": {
-                    "app_name": "Fast Money HVAC Ops",
+                    "app_name": "Listing Multiplier HVAC",
                     "brief": "Build a private/local-first revenue workspace for HVAC operators.",
                     "pricing_model": "hybrid",
                     "include_catalog_editor": True,
@@ -184,15 +184,17 @@ def test_fast_money_launch_writes_prompt_artifacts_and_scaffold(
     assert res.status_code == 200, res.text
     result = res.json()["state"]["result"]
     project_path = Path(result["project_path"])
-    brief = (project_path / "FAST_MONEY_BRIEF.md").read_text(encoding="utf-8")
+    brief = (project_path / "APP_BRIEF.md").read_text(encoding="utf-8")
     prompt = (project_path / "PROMPT.md").read_text(encoding="utf-8")
-    config = json.loads((project_path / "fast_money.config.json").read_text(encoding="utf-8"))
+    config = json.loads((project_path / "app.config.json").read_text(encoding="utf-8"))
 
-    assert "Fast Money HVAC Ops" in brief
-    assert "Lead -> quote -> approval -> engagement/job -> invoice -> renewal handoff" in brief
+    assert "Listing Multiplier HVAC" in brief
+    assert "Source listing -> channel draft -> approval -> publish -> refresh/relist -> performance follow-up" in brief
     assert "/api/v1/ai/context" in prompt
     assert "landing page" in prompt
     assert "billing and auth" in prompt.lower()
+    assert "FAST_MONEY" not in brief
+    assert "fast_money" not in prompt
     assert config["include_catalog_editor"] is True
     assert config["pricing_model"] == "hybrid"
     assert (project_path / "README.md").exists()
@@ -202,6 +204,8 @@ def test_fast_money_launch_writes_prompt_artifacts_and_scaffold(
     assert (project_path / "server.py").exists()
     assert (project_path / "static" / "styles.css").exists()
     assert (project_path / "static" / "app.js").exists()
+    assert not (project_path / "FAST_MONEY_BRIEF.md").exists()
+    assert not (project_path / "fast_money.config.json").exists()
     assert (storage.data_dir / "projects").exists()
 
 

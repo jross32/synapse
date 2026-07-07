@@ -45,6 +45,7 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { SquadWizard } from './SquadWizard';
+import { HelpIcon } from './HelpIcon';
 
 interface OpenTabRef {
   sessionId: string;
@@ -1113,60 +1114,93 @@ export function AgentSquadsView({
           <div className='flex items-center gap-2'>
             <CheckCircle2 className='h-4 w-4 text-primary' />
             <h3 className='text-sm font-semibold'>Explicit handoff</h3>
+            <HelpIcon
+              content='A handoff writes a summary into the shared project memory so the next worker knows exactly where things stand. Fill in what you did, any blockers, and who should take over.'
+              side='right'
+            />
           </div>
-          <select
-            value={handoffForm.status}
-            onChange={(e) =>
-              setHandoffForm((prev) => ({
-                ...prev,
-                status: e.target.value as AgentWorkItemStatus,
-              }))
-            }
-            className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
-          >
-            <option value='handoff'>Ready for handoff</option>
-            <option value='blocked'>Blocked</option>
-            <option value='completed'>Completed</option>
-          </select>
-          <textarea
-            value={handoffForm.summary_md}
-            onChange={(e) =>
-              setHandoffForm((prev) => ({ ...prev, summary_md: e.target.value }))
-            }
-            className={TEXTAREA_CLASS}
-            placeholder='Summarize what changed, what was learned, and what the next worker should know.'
-          />
-          <textarea
-            value={handoffForm.blockers_md}
-            onChange={(e) =>
-              setHandoffForm((prev) => ({ ...prev, blockers_md: e.target.value }))
-            }
-            className={TEXTAREA_CLASS}
-            placeholder='Blockers, missing credentials, flaky tests, or open decisions.'
-          />
-          <Input
-            value={handoffForm.files_touched}
-            onChange={(e) =>
-              setHandoffForm((prev) => ({ ...prev, files_touched: e.target.value }))
-            }
-            placeholder='Comma-separated files touched'
-          />
-          <select
-            value={handoffForm.suggested_next_role}
-            onChange={(e) =>
-              setHandoffForm((prev) => ({
-                ...prev,
-                suggested_next_role: e.target.value,
-              }))
-            }
-            className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
-          >
-            {roles.map((role) => (
-              <option key={role.id} value={role.id}>
-                {role.name}
-              </option>
-            ))}
-          </select>
+          <label className='grid gap-1 text-sm'>
+            <span className='flex items-center gap-1 text-xs text-muted-foreground'>
+              Outcome
+              <HelpIcon
+                content='Handoff = done for now, passing to someone else. Blocked = stuck and needs a human or a different role. Completed = fully done, no more work needed.'
+                side='top'
+              />
+            </span>
+            <select
+              value={handoffForm.status}
+              onChange={(e) =>
+                setHandoffForm((prev) => ({
+                  ...prev,
+                  status: e.target.value as AgentWorkItemStatus,
+                }))
+              }
+              className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
+            >
+              <option value='handoff'>Ready for handoff</option>
+              <option value='blocked'>Blocked — needs attention</option>
+              <option value='completed'>Completed</option>
+            </select>
+          </label>
+          <label className='grid gap-1 text-sm'>
+            <span className='text-xs text-muted-foreground'>
+              What did you do? <span className='text-destructive'>*</span>
+            </span>
+            <textarea
+              value={handoffForm.summary_md}
+              onChange={(e) =>
+                setHandoffForm((prev) => ({ ...prev, summary_md: e.target.value }))
+              }
+              className={TEXTAREA_CLASS}
+              placeholder='Summarize what changed, what was learned, and what the next worker should know.'
+            />
+          </label>
+          <label className='grid gap-1 text-sm'>
+            <span className='flex items-center gap-1 text-xs text-muted-foreground'>
+              Blockers or open decisions
+              <HelpIcon content='Anything the next worker must know before starting: missing credentials, flaky tests, pending decisions, or risky areas.' />
+            </span>
+            <textarea
+              value={handoffForm.blockers_md}
+              onChange={(e) =>
+                setHandoffForm((prev) => ({ ...prev, blockers_md: e.target.value }))
+              }
+              className={TEXTAREA_CLASS}
+              placeholder='Leave blank if nothing is blocking.'
+            />
+          </label>
+          <label className='grid gap-1 text-sm'>
+            <span className='flex items-center gap-1 text-xs text-muted-foreground'>
+              Files changed
+              <HelpIcon content='Comma-separated paths. The quality OS uses this for impact analysis.' />
+            </span>
+            <Input
+              value={handoffForm.files_touched}
+              onChange={(e) =>
+                setHandoffForm((prev) => ({ ...prev, files_touched: e.target.value }))
+              }
+              placeholder='e.g. src/foo.ts, tests/test_bar.py'
+            />
+          </label>
+          <label className='grid gap-1 text-sm'>
+            <span className='text-xs text-muted-foreground'>Who should go next?</span>
+            <select
+              value={handoffForm.suggested_next_role}
+              onChange={(e) =>
+                setHandoffForm((prev) => ({
+                  ...prev,
+                  suggested_next_role: e.target.value,
+                }))
+              }
+              className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
+            >
+              {roles.map((role) => (
+                <option key={role.id} value={role.id} title={role.description}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             onClick={() => void handleHandoff()}
             disabled={!selectedWorkItem || !handoffForm.summary_md.trim() || busy === 'handoff'}

@@ -3,7 +3,7 @@
   "name": "Fast Money",
   "category": "workflows",
   "icon": "terminal",
-  "description": "Spin up a private/local-first client-ops SaaS starter, install the Fast Money AI bundle, and open an AI build session in one run.",
+  "description": "Spin up a standalone local-first business app starter, install the Fast Money AI bundle, and open an AI build session in one run.",
   "version": "1.0.0",
   "fields": [
     {
@@ -11,16 +11,16 @@
       "type": "text",
       "label": "App name",
       "required": true,
-      "default": "Fast Money Client Ops",
-      "placeholder": "Fast Money Client Ops",
-      "help": "Customer-facing name for the generated SaaS."
+      "default": "Listing Multiplier",
+      "placeholder": "Listing Multiplier",
+      "help": "Customer-facing name for the generated standalone app."
     },
     {
       "key": "brief",
       "type": "text",
       "label": "Brief",
       "required": true,
-      "default": "Build a private/local-first client-ops SaaS for service businesses that turns leads into quotes, approvals, jobs, invoices, and renewals.",
+      "default": "Build a private/local-first listing operations SaaS that turns one source listing into channel-ready drafts, approvals, publishes, refreshes, and performance follow-through.",
       "placeholder": "Who is this for and what should it sell?",
       "help": "Short product brief for the AI build session."
     },
@@ -29,8 +29,8 @@
       "type": "path",
       "label": "Output path",
       "required": false,
-      "placeholder": "Leave blank for Synapse data/projects/fast-money-client-ops",
-      "help": "Optional project folder. Blank creates the reference app under Synapse's data directory."
+      "placeholder": "Leave blank for Synapse data/projects/listing-multiplier",
+      "help": "Optional project folder. Blank creates the standalone starter under Synapse's data directory."
     },
     {
       "key": "pricing_model",
@@ -44,26 +44,26 @@
     {
       "key": "include_customer_portal",
       "type": "boolean",
-      "label": "Include customer portal",
+      "label": "Include seller portal",
       "required": false,
       "default": true,
-      "help": "Create the customer-facing portal shell and navigation."
+      "help": "Create the seller-facing portal shell and navigation."
     },
     {
       "key": "include_employee_console",
       "type": "boolean",
-      "label": "Include employee console",
+      "label": "Include ops console",
       "required": false,
       "default": true,
-      "help": "Create the operator/admin console shell and workflow dashboard."
+      "help": "Create the ops/admin console shell and workflow dashboard."
     },
     {
       "key": "include_catalog_editor",
       "type": "boolean",
-      "label": "Include catalog editor",
+      "label": "Include template editor",
       "required": false,
       "default": false,
-      "help": "Add a catalog editor shell when the business needs editable services or packages."
+      "help": "Add a template editor shell when the business needs reusable listing patterns."
     },
     {
       "key": "preferred_runtime",

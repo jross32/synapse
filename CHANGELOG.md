@@ -10,7 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.38] — 2026-07-07
+
 ### Added
+- **ChatGPT Companion, rebuilt (AI Coding).** `ChatgptCompanion.tsx` is now a full companion
+  workspace: project-file context (list / upload / download), a desktop live bridge that captures
+  the visible ChatGPT reply, prompt/revise/save controls, and a reusable `ChatWorkspaceTemplate`
+  shell. (Copilot.)
+- **UX / onboarding polish pass.** New `HelpIcon` + `Tooltip` primitives thread "?" help tooltips
+  and friendlier human-readable labels through AI Factory, Agent Squads, and AI Coding; `PageHeader`
+  gained an optional `helpText`. (Copilot.)
+- **AI Coding "Squads" tab + Apps "Memory" section.** AI Coding surfaces Agent Squads inline
+  (`SessionsPage` in `squads` mode); the Apps hub gains a project-memory section. (Copilot.)
 - **Bug-hunt scoring wired into the benchmark engine (Plan 3 Phase 2).** `benchmarks.score_bug_hunt()`
   — an in-daemon twin of the fixture grader — plus `POST /benchmarks/score-bug-hunt` (stateless: a
   squad synthesist posts findings + tokens + the answer key, gets `bugs_per_1k_tokens` /
@@ -46,6 +57,15 @@ Every commit must append an entry under the in-progress version header.
   gaps analysis + a session-start protocol).
 
 ### Changed
+- **"Fast Money" tool → "Listing Multiplier".** The built-in launcher pivots from a generic
+  client-ops SaaS starter to a listing-operations SaaS (`Listing Multiplier`): renamed constants,
+  brief/config filenames (`APP_BRIEF.md` / `app.config.json`), spawn env vars (`SYNAPSE_STARTER_*`),
+  and all scaffold + seed content (listings / drafts / publications / metrics). The internal bundle
+  id `fast-money` is preserved for contract stability; marketplace/bundle/manifest labels updated. (Copilot.)
+- **Finishing pass on the wave (Claude):** fixed the `HelpIcon` click-hijack (it now
+  `stopPropagation()`s so a "?" inside a `<label>` no longer redirects focus to the field), and
+  removed dead code the wave left behind (unused `EmptyState` component + unused `Tooltip` imports
+  in `StatusBadge` / `SquadWizard`).
 - **AGENTS.md Golden rule: "Build for the AI, not just the human."** Every new capability
   must ship a daemon REST endpoint, be advertised in `endpoints_for_ai`, and be documented
   in `docs/api-finds.md` — a feature an AI can't discover + drive via the API is not shippable.
