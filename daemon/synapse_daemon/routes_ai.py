@@ -450,6 +450,61 @@ def build_ai_router(
                     "method": "GET",
                     "path": "/api/v1/audit",
                 },
+                {
+                    "purpose": "coordinate with other AI sessions on this repo (ADR-0024): register presence, claim advisory file lanes, check path overlaps, detect git collisions, and get the true next-free migration/ADR number from disk",
+                    "method": "GET | POST | DELETE",
+                    "path": "/api/v1/coordination/sessions | /coordination/lanes | /coordination/overlap | /coordination/snapshot | /coordination/detect-collisions | /coordination/next-numbers",
+                },
+                {
+                    "purpose": "self-report token usage per work item and read the squad-level token roll-up so Synapse can prove efficiency (ADR-0025)",
+                    "method": "GET | POST",
+                    "path": "/api/v1/agent-work-items/{id}/tokens | /api/v1/agent-squads/{id}/token-usage",
+                },
+                {
+                    "purpose": "stop all of a squad's workers (kill switch); set a squad's concurrency cap + token budget via PATCH; delegate a child work item to a specialist; record a review-pass verdict (opens a quality gate if blocking)",
+                    "method": "POST | PATCH",
+                    "path": "/api/v1/agent-squads/{id}/stop | /api/v1/agent-squads/{id} | /api/v1/agent-work-items/{id}/delegate | /api/v1/coder-review-passes/{id}/verdict",
+                },
+                {
+                    "purpose": "append a quick note to a project's shared AI memory (.synapse-ai-context.md) or backlog without a full handoff",
+                    "method": "POST",
+                    "path": "/api/v1/capture",
+                },
+                {
+                    "purpose": "read the human review inbox (items awaiting approval) and approve / revise / reject them -- check this before starting new work",
+                    "method": "GET | POST",
+                    "path": "/api/v1/review/inbox | /api/v1/review/items/{id}/approve | /revise | /reject",
+                },
+                {
+                    "purpose": "upload, list, download, and delete project or shared files, and list a project's AI session transcripts",
+                    "method": "GET | POST | DELETE",
+                    "path": "/api/v1/projects/{id}/files | /api/v1/files | /api/v1/projects/{id}/transcripts",
+                },
+                {
+                    "purpose": "list and launch curated AI quick-action workflow templates (e.g. autonomous-boss, bug-hunt-squad, ai-council-review)",
+                    "method": "GET | POST",
+                    "path": "/api/v1/quick-actions | /api/v1/quick-actions/{id}/launch",
+                },
+                {
+                    "purpose": "list / create / update AI personalities layered onto roles so two same-role workers differ",
+                    "method": "GET | POST | PATCH | DELETE",
+                    "path": "/api/v1/personalities",
+                },
+                {
+                    "purpose": "install + manage MCP servers, manage local Ollama models, and use the local-LLM assistant for cheap on-box chat",
+                    "method": "GET | POST | PATCH",
+                    "path": "/api/v1/mcp-servers | /api/v1/models | /api/v1/assistant",
+                },
+                {
+                    "purpose": "global search across projects, tools, actions, and settings",
+                    "method": "GET",
+                    "path": "/api/v1/search?q={query}",
+                },
+                {
+                    "purpose": "THE COMPLETE AI CAPABILITY REFERENCE -- every REST endpoint, WS event, injected env var, memory file, and the gaps AIs commonly miss. Read this repo file for the full inventory beyond this curated list.",
+                    "method": "DOC",
+                    "path": "docs/api-finds.md",
+                },
             ],
         }
 

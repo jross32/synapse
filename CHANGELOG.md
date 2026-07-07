@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+### Added
+- **AI-first API discoverability.** `GET /api/v1/ai/context` → `endpoints_for_ai` now
+  advertises the full AI menu: multi-AI coordination, per-worker token accounting,
+  squad kill-switch/cap/budget, delegate, review verdicts, capture, the human review
+  inbox, files/transcripts, quick-actions, personalities, MCP/models/assistant, search,
+  and a pointer to `docs/api-finds.md`. Committed **`docs/api-finds.md`** (Copilot's
+  complete AI-capability audit: every endpoint, WS event, env var, memory file + a
+  gaps analysis + a session-start protocol).
+
+### Changed
+- **AGENTS.md Golden rule: "Build for the AI, not just the human."** Every new capability
+  must ship a daemon REST endpoint, be advertised in `endpoints_for_ai`, and be documented
+  in `docs/api-finds.md` — a feature an AI can't discover + drive via the API is not shippable.
+  Mirrored in `docs/MULTI-AI-WORKFLOW.md`.
+
 ## [0.1.37] -- 2026-07-06
 
 ### Added

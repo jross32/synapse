@@ -40,6 +40,24 @@ prioritized (critical/important/optional) findings — you don't blindly follow.
 Full discipline + mechanism in [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md);
 launchable as the `ai-council-review` quick-action.
 
+**Build for the AI, not just the human (API-first + AI-discoverable).** A feature
+is only half-done if a person can click it but an AI running inside Synapse can't
+drive it. Synapse is built *for* AI operators as much as for the user. So every new
+capability MUST:
+1. **Be a REST endpoint on the daemon** — the daemon is the single source of truth;
+   the desktop UI, mobile UI, and AI all call the *same* API. Never put logic only
+   in the renderer where an AI can't reach it.
+2. **Be advertised in `endpoints_for_ai`** inside `daemon/synapse_daemon/routes_ai.py`
+   so `GET /api/v1/ai/context` tells any AI the capability exists and how to call it.
+3. **Be documented in [`docs/api-finds.md`](./docs/api-finds.md)** — the complete
+   AI-capability reference (every endpoint, WS event, injected env var, memory file).
+   Re-audit it when you add a `routes_*.py` file.
+4. **Inject any env vars / context** a spawned session needs to use it, and list any
+   new WS events it emits.
+
+A capability an AI cannot *discover* (via `ai/context`) and *drive* (via the API) is
+not shippable — treat that gap like a failing test.
+
 ---
 
 ## Repo layout (high level)

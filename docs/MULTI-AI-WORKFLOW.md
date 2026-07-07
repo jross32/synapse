@@ -139,6 +139,12 @@ the *cause* of version collisions, not the fix.
   short handoff note when you finish** so the next agent — possibly a different
   CLI — picks up the thread. This file is the authoritative place two concurrent
   agents agree on lanes, numbering, and commit order.
+- **Build for the AI, not just the human (AGENTS.md Golden rule).** Every new
+  capability must be a daemon REST endpoint, advertised in `endpoints_for_ai`
+  (`routes_ai.py` → `GET /api/v1/ai/context`), and documented in
+  [`docs/api-finds.md`](./api-finds.md) — the complete AI-capability reference
+  (every endpoint, WS event, env var, and the gaps AIs commonly miss). Read
+  `api-finds.md` before working; update it when you add a `routes_*.py` file.
 - **Error envelope, status enum, audit log, timestamps:** Contracts #4, #2,
   #11, #24 in AGENTS.md. Don't invent parallel shapes.
 - **AI Council Review — don't work alone (ADR-0023).** For meaningful work,
