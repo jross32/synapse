@@ -465,7 +465,7 @@ write its PR summary to `$SYNAPSE_AI_CASE_DRAFT_PR`.
 | POST | `/benchmarks/ingest-direct` | Ingest externally-run benchmark results |
 | POST | `/benchmarks/runs/{id}/rescore` | Rescore a run |
 | POST | `/benchmarks/runs/{id}/export` | Export benchmark report |
-| POST | `/benchmarks/score-bug-hunt` | Grade bug-hunt findings vs a fixture answer key → `true_positives` / `false_positive_rate` / `bugs_per_1k_tokens` (stateless; Plan 3 Phase 2) |
+| POST | `/benchmarks/score-bug-hunt` | Grade bug-hunt findings → `true_positives` / `false_positive_rate` / `bugs_per_1k_tokens` (stateless; Plan 3 Phase 2). Pass the answer key inline via `answer_key`, or by name via `fixture` (e.g. `"bug-hunt-fixture"`) to load the shipped key |
 
 ### 5I. Quality OS (Gates, Contracts, Evidence)
 

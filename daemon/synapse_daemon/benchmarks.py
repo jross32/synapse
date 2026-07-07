@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .coder_workspace import CoderRun
 from .errors import invalid, not_found
+from .runtime_paths import repo_root
 from .time_utils import from_iso, to_iso, utc_now
 
 
@@ -124,10 +125,13 @@ class BugHuntScore(BaseModel):
 
 
 class BugHuntScoreRequest(BaseModel):
-    """Grade a bug-hunt run: the caller passes the fixture's answer key inline (read from
-    ``benchmarks/bug-hunt-fixture/answer-key.json``), its findings, and the tokens it spent."""
+    """Grade a bug-hunt run. Provide the answer key one of two ways: inline via ``answer_key``,
+    or by name via ``fixture`` (e.g. ``"bug-hunt-fixture"``) to load the shipped key from
+    ``benchmarks/<fixture>/answer-key.json`` -- so a caller need not paste the whole key. Plus the
+    run's ``findings`` and the ``total_tokens`` it spent."""
 
-    answer_key: dict[str, Any]
+    answer_key: dict[str, Any] | None = None
+    fixture: str | None = None
     findings: list[dict[str, Any]] = Field(default_factory=list)
     total_tokens: int = 0
 
@@ -1081,6 +1085,23 @@ def score_bug_hunt(
         false_positive_rate=round(false_positives / denom_fp, 4) if denom_fp else 0.0,
         bugs_per_1k_tokens=round(true_positives / (tokens / 1000.0), 4) if tokens else None,
     )
+
+
+def load_fixture_answer_key(fixture: str) -> dict[str, Any]:
+    """Resolve a shipped bug-hunt fixture's answer key by name (e.g. ``"bug-hunt-fixture"``).
+
+    Lets a caller score against the fixture without pasting the whole key. The name is validated
+    to a single safe path segment (no separators / traversal). Raises ``not_found`` when the
+    fixture -- or its ``answer-key.json`` -- is absent (e.g. a packaged build that does not ship
+    ``benchmarks/``), so the caller degrades to passing ``answer_key`` inline.
+    """
+    name = (fixture or "").strip()
+    if not name or name != Path(name).name:
+        raise invalid("bug_hunt_fixture", f"Invalid fixture name: {fixture!r}")
+    path = repo_root() / "benchmarks" / name / "answer-key.json"
+    if not path.is_file():
+        raise not_found("bug_hunt_fixture", name)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def ingest_direct_attempt(conn: sqlite3.Connection, payload: BenchmarkDirectIngestRequest) -> BenchmarkAttempt:

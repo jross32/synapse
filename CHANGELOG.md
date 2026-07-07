@@ -10,6 +10,13 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+### Added
+- **`score-bug-hunt` accepts a fixture name.** `POST /benchmarks/score-bug-hunt` now takes an
+  optional `fixture` (e.g. `"bug-hunt-fixture"`) instead of a pasted `answer_key` — the daemon loads
+  the shipped `benchmarks/<fixture>/answer-key.json` (path-validated single segment; 404 if a build
+  doesn't ship it, so callers fall back to inline `answer_key`). Much less for a squad synthesist to
+  send when scoring itself against the standard fixture.
+
 ## [0.1.38] — 2026-07-07
 
 ### Added

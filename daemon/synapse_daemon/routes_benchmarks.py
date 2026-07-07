@@ -370,9 +370,14 @@ def build_benchmarks_router(storage: Storage, pty_manager: PtySessionManager) ->
 
     @router.post("/score-bug-hunt", response_model=None)
     async def score_bug_hunt(payload: benchmarks.BugHuntScoreRequest) -> dict[str, Any]:
-        # Stateless grader for the bug-hunt fixture (Plan 3 Phase 2). A squad's synthesist posts
-        # its findings + tokens + the fixture answer key and gets back bugs_per_1k_tokens etc.
-        score = benchmarks.score_bug_hunt(payload.answer_key, payload.findings, payload.total_tokens)
+        # Stateless grader for the bug-hunt fixture (Plan 3 Phase 2). A squad's synthesist posts its
+        # findings + tokens plus either the answer key inline or a `fixture` name to load it by.
+        answer_key = payload.answer_key
+        if not answer_key and payload.fixture:
+            answer_key = benchmarks.load_fixture_answer_key(payload.fixture)
+        if not answer_key:
+            raise invalid("bug_hunt", "Provide either answer_key or fixture.")
+        score = benchmarks.score_bug_hunt(answer_key, payload.findings, payload.total_tokens)
         return score.model_dump(mode="json")
 
     @router.post("/runs/{run_id}/rescore", response_model=None)

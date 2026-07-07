@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from synapse_daemon.app import build_app
-from synapse_daemon.benchmarks import BugHuntScore, score_bug_hunt
+from synapse_daemon.benchmarks import BugHuntScore, load_fixture_answer_key, score_bug_hunt
+from synapse_daemon.errors import SynapseError
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
@@ -103,3 +105,46 @@ def test_score_bug_hunt_route(tmp_path: Path) -> None:
         assert body["true_positives"] == 1
         assert body["false_positives"] == 1
         assert body["bugs_per_1k_tokens"] == 0.5
+
+
+def test_load_fixture_answer_key_resolves_shipped_fixture() -> None:
+    key = load_fixture_answer_key("bug-hunt-fixture")
+    assert key["fixture"] == "buttermore-bakery"
+    assert len(key["bugs"]) == 12
+
+
+def test_load_fixture_answer_key_rejects_path_traversal() -> None:
+    for bad in ("../secret", "a/b", "..", ""):
+        with pytest.raises(SynapseError):
+            load_fixture_answer_key(bad)
+
+
+def test_load_fixture_answer_key_unknown_fixture() -> None:
+    with pytest.raises(SynapseError):
+        load_fixture_answer_key("no-such-fixture")
+
+
+def test_score_route_accepts_fixture_name(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        r = c.post(
+            "/api/v1/benchmarks/score-bug-hunt",
+            json={
+                "fixture": "bug-hunt-fixture",
+                "findings": [
+                    {"surface": "contact form", "text": "empty submit shows success, no validation"},
+                    {"surface": "header", "text": "mobile nav overlaps logo, unclickable"},
+                ],
+                "total_tokens": 10_000,
+            },
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["total_bugs"] == 12
+        assert body["true_positives"] == 2  # B01, B04
+        assert body["bugs_per_1k_tokens"] == 0.2
+
+
+def test_score_route_requires_key_or_fixture(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        r = c.post("/api/v1/benchmarks/score-bug-hunt", json={"findings": [], "total_tokens": 100})
+        assert r.status_code >= 400
