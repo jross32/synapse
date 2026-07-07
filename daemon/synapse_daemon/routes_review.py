@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from . import proposals as proposals_module
 from . import review
@@ -112,5 +112,17 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
         proposal_id: str, payload: ProposalResolveRequest | None = None
     ) -> dict[str, Any]:
         return await _resolve_proposal(proposal_id, ProposalStatus.REJECTED, payload.note if payload else "")
+
+    @router.get("/proposals", response_model=list[proposals_module.Proposal])
+    async def list_review_proposals(
+        status: ProposalStatus | None = Query(default=None),
+    ) -> list[proposals_module.Proposal]:
+        # Optional status filter (open|approved|rejected) -- lets a brainstormer skip
+        # ideas you already rejected, and the UI show the full proposal history.
+        return proposals_module.list_proposals(storage.conn, status)
+
+    @router.get("/proposals/{proposal_id}", response_model=proposals_module.Proposal)
+    async def get_review_proposal(proposal_id: str) -> proposals_module.Proposal:
+        return proposals_module.get_proposal(storage.conn, proposal_id)
 
     return router

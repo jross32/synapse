@@ -737,6 +737,8 @@ Built-in assistant powered by Ollama. Wraps Synapse context into a system prompt
 | POST | `/review/items/{id}/revise` | Request revision |
 | POST | `/review/items/{id}/reject` | Reject item |
 | POST | `/review/proposals` | **File an improvement proposal** — an idea for the user to approve (ADR-0025) |
+| GET | `/review/proposals` | List proposals (optional `?status=open\|approved\|rejected`) |
+| GET | `/review/proposals/{id}` | Get one proposal |
 | POST | `/review/proposals/{id}/approve` | Approve a proposal |
 | POST | `/review/proposals/{id}/reject` | Reject a proposal |
 

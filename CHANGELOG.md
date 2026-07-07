@@ -11,6 +11,9 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Proposals API completed.** `GET /review/proposals` (optional `?status=open|approved|rejected`)
+  + `GET /review/proposals/{id}` — so a brainstormer can skip already-rejected ideas and the UI
+  can show the full proposal history.
 - **`brainstorm-improvements` quick-action.** Launch it at a project (or Synapse itself); an AI
   surveys the app + backlog + inbox and files ranked improvement ideas as proposals in your review
   inbox (propose-only, no changes) — completing the "agents brainstorm, you approve" loop.

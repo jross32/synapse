@@ -67,3 +67,19 @@ def test_approve_unknown_proposal_404(tmp_path: Path) -> None:
     client = _client(tmp_path)
     with client as c:
         assert c.post("/api/v1/review/proposals/nope/approve").status_code == 404
+
+
+def test_list_and_get_proposals_with_status_filter(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    with client as c:
+        p_open = c.post("/api/v1/review/proposals", json={"title": "Keep this open"}).json()["id"]
+        p_rej = c.post("/api/v1/review/proposals", json={"title": "Reject this"}).json()["id"]
+        c.post(f"/api/v1/review/proposals/{p_rej}/reject", json={"note": "no"})
+
+        assert {p["id"] for p in c.get("/api/v1/review/proposals").json()} == {p_open, p_rej}
+        rejected = c.get("/api/v1/review/proposals?status=rejected").json()
+        assert [p["id"] for p in rejected] == [p_rej]
+
+        one = c.get(f"/api/v1/review/proposals/{p_open}").json()
+        assert one["id"] == p_open and one["status"] == "open"
+        assert c.get("/api/v1/review/proposals/nope").status_code == 404
