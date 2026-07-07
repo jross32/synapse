@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from . import agent_squads as squads
 from . import projects
+from . import proposals as proposals_module
 from . import quality_os
 from .agent_squads import AgentWorkItem, AgentWorkItemStatus
 from .time_utils import to_iso, utc_now
@@ -54,6 +55,8 @@ class ReviewInbox(BaseModel):
     items: list[ReviewItem] = Field(default_factory=list)
     count: int = 0
     quality_gates: list[quality_os.QualityGate] = Field(default_factory=list)
+    # AI-filed improvement ideas awaiting your approve/reject (ADR-0025).
+    proposals: list[proposals_module.Proposal] = Field(default_factory=list)
 
 
 class ReviewActionRequest(BaseModel):
@@ -97,6 +100,7 @@ def build_inbox(conn: sqlite3.Connection) -> ReviewInbox:
             status=quality_os.QualityGateStatus.OPEN,
             blocking=True,
         ),
+        proposals=proposals_module.list_proposals(conn, proposals_module.ProposalStatus.OPEN),
     )
 
 

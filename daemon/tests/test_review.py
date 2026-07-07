@@ -129,4 +129,4 @@ def test_empty_inbox(tmp_path: Path) -> None:
     client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
     res = client.get("/api/v1/review/inbox")
     assert res.status_code == 200
-    assert res.json() == {"items": [], "count": 0, "quality_gates": []}
+    assert res.json() == {"items": [], "count": 0, "quality_gates": [], "proposals": []}

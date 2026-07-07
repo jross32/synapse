@@ -11,10 +11,12 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from . import proposals as proposals_module
 from . import review
 from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .models import AuditSource
+from .proposals import ProposalCreate, ProposalResolveRequest, ProposalStatus
 from .review import ReviewActionRequest, ReviewInbox
 from .storage import Storage
 from .ws import EventBus
@@ -63,5 +65,52 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
     @router.post("/items/{work_item_id}/reject", response_model=None)
     async def reject(work_item_id: str, payload: ReviewActionRequest) -> dict[str, Any]:
         return await _act(work_item_id, "reject", payload.note)
+
+    # Improvement proposals -- AIs file ideas here for you to approve/reject (ADR-0025).
+    @router.post("/proposals", response_model=proposals_module.Proposal)
+    async def file_proposal(payload: ProposalCreate) -> proposals_module.Proposal:
+        with storage.transaction() as conn:
+            proposal = proposals_module.create_proposal(conn, payload)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="proposal",
+                    entity_id=proposal.id,
+                    action="proposal.filed",
+                    source=AuditSource.AUTO,
+                    result="success",
+                    details={"title": proposal.title, "project_id": proposal.project_id},
+                ),
+            )
+        await bus.publish(event_name("review", "proposal_filed"), {"id": proposal.id})
+        return proposal
+
+    async def _resolve_proposal(proposal_id: str, status: ProposalStatus, note: str) -> dict[str, Any]:
+        with storage.transaction() as conn:
+            proposal = proposals_module.resolve_proposal(conn, proposal_id, status, note)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="proposal",
+                    entity_id=proposal_id,
+                    action=f"proposal.{status.value}",
+                    source=AuditSource.DESKTOP,
+                    result="success",
+                ),
+            )
+        await bus.publish(event_name("review", "resolved"), {"id": proposal_id, "action": status.value})
+        return proposal.model_dump(mode="json")
+
+    @router.post("/proposals/{proposal_id}/approve", response_model=None)
+    async def approve_proposal(
+        proposal_id: str, payload: ProposalResolveRequest | None = None
+    ) -> dict[str, Any]:
+        return await _resolve_proposal(proposal_id, ProposalStatus.APPROVED, payload.note if payload else "")
+
+    @router.post("/proposals/{proposal_id}/reject", response_model=None)
+    async def reject_proposal(
+        proposal_id: str, payload: ProposalResolveRequest | None = None
+    ) -> dict[str, Any]:
+        return await _resolve_proposal(proposal_id, ProposalStatus.REJECTED, payload.note if payload else "")
 
     return router

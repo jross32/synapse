@@ -732,10 +732,16 @@ Built-in assistant powered by Ollama. Wraps Synapse context into a system prompt
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/review/inbox` | Get work items awaiting human review |
+| GET | `/review/inbox` | Get work-item handoffs + AI-filed improvement proposals awaiting human review |
 | POST | `/review/items/{id}/approve` | Approve item |
 | POST | `/review/items/{id}/revise` | Request revision |
 | POST | `/review/items/{id}/reject` | Reject item |
+| POST | `/review/proposals` | **File an improvement proposal** — an idea for the user to approve (ADR-0025) |
+| POST | `/review/proposals/{id}/approve` | Approve a proposal |
+| POST | `/review/proposals/{id}/reject` | Reject a proposal |
+
+**Proposal body:** `{"title": "...", "rationale_md": "...", "project_id": "...", "source_runtime": "claude", "est_effort": "S", "est_token_cost": 20000}`.
+The safe **"agents brainstorm, you approve"** path — an AI files an idea here instead of acting on it unilaterally. Open proposals appear in `GET /review/inbox` under `proposals`.
 
 ### 5Y. Token Ledger
 

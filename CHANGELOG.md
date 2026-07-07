@@ -11,6 +11,11 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Improvement proposals inbox (Plan 3 Phase 3f, migration `025`).** An AI (or a squad
+  brainstormer) can `POST /review/proposals` to file an improvement idea — for an app or for
+  Synapse itself — into the human review inbox instead of acting on it unilaterally.
+  `GET /review/inbox` now surfaces open proposals alongside work-item handoffs; approve/reject
+  via `/review/proposals/{id}/approve|reject`. The safe "agents brainstorm, you approve" path.
 - **Frictionless token reporting on handoff (ADR-0025).** `POST /agent-work-items/{id}/handoff`
   now accepts optional `input_tokens` / `output_tokens` / `total_tokens` and records them to the
   token ledger — so a worker reports usage as part of the handoff it already does, instead of a
