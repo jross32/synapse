@@ -11,6 +11,11 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Bug-hunt scoring wired into the benchmark engine (Plan 3 Phase 2).** `benchmarks.score_bug_hunt()`
+  — an in-daemon twin of the fixture grader — plus `POST /benchmarks/score-bug-hunt` (stateless: a
+  squad synthesist posts findings + tokens + the answer key, gets `bugs_per_1k_tokens` /
+  `false_positive_rate` / `recall` back). `BenchmarkScore` gains `bugs_found_true_positive`,
+  `false_positive_rate`, `bugs_per_1k_tokens`. Added to `endpoints_for_ai` + `api-finds.md`.
 - **Bug-hunt benchmark fixture (Plan 3 Phase 2).** `benchmarks/bug-hunt-fixture/` — a deliberately-
   buggy static site (`app/`) with 12 categorized bugs (functional, state, ui, perf, a11y, edge-case,
   security), a machine-checkable `answer-key.json`, and a zero-dep `grade.py` that scores a run's

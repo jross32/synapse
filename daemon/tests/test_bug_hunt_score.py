@@ -1,0 +1,105 @@
+"""Bug-hunt scoring helper (Plan 3 Phase 2) -- in-daemon twin of bug-hunt-fixture/grade.py."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from synapse_daemon.app import build_app
+from synapse_daemon.benchmarks import BugHuntScore, score_bug_hunt
+from synapse_daemon.storage import Storage
+from synapse_daemon.ws import EventBus
+
+_INLINE_KEY = {
+    "bugs": [
+        {"id": "X1", "surface": "form", "match": ["empty submit", "no validation"]},
+        {"id": "X2", "surface": "nav", "match": ["nav overlap", "unclickable"]},
+    ]
+}
+
+
+def test_scores_true_and_false_positives() -> None:
+    findings = [
+        {"surface": "form", "text": "Empty submit still succeeds -- no validation"},
+        {"surface": "footer", "text": "the year looks old"},
+    ]
+    score = score_bug_hunt(_INLINE_KEY, findings, total_tokens=10_000)
+    assert isinstance(score, BugHuntScore)
+    assert score.true_positives == 1
+    assert score.false_positives == 1
+    assert score.missed == ["X2"]
+    assert score.recall == 0.5
+    assert score.false_positive_rate == 0.5
+    assert score.bugs_per_1k_tokens == 0.1  # 1 / (10000/1000)
+
+
+def test_duplicate_finding_not_double_counted() -> None:
+    findings = [
+        {"text": "empty submit, no validation at all"},
+        {"text": "again: empty submit with no validation"},
+    ]
+    score = score_bug_hunt(_INLINE_KEY, findings, total_tokens=5_000)
+    assert score.true_positives == 1
+    assert score.duplicates == 1
+    assert score.false_positives == 0
+
+
+def test_zero_tokens_gives_none_efficiency() -> None:
+    score = score_bug_hunt(_INLINE_KEY, [{"text": "nav overlap, unclickable"}], total_tokens=0)
+    assert score.true_positives == 1
+    assert score.bugs_per_1k_tokens is None
+
+
+def test_empty_findings() -> None:
+    score = score_bug_hunt(_INLINE_KEY, [], total_tokens=1_000)
+    assert score.true_positives == 0
+    assert score.false_positives == 0
+    assert score.missed == ["X1", "X2"]
+    assert score.recall == 0.0
+
+
+def test_matches_shipped_fixture_answer_key() -> None:
+    key_path = Path(__file__).resolve().parents[2] / "benchmarks" / "bug-hunt-fixture" / "answer-key.json"
+    key = json.loads(key_path.read_text(encoding="utf-8"))
+    findings = [
+        {"surface": "contact form", "text": "Empty submit still shows success -- no validation"},
+        {"surface": "header", "text": "Mobile nav overlaps the logo and links are unclickable"},
+        {"surface": "contact confirmation", "text": "Name into innerHTML unescaped -> reflected XSS"},
+        {"surface": "footer", "text": "copyright year feels old"},
+    ]
+    score = score_bug_hunt(key, findings, total_tokens=10_000)
+    assert score.total_bugs == 12
+    assert score.true_positives == 3  # B01, B04, B12
+    assert score.false_positives == 1
+    assert score.bugs_per_1k_tokens == 0.3
+    assert len(score.missed) == 9
+
+
+def _client(tmp_path: Path) -> TestClient:
+    s = Storage(tmp_path / "data")
+    s.open()
+    s.migrate()
+    app = build_app(s, EventBus())
+    return TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+
+
+def test_score_bug_hunt_route(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        r = c.post(
+            "/api/v1/benchmarks/score-bug-hunt",
+            json={
+                "answer_key": _INLINE_KEY,
+                "findings": [
+                    {"surface": "form", "text": "empty submit, no validation"},
+                    {"text": "totally unrelated nitpick"},
+                ],
+                "total_tokens": 2_000,
+            },
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["true_positives"] == 1
+        assert body["false_positives"] == 1
+        assert body["bugs_per_1k_tokens"] == 0.5

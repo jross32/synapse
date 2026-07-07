@@ -100,6 +100,36 @@ class BenchmarkScore(BaseModel):
     quality_per_1k_tokens: float | None = None
     quality_per_minute: float | None = None
     tokens_per_passed_check: float | None = None
+    # Bug-hunt scenarios (Plan 3 Phase 2 -- scored against a fixture answer key).
+    bugs_found_true_positive: int | None = None
+    false_positive_rate: float | None = None
+    bugs_per_1k_tokens: float | None = None
+
+
+class BugHuntScore(BaseModel):
+    """Result of grading a bug-hunt run against a fixture answer key.
+
+    Mirrors ``benchmarks/bug-hunt-fixture/grade.py`` so a squad/route can score a run in-process.
+    ``bugs_per_1k_tokens`` is the headline efficiency number the topology benchmark ranks on.
+    """
+
+    total_bugs: int = 0
+    true_positives: int = 0
+    false_positives: int = 0
+    duplicates: int = 0
+    missed: list[str] = Field(default_factory=list)
+    recall: float = 0.0
+    false_positive_rate: float = 0.0
+    bugs_per_1k_tokens: float | None = None
+
+
+class BugHuntScoreRequest(BaseModel):
+    """Grade a bug-hunt run: the caller passes the fixture's answer key inline (read from
+    ``benchmarks/bug-hunt-fixture/answer-key.json``), its findings, and the tokens it spent."""
+
+    answer_key: dict[str, Any]
+    findings: list[dict[str, Any]] = Field(default_factory=list)
+    total_tokens: int = 0
 
 
 class BenchmarkFailure(BaseModel):
@@ -999,6 +1029,58 @@ def recompute_attempt_metrics(conn: sqlite3.Connection, attempt_id: str) -> Benc
         (total_tokens, quality_per_1k_tokens, quality_per_minute, tokens_per_passed_check, now, attempt_id),
     )
     return get_attempt(conn, attempt_id)
+
+
+def _norm_text(text: str) -> str:
+    return " ".join(str(text).lower().split())
+
+
+def score_bug_hunt(
+    answer_key: dict[str, Any],
+    findings: list[dict[str, Any]],
+    total_tokens: int,
+) -> BugHuntScore:
+    """Grade bug-hunt ``findings`` against a fixture ``answer_key`` (see bug-hunt-fixture/).
+
+    Each finding is ``{"text": str, "surface"?: str}``. A finding is a true positive when its
+    text (plus surface) contains any of a bug's ``match`` phrases; each bug is claimed at most
+    once (later matches are ``duplicates``), and a finding matching no bug is a false positive.
+    Deterministic and dependency-free -- the in-process twin of ``grade.py``.
+    """
+    bugs = answer_key.get("bugs", [])
+    claimed: dict[str, int] = {}
+    false_positives = 0
+    duplicates = 0
+
+    for idx, finding in enumerate(findings):
+        blob = _norm_text(finding.get("text", "")) + " " + _norm_text(finding.get("surface", ""))
+        matched_id: str | None = None
+        for bug in bugs:
+            terms = [_norm_text(t) for t in bug.get("match", [])]
+            if any(term and term in blob for term in terms):
+                matched_id = bug.get("id")
+                break
+        if matched_id is None:
+            false_positives += 1
+        elif matched_id in claimed:
+            duplicates += 1
+        else:
+            claimed[matched_id] = idx
+
+    true_positives = len(claimed)
+    missed = [b.get("id") for b in bugs if b.get("id") not in claimed]
+    denom_fp = true_positives + false_positives
+    tokens = max(int(total_tokens or 0), 0)
+    return BugHuntScore(
+        total_bugs=len(bugs),
+        true_positives=true_positives,
+        false_positives=false_positives,
+        duplicates=duplicates,
+        missed=missed,
+        recall=round(true_positives / len(bugs), 4) if bugs else 0.0,
+        false_positive_rate=round(false_positives / denom_fp, 4) if denom_fp else 0.0,
+        bugs_per_1k_tokens=round(true_positives / (tokens / 1000.0), 4) if tokens else None,
+    )
 
 
 def ingest_direct_attempt(conn: sqlite3.Connection, payload: BenchmarkDirectIngestRequest) -> BenchmarkAttempt:

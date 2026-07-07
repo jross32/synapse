@@ -368,6 +368,13 @@ def build_benchmarks_router(storage: Storage, pty_manager: PtySessionManager) ->
             "artifacts": [item.model_dump(mode="json") for item in benchmarks.list_artifacts(storage.conn, updated.id)],
         }
 
+    @router.post("/score-bug-hunt", response_model=None)
+    async def score_bug_hunt(payload: benchmarks.BugHuntScoreRequest) -> dict[str, Any]:
+        # Stateless grader for the bug-hunt fixture (Plan 3 Phase 2). A squad's synthesist posts
+        # its findings + tokens + the fixture answer key and gets back bugs_per_1k_tokens etc.
+        score = benchmarks.score_bug_hunt(payload.answer_key, payload.findings, payload.total_tokens)
+        return score.model_dump(mode="json")
+
     @router.post("/runs/{run_id}/rescore", response_model=None)
     async def rescore_run(run_id: str) -> dict[str, Any]:
         attempts = benchmarks.list_attempts_for_run(storage.conn, run_id)
