@@ -1,0 +1,136 @@
+{
+  "fixture": "buttermore-bakery",
+  "version": "1.0.0",
+  "description": "Deliberately-buggy static site used to score a bug-hunt run. Every bug below is genuinely present in app/ and independently detectable. Grading is mechanical: a reported finding is a TRUE POSITIVE if it matches one bug's `match` keywords on the same `surface`; a finding matching no bug is a FALSE POSITIVE; a bug with no matching finding is a MISS.",
+  "grading": {
+    "true_positive": "reported finding whose text matches a bug's `match` terms (any) AND names the bug's surface",
+    "false_positive": "reported finding that matches no bug in this key",
+    "miss": "bug in this key with no matching reported finding",
+    "bugs_per_1k_tokens": "true_positives / (total_tokens / 1000)",
+    "false_positive_rate": "false_positives / (true_positives + false_positives)"
+  },
+  "categories": ["functional", "state", "ui", "performance", "accessibility", "edge-case", "security"],
+  "severities": ["minor", "moderate", "major", "critical"],
+  "bugs": [
+    {
+      "id": "B01",
+      "title": "Contact form reports success on an empty submit",
+      "category": "functional",
+      "severity": "critical",
+      "surface": "contact form",
+      "viewport": "any",
+      "detect": "Open the contact form, click Send with every field empty. It shows 'Your message was sent.' although nothing was entered.",
+      "match": ["empty submit", "no validation", "false success", "sends when empty", "novalidate", "always succeeds"]
+    },
+    {
+      "id": "B02",
+      "title": "Email fields accept any text (no format validation)",
+      "category": "functional",
+      "severity": "major",
+      "surface": "contact form, newsletter form",
+      "viewport": "any",
+      "detect": "Email inputs are type=text with no pattern and no JS check; 'notanemail' is accepted.",
+      "match": ["email validation", "invalid email accepted", "type=text email", "no email format", "email not validated"]
+    },
+    {
+      "id": "B03",
+      "title": "Subscribe double-counts on rapid double-click",
+      "category": "state",
+      "severity": "major",
+      "surface": "newsletter form",
+      "viewport": "any",
+      "detect": "Clicking Subscribe twice quickly increments the subscriber count twice for one person; no submit guard/disable.",
+      "match": ["double submit", "double click", "counts twice", "no debounce", "no guard", "race"]
+    },
+    {
+      "id": "B04",
+      "title": "Mobile nav overlaps header and is unclickable",
+      "category": "ui",
+      "severity": "critical",
+      "surface": "header / nav",
+      "viewport": "mobile",
+      "detect": "At <=768px the .nav-links is absolutely positioned over the header with z-index:-1, so the links sit behind/over the logo and cannot be tapped.",
+      "match": ["nav overlap", "menu unclickable", "mobile nav", "z-index", "links behind", "navigation overlaps"]
+    },
+    {
+      "id": "B05",
+      "title": "Google Fonts stylesheet loaded twice",
+      "category": "performance",
+      "severity": "minor",
+      "surface": "document head",
+      "viewport": "any",
+      "detect": "Two identical <link> tags load the same Poppins stylesheet — a wasted network request.",
+      "match": ["duplicate font", "font loaded twice", "duplicate link", "duplicate stylesheet", "redundant request"]
+    },
+    {
+      "id": "B06",
+      "title": "Success message text is unreadably low-contrast",
+      "category": "ui",
+      "severity": "moderate",
+      "surface": "newsletter success message",
+      "viewport": "any",
+      "detect": ".success uses #b8e0b8 text on #e8f5e8 — roughly 1.2:1 contrast, well below WCAG AA (4.5:1).",
+      "match": ["low contrast", "contrast ratio", "unreadable text", "wcag contrast", "hard to read success"]
+    },
+    {
+      "id": "B07",
+      "title": "Form inputs have no associated labels",
+      "category": "accessibility",
+      "severity": "major",
+      "surface": "newsletter form, contact form",
+      "viewport": "any",
+      "detect": "Inputs rely on placeholder text only; there are no <label> elements or aria-label attributes, so screen readers cannot name the fields.",
+      "match": ["no label", "missing label", "placeholder only", "aria-label", "unlabeled input"]
+    },
+    {
+      "id": "B08",
+      "title": "Buttons are <div onclick> — not keyboard accessible",
+      "category": "accessibility",
+      "severity": "major",
+      "surface": "newsletter form, contact form",
+      "viewport": "any",
+      "detect": "Subscribe and Send are <div class=btn onclick> with no role/tabindex, so they cannot be focused or activated by keyboard.",
+      "match": ["div button", "not a button", "not keyboard", "no tabindex", "no role button", "onclick div"]
+    },
+    {
+      "id": "B09",
+      "title": "Images are missing alt text",
+      "category": "accessibility",
+      "severity": "moderate",
+      "surface": "hero, gallery",
+      "viewport": "any",
+      "detect": "The hero image and all three gallery images have no alt attribute.",
+      "match": ["missing alt", "no alt text", "alt attribute", "images without alt"]
+    },
+    {
+      "id": "B10",
+      "title": "Message textarea has no length limit",
+      "category": "edge-case",
+      "severity": "minor",
+      "surface": "contact form",
+      "viewport": "any",
+      "detect": "The message textarea has no maxlength; pasting a very large string is not guarded and can break layout / bloat submission.",
+      "match": ["no maxlength", "length limit", "huge input", "unbounded textarea", "large paste"]
+    },
+    {
+      "id": "B11",
+      "title": "Whitespace-only name is accepted as a subscriber",
+      "category": "edge-case",
+      "severity": "moderate",
+      "surface": "newsletter form",
+      "viewport": "any",
+      "detect": "The subscribe gate checks name.length > 0 without trimming, so '   ' (spaces only) is accepted as a valid name.",
+      "match": ["whitespace name", "no trim", "spaces accepted", "blank name passes", "trim validation"]
+    },
+    {
+      "id": "B12",
+      "title": "Reflected XSS via unescaped name in innerHTML",
+      "category": "security",
+      "severity": "critical",
+      "surface": "contact confirmation",
+      "viewport": "any",
+      "detect": "sendMessage() sets confirm.innerHTML with the raw name value; a name of `<img src=x onerror=alert(1)>` executes script.",
+      "match": ["xss", "innerhtml", "script injection", "unescaped", "cross-site scripting", "html injection"]
+    }
+  ]
+}

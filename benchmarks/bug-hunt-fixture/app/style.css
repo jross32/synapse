@@ -1,0 +1,51 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Poppins', system-ui, sans-serif; color: #2a2a2a; background: #fffdf8; }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  background: #6b4423;
+  color: #fff;
+}
+.logo { font-weight: 600; font-size: 20px; }
+.nav-links { display: flex; gap: 24px; }
+.nav-links a { color: #fff; text-decoration: none; }
+
+.hero { text-align: center; padding: 48px 24px; }
+.hero-img { width: 100%; max-width: 640px; height: 240px; object-fit: cover; border-radius: 12px; }
+.hero h1 { margin: 24px 0 8px; font-size: 32px; }
+
+.card { max-width: 560px; margin: 32px auto; padding: 24px; background: #fff; border: 1px solid #eee; border-radius: 12px; }
+.card input, .card textarea { display: block; width: 100%; margin: 10px 0; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font: inherit; }
+.card textarea { min-height: 100px; resize: vertical; }
+
+.btn { display: inline-block; margin-top: 8px; padding: 12px 24px; background: #6b4423; color: #fff; border-radius: 8px; cursor: pointer; user-select: none; }
+
+.gallery { max-width: 900px; margin: 32px auto; text-align: center; }
+.gallery img { width: 240px; height: 160px; object-fit: cover; border-radius: 8px; margin: 8px; }
+
+/* BUG B06: success text is far too low-contrast against its background (~1.2:1). */
+.success { margin-top: 12px; color: #b8e0b8; background: #e8f5e8; padding: 8px; border-radius: 6px; }
+.confirm { margin-top: 12px; color: #2e7d32; }
+.hidden { display: none; }
+
+.footer { text-align: center; padding: 24px; color: #999; }
+
+@media (max-width: 768px) {
+  /* BUG B04: on mobile the nav is absolutely positioned ON TOP of the header,
+     so the links overlap the logo and are effectively unclickable. */
+  .nav-links {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 32px;
+    background: transparent;
+    z-index: -1;
+  }
+  .hero h1 { font-size: 24px; }
+}

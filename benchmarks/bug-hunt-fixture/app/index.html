@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buttermore Bakery</title>
+  <!-- BUG B05: the same Google Fonts stylesheet is loaded twice (duplicate network request). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="logo">Buttermore Bakery</div>
+    <nav class="nav-links">
+      <a href="#menu">Menu</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#subscribe">Newsletter</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <!-- BUG B09: hero image has no alt text. -->
+      <img class="hero-img" src="hero.jpg" />
+      <h1>Fresh bread, baked at dawn.</h1>
+      <p>Family-run since 1998. Sourdough, pastries, and coffee on Main Street.</p>
+    </section>
+
+    <section id="subscribe" class="card">
+      <h2>Join our newsletter</h2>
+      <p>Get the weekly bake list. Subscribers: <span id="sub-count">0</span></p>
+      <!-- BUG B07: inputs use placeholders only, no <label> or aria-label. -->
+      <input id="sub-name" type="text" placeholder="Your name" />
+      <input id="sub-email" type="text" placeholder="Email" /><!-- BUG B02: type=text, not email; no validation. -->
+      <!-- BUG B08: this is a <div>, not a <button> — not keyboard-focusable, no button role. -->
+      <div class="btn" id="sub-btn" onclick="subscribe()">Subscribe</div>
+      <p id="sub-msg" class="success hidden">You're subscribed! 🎉</p>
+    </section>
+
+    <section id="gallery" class="gallery">
+      <h2>From the oven</h2>
+      <!-- BUG B09 (cont.): gallery images have no alt text. -->
+      <img src="loaf.jpg" />
+      <img src="croissant.jpg" />
+      <img src="cake.jpg" />
+    </section>
+
+    <section id="contact" class="card">
+      <h2>Send us a message</h2>
+      <!-- BUG B01: novalidate + no JS checks -> empty submit still "succeeds". -->
+      <form id="contact-form" novalidate>
+        <input id="c-name" type="text" placeholder="Your name" />
+        <input id="c-email" type="text" placeholder="Email" />
+        <!-- BUG B10: no maxlength on the message; a huge paste is not guarded. -->
+        <textarea id="c-message" placeholder="Your message"></textarea>
+        <!-- BUG B08 (cont.): div acting as a submit control. -->
+        <div class="btn" id="c-btn" onclick="sendMessage()">Send</div>
+      </form>
+      <p id="c-confirm" class="confirm hidden"></p>
+    </section>
+  </main>
+
+  <footer class="footer">© 1998 Buttermore Bakery</footer>
+  <script src="script.js"></script>
+</body>
+</html>

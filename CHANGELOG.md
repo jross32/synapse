@@ -11,6 +11,12 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Bug-hunt benchmark fixture (Plan 3 Phase 2).** `benchmarks/bug-hunt-fixture/` — a deliberately-
+  buggy static site (`app/`) with 12 categorized bugs (functional, state, ui, perf, a11y, edge-case,
+  security), a machine-checkable `answer-key.json`, and a zero-dep `grade.py` that scores a run's
+  findings into `true_positives` / `false_positive_rate` / `bugs_per_1k_tokens`. This is the fixed
+  fixture the topology benchmark (solo-baseline vs flat vs supervisor-tree) scores against to prove
+  the "more bugs per 1k tokens with Synapse" claim honestly.
 - **Proposals API completed.** `GET /review/proposals` (optional `?status=open|approved|rejected`)
   + `GET /review/proposals/{id}` — so a brainstormer can skip already-rejected ideas and the UI
   can show the full proposal history.
