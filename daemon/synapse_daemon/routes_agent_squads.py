@@ -526,6 +526,23 @@ def build_agent_squads_router(
                 files_touched=adjusted_payload.files_touched,
                 suggested_next_role=adjusted_payload.suggested_next_role,
             )
+            # If the worker self-reported token usage in its handoff, record it to
+            # the ledger (ADR-0025) so reporting is frictionless -- part of the
+            # handoff the worker already does, not a separate call it forgets.
+            if any(
+                t is not None
+                for t in (payload.input_tokens, payload.output_tokens, payload.total_tokens)
+            ):
+                token_ledger.record_tokens(
+                    conn,
+                    work_item_id,
+                    token_ledger.WorkItemTokenUsageCreate(
+                        input_tokens=payload.input_tokens or 0,
+                        output_tokens=payload.output_tokens or 0,
+                        total_tokens=payload.total_tokens,
+                        metadata={"via": "handoff"},
+                    ),
+                )
             audit(
                 conn,
                 AuditRecord(

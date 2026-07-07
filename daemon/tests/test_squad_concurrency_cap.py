@@ -84,3 +84,20 @@ def test_launch_blocked_when_token_budget_exhausted(tmp_path: Path) -> None:
         blocked = c.post(f"/api/v1/agent-work-items/{i2.id}/launch")
         assert blocked.status_code == 409, blocked.text
         assert "budget exhausted" in blocked.text.lower()
+
+
+def test_handoff_records_token_usage(tmp_path: Path) -> None:
+    # A worker can self-report token usage as part of its handoff (ADR-0025) --
+    # the ledger records it, so reporting doesn't need a separate forgotten call.
+    s, squad, i1, _i2 = _setup(tmp_path)
+    app = build_app(s, EventBus())
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    with client as c:
+        r = c.post(
+            f"/api/v1/agent-work-items/{i1.id}/handoff",
+            json={"summary_md": "done", "input_tokens": 1000, "output_tokens": 250},
+        )
+        assert r.status_code == 200, r.text
+        roll = c.get(f"/api/v1/agent-squads/{squad.id}/token-usage").json()
+        assert roll["total_tokens"] == 1250
+        assert roll["entries"] == 1

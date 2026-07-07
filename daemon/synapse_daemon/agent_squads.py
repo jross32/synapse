@@ -195,6 +195,11 @@ class AgentWorkItemHandoffRequest(BaseModel):
     files_touched: list[str] = Field(default_factory=list)
     suggested_next_role: str | None = None
     verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
+    # Optional self-reported token usage recorded to the ledger on handoff (ADR-0025)
+    # -- so reporting is frictionless, part of the handoff a worker already does.
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
     source: AuditSource = AuditSource.DESKTOP
 
 

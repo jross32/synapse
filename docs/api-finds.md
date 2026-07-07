@@ -365,6 +365,8 @@ one PTY session with a role-specific prompt.
   "blockers_md": "What's left...",
   "files_touched": ["src/foo.ts"],
   "suggested_next_role": "reviewer",
+  "input_tokens": 12000,
+  "output_tokens": 3500,
   "verdict": {
     "blocking": false,
     "severity": "info",

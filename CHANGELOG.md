@@ -11,6 +11,10 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Frictionless token reporting on handoff (ADR-0025).** `POST /agent-work-items/{id}/handoff`
+  now accepts optional `input_tokens` / `output_tokens` / `total_tokens` and records them to the
+  token ledger — so a worker reports usage as part of the handoff it already does, instead of a
+  separate call it forgets (`api-finds.md` GAP-05).
 - **AI-first API discoverability.** `GET /api/v1/ai/context` → `endpoints_for_ai` now
   advertises the full AI menu: multi-AI coordination, per-worker token accounting,
   squad kill-switch/cap/budget, delegate, review verdicts, capture, the human review
