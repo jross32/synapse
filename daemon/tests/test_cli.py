@@ -111,6 +111,54 @@ def test_cli_http_timeout_is_reported_cleanly(
         cli_http.request("GET", "/health", timeout=0.01)
 
 
+def test_cli_http_httperror_surfaces_daemon_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import io
+    import json
+    from urllib.error import HTTPError
+
+    from synapse_daemon import cli_http
+
+    monkeypatch.setenv("SYNAPSE_TOKEN", "envelope-token-123")
+    envelope = {"code": "validation.invalid", "message": "bad input"}
+
+    def _raise(*_args, **_kwargs):
+        fp = io.BytesIO(json.dumps(envelope).encode("utf-8"))
+        raise HTTPError("http://x/api/v1/x", 422, "Unprocessable", {}, fp)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli_http.urllib_request, "urlopen", _raise)
+    with pytest.raises(cli_http.SynapseCliError) as exc:
+        cli_http.request("POST", "/x", body={})
+    # The user gets the status, the daemon's error code, and its message -- not a bare traceback.
+    message = str(exc.value)
+    assert "422" in message
+    assert "validation.invalid" in message
+    assert "bad input" in message
+
+
+def test_cli_http_daemon_base_override_strips_trailing_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from synapse_daemon import cli_http
+
+    monkeypatch.setenv("SYNAPSE_DAEMON_BASE", "http://example.test:9999/")
+    assert cli_http.daemon_base() == "http://example.test:9999"
+    monkeypatch.delenv("SYNAPSE_DAEMON_BASE", raising=False)
+    assert cli_http.daemon_base() == "http://127.0.0.1:7878"
+
+
+def test_cli_http_build_url_normalizes_leading_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from synapse_daemon import cli_http
+
+    monkeypatch.delenv("SYNAPSE_DAEMON_BASE", raising=False)
+    expected = "http://127.0.0.1:7878/api/v1/health"
+    assert cli_http._build_url("health") == expected
+    assert cli_http._build_url("/health") == expected
+
+
 def test_cli_doctor_reports_token_state(
     tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
