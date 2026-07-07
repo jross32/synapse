@@ -90,6 +90,32 @@ def test_end_session_releases_its_active_lanes(tmp_path: Path) -> None:
     assert coord.list_active_lanes(storage.conn) == []
 
 
+def test_stale_sweep_releases_lanes_and_frees_paths(tmp_path: Path) -> None:
+    # The automatic path: an agent dies WITHOUT calling end_session (e.g. it hit its usage limit),
+    # so only the heartbeat sweep can free its lane. Distinct from the graceful end_session above.
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        dead = _register(conn, runtime_id="copilot", agent_label="Copilot")
+        coord.claim_lane(conn, None, coord.LaneClaim(session_id=dead.id, path_globs=["renderer/x.tsx"]))
+        old = to_iso(utc_now() - timedelta(seconds=coord.SESSION_STALE_SECONDS + 60))
+        conn.execute("UPDATE agent_sessions SET last_heartbeat_at = ? WHERE id = ?", (old, dead.id))
+    assert len(coord.list_active_lanes(storage.conn)) == 1
+
+    with storage.transaction() as conn:
+        assert coord.expire_stale_sessions(conn) == 1
+    # The dead agent's lane is released automatically by the sweep...
+    assert coord.list_active_lanes(storage.conn) == []
+
+    # ...so a live agent can claim the same path with no conflict.
+    with storage.transaction() as conn:
+        live = _register(conn, runtime_id="claude", agent_label="Claude")
+        result = coord.claim_lane(
+            conn, None, coord.LaneClaim(session_id=live.id, path_globs=["renderer/x.tsx"])
+        )
+    assert result.granted is True
+    assert result.conflicts == []
+
+
 # -- file lanes + overlap -----------------------------------------------------
 
 
