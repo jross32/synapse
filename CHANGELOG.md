@@ -11,6 +11,9 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **`brainstorm-improvements` quick-action.** Launch it at a project (or Synapse itself); an AI
+  surveys the app + backlog + inbox and files ranked improvement ideas as proposals in your review
+  inbox (propose-only, no changes) — completing the "agents brainstorm, you approve" loop.
 - **Improvement proposals inbox (Plan 3 Phase 3f, migration `025`).** An AI (or a squad
   brainstormer) can `POST /review/proposals` to file an improvement idea — for an app or for
   Synapse itself — into the human review inbox instead of acting on it unilaterally.
