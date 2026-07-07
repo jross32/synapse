@@ -71,6 +71,12 @@ secrets/
 installer/daemon-dist/
 *.exe
 
+# Agent-operating-brief drops at repo root. PROMPT.md is a reserved daemon-generated
+# runtime filename (routes_quick_actions/routes_benchmarks/tools/fast_money write it into a
+# spawned session's project cwd) -- it must never be committed as source at the repo root.
+/PROMPT.md
+/IMPROVEMENT-BRIEF.md
+
 # Test / agent scratch (per-run, never committed)
 .tmp/
 .codex-e2e-logs/
