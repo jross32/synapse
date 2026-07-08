@@ -164,6 +164,26 @@ def build_agent_squads_router(
         detail = squads.squad_detail(storage.conn, squad_id)
         return detail.model_dump(mode="json")
 
+    @router.get("/agent-squads/{squad_id}/capacity", response_model=None)
+    async def get_squad_capacity(squad_id: str) -> dict[str, Any]:
+        # "Can I launch another worker?" -- the same concurrency-cap + token-budget gates the launch
+        # path enforces, surfaced so an AI/UI can check headroom before delegating (0 = unlimited).
+        squad = squads.get_squad(storage.conn, squad_id)
+        running = squads.count_running_work_items(storage.conn, squad_id)
+        spent = token_ledger.sum_squad_tokens(storage.conn, squad_id).total_tokens
+        concurrency_ok = not squad.max_concurrent or running < squad.max_concurrent
+        budget_ok = not squad.token_budget or spent < squad.token_budget
+        return {
+            "squad_id": squad.id,
+            "running": running,
+            "max_concurrent": squad.max_concurrent,
+            "concurrency_available": max(0, squad.max_concurrent - running) if squad.max_concurrent else None,
+            "tokens_spent": spent,
+            "token_budget": squad.token_budget,
+            "tokens_remaining": max(0, squad.token_budget - spent) if squad.token_budget else None,
+            "can_launch": concurrency_ok and budget_ok,
+        }
+
     @router.patch("/agent-squads/{squad_id}", response_model=None)
     async def patch_squad(squad_id: str, payload: AgentSquadUpdate) -> dict[str, Any]:
         with storage.transaction() as conn:

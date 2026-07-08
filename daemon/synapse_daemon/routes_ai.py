@@ -462,7 +462,7 @@ def build_ai_router(
                 {
                     "purpose": "self-report token usage per work item and read the squad-level token roll-up so Synapse can prove efficiency (ADR-0025)",
                     "method": "GET | POST",
-                    "path": "/api/v1/agent-work-items/{id}/tokens | /api/v1/agent-squads/{id}/token-usage",
+                    "path": "/api/v1/agent-work-items/{id}/tokens | /api/v1/agent-squads/{id}/token-usage | /api/v1/agent-squads/{id}/capacity (can_launch headroom vs cap+budget)",
                 },
                 {
                     "purpose": "stop all of a squad's workers (kill switch); set a squad's concurrency cap + token budget via PATCH; delegate a child work item to a specialist (auto_launch:true launches it immediately, bounded by the cap + budget); record a review-pass verdict (opens a quality gate if blocking)",

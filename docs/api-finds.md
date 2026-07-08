@@ -333,6 +333,7 @@ one PTY session with a role-specific prompt.
 | GET | `/agent-squads` | List all squads |
 | POST | `/agent-squads` | Create squad for a project |
 | GET | `/agent-squads/{id}` | Get squad + all work items |
+| GET | `/agent-squads/{id}/capacity` | Headroom vs the launch gates: `running`/`max_concurrent`, `tokens_spent`/`token_budget`, `can_launch` — check before delegating a new worker |
 | PATCH | `/agent-squads/{id}` | Update squad (goal, status, concurrency cap, token budget) |
 | DELETE | `/agent-squads/{id}` | Delete squad |
 | POST | `/agent-squads/{id}/stop` | Kill all running workers immediately |

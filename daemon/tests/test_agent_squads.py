@@ -169,6 +169,39 @@ def test_delegate_auto_launch_over_cap_leaves_child_queued(tmp_path: Path) -> No
         assert overflow["pty_session_id"] is None
 
 
+def test_squad_capacity_reflects_cap_and_running(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    with client as c:
+        squad = c.post(
+            "/api/v1/agent-squads",
+            json={
+                "project_id": "demo-project", "name": "Capped", "goal_md": "x",
+                "lead_role_id": "planner", "max_concurrent": 2, "token_budget": 1000,
+            },
+        ).json()
+        cap = c.get(f"/api/v1/agent-squads/{squad['id']}/capacity").json()
+        assert cap["max_concurrent"] == 2 and cap["running"] == 0
+        assert cap["concurrency_available"] == 2 and cap["tokens_remaining"] == 1000
+        assert cap["can_launch"] is True
+
+        for _ in range(2):
+            wi = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+            c.post(f"/api/v1/agent-work-items/{wi['id']}/status", json={"status": "running"})
+        cap2 = c.get(f"/api/v1/agent-squads/{squad['id']}/capacity").json()
+        assert cap2["running"] == 2 and cap2["concurrency_available"] == 0
+        assert cap2["can_launch"] is False
+
+
+def test_squad_capacity_unlimited_when_uncapped(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    with client as c:
+        squad = _create_squad(c)  # no max_concurrent / token_budget -> 0 = unlimited
+        cap = c.get(f"/api/v1/agent-squads/{squad['id']}/capacity").json()
+        assert cap["max_concurrent"] == 0 and cap["concurrency_available"] is None
+        assert cap["token_budget"] == 0 and cap["tokens_remaining"] is None
+        assert cap["can_launch"] is True
+
+
 @posix_only
 def test_delegate_auto_launch_spawns_child(tmp_path: Path) -> None:
     app, client = _harness(tmp_path)

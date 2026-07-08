@@ -11,6 +11,9 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Squad capacity check.** `GET /agent-squads/{id}/capacity` reports headroom against the launch
+  gates — `running`/`max_concurrent`, `tokens_spent`/`token_budget`, and a `can_launch` boolean — so
+  an AI or the UI can check whether there's room before delegating another worker (0 = unlimited).
 - **Promote a proposal to a backlog item.** `POST /review/proposals/{id}/promote` approves a
   project-scoped improvement proposal and turns it into an actionable item in that project's backlog
   — closing the "agents brainstorm → you approve → it becomes real work" loop. (Synapse-wide
