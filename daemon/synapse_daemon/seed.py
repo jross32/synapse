@@ -14,9 +14,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from . import mcp_servers
 from . import projects as projects_module
 from .health import HealthProbe
-from .projects import Project, ProjectKind
+from .projects import Project, ProjectKind, ProjectUpdate, update
 from .runtime_paths import repo_root
 from .storage import Storage
 
@@ -50,6 +51,55 @@ def resolve_synapse_self_path(*, parent_dir: Path | None = None) -> Path:
     return repo_root()
 
 
+def resolve_web_scraper_path(
+    storage: Storage,
+    *,
+    parent_dir: Path | None = None,
+    source_path: Path | None = None,
+) -> Path:
+    fallback = (parent_dir or Path.home()) / "wbscrper"
+
+    candidates: list[Path] = []
+    if source_path is not None:
+        candidates.append(source_path)
+    candidates.append(mcp_servers.web_scraper_install_dir(storage.data_dir))
+    candidates.append((parent_dir or Path.home()) / "wbscrper")
+    candidates.append(Path("C:/Users/justi/wbscrper"))
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if mcp_servers.looks_like_web_scraper_repo(resolved):
+            return resolved
+    return fallback
+
+
+def reconcile_web_scraper_project(storage: Storage, *, source_path: Path | None = None) -> bool:
+    project = projects_module.get_or_none(storage.conn, WBSCRPER_PROJECT_ID)
+    if project is None:
+        return False
+    preferred = resolve_web_scraper_path(storage, source_path=source_path)
+    try:
+        preferred_resolved = preferred.resolve()
+    except OSError:
+        preferred_resolved = preferred
+    if not mcp_servers.looks_like_web_scraper_repo(preferred_resolved):
+        return False
+    current_path = Path(project.path)
+    try:
+        current_resolved = current_path.resolve()
+    except OSError:
+        current_resolved = current_path
+    if current_resolved == preferred_resolved:
+        return False
+    if mcp_servers.looks_like_web_scraper_repo(current_resolved):
+        return False
+    with storage.transaction() as conn:
+        update(conn, WBSCRPER_PROJECT_ID, ProjectUpdate(path=str(preferred_resolved)))
+    return True
+
+
 def seed_default_projects(storage: Storage, *, parent_dir: Path | None = None) -> list[str]:
     """Insert any default projects missing from the registry.
 
@@ -58,9 +108,7 @@ def seed_default_projects(storage: Storage, *, parent_dir: Path | None = None) -
 
     created: list[str] = []
 
-    wbscrper_path = (parent_dir or Path.home()) / "wbscrper"
-    if not wbscrper_path.exists():
-        wbscrper_path = Path("C:/Users/justi/wbscrper")  # known location on dev machine
+    wbscrper_path = resolve_web_scraper_path(storage, parent_dir=parent_dir)
 
     if projects_module.get_or_none(storage.conn, WBSCRPER_PROJECT_ID) is None:
         project = Project(

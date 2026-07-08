@@ -10,6 +10,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from synapse_daemon import mcp_servers as mcp
+from synapse_daemon import projects as projects_module
+from synapse_daemon.__main__ import _build_lifespan
 from synapse_daemon.app import build_app
 from synapse_daemon.mcp_servers import (
     McpServer,
@@ -18,6 +20,9 @@ from synapse_daemon.mcp_servers import (
     McpTransport,
     build_mcp_config,
 )
+from synapse_daemon.process_manager import ProcessManager
+from synapse_daemon.projects import ProjectUpdate, update
+from synapse_daemon.seed import seed_default_projects
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
 
@@ -96,6 +101,9 @@ def test_install_web_scraper_catalog_bootstraps_autorun(tmp_path: Path, monkeypa
     assert stored.launch_command in {"npm", "npm.cmd"}
     assert stored.launch_args[:2] == ["--prefix", str(checkout)]
     assert stored.launch_args[-2:] == ["run", "mcp:http"]
+    assert stored.url == "http://127.0.0.1:12000/mcp"
+    assert stored.env["SCRAPER_URL"] == "http://127.0.0.1:12345"
+    assert stored.env["MCP_HTTP_PORT"] == "12000"
 
 
 def test_install_duplicate_is_409(tmp_path: Path) -> None:
@@ -136,7 +144,79 @@ def test_ensure_bootstrap_web_scraper_creates_autorun_server(tmp_path: Path) -> 
     assert server.id == "web-scraper"
     assert server.autorun is True
     assert server.enabled is True
-    assert server.url == "http://127.0.0.1:12345/mcp"
+    assert server.url == "http://127.0.0.1:12000/mcp"
+    assert server.env["SCRAPER_URL"] == "http://127.0.0.1:12345"
+    assert server.env["MCP_HTTP_PORT"] == "12000"
+
+
+def test_ensure_bootstrap_web_scraper_rehomes_known_server_to_first_party(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    checkout = _fake_web_scraper_repo(tmp_path / "wbscrper")
+
+    with storage.transaction() as conn:
+        mcp.install_server(
+            conn,
+            mcp.McpServerInstallRequest(
+                id="web-scraper",
+                name="Web Scraper",
+                transport=McpTransport.HTTP,
+                url="http://127.0.0.1:18999/mcp",
+            ),
+            mcp.McpCatalog(servers=[]),
+        )
+        server = mcp.ensure_bootstrap_web_scraper(conn, source_path=checkout)
+
+    assert server is not None
+    assert server.url == "http://127.0.0.1:12000/mcp"
+    assert server.launch_command in {"npm", "npm.cmd"}
+    assert server.autorun is True
+    assert server.env["SCRAPER_URL"] == "http://127.0.0.1:12345"
+
+
+def test_startup_bootstraps_web_scraper_from_checkout_and_launches_project(
+    tmp_path: Path, monkeypatch
+) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    seed_default_projects(storage, parent_dir=tmp_path)
+    with storage.transaction() as conn:
+        update(conn, "wbscrper", ProjectUpdate(path=str(tmp_path / "stale-wbscrper")))
+    bus = EventBus()
+    app = build_app(
+        storage,
+        bus,
+        process_manager=ProcessManager(storage, bus),
+        allow_web_scraper_download_bootstrap=True,
+    )
+    app.state.bound_port = 7878
+    app.router.lifespan_context = _build_lifespan(
+        storage,
+        bus,
+        app.state.process_manager,
+        app.state.tool_registry,
+    )
+    checkout = _fake_web_scraper_repo(tmp_path / "checkout")
+    launched: list[str] = []
+
+    monkeypatch.setattr(mcp, "discover_local_web_scraper_repo", lambda: None)
+    monkeypatch.setattr(mcp, "ensure_web_scraper_checkout", lambda data_dir: checkout)
+
+    async def _fake_launch(project_id: str, **_kwargs) -> None:
+        launched.append(project_id)
+
+    app.state.process_manager.launch = _fake_launch  # type: ignore[method-assign]
+
+    with TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token}):
+        pass
+
+    stored = mcp.get_server(storage.conn, "web-scraper")
+    project = projects_module.get(storage.conn, "wbscrper")
+    assert stored.url == "http://127.0.0.1:12000/mcp"
+    assert launched == ["wbscrper"]
+    assert Path(project.path) == checkout.resolve()
 
 
 def test_patch_enable_autorun_and_delete(tmp_path: Path) -> None:

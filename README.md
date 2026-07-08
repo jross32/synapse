@@ -6,7 +6,7 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.37`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. The newest shipped wave adds a bundled Synapse-self workspace, a dedicated Web Scraper harvest workspace, an experimental **ChatGPT Companion** in AI Coding, and a first-party **Web Scraper MCP** install/auto-start path. **589 automated tests pass.**
+> **Status:** early development (`v0.1.39`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. The newest shipped wave hardens the first-party **Web Scraper MCP** so the real daemon auto-installs and auto-starts it on boot, rehomes stale seeded project paths to the active checkout, and tightens desktop restart reliability in the tray/desktop bridge. **663 automated tests pass** (`14 skipped`).
 >
 > 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit, the ChatGPT companion, and the Web Scraper harvest workspace), refreshed as the UI evolves.
 
@@ -245,7 +245,7 @@ pip install -e ".[dev]"
 
 # checks
 npm run typecheck                 # TypeScript passes
-(cd daemon && python -m pytest -q) # 589 tests pass + 12 skipped
+(cd daemon && python -m pytest -q) # 663 tests pass + 14 skipped
 
 # run the dev stack (daemon + Vite + Electron)
 synapse.cmd

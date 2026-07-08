@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.39] -- 2026-07-08
+
+### Changed
+- **First-party Web Scraper boot wiring is now real in the production daemon, not just the test harness.**
+  The `python -m synapse_daemon` lifespan now runs the app's startup/shutdown hooks, so the
+  first-party `web-scraper` MCP bootstrap + autorun path actually executes on a real Synapse boot.
+- **Web Scraper first-party defaults now model the real split surfaces explicitly.**
+  Synapse now keeps the MCP endpoint on `http://127.0.0.1:12000/mcp`, the companion UI/API app on
+  `http://127.0.0.1:12345`, and the installed-page overview prefers `SCRAPER_URL` when present.
+
+### Fixed
+- **Fresh installs no longer half-wire the Web Scraper companion app.**
+  If Synapse bootstraps the official checkout, the seeded `wbscrper` project now rehomes from stale
+  placeholder paths to the actual active checkout before launch, so the first-party app and MCP stay
+  aligned.
+- **Known first-party Web Scraper configs are repaired on boot.**
+  Existing `web-scraper` / `wbscrper` MCP rows are rehomed to the first-party HTTP launch config,
+  corrected to the real MCP/UI port split, and re-enabled for autorun.
+- **Desktop restart feedback is more honest and safer.**
+  The Electron bridge no longer reports restart success before the restart path clears its first
+  failure points, and a failed relaunch now recovers the window instead of hard-exiting the app.
+
+
 ### Added
 - **Bug-hunt scoring: per-category breakdown.** `score_bug_hunt` / `POST /benchmarks/score-bug-hunt`
   (and the standalone `grade.py`) now return `by_category` (`{category: {found, total}}`) so a
@@ -2541,4 +2564,5 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
+
 

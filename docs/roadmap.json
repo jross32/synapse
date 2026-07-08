@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-07-06",
+  "generated_at": "2026-07-08",
   "items": [
     {
       "id": "ai-council-review",
@@ -72,7 +72,7 @@
       "status": "shipped",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0017",
-      "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically, including a first-party Web Scraper entry that can download the official repo, configure it, and auto-start with Synapse."
+      "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically, including a first-party Web Scraper entry that can download the official repo, keep its MCP/UI ports aligned, and auto-start with the real Synapse daemon on boot."
     },
     {
       "id": "launch-art",

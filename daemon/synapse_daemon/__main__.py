@@ -136,6 +136,7 @@ def _build_lifespan(
 
         # Start the resource heartbeat loop (Contract #19).
         pm.start_monitoring()
+        await app.router._startup()  # type: ignore[attr-defined]
 
         log.info(
             "Synapse daemon %s ready | schema=%d | contracts 1-28 | port=%d",
@@ -145,6 +146,7 @@ def _build_lifespan(
         )
         yield
         log.info("Synapse daemon shutting down.")
+        await app.router._shutdown()  # type: ignore[attr-defined]
         await registry.shutdown_all()
         # Close every live PTY session before the loop tears down -- the
         # session manager rides on app.state (wired in build_app).
@@ -214,7 +216,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     registry = ToolRegistry(args.tools_dir, bus, storage)
     auth = AuthManager(storage, ensure_local_token(storage.data_dir))
     app = build_app(
-        storage, bus, process_manager=pm, tool_registry=registry, auth=auth
+        storage,
+        bus,
+        process_manager=pm,
+        tool_registry=registry,
+        auth=auth,
+        allow_web_scraper_download_bootstrap=True,
     )
     app.state.bound_port = args.port
     app.state.bound_host = host

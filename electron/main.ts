@@ -530,7 +530,9 @@ function buildTrayMenu(): Electron.Menu {
     { type: 'separator' },
     {
       label: 'Restart Synapse',
-      click: () => restartApp(),
+      click: () => {
+        void restartApp();
+      },
     },
     {
       label: 'Exit Synapse',
@@ -548,29 +550,32 @@ function buildTrayMenu(): Electron.Menu {
  * boot-config changes (e.g. the LAN-exposure toggle the user just flipped in
  * Settings → Network).
  */
-function restartApp(): void {
-  if (restartInFlight) return;
+async function restartApp(): Promise<boolean> {
+  if (restartInFlight) return false;
   restartInFlight = true;
 
   if (isDev && process.env.SYNAPSE_DEV_WRAPPER === '1') {
     console.log('[synapse] requesting full wrapper restart');
     isQuitting = true;
     app.exit(FULL_DEV_RESTART_EXIT_CODE);
-    return;
+    return true;
   }
 
   console.log('[synapse] restarting app');
   isQuitting = true;
-  void (async () => {
-    try {
-      await shutdownSpawnedDaemon();
-      app.relaunch();
-      app.exit(0);
-    } catch (error) {
-      console.error('[synapse] restart failed:', error);
-      app.exit(1);
-    }
-  })();
+  try {
+    await shutdownSpawnedDaemon();
+    app.relaunch();
+    app.exit(0);
+    return true;
+  } catch (error) {
+    console.error('[synapse] restart failed:', error);
+    restartInFlight = false;
+    isQuitting = false;
+    tray?.setToolTip('Synapse · restart failed');
+    showWindow();
+    return false;
+  }
 }
 
 // A tray project click: launch it if idle, otherwise just surface the window.
@@ -723,10 +728,7 @@ ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
 
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
-ipcMain.handle('synapse:restart', () => {
-  restartApp();
-  return true;
-});
+ipcMain.handle('synapse:restart', () => restartApp());
 ipcMain.handle('synapse:exit', () => {
   isQuitting = true;
   app.quit();

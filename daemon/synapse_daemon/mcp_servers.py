@@ -32,7 +32,9 @@ WEB_SCRAPER_SERVER_ID = "web-scraper"
 WEB_SCRAPER_LEGACY_SERVER_ID = "wbscrper"
 WEB_SCRAPER_KNOWN_IDS = (WEB_SCRAPER_SERVER_ID, WEB_SCRAPER_LEGACY_SERVER_ID)
 WEB_SCRAPER_GIT_URL = "https://github.com/jross32/wbscrper.git"
-WEB_SCRAPER_DEFAULT_URL = "http://127.0.0.1:12345/mcp"
+WEB_SCRAPER_APP_BASE_URL = "http://127.0.0.1:12345"
+WEB_SCRAPER_MCP_PORT = 12000
+WEB_SCRAPER_DEFAULT_URL = f"http://127.0.0.1:{WEB_SCRAPER_MCP_PORT}/mcp"
 
 
 class McpTransport(str, Enum):
@@ -239,15 +241,30 @@ def web_scraper_install_request(source_path: Path) -> McpServerInstallRequest:
         url=WEB_SCRAPER_DEFAULT_URL,
         launch_command=preferred_npm_command(),
         launch_args=["--prefix", str(source_path), "run", "mcp:http"],
+        env={
+            "MCP_HTTP_PORT": str(WEB_SCRAPER_MCP_PORT),
+            "SCRAPER_URL": WEB_SCRAPER_APP_BASE_URL,
+        },
     )
+
+
+def web_scraper_source_path(server: McpServer) -> Path | None:
+    if server.id not in WEB_SCRAPER_KNOWN_IDS:
+        return None
+    if len(server.launch_args) >= 2 and server.launch_args[0] == "--prefix":
+        return Path(server.launch_args[1])
+    return None
 
 
 def ensure_bootstrap_web_scraper(
     conn: sqlite3.Connection,
     *,
     source_path: Path | None = None,
+    data_dir: Path | None = None,
 ) -> McpServer | None:
     source = source_path or discover_local_web_scraper_repo()
+    if source is None and data_dir is not None:
+        source = ensure_web_scraper_checkout(data_dir)
     if source is None or not looks_like_web_scraper_repo(source):
         return None
 
@@ -266,6 +283,8 @@ def ensure_bootstrap_web_scraper(
         patch_kwargs["launch_command"] = desired.launch_command
     if server.launch_args != desired.launch_args:
         patch_kwargs["launch_args"] = desired.launch_args
+    if server.env != desired.env:
+        patch_kwargs["env"] = desired.env
     if not server.enabled:
         patch_kwargs["enabled"] = True
     if not server.autorun:

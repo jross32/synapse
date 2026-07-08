@@ -68,6 +68,16 @@ def _base_url_from_mcp_url(url: str | None) -> str | None:
     return trimmed
 
 
+def _web_scraper_base_url(server: mcp.McpServer) -> str | None:
+    configured = server.env.get("SCRAPER_URL")
+    if isinstance(configured, str) and configured.startswith(("http://", "https://")):
+        return configured.rstrip("/")
+    parsed = urlparse(server.url or "")
+    if server.id in _KNOWN_WEB_SCRAPER_IDS and parsed.port == mcp.WEB_SCRAPER_MCP_PORT:
+        return mcp.WEB_SCRAPER_APP_BASE_URL
+    return _base_url_from_mcp_url(server.url)
+
+
 def _count_from_meta(meta: dict[str, Any], *keys: str) -> int | None:
     for key in keys:
         value = meta.get(key)
@@ -109,7 +119,7 @@ async def _fetch_meta(base_url: str) -> tuple[dict[str, Any] | None, str | None]
 
 
 async def _overview_for_server(server: mcp.McpServer) -> WebScraperOverview:
-    base_url = _base_url_from_mcp_url(server.url)
+    base_url = _web_scraper_base_url(server)
     if not base_url:
         return WebScraperOverview(
             status=InstalledPageStatus.AVAILABLE,

@@ -163,6 +163,41 @@ def test_web_scraper_routes_proxy_through_synapse(tmp_path: Path) -> None:
         assert "component" in action.json()
 
 
+def test_web_scraper_overview_prefers_scraper_url_env_for_first_party_server(tmp_path: Path) -> None:
+    with _json_server(
+        {
+            ("GET", "/api/mcp-meta"): (
+                200,
+                {
+                    "server": {"name": "web-scraper"},
+                    "tools_count": 12,
+                    "prompts_count": 3,
+                },
+            ),
+        }
+    ) as base_url:
+        client, _ = _harness(tmp_path)
+        installed = client.post(
+            "/api/v1/mcp-servers/install",
+            json={
+                "id": "web-scraper",
+                "name": "Web Scraper",
+                "transport": "http",
+                "url": "http://127.0.0.1:12000/mcp",
+                "env": {"SCRAPER_URL": base_url},
+            },
+        )
+        assert installed.status_code == 201, installed.text
+
+        overview = client.get("/api/v1/installed-pages/web-scraper")
+        assert overview.status_code == 200, overview.text
+        payload = overview.json()
+        assert payload["status"] == "connected"
+        assert payload["source_url"] == "http://127.0.0.1:12000/mcp"
+        assert payload["base_url"] == base_url
+        assert payload["docs_url"] == f"{base_url}/docs"
+
+
 def test_web_scraper_harvest_save_persists_project_files(tmp_path: Path) -> None:
     client, storage = _harness(tmp_path)
     with storage.transaction() as conn:

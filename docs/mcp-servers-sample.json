@@ -76,9 +76,13 @@
       "publisher": "The WhatIf Company",
       "description": "Download the first-party Web Scraper MCP + UI from GitHub, wire it into Synapse automatically, and auto-start it on Synapse launch.",
       "transport": "http",
-      "url": "http://127.0.0.1:12345/mcp",
+      "url": "http://127.0.0.1:12000/mcp",
       "launch_command": "npm",
       "launch_args": ["run", "mcp:http"],
+      "env": {
+        "MCP_HTTP_PORT": "12000",
+        "SCRAPER_URL": "http://127.0.0.1:12345"
+      },
       "tags": ["web", "browser", "research", "automation", "native"],
       "recommended": true
     },

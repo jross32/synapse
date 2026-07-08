@@ -28,7 +28,7 @@ from . import __version__
 from .api_versions import API_PREFIX, event_name
 from .auth import AuthManager, ensure_local_token, require_token
 from .errors import ErrorEnvelope, SynapseError
-from .models import HealthResponse
+from .models import AuditSource, HealthResponse
 from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
 from .profile import ProfileManager
@@ -102,6 +102,7 @@ def build_app(
     process_manager: ProcessManager | None = None,
     tool_registry: ToolRegistry | None = None,
     auth: AuthManager | None = None,
+    allow_web_scraper_download_bootstrap: bool = False,
 ) -> FastAPI:
     """Construct the FastAPI app bound to a Storage + EventBus.
 
@@ -377,12 +378,25 @@ def build_app(
 
     async def _autostart_mcp_servers() -> None:
         from . import mcp_servers as _mcp
+        from .seed import WBSCRPER_PROJECT_ID, reconcile_web_scraper_project
 
         bootstrapped_server = None
-        with storage.transaction() as conn:
-            bootstrapped_server = _mcp.ensure_bootstrap_web_scraper(conn)
+        try:
+            with storage.transaction() as conn:
+                bootstrapped_server = _mcp.ensure_bootstrap_web_scraper(
+                    conn,
+                    data_dir=storage.data_dir if allow_web_scraper_download_bootstrap else None,
+                )
+        except SynapseError as exc:
+            log.warning("Web Scraper bootstrap skipped: %s", exc.envelope.message)
+        except Exception:  # pragma: no cover - defensive boot logging
+            log.exception("Web Scraper bootstrap failed unexpectedly.")
 
         if bootstrapped_server is not None:
+            reconcile_web_scraper_project(
+                storage,
+                source_path=_mcp.web_scraper_source_path(bootstrapped_server),
+            )
             await bus.publish(
                 event_name("mcp_server", "updated"),
                 {
@@ -395,6 +409,15 @@ def build_app(
         for server in _mcp.list_servers(storage.conn):
             if not (server.enabled and server.autorun):
                 continue
+            if allow_web_scraper_download_bootstrap and server.id in _mcp.WEB_SCRAPER_KNOWN_IDS:
+                try:
+                    await process_manager.launch(WBSCRPER_PROJECT_ID, source=AuditSource.AUTO)
+                except SynapseError as exc:
+                    if exc.envelope.code != "project.conflict":
+                        log.warning(
+                            "Web Scraper app bootstrap launch skipped: %s",
+                            exc.envelope.message,
+                        )
             status, detail = await mcp_manager.status(server)
             started = False
             if status == _mcp.McpServerStatus.STOPPED:

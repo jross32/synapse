@@ -5,9 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from synapse_daemon import projects as projects_module
+from synapse_daemon.projects import ProjectUpdate, update
 from synapse_daemon.seed import (
     SYNAPSE_SELF_PROJECT_ID,
     WBSCRPER_PROJECT_ID,
+    reconcile_web_scraper_project,
     seed_default_projects,
 )
 from synapse_daemon.storage import Storage
@@ -54,13 +56,32 @@ def test_seed_leaves_user_edits_alone(tmp_path: Path) -> None:
     try:
         seed_default_projects(s, parent_dir=tmp_path)
         # Simulate user rename.
-        from synapse_daemon.projects import ProjectUpdate, update
-
         with s.transaction() as conn:
             update(conn, WBSCRPER_PROJECT_ID, ProjectUpdate(name="My Scraper"))
 
         seed_default_projects(s, parent_dir=tmp_path)  # re-seed
         project = projects_module.get(s.conn, WBSCRPER_PROJECT_ID)
         assert project.name == "My Scraper"  # rename preserved
+    finally:
+        s.close()
+
+
+def test_reconcile_web_scraper_project_rehomes_stale_default_path(tmp_path: Path) -> None:
+    s = _storage(tmp_path)
+    checkout = tmp_path / "vendor" / "web-scraper"
+    checkout.mkdir(parents=True, exist_ok=True)
+    (checkout / "mcp-server.js").write_text("// fake web scraper mcp\n", encoding="utf-8")
+    (checkout / "package.json").write_text(
+        '{"name":"web-scraper-app","scripts":{"mcp:http":"node mcp-server.js --http"}}',
+        encoding="utf-8",
+    )
+    try:
+        seed_default_projects(s, parent_dir=tmp_path)
+        with s.transaction() as conn:
+            update(conn, WBSCRPER_PROJECT_ID, ProjectUpdate(path=str(tmp_path / "stale-wbscrper")))
+        changed = reconcile_web_scraper_project(s, source_path=checkout)
+        project = projects_module.get(s.conn, WBSCRPER_PROJECT_ID)
+        assert changed is True
+        assert Path(project.path) == checkout.resolve()
     finally:
         s.close()
