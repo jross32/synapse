@@ -55,6 +55,21 @@ def test_parse_changelog_structure() -> None:
     assert any(s.title == "Fixed" for s in v.sections)
 
 
+def test_parse_changelog_accepts_all_dash_date_separators() -> None:
+    # The repo CHANGELOG mixes "--", en-dash and em-dash header separators (0.1.38 uses "—").
+    # All three must still yield a parsed date so the What's New feed isn't silently blanked.
+    sample = (
+        "# Changelog\n\n"
+        "## [0.3.0] — 2026-07-07\n### Added\n- em dash\n\n"
+        "## [0.2.0] – 2026-07-06\n### Added\n- en dash\n\n"
+        "## [0.1.0] -- 2026-07-05\n### Added\n- double hyphen\n"
+    )
+    versions = {v.version: v for v in parse_changelog(sample)}
+    assert versions["0.3.0"].date == "2026-07-07"
+    assert versions["0.2.0"].date == "2026-07-06"
+    assert versions["0.1.0"].date == "2026-07-05"
+
+
 def test_changelog_endpoint_serves_real_file(tmp_path: Path) -> None:
     client = _harness(tmp_path)
     res = client.get("/api/v1/about/changelog")
