@@ -30,6 +30,48 @@ def _harness(tmp_path: Path):
     return app, client, storage
 
 
+def test_create_general_thread_has_null_project(tmp_path: Path) -> None:
+    # Plan 2 Phase A: a "New chat" with no project.
+    _app, client, _storage = _harness(tmp_path)
+    with client as c:
+        created = c.post("/api/v1/coder-threads/general", json={"title": "General chat"})
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["project_id"] is None
+        assert body["title"] == "General chat"
+
+        listed = c.get("/api/v1/coder-threads/general")
+        assert listed.status_code == 200, listed.text
+        assert body["id"] in [t["thread"]["id"] for t in listed.json()["threads"]]
+
+
+def test_general_and_project_threads_are_separate(tmp_path: Path) -> None:
+    _app, client, _storage = _harness(tmp_path)
+    with client as c:
+        proj = c.post("/api/v1/projects/demo-project/coder-threads", json={"title": "Project thread"}).json()
+        gen = c.post("/api/v1/coder-threads/general", json={"title": "General thread"}).json()
+
+        general_ids = [t["thread"]["id"] for t in c.get("/api/v1/coder-threads/general").json()["threads"]]
+        project_ids = [
+            t["thread"]["id"] for t in c.get("/api/v1/projects/demo-project/coder-threads").json()["threads"]
+        ]
+        assert gen["id"] in general_ids and gen["id"] not in project_ids
+        assert proj["id"] in project_ids and proj["id"] not in general_ids
+
+
+def test_thread_project_id_nulled_when_project_deleted(tmp_path: Path) -> None:
+    # Migration 026: coder_threads.project_id is ON DELETE SET NULL, so deleting a project orphans
+    # its threads into the General scope instead of cascading them away.
+    from synapse_daemon import coder_workspace
+
+    _app, client, storage = _harness(tmp_path)
+    with client as c:
+        thread = c.post("/api/v1/projects/demo-project/coder-threads", json={"title": "Owned"}).json()
+    with storage.transaction() as conn:
+        conn.execute("DELETE FROM projects WHERE id = 'demo-project'")
+    assert coder_workspace.get_thread(storage.conn, thread["id"]).project_id is None
+
+
 def test_coder_thread_crud_and_context(tmp_path: Path) -> None:
     _app, client, _storage = _harness(tmp_path)
     with client as c:

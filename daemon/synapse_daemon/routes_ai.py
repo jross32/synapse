@@ -214,31 +214,35 @@ def build_ai_router(
                     "updated_at": case.updated_at,
                 }
             )
+        def _thread_row(summary: Any) -> dict[str, Any]:
+            return {
+                "id": summary.thread.id,
+                "project_id": summary.thread.project_id,
+                "title": summary.thread.title,
+                "status": summary.thread.status.value,
+                "active_runtime_id": summary.thread.active_runtime_id,
+                "active_provider": summary.thread.active_provider,
+                "active_model": summary.thread.active_model,
+                "workspace_context_mode": summary.thread.workspace_context_mode,
+                "message_count": summary.message_count,
+                "run_count": summary.run_count,
+                "review_pass_count": summary.review_pass_count,
+                "blocking_gate_count": len(
+                    quality_os_module.blocking_gates_for_subject(
+                        storage.conn, "coder_thread", summary.thread.id
+                    )
+                ),
+                "last_message_preview": summary.last_message_preview,
+                "updated_at": summary.thread.updated_at,
+            }
+
         coder_threads = []
         for project in projects_module.list_projects(storage.conn):
             for summary in coder_workspace_module.list_threads(storage.conn, project.id):
-                coder_threads.append(
-                    {
-                        "id": summary.thread.id,
-                        "project_id": summary.thread.project_id,
-                        "title": summary.thread.title,
-                        "status": summary.thread.status.value,
-                        "active_runtime_id": summary.thread.active_runtime_id,
-                        "active_provider": summary.thread.active_provider,
-                        "active_model": summary.thread.active_model,
-                        "workspace_context_mode": summary.thread.workspace_context_mode,
-                        "message_count": summary.message_count,
-                        "run_count": summary.run_count,
-                        "review_pass_count": summary.review_pass_count,
-                        "blocking_gate_count": len(
-                            quality_os_module.blocking_gates_for_subject(
-                                storage.conn, "coder_thread", summary.thread.id
-                            )
-                        ),
-                        "last_message_preview": summary.last_message_preview,
-                        "updated_at": summary.thread.updated_at,
-                    }
-                )
+                coder_threads.append(_thread_row(summary))
+        # Project-free General threads (Plan 2 Phase A) are visible in the AI overview too.
+        for summary in coder_workspace_module.list_general_threads(storage.conn):
+            coder_threads.append(_thread_row(summary))
         benchmark_runs = []
         for run in benchmarks_module.list_runs(storage.conn):
             attempts = benchmarks_module.list_attempts_for_run(storage.conn, run.id)
@@ -351,9 +355,9 @@ def build_ai_router(
                     "path": "/api/v1/projects/{id}/workbench",
                 },
                 {
-                    "purpose": "list project-scoped coder threads and create a new one",
+                    "purpose": "list project-scoped coder threads and create a new one; also the project-free General scope (list/create at /coder-threads/general)",
                     "method": "GET | POST",
-                    "path": "/api/v1/projects/{id}/coder-threads",
+                    "path": "/api/v1/projects/{id}/coder-threads | /api/v1/coder-threads/general",
                 },
                 {
                     "purpose": "read, update, delete, and inspect thread context",

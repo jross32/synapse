@@ -194,6 +194,23 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
             thread = coder_workspace.create_thread(conn, project_id, payload)
         return thread.model_dump(mode="json")
 
+    # Project-free "General" scope (Plan 2 Phase A). Registered BEFORE /coder-threads/{thread_id}
+    # so the literal "general" path is not captured as a thread id.
+    @router.get("/coder-threads/general", response_model=None)
+    async def list_general_coder_threads() -> dict[str, Any]:
+        return {
+            "threads": [
+                item.model_dump(mode="json") for item in coder_workspace.list_general_threads(storage.conn)
+            ]
+        }
+
+    @router.post("/coder-threads/general", response_model=None, status_code=201)
+    async def create_general_coder_thread(payload: coder_workspace.CoderThreadCreate) -> dict[str, Any]:
+        # A "New chat" tied to no project -- the thread's project_id stays NULL.
+        with storage.transaction() as conn:
+            thread = coder_workspace.create_thread(conn, None, payload)
+        return thread.model_dump(mode="json")
+
     @router.get("/coder-threads/{thread_id}", response_model=None)
     async def get_thread(thread_id: str) -> dict[str, Any]:
         return _thread_detail(storage.conn, thread_id)

@@ -72,10 +72,26 @@ def apply_pending(conn: sqlite3.Connection, migrations: list[Migration]) -> list
         sql = pkg.joinpath(migration.filename).read_text(encoding="utf-8")
         statements = _split_statements(sql)
 
+        # A migration that rebuilds a table with child FKs (the SQLite "12-step" ALTER) must run
+        # with foreign_keys OFF, or the ``DROP TABLE parent`` fires ``ON DELETE CASCADE`` on children
+        # and silently destroys their rows. ``PRAGMA foreign_keys`` is a no-op inside a transaction,
+        # so we toggle it in autocommit around BEGIN/COMMIT and validate integrity with
+        # ``foreign_key_check`` before committing. Opt-in via a marker (detected on the raw text,
+        # since ``_split_statements`` strips comments) so normal migrations keep full FK enforcement.
+        fk_off = "runner:foreign_keys=off" in sql
+
+        if fk_off:
+            conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("BEGIN IMMEDIATE")
         try:
             for stmt in statements:
                 conn.execute(stmt)
+            if fk_off:
+                violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if violations:
+                    raise sqlite3.IntegrityError(
+                        f"migration {migration.number} left foreign-key violations: {violations!r}"
+                    )
             conn.execute(
                 "INSERT INTO schema_migrations (number, slug, applied_at) VALUES (?, ?, ?)",
                 (migration.number, migration.slug, _utc_now_iso()),
@@ -84,6 +100,9 @@ def apply_pending(conn: sqlite3.Connection, migrations: list[Migration]) -> list
         except Exception:
             conn.execute("ROLLBACK")
             raise
+        finally:
+            if fk_off:
+                conn.execute("PRAGMA foreign_keys = ON")
 
         newly_applied.append(migration.number)
 

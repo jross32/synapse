@@ -59,7 +59,7 @@ class CoderWorkspacePreferences(BaseModel):
 
 class CoderThread(BaseModel):
     id: str
-    project_id: str
+    project_id: str | None = None  # None = General (project-free) scope, Plan 2 Phase A
     title: str
     status: CoderThreadStatus = CoderThreadStatus.ACTIVE
     active_runtime_id: str | None = None
@@ -478,6 +478,37 @@ def list_threads(conn: sqlite3.Connection, project_id: str) -> list[CoderThreadS
         ORDER BY t.archived ASC, t.pinned DESC, t.updated_at DESC
         """,
         (project_id,),
+    ).fetchall()
+    return [
+        CoderThreadSummary(
+            thread=_row_to_thread(row),
+            message_count=row["message_count"] or 0,
+            review_pass_count=row["review_pass_count"] or 0,
+            run_count=row["run_count"] or 0,
+            last_message_preview=row["last_message_preview"] or "",
+        )
+        for row in rows
+    ]
+
+
+def list_general_threads(conn: sqlite3.Connection) -> list[CoderThreadSummary]:
+    """List project-free ("General" scope) threads -- Plan 2 Phase A. Same shape as
+    ``list_threads`` but scoped to rows whose ``project_id IS NULL``."""
+    rows = conn.execute(
+        """
+        SELECT t.*,
+               (SELECT COUNT(1) FROM coder_messages m WHERE m.thread_id = t.id) AS message_count,
+               (SELECT COUNT(1) FROM coder_review_passes r WHERE r.thread_id = t.id) AS review_pass_count,
+               (SELECT COUNT(1) FROM coder_runs cr WHERE cr.thread_id = t.id) AS run_count,
+               COALESCE((SELECT substr(m.content_md, 1, 140)
+                         FROM coder_messages m
+                         WHERE m.thread_id = t.id
+                         ORDER BY m.created_at DESC
+                         LIMIT 1), '') AS last_message_preview
+        FROM coder_threads t
+        WHERE t.project_id IS NULL
+        ORDER BY t.archived ASC, t.pinned DESC, t.updated_at DESC
+        """,
     ).fetchall()
     return [
         CoderThreadSummary(

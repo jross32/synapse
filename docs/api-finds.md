@@ -393,6 +393,8 @@ Chat-first coder sessions with message history, review passes, and runtime switc
 | PATCH | `/coder-workspace/preferences` | Update prefs (advanced_terminal_enabled, raw_pty_enabled) |
 | GET | `/projects/{id}/coder-threads` | List threads for project |
 | POST | `/projects/{id}/coder-threads` | Create new thread |
+| GET | `/coder-threads/general` | List project-free ("General" scope) threads |
+| POST | `/coder-threads/general` | Create a "New chat" with no project (`project_id` stays null) |
 | GET | `/coder-threads/{id}` | Get thread detail |
 | PATCH | `/coder-threads/{id}` | Update thread (title, status, workspace_context_mode) |
 | DELETE | `/coder-threads/{id}` | Delete thread |

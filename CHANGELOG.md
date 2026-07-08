@@ -11,6 +11,16 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Project-free "New chat" (Plan 2 Phase A, migration `026`).** Coder threads can now live in a
+  "General" scope with no project: `POST /coder-threads/general` creates one and
+  `GET /coder-threads/general` lists them. `coder_threads.project_id` is now nullable
+  (`ON DELETE SET NULL`), so deleting a project orphans its threads into General instead of cascading
+  them away. (Dispatch-to-General cwd + the renderer entry are follow-up increments.)
+- **Migration runner: FK-safe table rebuilds.** A migration can opt into a `runner:foreign_keys=off`
+  marker so a SQLite "12-step" table rebuild (DROP + RENAME to change a column constraint) runs with
+  foreign keys disabled — otherwise dropping a parent table silently cascade-deletes its children.
+  The runner toggles the pragma around the transaction and runs `foreign_key_check` before
+  committing. This is what lets migration 026 run without destroying coder message/run history.
 - **Delegated children can auto-launch (Plan 3 Phase 3).** `POST /agent-work-items/{id}/delegate`
   accepts `auto_launch: true` — the child launches immediately, bounded by the squad's concurrency
   cap + token budget; if a gate trips it's left QUEUED (with a `queued_reason`) instead of erroring
