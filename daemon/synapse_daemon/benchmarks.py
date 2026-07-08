@@ -122,6 +122,7 @@ class BugHuntScore(BaseModel):
     recall: float = 0.0
     false_positive_rate: float = 0.0
     bugs_per_1k_tokens: float | None = None
+    by_category: dict[str, dict[str, int]] = Field(default_factory=dict)  # category -> {found, total}
 
 
 class BugHuntScoreRequest(BaseModel):
@@ -1073,6 +1074,14 @@ def score_bug_hunt(
 
     true_positives = len(claimed)
     missed = [b.get("id") for b in bugs if b.get("id") not in claimed]
+    # Per-category coverage: which bug classes the run found vs missed -- a topology-benchmark signal
+    # (e.g. "finds all functional bugs but misses accessibility").
+    by_category: dict[str, dict[str, int]] = {}
+    for bug in bugs:
+        entry = by_category.setdefault(bug.get("category") or "uncategorized", {"found": 0, "total": 0})
+        entry["total"] += 1
+        if bug.get("id") in claimed:
+            entry["found"] += 1
     denom_fp = true_positives + false_positives
     tokens = max(int(total_tokens or 0), 0)
     return BugHuntScore(
@@ -1084,6 +1093,7 @@ def score_bug_hunt(
         recall=round(true_positives / len(bugs), 4) if bugs else 0.0,
         false_positive_rate=round(false_positives / denom_fp, 4) if denom_fp else 0.0,
         bugs_per_1k_tokens=round(true_positives / (tokens / 1000.0), 4) if tokens else None,
+        by_category=by_category,
     )
 
 

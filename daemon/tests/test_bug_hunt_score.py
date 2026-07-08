@@ -164,3 +164,21 @@ def test_list_bug_hunt_fixtures_route(tmp_path: Path) -> None:
         r = c.get("/api/v1/benchmarks/bug-hunt-fixtures")
         assert r.status_code == 200, r.text
         assert any(f["name"] == "bug-hunt-fixture" for f in r.json()["fixtures"])
+
+
+def test_score_includes_per_category_breakdown() -> None:
+    from synapse_daemon.benchmarks import load_fixture_answer_key
+
+    key = load_fixture_answer_key("bug-hunt-fixture")
+    findings = [
+        {"surface": "contact form", "text": "empty submit shows success, no validation"},  # B01 functional
+        {"surface": "header", "text": "mobile nav overlaps logo, unclickable"},  # B04 ui
+        {"surface": "contact confirmation", "text": "name into innerHTML unescaped -> xss"},  # B12 security
+    ]
+    score = score_bug_hunt(key, findings, total_tokens=10_000)
+    bc = score.by_category
+    assert bc["functional"] == {"found": 1, "total": 2}
+    assert bc["ui"] == {"found": 1, "total": 2}
+    assert bc["security"] == {"found": 1, "total": 1}
+    assert bc["accessibility"] == {"found": 0, "total": 3}  # found nothing in this class
+    assert sum(c["total"] for c in bc.values()) == 12

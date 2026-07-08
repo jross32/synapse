@@ -11,6 +11,9 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Bug-hunt scoring: per-category breakdown.** `score_bug_hunt` / `POST /benchmarks/score-bug-hunt`
+  (and the standalone `grade.py`) now return `by_category` (`{category: {found, total}}`) so a
+  topology run shows *where* it's weak — e.g. finds all functional bugs but misses accessibility.
 - **Squad capacity check.** `GET /agent-squads/{id}/capacity` reports headroom against the launch
   gates — `running`/`max_concurrent`, `tokens_spent`/`token_budget`, and a `can_launch` boolean — so
   an AI or the UI can check whether there's room before delegating another worker (0 = unlimited).

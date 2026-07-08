@@ -45,6 +45,10 @@ def test_grade_py_scores_findings(tmp_path: Path) -> None:
     assert report["false_positives"] == 1
     assert report["bugs_per_1k_tokens"] == 0.2  # 2 / (10000/1000)
     assert report["false_positive_rate"] == round(1 / 3, 4)
+    # Per-category breakdown: found 1/2 functional (B01), 1/2 ui (B04), 0/3 accessibility.
+    assert report["by_category"]["functional"] == {"found": 1, "total": 2}
+    assert report["by_category"]["ui"] == {"found": 1, "total": 2}
+    assert report["by_category"]["accessibility"] == {"found": 0, "total": 3}
 
 
 def test_grade_py_zero_findings_zero_tokens(tmp_path: Path) -> None:

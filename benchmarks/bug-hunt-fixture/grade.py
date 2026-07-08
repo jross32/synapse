@@ -46,6 +46,14 @@ def grade(key: dict, findings: list[dict], tokens: int) -> dict:
     duplicates = finding_status.count("duplicate")
     missed = [b["id"] for b in bugs if b["id"] not in claimed]
 
+    # Per-category coverage: which bug classes were found vs missed.
+    by_category = {}
+    for bug in bugs:
+        entry = by_category.setdefault(bug.get("category") or "uncategorized", {"found": 0, "total": 0})
+        entry["total"] += 1
+        if bug["id"] in claimed:
+            entry["found"] += 1
+
     denom_fp = true_positives + false_positives
     tokens = max(int(tokens), 0)
     return {
@@ -59,6 +67,7 @@ def grade(key: dict, findings: list[dict], tokens: int) -> dict:
         "false_positive_rate": round(false_positives / denom_fp, 4) if denom_fp else 0.0,
         "tokens": tokens,
         "bugs_per_1k_tokens": round(true_positives / (tokens / 1000), 4) if tokens else None,
+        "by_category": by_category,
         "matched": {bug_id: findings[fi].get("text", "") for bug_id, fi in sorted(claimed.items())},
     }
 
