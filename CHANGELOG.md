@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.40] -- 2026-07-08
+
+### Fixed
+- **`synapse.cmd` reliably launches even after a crashed or force-quit run (fixes "it crashes when
+  starting / it said stopping a daemon").** A previous run that was force-quit or crashed leaves its
+  Vite (5173) and/or daemon (7878) child orphaned and still squatting on the port. On the next launch
+  Vite then fails with `Port 5173 is already in use` and exits; `scripts/dev.ps1`'s `finally` block
+  stops the daemon and reports a non-zero exit — surfacing as "-> Stopping daemon" and looking like a
+  crash even though the daemon started perfectly. `dev.ps1` now runs a best-effort pre-flight
+  `Clear-StalePort` before starting the daemon and Vite, evicting a stale process **only** when its
+  command line is clearly Synapse-owned (`synapse_daemon` / `vite`) — an unrelated process on the same
+  port is left alone and warned about. This is the orchestrator-level twin of the daemon's own 7878
+  self-eviction.
+- **Stale-daemon eviction can never abort daemon startup.** `_evict_stale_daemon_on_port` is now fully
+  guarded at the call site and around process termination, so any unexpected error while stopping a
+  stale daemon is logged and the daemon proceeds to bind anyway.
+
 ## [0.1.39] -- 2026-07-08
 
 ### Fixed

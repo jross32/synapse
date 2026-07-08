@@ -72,6 +72,54 @@ function Stop-ProcessTree {
   Start-Sleep -Milliseconds 250
 }
 
+function Clear-StalePort {
+  param(
+    [Parameter(Mandatory = $true)]
+    [int]$Port,
+    [Parameter(Mandatory = $true)]
+    [string]$Match,
+    [Parameter(Mandatory = $true)]
+    [string]$Label
+  )
+
+  # Best-effort pre-flight cleanup. A crashed or force-quit run orphans its
+  # child (the daemon on 7878, Vite on 5173); the orphan keeps squatting on the
+  # port so the next launch cannot bind and the whole start fails -- which the
+  # finally-block then reports as "Stopping daemon", looking like a crash.
+  # Kill ONLY a process whose command line clearly belongs to us ($Match) so an
+  # unrelated user process on the same port is never touched. Any failure here
+  # is swallowed: cleanup must never abort a launch.
+  try {
+    $conns = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
+    if (-not $conns) {
+      return
+    }
+    $stalePids = $conns | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($procId in $stalePids) {
+      if (-not $procId -or $procId -eq 0) {
+        continue
+      }
+      $cmd = ''
+      try {
+        $cimProc = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
+        if ($cimProc) {
+          $cmd = "$($cimProc.CommandLine)"
+        }
+      } catch {
+      }
+      if ($cmd.ToLower().Contains($Match.ToLower())) {
+        Write-Host "-> Clearing stale $Label (PID $procId) holding port $Port before start"
+        & taskkill /PID $procId /T /F | Out-Null
+        Start-Sleep -Milliseconds 400
+      } else {
+        Write-Warning "Port $Port is held by a non-Synapse process (PID $procId); leaving it. The launch may fail to bind."
+      }
+    }
+  } catch {
+    Write-Host "   (stale-port check for $Port skipped: $($_.Exception.Message))"
+  }
+}
+
 function Start-LoggedCmdProcess {
   param(
     [Parameter(Mandatory = $true)]
@@ -179,6 +227,7 @@ do {
 
   try {
     if (-not $AppOnly) {
+      Clear-StalePort -Port 7878 -Match 'synapse_daemon' -Label 'daemon'
       $daemonCommand = 'python -m synapse_daemon --port 7878 --data-dir data'
       if ($BindLan) {
         $daemonCommand += ' --bind-lan'
@@ -198,6 +247,7 @@ do {
       throw 'build:electron failed'
     }
 
+    Clear-StalePort -Port 5173 -Match 'vite' -Label 'Vite dev server'
     $viteProc = Start-LoggedCmdProcess `
       -Label 'Vite dev server' `
       -Command 'node node_modules\vite\bin\vite.js' `

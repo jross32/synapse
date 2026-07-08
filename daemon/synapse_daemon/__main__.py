@@ -228,7 +228,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     app.state.data_dir = args.data_dir
     app.router.lifespan_context = _build_lifespan(storage, bus, pm, registry)
 
-    _evict_stale_daemon_on_port(args.port)
+    try:
+        _evict_stale_daemon_on_port(args.port)
+    except Exception:  # noqa: BLE001 - eviction is best-effort; it must NEVER prevent the daemon from trying to start
+        log.exception("Stale-daemon eviction raised; proceeding to bind %s anyway.", args.port)
 
     try:
         uvicorn.run(
@@ -292,7 +295,7 @@ def _evict_stale_daemon_on_port(port: int) -> None:
                 proc.wait(timeout=5)
             except psutil.TimeoutExpired:
                 proc.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+        except Exception as exc:  # noqa: BLE001 - eviction is best-effort; a failure must NEVER abort startup
             log.warning("Could not evict stale daemon pid=%s: %s", pid, exc)
 
 
