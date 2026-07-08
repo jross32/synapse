@@ -11,6 +11,12 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Delegated children can auto-launch (Plan 3 Phase 3).** `POST /agent-work-items/{id}/delegate`
+  accepts `auto_launch: true` — the child launches immediately, bounded by the squad's concurrency
+  cap + token budget; if a gate trips it's left QUEUED (with a `queued_reason`) instead of erroring
+  the delegation. Closes the delegate dead-end where a supervisor could create a child it couldn't
+  start. (The launch route body was refactored into a shared `_do_launch` helper — no behavior change
+  to `POST /agent-work-items/{id}/launch`.)
 - **Bug-hunt fixture discovery.** `GET /benchmarks/bug-hunt-fixtures` lists the shipped fixtures
   (`name` / `fixture` / `total_bugs`) so an AI can discover the valid `fixture` names before scoring.
 - **`score-bug-hunt` accepts a fixture name.** `POST /benchmarks/score-bug-hunt` now takes an

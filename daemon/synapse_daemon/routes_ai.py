@@ -461,7 +461,7 @@ def build_ai_router(
                     "path": "/api/v1/agent-work-items/{id}/tokens | /api/v1/agent-squads/{id}/token-usage",
                 },
                 {
-                    "purpose": "stop all of a squad's workers (kill switch); set a squad's concurrency cap + token budget via PATCH; delegate a child work item to a specialist; record a review-pass verdict (opens a quality gate if blocking)",
+                    "purpose": "stop all of a squad's workers (kill switch); set a squad's concurrency cap + token budget via PATCH; delegate a child work item to a specialist (auto_launch:true launches it immediately, bounded by the cap + budget); record a review-pass verdict (opens a quality gate if blocking)",
                     "method": "POST | PATCH",
                     "path": "/api/v1/agent-squads/{id}/stop | /api/v1/agent-squads/{id} | /api/v1/agent-work-items/{id}/delegate | /api/v1/coder-review-passes/{id}/verdict",
                 },

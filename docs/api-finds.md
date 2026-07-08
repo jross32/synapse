@@ -338,7 +338,7 @@ one PTY session with a role-specific prompt.
 | POST | `/agent-squads/{id}/stop` | Kill all running workers immediately |
 | POST | `/agent-squads/{id}/work-items` | Create work item in squad |
 | POST | `/agent-work-items/{id}/launch` | **Launch work item** (spawns AI with role prompt, MCP config, env vars) |
-| POST | `/agent-work-items/{id}/delegate` | Create child work item delegated from this one |
+| POST | `/agent-work-items/{id}/delegate` | Create a child work item delegated from this one; pass `auto_launch: true` to launch it immediately (bounded by the squad's concurrency cap + token budget — over-limit children stay QUEUED with a `queued_reason`) |
 | POST | `/agent-work-items/{id}/handoff` | Complete/hand off work item with summary + blockers + files_touched + verdict |
 | POST | `/agent-work-items/{id}/status` | Update work item status |
 | POST | `/agent-work-items/{id}/tokens` | **Record token usage** (AI self-reports) |

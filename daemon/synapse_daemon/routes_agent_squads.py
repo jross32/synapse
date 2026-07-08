@@ -34,7 +34,7 @@ from .ai_context_memory import (
 from .api_versions import event_name
 from .audit import AuditRecord, audit
 from . import token_ledger
-from .errors import conflict, invalid
+from .errors import SynapseError, conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
 from .ws import Event, EventBus
@@ -269,12 +269,7 @@ def build_agent_squads_router(
         await bus.publish(event_name("agent_work_item", "created"), {"work_item": item.model_dump(mode="json")})
         return item.model_dump(mode="json")
 
-    @router.post("/agent-work-items/{work_item_id}/launch", response_model=None)
-    async def launch_work_item(
-        work_item_id: str,
-        payload: AgentWorkItemLaunchRequest | None = None,
-    ) -> dict[str, Any]:
-        body = payload or AgentWorkItemLaunchRequest()
+    async def _do_launch(work_item_id: str, body: AgentWorkItemLaunchRequest) -> dict[str, Any]:
         with storage.transaction() as conn:
             work_item = squads.get_work_item(conn, work_item_id)
             squad = squads.get_squad(conn, work_item.squad_id)
@@ -420,6 +415,13 @@ def build_agent_squads_router(
             "project_name": project.name,
         }
 
+    @router.post("/agent-work-items/{work_item_id}/launch", response_model=None)
+    async def launch_work_item(
+        work_item_id: str,
+        payload: AgentWorkItemLaunchRequest | None = None,
+    ) -> dict[str, Any]:
+        return await _do_launch(work_item_id, payload or AgentWorkItemLaunchRequest())
+
     @router.post("/agent-work-items/{work_item_id}/delegate", response_model=None, status_code=201)
     async def delegate_work_item(
         work_item_id: str,
@@ -451,11 +453,33 @@ def build_agent_squads_router(
                     action="delegate",
                     source=payload.source,
                     result="success",
-                    details={"parent_id": parent.id, "squad_id": parent.squad_id},
+                    details={"parent_id": parent.id, "squad_id": parent.squad_id, "auto_launch": payload.auto_launch},
                 ),
             )
         await bus.publish(event_name("agent_work_item", "created"), {"work_item": child.model_dump(mode="json")})
-        return child.model_dump(mode="json")
+
+        # Auto-launch (Plan 3 Phase 3): optionally spawn the delegated child right away, bounded by
+        # the squad's concurrency cap + token budget. If a gate trips, the child is left QUEUED for a
+        # later launch instead of erroring the whole delegation.
+        if not payload.auto_launch:
+            return child.model_dump(mode="json")
+        try:
+            launched = await _do_launch(
+                child.id,
+                AgentWorkItemLaunchRequest(preferred_runtime=payload.preferred_runtime, source=payload.source),
+            )
+        except SynapseError as exc:
+            # A concurrency-cap / token-budget gate (409) leaves the child QUEUED for a later launch.
+            # Any other failure (bad cwd, spawn error) is a real problem -- surface it; the child
+            # was still created and can be launched manually once the cause is fixed.
+            if exc.status == 409:
+                return {**child.model_dump(mode="json"), "launched": None, "queued_reason": exc.envelope.message}
+            raise
+        # `launched` is the authoritative "it started" signal. `fresh` reflects the child's *current*
+        # status, which for an instant-exiting runtime may already read completed rather than running
+        # -- that's accurate, not a race bug. Both auto-launch branches return launched+queued_reason.
+        fresh = squads.get_work_item(storage.conn, child.id)
+        return {**fresh.model_dump(mode="json"), "launched": launched, "queued_reason": None}
 
     @router.post("/agent-work-items/{work_item_id}/handoff", response_model=None)
     async def handoff_work_item(

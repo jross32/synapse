@@ -114,6 +114,113 @@ def test_delegate_creates_child_work_item_linked_by_parent_id(tmp_path: Path) ->
         assert any(item["id"] == child["id"] for item in detail["work_items"])
 
 
+def test_delegate_without_auto_launch_returns_bare_child(tmp_path: Path) -> None:
+    # Backward compatibility: the default (no auto_launch) still returns the bare child, unlaunched.
+    _app, client = _harness(tmp_path)
+    with client as c:
+        squad = _create_squad(c)
+        parent = _create_work_item(c, squad["id"], assigned_role_id="planner")
+        res = c.post(
+            f"/api/v1/agent-work-items/{parent['id']}/delegate",
+            json={"title": "Just create it", "assigned_role_id": "reviewer"},
+        )
+        assert res.status_code == 201, res.text
+        body = res.json()
+        assert body["status"] == "queued"
+        assert "launched" not in body
+
+
+def test_delegate_auto_launch_over_cap_leaves_child_queued(tmp_path: Path) -> None:
+    # Plan 3 Phase 3: auto_launch is bounded by the squad's concurrency cap. When the cap is already
+    # full the child is created but LEFT QUEUED (with a reason) instead of erroring the delegation.
+    # Deterministic + platform-independent: the cap gate fires before any PTY spawn.
+    _app, client = _harness(tmp_path)
+    with client as c:
+        squad = c.post(
+            "/api/v1/agent-squads",
+            json={
+                "project_id": "demo-project",
+                "name": "Capped Squad",
+                "goal_md": "x",
+                "lead_role_id": "planner",
+                "max_concurrent": 1,
+            },
+        ).json()
+        # Occupy the single slot with a RUNNING work item (a status change, no real spawn).
+        busy = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        assert c.post(
+            f"/api/v1/agent-work-items/{busy['id']}/status", json={"status": "running"}
+        ).status_code == 200
+        parent = _create_work_item(c, squad["id"], assigned_role_id="planner")
+
+        res = c.post(
+            f"/api/v1/agent-work-items/{parent['id']}/delegate",
+            json={"title": "Overflow work", "assigned_role_id": "reviewer", "auto_launch": True},
+        )
+        assert res.status_code == 201, res.text
+        body = res.json()
+        assert body["launched"] is None
+        assert "queued_reason" in body and "cap" in body["queued_reason"].lower()
+        assert body["status"] == "queued"
+        # Persisted state (not just the response snapshot) confirms the child never launched.
+        items = c.get(f"/api/v1/agent-squads/{squad['id']}").json()["work_items"]
+        overflow = next(w for w in items if w["title"] == "Overflow work")
+        assert overflow["status"] == "queued"
+        assert overflow["pty_session_id"] is None
+
+
+@posix_only
+def test_delegate_auto_launch_spawns_child(tmp_path: Path) -> None:
+    app, client = _harness(tmp_path)
+    script = tmp_path / "auto-child.sh"
+    script.write_text("#!/usr/bin/env bash\nsleep 2\n", encoding="utf-8")
+    script.chmod(0o755)
+    with client as c:
+        squad = _create_squad(c)
+        parent = _create_work_item(c, squad["id"], assigned_role_id="planner")
+        res = c.post(
+            f"/api/v1/agent-work-items/{parent['id']}/delegate",
+            json={
+                "title": "Launched child",
+                "assigned_role_id": "reviewer",
+                "preferred_runtime": str(script),
+                "auto_launch": True,
+            },
+        )
+        assert res.status_code == 201, res.text
+        body = res.json()
+        assert body["launched"] is not None
+        assert body["status"] == "running"
+        assert body["launched"]["work_item_id"] == body["id"]
+        c.delete(f"/api/v1/pty/{body['launched']['session_id']}")
+
+
+@posix_only
+def test_delegate_auto_launch_surfaces_real_spawn_failure(tmp_path: Path) -> None:
+    # A genuine (non-cap) launch failure must SURFACE as a 4xx -- not be swallowed as a benign
+    # "queued" gate. The child is still created (committed before the launch attempt) and left QUEUED
+    # for a manual retry once the cause is fixed. Guards the 409-only swallow / re-raise branch.
+    _app, client = _harness(tmp_path)
+    missing = tmp_path / "does-not-exist-binary"
+    with client as c:
+        squad = _create_squad(c)
+        parent = _create_work_item(c, squad["id"], assigned_role_id="planner")
+        res = c.post(
+            f"/api/v1/agent-work-items/{parent['id']}/delegate",
+            json={
+                "title": "Doomed launch",
+                "assigned_role_id": "reviewer",
+                "preferred_runtime": str(missing),
+                "auto_launch": True,
+            },
+        )
+        assert res.status_code == 422, res.text
+        items = c.get(f"/api/v1/agent-squads/{squad['id']}").json()["work_items"]
+        child = next(w for w in items if w["title"] == "Doomed launch")
+        assert child["status"] == "queued"
+        assert child["pty_session_id"] is None
+
+
 def test_handoff_appends_to_project_ai_context_file(tmp_path: Path) -> None:
     app, client = _harness(tmp_path)
     with client as c:

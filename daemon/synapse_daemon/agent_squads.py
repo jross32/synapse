@@ -175,6 +175,9 @@ class AgentWorkItemDelegateRequest(BaseModel):
     instructions_md: str = ""
     assigned_role_id: str | None = None
     preferred_runtime: str | None = None
+    # Plan 3 Phase 3: launch the delegated child immediately (bounded by the squad's concurrency cap
+    # + token budget). If a gate trips, the child is left QUEUED rather than erroring the delegation.
+    auto_launch: bool = False
     source: AuditSource = AuditSource.DESKTOP
 
 
