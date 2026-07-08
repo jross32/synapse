@@ -12,6 +12,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [0.1.39] -- 2026-07-08
 
+### Fixed
+- **Daemon reliably claims port 7878 on startup (fixes "the app is stuck loading everything" + dead
+  WAN).** `python -m synapse_daemon` now evicts a *stale* Synapse daemon still listening on the bind
+  port before starting uvicorn — a daemon that outlived its app (a crash, an orphaned tunnel, or a
+  previous run that was never reaped) previously caused `WinError 10048`, a silent daemon exit, and a
+  wedged desktop app / dead Cloudtap WAN. Only a process whose command line is a synapse daemon is
+  evicted; anything else on the port is left alone. (Root cause of the stuck-app report.)
+- **The web-scraper boot autorun can never abort daemon startup.** `reconcile_web_scraper_project`
+  and the auto-launch step run inside the fatal `on_startup` handler, so they're now fully wrapped —
+  a web-scraper hiccup degrades gracefully (logged) instead of taking the whole daemon down.
+
 ### Changed
 - **First-party Web Scraper boot wiring is now real in the production daemon, not just the test harness.**
   The `python -m synapse_daemon` lifespan now runs the app's startup/shutdown hooks, so the

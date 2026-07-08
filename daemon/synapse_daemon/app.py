@@ -393,10 +393,13 @@ def build_app(
             log.exception("Web Scraper bootstrap failed unexpectedly.")
 
         if bootstrapped_server is not None:
-            reconcile_web_scraper_project(
-                storage,
-                source_path=_mcp.web_scraper_source_path(bootstrapped_server),
-            )
+            try:
+                reconcile_web_scraper_project(
+                    storage,
+                    source_path=_mcp.web_scraper_source_path(bootstrapped_server),
+                )
+            except Exception:  # a reconcile failure must NEVER abort daemon startup
+                log.exception("Web Scraper project reconcile failed; continuing startup.")
             await bus.publish(
                 event_name("mcp_server", "updated"),
                 {
@@ -418,6 +421,8 @@ def build_app(
                             "Web Scraper app bootstrap launch skipped: %s",
                             exc.envelope.message,
                         )
+                except Exception:  # a launch failure must NEVER abort daemon startup
+                    log.exception("Web Scraper app bootstrap launch failed; continuing startup.")
             status, detail = await mcp_manager.status(server)
             started = False
             if status == _mcp.McpServerStatus.STOPPED:

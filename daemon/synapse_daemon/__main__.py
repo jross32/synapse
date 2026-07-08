@@ -228,6 +228,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     app.state.data_dir = args.data_dir
     app.router.lifespan_context = _build_lifespan(storage, bus, pm, registry)
 
+    _evict_stale_daemon_on_port(args.port)
+
     try:
         uvicorn.run(
             app,
@@ -242,6 +244,56 @@ def main(argv: Sequence[str] | None = None) -> int:
         storage.close()
 
     return 0
+
+
+def _evict_stale_daemon_on_port(port: int) -> None:
+    """Kill a stale Synapse daemon still LISTENING on ``port`` so this instance can bind it.
+
+    A daemon that outlived its app (crash, orphaned tunnel, a previous run that was never reaped)
+    keeps squatting on the port; ``uvicorn.run`` then fails to bind (WinError 10048 / EADDRINUSE)
+    and the process exits, leaving the desktop app "stuck loading everything" and WAN/Cloudtap dead.
+    We only touch a process whose command line is clearly a synapse daemon -- anything else keeping
+    the port is left alone so uvicorn surfaces the real error. Entirely best-effort: any failure
+    here is logged and ignored (it must never stop the daemon from trying to start).
+    """
+    import os
+
+    log = logging.getLogger("synapse")
+    try:
+        import psutil
+    except Exception:  # pragma: no cover - psutil should always be present
+        return
+
+    me = os.getpid()
+    try:
+        conns = psutil.net_connections(kind="inet")
+    except Exception as exc:  # AccessDenied etc. -- skip eviction, let uvicorn try to bind
+        log.debug("Port-eviction scan skipped (%s); proceeding to bind %s.", exc, port)
+        return
+
+    for conn in conns:
+        if conn.status != psutil.CONN_LISTEN or not conn.laddr or conn.laddr.port != port:
+            continue
+        pid = conn.pid
+        if not pid or pid == me:
+            continue
+        try:
+            proc = psutil.Process(pid)
+            cmdline = " ".join(proc.cmdline()).lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if "synapse_daemon" not in cmdline:
+            log.warning("Port %s is held by a non-Synapse process (pid=%s); not evicting.", port, pid)
+            continue
+        log.warning("Evicting stale Synapse daemon (pid=%s) holding port %s before rebinding.", pid, port)
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except psutil.TimeoutExpired:
+                proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+            log.warning("Could not evict stale daemon pid=%s: %s", pid, exc)
 
 
 if __name__ == "__main__":
