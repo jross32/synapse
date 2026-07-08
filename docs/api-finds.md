@@ -745,6 +745,7 @@ Built-in assistant powered by Ollama. Wraps Synapse context into a system prompt
 | GET | `/review/proposals/{id}` | Get one proposal |
 | POST | `/review/proposals/{id}/approve` | Approve a proposal |
 | POST | `/review/proposals/{id}/reject` | Reject a proposal |
+| POST | `/review/proposals/{id}/promote` | Approve + turn a project-scoped proposal into a project **backlog item** (the actionable "yes, do this"). 400 if the proposal is Synapse-wide (no project) |
 
 **Proposal body:** `{"title": "...", "rationale_md": "...", "project_id": "...", "source_runtime": "claude", "est_effort": "S", "est_token_cost": 20000}`.
 The safe **"agents brainstorm, you approve"** path — an AI files an idea here instead of acting on it unilaterally. Open proposals appear in `GET /review/inbox` under `proposals`.

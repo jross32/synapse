@@ -11,6 +11,10 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **Promote a proposal to a backlog item.** `POST /review/proposals/{id}/promote` approves a
+  project-scoped improvement proposal and turns it into an actionable item in that project's backlog
+  — closing the "agents brainstorm → you approve → it becomes real work" loop. (Synapse-wide
+  proposals with no project return 400.)
 - **Project-free "New chat" (Plan 2 Phase A, migration `026`).** Coder threads can now live in a
   "General" scope with no project: `POST /coder-threads/general` creates one and
   `GET /coder-threads/general` lists them. `coder_threads.project_id` is now nullable

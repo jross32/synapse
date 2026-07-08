@@ -11,11 +11,14 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
+from . import project_records
 from . import proposals as proposals_module
 from . import review
 from .api_versions import event_name
 from .audit import AuditRecord, audit
+from .errors import invalid
 from .models import AuditSource
+from .project_records import ProjectBacklogItemCreate
 from .proposals import ProposalCreate, ProposalResolveRequest, ProposalStatus
 from .review import ReviewActionRequest, ReviewInbox
 from .storage import Storage
@@ -112,6 +115,46 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
         proposal_id: str, payload: ProposalResolveRequest | None = None
     ) -> dict[str, Any]:
         return await _resolve_proposal(proposal_id, ProposalStatus.REJECTED, payload.note if payload else "")
+
+    @router.post("/proposals/{proposal_id}/promote", response_model=None)
+    async def promote_proposal(proposal_id: str) -> dict[str, Any]:
+        # "Yes, do this" -> turn an approved idea into an actionable project backlog item, closing
+        # the brainstorm -> approve -> action loop. Only a project-scoped proposal can be promoted;
+        # a Synapse-wide one (project_id is null) has no backlog to land in.
+        with storage.transaction() as conn:
+            proposal = proposals_module.get_proposal(conn, proposal_id)
+            if not proposal.project_id:
+                raise invalid(
+                    "proposal", "Only a project-scoped proposal can be promoted to a backlog item."
+                )
+            item = project_records.create_backlog_item(
+                conn,
+                proposal.project_id,
+                ProjectBacklogItemCreate(
+                    title=proposal.title,
+                    body_md=(proposal.rationale_md.strip() + f"\n\n_Promoted from proposal {proposal.id}._").strip(),
+                    source=AuditSource.DESKTOP,
+                ),
+            )
+            resolved = proposals_module.resolve_proposal(
+                conn, proposal_id, ProposalStatus.APPROVED, f"Promoted to backlog item {item.id}"
+            )
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="proposal",
+                    entity_id=proposal_id,
+                    action="proposal.promoted",
+                    source=AuditSource.DESKTOP,
+                    result="success",
+                    details={"backlog_item_id": item.id, "project_id": proposal.project_id},
+                ),
+            )
+        await bus.publish(
+            event_name("review", "resolved"),
+            {"id": proposal_id, "action": "promoted", "backlog_item_id": item.id},
+        )
+        return {"proposal": resolved.model_dump(mode="json"), "backlog_item": item.model_dump(mode="json")}
 
     @router.get("/proposals", response_model=list[proposals_module.Proposal])
     async def list_review_proposals(

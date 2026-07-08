@@ -83,3 +83,40 @@ def test_list_and_get_proposals_with_status_filter(tmp_path: Path) -> None:
         one = c.get(f"/api/v1/review/proposals/{p_open}").json()
         assert one["id"] == p_open and one["status"] == "open"
         assert c.get("/api/v1/review/proposals/nope").status_code == 404
+
+
+def test_promote_project_proposal_creates_backlog_item(tmp_path: Path) -> None:
+    from synapse_daemon import project_records
+    from synapse_daemon.projects import Project, create as create_project
+
+    s = Storage(tmp_path / "data")
+    s.open()
+    s.migrate()
+    with s.transaction() as conn:
+        create_project(conn, Project(id="proj1", name="Proj", path="/tmp", launch_cmd="echo hi"))
+    app = build_app(s, EventBus())
+    with TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token}) as c:
+        pid = c.post(
+            "/api/v1/review/proposals",
+            json={"title": "Add dark mode", "rationale_md": "Users want it", "project_id": "proj1"},
+        ).json()["id"]
+
+        promoted = c.post(f"/api/v1/review/proposals/{pid}/promote")
+        assert promoted.status_code == 200, promoted.text
+        body = promoted.json()
+        assert body["proposal"]["status"] == "approved"
+        assert body["backlog_item"]["title"] == "Add dark mode"
+        assert body["backlog_item"]["project_id"] == "proj1"
+        assert "proposal" in body["backlog_item"]["body_md"].lower()
+
+    # The backlog item is persisted in the project's backlog.
+    items = project_records.list_backlog(s.conn, "proj1")
+    assert any(i.title == "Add dark mode" for i in items)
+
+
+def test_promote_synapse_wide_proposal_is_rejected(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    with client as c:
+        # No project_id -> Synapse-wide proposal -> cannot promote to a project backlog.
+        pid = c.post("/api/v1/review/proposals", json={"title": "Global idea"}).json()["id"]
+        assert c.post(f"/api/v1/review/proposals/{pid}/promote").status_code >= 400

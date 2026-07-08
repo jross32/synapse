@@ -477,7 +477,7 @@ def build_ai_router(
                 {
                     "purpose": "read the human review inbox (work-item handoffs + AI-filed improvement proposals awaiting approval) -- check before starting new work; approve/revise/reject items; and FILE an improvement idea for the user to approve instead of acting unilaterally (agents brainstorm, you approve), then approve/reject proposals",
                     "method": "GET | POST",
-                    "path": "/api/v1/review/inbox | /api/v1/review/items/{id}/approve | /revise | /reject | /api/v1/review/proposals | /api/v1/review/proposals/{id}/approve | /reject",
+                    "path": "/api/v1/review/inbox | /api/v1/review/items/{id}/approve | /revise | /reject | /api/v1/review/proposals | /api/v1/review/proposals/{id}/approve | /reject | /promote (approve + create a project backlog item)",
                 },
                 {
                     "purpose": "upload, list, download, and delete project or shared files, and list a project's AI session transcripts",
