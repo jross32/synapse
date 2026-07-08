@@ -15,7 +15,9 @@ Every commit must append an entry under the in-progress version header.
   "General" scope with no project: `POST /coder-threads/general` creates one and
   `GET /coder-threads/general` lists them. `coder_threads.project_id` is now nullable
   (`ON DELETE SET NULL`), so deleting a project orphans its threads into General instead of cascading
-  them away. (Dispatch-to-General cwd + the renderer entry are follow-up increments.)
+  them away. Dispatching a General thread (and launching its review passes) now spawns the PTY in a
+  dedicated `data/general-workspace` dir with no project, and its context read is null-safe. (The
+  renderer "New chat" entry is the remaining follow-up.)
 - **Migration runner: FK-safe table rebuilds.** A migration can opt into a `runner:foreign_keys=off`
   marker so a SQLite "12-step" table rebuild (DROP + RENAME to change a column constraint) runs with
   foreign keys disabled — otherwise dropping a parent table silently cascade-deletes its children.

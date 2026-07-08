@@ -244,6 +244,16 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
             message = coder_workspace.add_message(conn, thread_id, payload)
         return message.model_dump(mode="json")
 
+    def _thread_workspace(thread: coder_workspace.CoderThread):
+        # Resolve (cwd, project) for a coder thread. A General (project-free) thread has no project
+        # and spawns in a dedicated data/general-workspace dir (Plan 2 Phase A).
+        if thread.project_id:
+            proj = projects_module.get(storage.conn, thread.project_id)
+            return proj.path, proj
+        general = storage.data_dir / "general-workspace"
+        general.mkdir(parents=True, exist_ok=True)
+        return str(general), None
+
     @router.post("/coder-threads/{thread_id}/dispatch", response_model=None, status_code=201)
     async def dispatch_thread_message(
         thread_id: str, payload: coder_workspace.CoderDispatchMessageRequest
@@ -252,7 +262,7 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
         if not prompt:
             raise invalid("coder_thread", "Message cannot be empty.")
         thread = coder_workspace.get_thread(storage.conn, thread_id)
-        project = projects_module.get(storage.conn, thread.project_id)
+        cwd, project = _thread_workspace(thread)
         runtime_id = _canonical_runtime_id(payload.runtime_id or thread.active_runtime_id)
         provider = payload.provider or thread.active_provider or _provider_for_runtime(runtime_id)
         model = payload.model or thread.active_model or _model_for_runtime(runtime_id)
@@ -295,16 +305,18 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
                     model=model,
                     surface_kind="coder-thread-dispatch",
                     surface_profile_version="v1",
-                    project_id=project.id,
+                    project_id=project.id if project else None,
                     workspace_context_mode=payload.workspace_context_mode
                     or thread.workspace_context_mode,
-                    attachments_count=len(files_storage.list_for_project(conn, project.id)),
+                    attachments_count=(
+                        len(files_storage.list_for_project(conn, project.id)) if project else 0
+                    ),
                     workspace_overhead_bytes=len(prompt.encode("utf-8")),
                     metadata={"argv": argv, **payload.metadata},
                 ),
             )
             coder_workspace.attach_run_to_message(conn, message.id, run_record.id)
-        session = await pty_manager.spawn(argv=argv, cwd=project.path, project_id=project.id)
+        session = await pty_manager.spawn(argv=argv, cwd=cwd, project_id=project.id if project else None)
         with storage.transaction() as conn:
             run_record = coder_workspace.update_run_session(conn, run_record.id, session.session_id)
         await _write_prompt_to_session(session, prompt)
@@ -397,7 +409,7 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
         review_pass = coder_workspace.get_review_pass(storage.conn, review_pass_id)
         if review_pass.thread_id != thread_id:
             raise invalid("coder_review_pass", "Review pass does not belong to this thread.")
-        project = projects_module.get(storage.conn, thread.project_id)
+        cwd, project = _thread_workspace(thread)
         runtime_id = _canonical_runtime_id(
             body.runtime_id or review_pass.requested_runtime_id or thread.active_runtime_id
         )
@@ -426,15 +438,17 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
                     model=model,
                     surface_kind="coder-review-pass",
                     surface_profile_version="v1",
-                    project_id=project.id,
+                    project_id=project.id if project else None,
                     workspace_context_mode=thread.workspace_context_mode,
-                    attachments_count=len(files_storage.list_for_project(conn, project.id)),
+                    attachments_count=(
+                        len(files_storage.list_for_project(conn, project.id)) if project else 0
+                    ),
                     workspace_overhead_bytes=len(prompt_md.encode("utf-8")),
                     metadata={"argv": argv, **body.metadata},
                 ),
             )
             coder_workspace.attach_run_to_review_pass(conn, review_pass_id, run_record.id)
-        session = await pty_manager.spawn(argv=argv, cwd=project.path, project_id=project.id)
+        session = await pty_manager.spawn(argv=argv, cwd=cwd, project_id=project.id if project else None)
         with storage.transaction() as conn:
             run_record = coder_workspace.update_run_session(conn, run_record.id, session.session_id)
         await _write_prompt_to_session(session, prompt_md)
@@ -449,8 +463,18 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
     @router.get("/coder-threads/{thread_id}/context", response_model=None)
     async def get_thread_context(thread_id: str) -> dict[str, Any]:
         thread = coder_workspace.get_thread(storage.conn, thread_id)
-        files = files_storage.list_for_project(storage.conn, thread.project_id)
-        records = project_records.get_records(storage.conn, thread.project_id)
+        # A General (project-free) thread has no project files or records.
+        if thread.project_id:
+            files = files_storage.list_for_project(storage.conn, thread.project_id)
+            records = project_records.get_records(storage.conn, thread.project_id)
+            records_summary = {
+                "adrs": len(records.adrs),
+                "backlog": len(records.backlog),
+                "versions": len(records.versions),
+            }
+        else:
+            files = []
+            records_summary = {"adrs": 0, "backlog": 0, "versions": 0}
         context = coder_workspace.CoderWorkspaceContext(
             thread=thread,
             recent_messages=coder_workspace.list_messages(storage.conn, thread_id)[-25:],
@@ -458,11 +482,7 @@ def build_coder_workspace_router(storage: Storage, pty_manager: PtySessionManage
             linked_runs=coder_workspace.list_runs_for_thread(storage.conn, thread_id)[:10],
             files_count=len(files),
             recent_file_ids=[item.id for item in files[:10]],
-            records_summary={
-                "adrs": len(records.adrs),
-                "backlog": len(records.backlog),
-                "versions": len(records.versions),
-            },
+            records_summary=records_summary,
             available_actions=[
                 "send-message",
                 "dispatch-message",

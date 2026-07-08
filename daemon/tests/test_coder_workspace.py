@@ -72,6 +72,48 @@ def test_thread_project_id_nulled_when_project_deleted(tmp_path: Path) -> None:
     assert coder_workspace.get_thread(storage.conn, thread["id"]).project_id is None
 
 
+def test_general_thread_dispatch_uses_general_workspace(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Plan 2 Phase A: dispatching a project-free thread spawns in a dedicated General workspace dir
+    # (not a project path) with no project_id, and its context read is null-safe.
+    _app, client, _storage = _harness(tmp_path)
+    spawns: list[dict] = []
+
+    class FakeSession:
+        def __init__(self, session_id: str, project_id: str | None) -> None:
+            self.session_id = session_id
+            self.project_id = project_id
+
+        async def write(self, payload: bytes) -> None:
+            pass
+
+        def summary(self):  # type: ignore[no-untyped-def]
+            return types.SimpleNamespace(
+                session_id=self.session_id, argv=["codex"], cwd="x",
+                started_at="2026-07-08T00:00:00+00:00", exit_code=None, rows=24, cols=80,
+                project_id=self.project_id,
+            )
+
+    async def fake_spawn(self, argv, cwd=None, env=None, rows=24, cols=80, project_id=None, session_id=None):  # type: ignore[no-untyped-def]
+        spawns.append({"cwd": cwd, "project_id": project_id})
+        return FakeSession(session_id or "fake-1", project_id)
+
+    monkeypatch.setattr("synapse_daemon.pty_sessions.PtySessionManager.spawn", fake_spawn)
+
+    with client as c:
+        thread = c.post(
+            "/api/v1/coder-threads/general", json={"title": "General chat", "active_runtime_id": "codex"}
+        ).json()
+        dispatched = c.post(
+            f"/api/v1/coder-threads/{thread['id']}/dispatch", json={"content_md": "hi from general"}
+        )
+        assert dispatched.status_code == 201, dispatched.text
+        assert spawns and spawns[0]["project_id"] is None
+        assert spawns[0]["cwd"].endswith("general-workspace")
+        # Context on a General thread is null-safe (no project files/records, no 500).
+        ctx = c.get(f"/api/v1/coder-threads/{thread['id']}/context")
+        assert ctx.status_code == 200, ctx.text
+
+
 def test_coder_thread_crud_and_context(tmp_path: Path) -> None:
     _app, client, _storage = _harness(tmp_path)
     with client as c:
