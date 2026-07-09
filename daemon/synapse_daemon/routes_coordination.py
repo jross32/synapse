@@ -5,11 +5,9 @@ detector + disk-truth migration/ADR numbering. Every mutation audits (Contract
 #11) and, when a bus is provided, broadcasts a ``v1.coordination.*`` event
 (Contract #5) so the cockpit updates live.
 
-NOTE: this router is intentionally standalone. It is mounted into ``app.py``
-(``build_coordination_router(storage, bus)``) as a follow-up once the current
-concurrent wave is committed -- until then it is fully unit-tested against a
-bare app, and ``scripts/coordination-preflight.ps1`` delivers the numbering +
-overlap gate independently.
+This router is mounted into ``app.py`` via ``build_coordination_router(storage, bus)``
+so the ``/api/v1/coordination/*`` endpoints are live. ``scripts/coordination-preflight.ps1``
+delivers the numbering + overlap gate independently for pre-commit use.
 """
 
 from __future__ import annotations

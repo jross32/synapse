@@ -10,6 +10,14 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.48] -- 2026-07-09
+
+### Fixed
+- **Corrected the stale `routes_coordination.py` module docstring** that claimed the coordination router
+  was "mounted as a follow-up once the concurrent wave is committed" — it has been mounted in `app.py`
+  for a while and the `/api/v1/coordination/*` endpoints are live. Resolves the inbox idea filed this
+  session; demonstrates the v0.1.47 "close what you address" lifecycle (resolve-on-commit).
+
 ## [0.1.47] -- 2026-07-09
 
 ### Changed
