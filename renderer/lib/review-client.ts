@@ -22,15 +22,49 @@ export interface ReviewItem {
   updated_at: string;
 }
 
+export type ProposalStatus = 'open' | 'approved' | 'rejected';
+
+// AI-filed improvement idea awaiting your approve/reject (ADR-0025). Mirrors
+// daemon/synapse_daemon/proposals.py::Proposal.
+export interface Proposal {
+  id: string;
+  title: string;
+  rationale_md: string;
+  project_id: string | null;
+  source_runtime: string;
+  est_effort: string;
+  est_token_cost: number;
+  status: ProposalStatus;
+  resolution_note: string;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface ReviewInbox {
   items: ReviewItem[];
   count: number;
+  proposals: Proposal[];
 }
 
 const p = encodeURIComponent;
 
 export function getReviewInbox(): Promise<ReviewInbox> {
   return apiFetch<ReviewInbox>('/review/inbox', { method: 'GET' });
+}
+
+export function approveProposal(id: string, note = ''): Promise<unknown> {
+  return apiFetch(`/review/proposals/${p(id)}/approve`, { method: 'POST', body: { note } });
+}
+
+export function rejectProposal(id: string, note = ''): Promise<unknown> {
+  return apiFetch(`/review/proposals/${p(id)}/reject`, { method: 'POST', body: { note } });
+}
+
+// Approve + turn a project-scoped idea into an actionable backlog item.
+export function promoteProposal(id: string): Promise<unknown> {
+  return apiFetch(`/review/proposals/${p(id)}/promote`, { method: 'POST' });
 }
 
 export function approveReview(id: string): Promise<unknown> {

@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.45] -- 2026-07-09
+
+### Fixed
+- **AI-filed improvement ideas now actually show in the Review inbox.** The daemon's
+  `GET /api/v1/review/inbox` has always returned AI-filed proposals in its `proposals` field (ADR-0025),
+  but the renderer (`Review.tsx`) only rendered work-item handoff `items` and drove its "All caught up"
+  empty-state off `count` (handoffs only) — so a filed idea was invisible in the UI. `Review.tsx` now
+  renders a **"Improvement ideas from your AI workforce"** section with each proposal's rationale,
+  source, effort, and **Approve / Reject / Promote** (approve + add to backlog) actions; the empty-state
+  now accounts for proposals; and the live-refresh subscription also fires on `v1.review.proposal_filed`
+  so a newly filed idea appears without a manual refresh. `review-client.ts` gains the `Proposal` type,
+  the `proposals` field on `ReviewInbox`, and `approveProposal` / `rejectProposal` / `promoteProposal`.
+
 ## [0.1.44] -- 2026-07-09
 
 ### Fixed
