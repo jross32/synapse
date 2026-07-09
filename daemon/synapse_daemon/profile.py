@@ -14,6 +14,7 @@ import json
 import platform as platform_mod
 import socket
 import subprocess
+import time
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,6 +36,10 @@ from .time_utils import to_iso, utc_now
 _PROFILE_SINGLETON_ID = 1
 _TOKEN_REFRESH_MARGIN_SECONDS = 45
 _PUBLIC_CONFIG_CACHE_TTL_SECONDS = 300
+# When the remote Synapse Accounts server is unreachable, back off this long before
+# trying it again. Without this, a down accounts server makes every /profile read
+# block the async event loop on a synchronous urllib call, wedging the whole app.
+_REMOTE_FAILURE_COOLDOWN_SECONDS = 60
 
 
 class ProfileSyncStatus(str):
@@ -195,6 +200,9 @@ class ProfileManager:
         self._cached_auth_providers: list[str] = ["native"]
         self._cached_auth_providers_at: datetime | None = None
         self._account_backend_reachable = False
+        # Circuit breaker for the remote accounts server (see
+        # _REMOTE_FAILURE_COOLDOWN_SECONDS). monotonic() deadline; 0 = closed.
+        self._remote_cooldown_until: float = 0.0
 
     # ── public summary / preferences ───────────────────────────────────
 
@@ -758,6 +766,10 @@ class ProfileManager:
         row = self._state_row()
         if not row["user_id"]:
             return
+        if best_effort and time.monotonic() < self._remote_cooldown_until:
+            # Accounts server recently failed -- serve local state instead of
+            # blocking the event loop on another doomed request.
+            return
         try:
             access_token = self._ensure_access_token()
             account = self._accounts.get_me(access_token=access_token)
@@ -766,8 +778,10 @@ class ProfileManager:
                 document = self._accounts.get_sync_document(access_token=access_token)
                 self._merge_remote_payload(document.document)
             self._set_sync_status(error=None)
+            self._remote_cooldown_until = 0.0
         except Exception as exc:
             if best_effort:
+                self._remote_cooldown_until = time.monotonic() + _REMOTE_FAILURE_COOLDOWN_SECONDS
                 self._set_sync_status(error=str(exc))
                 return
             raise
@@ -776,13 +790,17 @@ class ProfileManager:
         row = self._state_row()
         if not row["user_id"] or not row["sync_enabled"]:
             return
+        if best_effort and time.monotonic() < self._remote_cooldown_until:
+            return
         try:
             access_token = self._ensure_access_token()
             document = self._build_remote_payload()
             self._accounts.put_sync_document(access_token=access_token, document=document)
             self._set_sync_status(error=None)
+            self._remote_cooldown_until = 0.0
         except Exception as exc:
             if best_effort:
+                self._remote_cooldown_until = time.monotonic() + _REMOTE_FAILURE_COOLDOWN_SECONDS
                 self._set_sync_status(error=str(exc))
                 return
             raise

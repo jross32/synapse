@@ -211,3 +211,71 @@ def test_profile_sign_in_uses_mocked_accounts_session(
     assert res.json()["signed_in"] is True
     assert res.json()["account_provider"] == "google"
     assert res.json()["display_name"] == "Justin"
+
+
+class _FlakyAccounts:
+    """Authenticates once, then the accounts server is unreachable on get_me.
+
+    Mirrors the real freeze bug: a signed-in user whose remote accounts server
+    (127.0.0.1:8788) is down. Every profile read used to re-hit get_me with a
+    blocking urllib call, freezing the async event loop. The circuit breaker must
+    stop re-trying the remote after the first failure.
+    """
+
+    def __init__(self) -> None:
+        self.get_me_calls = 0
+
+    def public_config(self):  # noqa: ANN201 - test double
+        from synapse_daemon.synapse_accounts_client import PublicConfigPayload
+
+        return PublicConfigPayload(available_providers=["native"])
+
+    def sign_in(self, *, login: str, password: str) -> SessionPayload:
+        return SessionPayload(
+            access_token="access-token",
+            refresh_token="refresh-token",
+            expires_in=3600,
+            account=AccountPayload(
+                account_id="user-123",
+                username="justin",
+                email="justin@example.com",
+                email_verified=True,
+            ),
+        )
+
+    def get_me(self, *, access_token: str):  # noqa: ANN201 - test double
+        self.get_me_calls += 1
+        raise RuntimeError("connection refused")
+
+    def get_sync_document(self, *, access_token: str):  # noqa: ANN201 - test double
+        raise RuntimeError("connection refused")
+
+    def put_sync_document(self, *, access_token: str, document):  # noqa: ANN201 - test double
+        raise RuntimeError("connection refused")
+
+
+def test_remote_circuit_breaker_stops_hammering_a_down_accounts_server(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    accounts = _FlakyAccounts()
+    manager = ProfileManager(storage, accounts_client=accounts)
+
+    # Sign in so a user_id + fresh access token exist -> reads will attempt the remote.
+    manager.sign_in_password(login="justin@example.com", password="hunter42")
+    accounts.get_me_calls = 0  # ignore any calls during the sign-in flow
+    manager._remote_cooldown_until = 0.0  # close the breaker (sign-in already tripped it)
+
+    # First read attempts the remote (get_me), which fails and trips the breaker.
+    manager.list_service_connections()
+    # Second read within the cooldown window must serve local state WITHOUT re-hitting
+    # the remote -- otherwise a down accounts server blocks the event loop on every poll.
+    manager.list_service_connections()
+
+    assert accounts.get_me_calls == 1, (
+        "circuit breaker should stop re-calling the remote after the first failure; "
+        f"got {accounts.get_me_calls} calls"
+    )
+    # And the app stays usable: the read still returns connections from local state.
+    assert isinstance(manager.list_service_connections(), list)
+    assert accounts.get_me_calls == 1  # still no new remote call

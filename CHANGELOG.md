@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.41] -- 2026-07-09
+
+### Fixed
+- **The app no longer freezes with every panel stuck on "Loading..." (async event-loop starvation).**
+  When signed into a Synapse account whose remote accounts server (`127.0.0.1:8788`) is down or
+  unreachable, every `GET /profile` and `GET /profile/service-connections` poll called that server with
+  a **synchronous `urllib` request on the asyncio event loop** (`profile._refresh_from_remote` ->
+  `SynapseAccountsClient._request`), blocking the loop for up to the 12s request timeout. That starved
+  the daemon so it could not serve **any** request — health, projects, web-scraper, everything — which
+  the renderer showed as an endless "Loading..." on every tab (confirmed via a py-spy dump of the hung
+  daemon). Two-part fix: (1) a **circuit breaker** in `_refresh_from_remote` / `_sync_to_remote` — after
+  one remote failure the daemon serves local state for a 60s cooldown instead of re-hitting a known-down
+  server on every read; (2) the two hot GET profile routes now run the (possibly blocking) manager call
+  via `asyncio.to_thread`, so a slow/down accounts server — or slow local-CLI detection — can never
+  freeze the event loop. Synapse stays local-first and fully usable with the accounts server offline.
+  Regression test: `test_remote_circuit_breaker_stops_hammering_a_down_accounts_server`.
+
 ## [0.1.40] -- 2026-07-08
 
 ### Fixed

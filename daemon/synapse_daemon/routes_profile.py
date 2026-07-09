@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from html import escape
 
 from fastapi import APIRouter, Depends, Request
@@ -151,7 +152,10 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.get("", response_model=None, dependencies=[guard])
     async def get_profile() -> dict:
-        return manager.summary().model_dump(mode="json")
+        # summary() may hit the remote accounts server (blocking urllib); run it off
+        # the event loop so a slow/down accounts server never freezes the whole app.
+        summary = await asyncio.to_thread(manager.summary)
+        return summary.model_dump(mode="json")
 
     @router.patch("", response_model=None, dependencies=[guard])
     async def update_profile(payload: ProfileConfigUpdate, request: Request) -> dict:
@@ -253,11 +257,11 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.get("/service-connections", response_model=None, dependencies=[guard])
     async def list_services() -> dict:
+        # list_service_connections() may hit the remote accounts server (blocking
+        # urllib); run it off the event loop so the app never freezes on a poll.
+        connections = await asyncio.to_thread(manager.list_service_connections)
         return {
-            "connections": [
-                connection.model_dump(mode="json")
-                for connection in manager.list_service_connections()
-            ]
+            "connections": [connection.model_dump(mode="json") for connection in connections]
         }
 
     @router.post("/service-connections/{provider}/connect", response_model=None, dependencies=[guard])
