@@ -10,6 +10,27 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.43] -- 2026-07-09
+
+### Added
+- **AI Working Agreement — the cross-AI coordination + idea-filing habits are now baked in so every AI
+  actually uses them, not just this session.** The coordination substrate (ADR-0024) and the
+  improvement-proposals inbox (ADR-0025) already existed and were advertised via `GET /api/v1/ai/context`,
+  but nothing told AIs to *use* them, so no sessions registered and the inbox stayed empty. Now:
+  - `AGENTS.md` gains a canonical **"AI Working Agreement — every AI, every session"** section: at the
+    start of any Synapse work (even from a terminal outside Synapse), every AI (Claude, Codex, Copilot,
+    local, …) should (1) **check in** via `GET /api/v1/coordination/snapshot` + register a session +
+    claim a file lane so agents don't collide, and (2) **file improvement ideas** it notices to the
+    review inbox (`POST /api/v1/review/proposals`) instead of dropping them or rabbit-holing.
+  - New thin entry files **`CLAUDE.md`** and **`.github/copilot-instructions.md`** point tool-specific
+    AIs at that agreement (Synapse previously had neither), and `docs/MULTI-AI-WORKFLOW.md` links to it.
+  - The same two habits are injected into **every squad/workbench worker's prompt**
+    (`ai_context_memory.write_role_prompt`, new `AI_WORKING_AGREEMENT_PROMPT`) using the `$SYNAPSE_API`
+    / `$SYNAPSE_TOKEN` / `$SYNAPSE_PROJECT_ID` env vars each worker already gets.
+  - Six real improvement ideas discovered while fixing the 0.1.40–0.1.42 bugs were filed to the inbox
+    (scoped `synapse-self`) to seed it. Regression test:
+    `test_prompt_includes_working_agreement`.
+
 ## [0.1.42] -- 2026-07-09
 
 ### Fixed

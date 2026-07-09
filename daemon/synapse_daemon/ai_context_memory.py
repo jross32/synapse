@@ -23,6 +23,23 @@ AI_CONTEXT_DIRECTION_PROMPT = (
     "Read it before you begin, and update it through a handoff when you finish."
 )
 
+# Injected into every squad/workbench prompt so the two cross-AI habits hold no matter
+# who is launched (AGENTS.md "AI Working Agreement"). Uses the env vars every workbench
+# PTY already gets ($SYNAPSE_API, $SYNAPSE_TOKEN, $SYNAPSE_PROJECT_ID).
+AI_WORKING_AGREEMENT_PROMPT = (
+    "## Working agreement\n"
+    "You are one of possibly several AI agents working this repo. Two habits, both via the daemon at "
+    "$SYNAPSE_API (auth header `X-Synapse-Token: $SYNAPSE_TOKEN`):\n"
+    "1. **Coordinate** -- check `GET $SYNAPSE_API/coordination/snapshot` to see who else is working and "
+    "which files are claimed, and avoid editing a file another session already claimed.\n"
+    "2. **File ideas, don't drop them** -- when you notice an out-of-scope improvement, bug, duplicate, "
+    "missing test, or UX/perf idea while doing this work item, file it for the user to approve instead "
+    "of acting on it or forgetting it: `POST $SYNAPSE_API/review/proposals` with "
+    '`{"title":"...","rationale_md":"...","project_id":"$SYNAPSE_PROJECT_ID",'
+    '"source_runtime":"<your runtime>","metadata":{"kind":"bug|idea|feature|ux|perf"}}`. '
+    "Then keep doing your assigned work item -- don't rabbit-hole into the idea."
+)
+
 
 def project_root(data_dir: Path, project_id: str) -> Path:
     return data_dir / "projects" / project_id
@@ -196,6 +213,8 @@ def write_role_prompt(
             f"Path: {context_file}",
             "",
             AI_CONTEXT_DIRECTION_PROMPT,
+            "",
+            AI_WORKING_AGREEMENT_PROMPT,
             "",
             "## AI context excerpt",
             _context_excerpt(context_file, context_mode),

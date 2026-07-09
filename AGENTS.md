@@ -60,6 +60,54 @@ not shippable — treat that gap like a failing test.
 
 ---
 
+## AI Working Agreement — every AI, every session
+
+**This applies to you** — Claude, Codex, Copilot, Cursor, a local model, anything — and it applies
+whether you are driving Synapse from inside its Sessions tab **or editing this repo from a plain
+terminal outside Synapse.** Synapse exists so multiple AIs can work as one coordinated developer; act
+like it. Two habits, both backed by the daemon's REST API. The daemon runs on `127.0.0.1:7878`; the
+trusted-local token is in `data/auth-token`, sent as the `X-Synapse-Token` header. (The daemon is the
+Synapse app itself, so it is almost always running while you work on this repo.)
+
+### 1. Check in so agents don't collide (coordination — ADR-0024)
+
+At the **start** of any Synapse work session, and periodically as you work:
+
+- **See who else is here:** `GET /api/v1/coordination/snapshot` → live sessions + claimed file lanes.
+  If another agent is already editing files you were about to touch, pick different work or coordinate.
+- **Register yourself:** `POST /api/v1/coordination/sessions`
+  `{"runtime_id":"claude|codex|copilot|…","agent_label":"<name>","task":"<what you're doing>"}` →
+  returns a `session_id`. Heartbeat with `POST /api/v1/coordination/sessions/{id}/heartbeat` more often
+  than every 90s (or the stale-sweep marks you gone). End with `DELETE …/sessions/{id}` when done.
+- **Claim a lane before editing:** `POST /api/v1/coordination/lanes?project_id=<id>`
+  `{"session_id":"…","path_globs":["daemon/synapse_daemon/foo.py"]}` → `conflicts[]` lists overlapping
+  lanes owned by **other** agents (advisory, never hard-blocks). Release with `DELETE …/lanes/{lane_id}`.
+
+If the daemon isn't reachable, proceed best-effort — but still stage only your own files, rebase before
+pushing, and never `git add -A` when another AI may be mid-edit (`docs/MULTI-AI-WORKFLOW.md`).
+
+### 2. File improvement ideas as you work (proposals — ADR-0025)
+
+While building you **will** notice things worth doing that are out of scope for the current change — a
+bug, a duplicate, dead code, a missing test, a UX/UI improvement, a new tool/MCP/workflow idea, a "this
+would be easier if X." **Don't silently drop them, and don't rabbit-hole into them.** File each as a
+proposal for Justin to approve at a glance, then keep coding:
+
+```
+POST /api/v1/review/proposals
+{"title":"<one line>","rationale_md":"<why + how, markdown>","project_id":"synapse-self",
+ "source_runtime":"<which AI you are>","est_effort":"S|M|L","est_token_cost":<int>,
+ "metadata":{"kind":"bug|idea|feature|ux|perf|dedup|doc-drift"}}
+```
+
+They land in the **Review inbox** next to work handoffs; Justin approves / rejects / **promotes** each
+(a `synapse-self`-scoped idea promotes straight to a backlog item). This is how ideas reach Justin
+without derailing your current task — brainstorm freely, file liberally, keep shipping. Both habits are
+advertised to in-app AIs via `GET /api/v1/ai/context` and injected into every squad worker's prompt, so
+they hold no matter how the AI was launched.
+
+---
+
 ## Repo layout (high level)
 
 ```

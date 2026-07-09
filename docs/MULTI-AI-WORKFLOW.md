@@ -11,6 +11,12 @@ profile feature). `AGENTS.md` assumes one AI per session. This doc covers
 the part that breaks when two agents share a working tree — so the project
 moves forward *without causing mess*.
 
+> **Two-habit summary — see [`AGENTS.md` → AI Working Agreement](../AGENTS.md#ai-working-agreement--every-ai-every-session):**
+> (1) **check in** via the coordination API (`GET /api/v1/coordination/snapshot`, register a session,
+> claim a file lane) so agents don't collide; (2) **file improvement ideas** you notice to the review
+> inbox (`POST /api/v1/review/proposals`) instead of dropping them. This doc is the deep-dive on the
+> concurrent-edit half.
+
 ---
 
 ## The one rule that prevents 90% of the mess

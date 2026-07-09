@@ -147,3 +147,13 @@ def test_prompt_without_personality_is_graceful(tmp_path: Path) -> None:
     text = _prompt(tmp_path)
     assert "## Personality" in text
     assert "No specific personality" in text
+
+
+def test_prompt_includes_working_agreement(tmp_path: Path) -> None:
+    # Every spawned worker must be told to coordinate + file improvement ideas (AGENTS.md
+    # "AI Working Agreement") so the two cross-AI habits hold no matter who is launched.
+    text = _prompt(tmp_path)
+    assert "## Working agreement" in text
+    assert "/coordination/snapshot" in text
+    assert "/review/proposals" in text
+    assert "$SYNAPSE_PROJECT_ID" in text
