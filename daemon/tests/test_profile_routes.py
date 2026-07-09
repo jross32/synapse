@@ -279,3 +279,38 @@ def test_remote_circuit_breaker_stops_hammering_a_down_accounts_server(tmp_path:
     # And the app stays usable: the read still returns connections from local state.
     assert isinstance(manager.list_service_connections(), list)
     assert accounts.get_me_calls == 1  # still no new remote call
+
+
+class _NoConfigAccounts:
+    """Accounts server whose public_config probe always fails (server down)."""
+
+    def __init__(self) -> None:
+        self.public_config_calls = 0
+
+    def public_config(self):  # noqa: ANN201 - test double
+        self.public_config_calls += 1
+        raise RuntimeError("connection refused")
+
+
+def test_circuit_breaker_also_covers_public_config_probe(tmp_path: Path) -> None:
+    # summary() probes the accounts server for available auth providers on every call.
+    # When the server is down, that probe (a blocking urllib connect) must be skipped
+    # after the first failure -- otherwise every /profile poll pays the full connect
+    # timeout, which is what made the app feel frozen even when not signed in.
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    accounts = _NoConfigAccounts()
+    manager = ProfileManager(storage, accounts_client=accounts)
+
+    manager.summary()  # probes public_config -> fails -> trips the breaker
+    manager.summary()  # breaker open -> no re-probe
+    manager.summary()
+
+    assert accounts.public_config_calls == 1, (
+        f"public_config should be probed once then short-circuited; got {accounts.public_config_calls}"
+    )
+    # The app stays usable local-first: still reports the native provider + unreachable backend.
+    summary = manager.summary()
+    assert "native" in summary.available_auth_providers
+    assert summary.account_backend_reachable is False

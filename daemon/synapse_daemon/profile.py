@@ -1086,21 +1086,31 @@ class ProfileManager:
             and now - self._cached_auth_providers_at < timedelta(seconds=_PUBLIC_CONFIG_CACHE_TTL_SECONDS)
         ):
             return self._cached_auth_providers
+        if best_effort and time.monotonic() < self._remote_cooldown_until:
+            # Same circuit breaker as _refresh_from_remote: the accounts server
+            # recently failed, so skip the (slow, blocking) probe on routine polls
+            # and serve the last-known providers. This keeps /profile fast when the
+            # accounts server is offline. An explicit refresh (best_effort=False)
+            # still re-probes immediately so a just-started server is picked up.
+            self._account_backend_reachable = False
+            return self._cached_auth_providers
         try:
             config = self._accounts.public_config()
             self._cached_auth_providers = config.available_providers or ["native"]
             self._cached_auth_providers_at = now
             self._account_backend_reachable = True
+            self._remote_cooldown_until = 0.0
             return self._cached_auth_providers
         except Exception:
             # No accounts backend reachable -> sign-in is unavailable. Keep the
             # "native" default in the providers list (back-compat) but flag the
             # backend unreachable so the UI shows an honest "sync is optional"
             # state instead of a sign-in form that always errors. Deliberately
-            # do NOT stamp _cached_auth_providers_at here: a Refresh right after
-            # the user starts the accounts service should re-probe and pick it
-            # up immediately rather than wait out the cache TTL.
+            # do NOT stamp _cached_auth_providers_at here: a Refresh (best_effort=
+            # False) right after the user starts the accounts service should
+            # re-probe and pick it up immediately rather than wait out the TTL.
             self._account_backend_reachable = False
+            self._remote_cooldown_until = time.monotonic() + _REMOTE_FAILURE_COOLDOWN_SECONDS
             if best_effort:
                 return self._cached_auth_providers
             raise

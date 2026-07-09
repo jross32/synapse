@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.42] -- 2026-07-09
+
+### Fixed
+- **`GET /profile` is now fast when the accounts server is offline (completes the 0.1.41 freeze fix).**
+  `summary()` also probes the accounts server for available auth providers (`_available_auth_providers`
+  -> `public_config`), and that probe deliberately did not cache *failures*, so every poll paid the full
+  ~2s connect timeout even after the 0.1.41 breaker silenced the token refresh. That probe now honors the
+  same circuit breaker: after one failure it serves the last-known providers for the cooldown window (an
+  explicit, non-best-effort refresh still re-probes immediately, so a just-started accounts server is
+  picked up). Measured: `/profile` drops from ~2s/call to ~7ms after the first call while offline.
+  Regression test: `test_circuit_breaker_also_covers_public_config_probe`.
+
 ## [0.1.41] -- 2026-07-09
 
 ### Fixed
