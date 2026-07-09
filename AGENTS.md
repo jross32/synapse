@@ -97,14 +97,23 @@ proposal for Justin to approve at a glance, then keep coding:
 POST /api/v1/review/proposals
 {"title":"<one line>","rationale_md":"<why + how, markdown>","project_id":"synapse-self",
  "source_runtime":"<which AI you are>","est_effort":"S|M|L","est_token_cost":<int>,
- "metadata":{"kind":"bug|idea|feature|ux|perf|dedup|doc-drift"}}
+ "metadata":{"kind":"bug|idea|feature|ux|perf|dedup|doc-drift",
+             "impact":"<one plain-language line a non-developer understands>"}}
 ```
 
-They land in the **Review inbox** next to work handoffs; Justin approves / rejects / **promotes** each
-(a `synapse-self`-scoped idea promotes straight to a backlog item). This is how ideas reach Justin
-without derailing your current task — brainstorm freely, file liberally, keep shipping. Both habits are
-advertised to in-app AIs via `GET /api/v1/ai/context` and injected into every squad worker's prompt, so
-they hold no matter how the AI was launched.
+- **Include `metadata.impact`** — one plain-English sentence a non-developer gets ("Panels won't get
+  stuck loading forever"). The inbox renders it as *"What this means for you."*
+- **Dedup before filing** — `GET /api/v1/review/proposals?status=open` first; don't file a
+  near-duplicate of an idea that's already there.
+- **Close what you address** — if your work resolves an existing open idea, **resolve it** so it doesn't
+  go stale: `POST /api/v1/review/proposals/{id}/approve` (or `/reject` if obsolete) with a note, and
+  reference the idea's id in your commit message. Never edit away the richer parts of an idea because
+  you did one piece of it — leave the rest for Justin's manual review.
+
+They land in the **Review inbox** next to work handoffs, grouped by category and clickable for detail;
+Justin approves / rejects / **promotes** each (a `synapse-self`-scoped idea promotes straight to a
+backlog item). Both habits are advertised to in-app AIs via `GET /api/v1/ai/context` and injected into
+every squad worker's prompt, so they hold no matter how the AI was launched.
 
 ---
 

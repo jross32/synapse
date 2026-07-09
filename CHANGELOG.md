@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.47] -- 2026-07-09
+
+### Changed
+- **Proposal-lifecycle rules baked into the AI Working Agreement (fixes stale ideas + adds
+  plain-language impact).** When filing an improvement idea, every AI now must: (1) include a
+  plain-language `metadata.impact` line (the inbox renders it as *"What this means for you"*); (2)
+  **dedup-check** `GET /review/proposals?status=open` before filing so it doesn't duplicate an existing
+  idea; and (3) **close what it addresses** — if its work resolves an existing open idea, resolve it
+  (`POST /review/proposals/{id}/approve`, or reject if obsolete) with a note and reference the idea's id
+  in the commit, so a bug fixed in passing no longer leaves a stale idea sitting in the inbox. The
+  richer parts of an idea are never edited away for a partial fix — the rest is left for manual review.
+  Applied to `AGENTS.md` and the prompt injected into every squad worker (`AI_WORKING_AGREEMENT_PROMPT`).
+
 ## [0.1.46] -- 2026-07-09
 
 ### Changed

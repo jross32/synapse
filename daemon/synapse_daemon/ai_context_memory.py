@@ -33,11 +33,13 @@ AI_WORKING_AGREEMENT_PROMPT = (
     "1. **Coordinate** -- check `GET $SYNAPSE_API/coordination/snapshot` to see who else is working and "
     "which files are claimed, and avoid editing a file another session already claimed.\n"
     "2. **File ideas, don't drop them** -- when you notice an out-of-scope improvement, bug, duplicate, "
-    "missing test, or UX/perf idea while doing this work item, file it for the user to approve instead "
-    "of acting on it or forgetting it: `POST $SYNAPSE_API/review/proposals` with "
-    '`{"title":"...","rationale_md":"...","project_id":"$SYNAPSE_PROJECT_ID",'
-    '"source_runtime":"<your runtime>","metadata":{"kind":"bug|idea|feature|ux|perf"}}`. '
-    "Then keep doing your assigned work item -- don't rabbit-hole into the idea."
+    "missing test, or UX/perf idea, first check `GET $SYNAPSE_API/review/proposals?status=open` to avoid "
+    "duplicates, then file it for the user to approve: `POST $SYNAPSE_API/review/proposals` with "
+    '`{"title":"...","rationale_md":"...","project_id":"$SYNAPSE_PROJECT_ID","source_runtime":'
+    '"<your runtime>","metadata":{"kind":"bug|idea|feature|ux|perf","impact":"<one plain-language line '
+    'for a non-developer>"}}`. If your work RESOLVES an existing open idea, close it so it does not go '
+    "stale: `POST $SYNAPSE_API/review/proposals/{id}/approve` with a note. Then keep doing your assigned "
+    "work item -- don't rabbit-hole into the idea."
 )
 
 

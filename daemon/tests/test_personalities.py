@@ -157,3 +157,7 @@ def test_prompt_includes_working_agreement(tmp_path: Path) -> None:
     assert "/coordination/snapshot" in text
     assert "/review/proposals" in text
     assert "$SYNAPSE_PROJECT_ID" in text
+    # Proposal lifecycle: dedup-check, plain-language impact, and close-what-you-address.
+    assert "status=open" in text
+    assert "impact" in text
+    assert "/approve" in text
