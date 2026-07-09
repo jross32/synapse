@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   Inbox,
   Lightbulb,
   Loader2,
@@ -28,7 +29,32 @@ import { useDaemon } from '@shared/daemon-context';
 import { cn } from '@shared/utils';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { Modal } from '../components/ui/modal';
 import { PageHeader } from '../components/PageHeader';
+
+// Friendly category names for the raw metadata.kind an AI files a proposal under.
+const CATEGORY_LABELS: Record<string, string> = {
+  bug: 'Bugs',
+  ux: 'Design & UX',
+  ui: 'Design & UX',
+  perf: 'Performance',
+  performance: 'Performance',
+  feature: 'New features',
+  reliability: 'Reliability',
+  devex: 'Developer experience',
+  dedup: 'Cleanup',
+  'doc-drift': 'Docs',
+  idea: 'Ideas',
+};
+
+function proposalKind(proposal: Proposal): string {
+  return typeof proposal.metadata?.kind === 'string' ? proposal.metadata.kind : 'idea';
+}
+
+function categoryOf(proposal: Proposal): string {
+  const kind = proposalKind(proposal);
+  return CATEGORY_LABELS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
+}
 
 export interface ReviewPageProps {
   headerless?: boolean;
@@ -39,6 +65,7 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
   const [inbox, setInbox] = useState<ReviewInbox | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openProposal, setOpenProposal] = useState<Proposal | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -74,6 +101,16 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
   const count = inbox?.count ?? 0;
   const proposals = inbox?.proposals ?? [];
   const isEmpty = count === 0 && proposals.length === 0;
+
+  // Group ideas by friendly category so a growing inbox stays organized.
+  const proposalGroups = new Map<string, Proposal[]>();
+  for (const proposal of proposals) {
+    const category = categoryOf(proposal);
+    const list = proposalGroups.get(category) ?? [];
+    list.push(proposal);
+    proposalGroups.set(category, list);
+  }
+  const sortedGroups = [...proposalGroups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const header = headerless ? null : (
     <PageHeader
       title='Review'
@@ -112,21 +149,93 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
               <div className='mt-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground'>
                 <Lightbulb className='h-3.5 w-3.5' /> Improvement ideas from your AI workforce
               </div>
-              {proposals.map((proposal) => (
-                <ProposalCard key={proposal.id} proposal={proposal} onResolved={refresh} />
+              {sortedGroups.map(([category, list]) => (
+                <div key={category} className='flex flex-col gap-2'>
+                  <div className='flex items-center gap-2 text-sm font-semibold'>
+                    {category}
+                    <span className='rounded-full bg-secondary/60 px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground'>
+                      {list.length}
+                    </span>
+                  </div>
+                  {list.map((proposal) => (
+                    <ProposalSummaryCard
+                      key={proposal.id}
+                      proposal={proposal}
+                      onOpen={() => setOpenProposal(proposal)}
+                    />
+                  ))}
+                </div>
               ))}
             </>
           )}
         </div>
       )}
+
+      {openProposal && (
+        <ProposalDetailModal
+          proposal={openProposal}
+          onClose={() => setOpenProposal(null)}
+          onResolved={() => {
+            setOpenProposal(null);
+            void refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function ProposalCard({ proposal, onResolved }: { proposal: Proposal; onResolved: () => void }): JSX.Element {
+function plainSnippet(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[#*`_>[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Compact, clickable summary row -- opens the full detail popup.
+function ProposalSummaryCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => void }): JSX.Element {
+  const snippet = plainSnippet(proposal.rationale_md).slice(0, 130);
+  return (
+    <Card className='p-0'>
+      <button
+        type='button'
+        onClick={onOpen}
+        className='flex w-full items-center gap-3 rounded-lg p-4 text-left transition-colors hover:bg-secondary/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+      >
+        <Lightbulb className='h-4 w-4 shrink-0 text-sky-300' />
+        <div className='min-w-0 flex-1'>
+          <div className='flex items-center gap-2'>
+            <h3 className='truncate font-semibold'>{proposal.title}</h3>
+            {proposal.est_effort && (
+              <span className='shrink-0 rounded bg-secondary/60 px-1.5 py-0.5 text-[10px] text-muted-foreground'>
+                {proposal.est_effort}
+              </span>
+            )}
+          </div>
+          {snippet && <p className='truncate text-xs text-muted-foreground'>{snippet}</p>}
+        </div>
+        <ChevronRight className='h-4 w-4 shrink-0 text-muted-foreground' aria-hidden='true' />
+        <span className='sr-only'>View idea details</span>
+      </button>
+    </Card>
+  );
+}
+
+// Full detail popup: plain-language impact + full reasoning + approve/reject/promote.
+function ProposalDetailModal({
+  proposal,
+  onClose,
+  onResolved,
+}: {
+  proposal: Proposal;
+  onClose: () => void;
+  onResolved: () => void;
+}): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const kind = typeof proposal.metadata?.kind === 'string' ? proposal.metadata.kind : 'idea';
+  const kind = proposalKind(proposal);
+  const impact = typeof proposal.metadata?.impact === 'string' ? proposal.metadata.impact : '';
 
   async function run(fn: () => Promise<unknown>): Promise<void> {
     setBusy(true);
@@ -141,51 +250,69 @@ function ProposalCard({ proposal, onResolved }: { proposal: Proposal; onResolved
   }
 
   return (
-    <Card className='flex flex-col gap-2 p-4'>
-      <div className='flex flex-wrap items-center gap-2'>
-        <span className='inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-200'>
-          <Lightbulb className='h-3 w-3' /> Idea
-        </span>
-        <h3 className='font-semibold'>{proposal.title}</h3>
-        <span className='ml-auto text-xs text-muted-foreground'>
-          {kind}{proposal.est_effort ? ` · ${proposal.est_effort}` : ''}
-        </span>
-      </div>
+    <Modal open onClose={onClose} labelledBy='proposal-detail-title' className='max-w-2xl'>
+      <div className='flex flex-col gap-3'>
+        <div className='flex flex-wrap items-center gap-2'>
+          <span className='inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-200'>
+            <Lightbulb className='h-3 w-3' /> {CATEGORY_LABELS[kind] ?? kind}
+          </span>
+          {proposal.est_effort && (
+            <span className='rounded-full bg-secondary/60 px-2 py-0.5 text-xs text-muted-foreground'>
+              Effort: {proposal.est_effort}
+            </span>
+          )}
+        </div>
 
-      {proposal.rationale_md && (
-        <p className='whitespace-pre-wrap text-sm text-muted-foreground'>{proposal.rationale_md}</p>
-      )}
-      <p className='text-xs text-muted-foreground'>
-        Filed by <span className='text-foreground'>{proposal.source_runtime || 'an AI'}</span>
-        {proposal.project_id ? <> · {proposal.project_id}</> : null}
-      </p>
+        <h2 id='proposal-detail-title' className='text-lg font-semibold'>{proposal.title}</h2>
 
-      <div className='flex flex-wrap gap-2'>
-        {proposal.project_id && (
-          <Button size='sm' disabled={busy} onClick={() => void run(() => promoteProposal(proposal.id))}>
-            <CheckCircle2 className='h-4 w-4' /> Approve + add to backlog
-          </Button>
+        {impact && (
+          <div className='rounded-md border border-border bg-secondary/20 p-3'>
+            <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>What this means for you</p>
+            <p className='mt-1 text-sm'>{impact}</p>
+          </div>
         )}
-        <Button
-          size='sm'
-          variant={proposal.project_id ? 'outline' : 'default'}
-          disabled={busy}
-          onClick={() => void run(() => approveProposal(proposal.id))}
-        >
-          <CheckCircle2 className='h-4 w-4' /> Approve
-        </Button>
-        <Button
-          size='sm'
-          variant='ghost'
-          className='text-destructive'
-          disabled={busy}
-          onClick={() => void run(() => rejectProposal(proposal.id))}
-        >
-          <XCircle className='h-4 w-4' /> Reject
-        </Button>
+
+        <div>
+          <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Why + how</p>
+          <p className='mt-1 whitespace-pre-wrap text-sm text-muted-foreground'>{proposal.rationale_md}</p>
+        </div>
+
+        <p className='text-xs text-muted-foreground'>
+          Filed by <span className='text-foreground'>{proposal.source_runtime || 'an AI'}</span>
+          {proposal.project_id ? <> · {proposal.project_id}</> : null}
+        </p>
+
+        {err && <p role='alert' className='text-xs text-destructive'>{err}</p>}
+
+        <div className='flex flex-wrap items-center gap-2'>
+          {proposal.project_id && (
+            <Button size='sm' disabled={busy} onClick={() => void run(() => promoteProposal(proposal.id))}>
+              <CheckCircle2 className='h-4 w-4' /> Approve + add to backlog
+            </Button>
+          )}
+          <Button
+            size='sm'
+            variant={proposal.project_id ? 'outline' : 'default'}
+            disabled={busy}
+            onClick={() => void run(() => approveProposal(proposal.id))}
+          >
+            <CheckCircle2 className='h-4 w-4' /> Approve
+          </Button>
+          <Button
+            size='sm'
+            variant='ghost'
+            className='text-destructive'
+            disabled={busy}
+            onClick={() => void run(() => rejectProposal(proposal.id))}
+          >
+            <XCircle className='h-4 w-4' /> Reject
+          </Button>
+          <Button size='sm' variant='ghost' className='ml-auto' disabled={busy} onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </div>
-      {err && <p role='alert' className='text-xs text-destructive'>{err}</p>}
-    </Card>
+    </Modal>
   );
 }
 

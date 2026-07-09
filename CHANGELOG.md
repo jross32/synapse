@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.46] -- 2026-07-09
+
+### Changed
+- **The Review inbox's AI-filed ideas are now organized + clickable.** Improvement proposals are
+  grouped under friendly categories (Bugs, Design & UX, Performance, Reliability, Docs, …) so a growing
+  inbox stays tidy, and each idea is now a compact clickable row that opens a **detail popup** with a
+  plain-language *"What this means for you"* summary (from a proposal's optional `metadata.impact`), the
+  full why-and-how reasoning, effort, who filed it, and Approve / Reject / Promote actions. Builds on
+  the v0.1.45 fix that first surfaced proposals in the UI. Renderer-only; verified via `tsc` + a live
+  Vite HMR update into the running app.
+
 ## [0.1.45] -- 2026-07-09
 
 ### Fixed
