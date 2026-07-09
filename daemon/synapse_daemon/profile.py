@@ -40,6 +40,10 @@ _PUBLIC_CONFIG_CACHE_TTL_SECONDS = 300
 # trying it again. Without this, a down accounts server makes every /profile read
 # block the async event loop on a synchronous urllib call, wedging the whole app.
 _REMOTE_FAILURE_COOLDOWN_SECONDS = 60
+# Local CLI/service detection shells out (`where claude`, `gh auth status`, …) and
+# costs ~1-1.5s per profile read. Cache the per-provider result briefly; an explicit
+# connect/verify bypasses the cache for a fresh probe.
+_LOCAL_DETECT_CACHE_TTL_SECONDS = 45
 
 
 class ProfileSyncStatus(str):
@@ -203,6 +207,9 @@ class ProfileManager:
         # Circuit breaker for the remote accounts server (see
         # _REMOTE_FAILURE_COOLDOWN_SECONDS). monotonic() deadline; 0 = closed.
         self._remote_cooldown_until: float = 0.0
+        # Short-TTL cache of local CLI/service detection, keyed "provider:host_id"
+        # -> (monotonic_stamp, ServiceConnection). See _LOCAL_DETECT_CACHE_TTL_SECONDS.
+        self._local_detect_cache: dict[str, tuple[float, ServiceConnection]] = {}
 
     # ── public summary / preferences ───────────────────────────────────
 
@@ -693,7 +700,8 @@ class ProfileManager:
                 updated_at=_now_iso(),
             )
         else:
-            connection = self._detect_local_service(provider, host)
+            # Explicit connect/verify -> bypass the detection cache for a fresh probe.
+            connection = self._detect_local_service(provider, host, use_cache=False)
         self._upsert_service_connection(connection)
         self._sync_to_remote(best_effort=True)
         return connection
@@ -1190,7 +1198,9 @@ class ProfileManager:
                 ),
             )
 
-    def _detect_local_service(self, provider: str, host: HostPresence) -> ServiceConnection:
+    def _detect_local_service(
+        self, provider: str, host: HostPresence, *, use_cache: bool = True
+    ) -> ServiceConnection:
         now = _now_iso()
         provider_map = {
             "claude-code": {
@@ -1217,6 +1227,11 @@ class ProfileManager:
         if provider not in provider_map:
             raise invalid("profile", f"Unsupported service provider '{provider}'.")
         meta = provider_map[provider]
+        cache_key = f"{provider}:{host.id}"
+        if use_cache:
+            cached = self._local_detect_cache.get(cache_key)
+            if cached is not None and time.monotonic() - cached[0] < _LOCAL_DETECT_CACHE_TTL_SECONDS:
+                return cached[1]
         binary_path = resolve_command(meta["binary"])
         config_detected = any(path.exists() for path in meta["config_paths"])
         details: dict[str, Any] = {
@@ -1258,7 +1273,7 @@ class ProfileManager:
                 except Exception:
                     details["gh_auth_status"] = False
 
-        return ServiceConnection(
+        connection = ServiceConnection(
             id=f"local-{provider}",
             provider=provider,
             display_name=meta["display_name"],
@@ -1271,6 +1286,8 @@ class ProfileManager:
             created_at=now,
             updated_at=now,
         )
+        self._local_detect_cache[cache_key] = (time.monotonic(), connection)
+        return connection
 
 
 __all__ = [

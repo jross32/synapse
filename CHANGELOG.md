@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.44] -- 2026-07-09
+
+### Fixed
+- **`/profile/service-connections` is no longer ~1.5s on every poll.** Local CLI/service detection
+  shells out (`where claude`, `where codex`, `gh auth status`, …) for four providers on every call.
+  Those results are now cached per provider+host for 45s (`_LOCAL_DETECT_CACHE_TTL_SECONDS`); an
+  explicit connect/verify (`use_cache=False`) still bypasses the cache for a fresh probe, so a
+  just-installed CLI is picked up immediately. Implements the inbox proposal *"Cache local-CLI detection
+  in the Profile service-connections endpoint"* filed this session. Regression test:
+  `test_local_cli_detection_is_cached`.
+
 ## [0.1.43] -- 2026-07-09
 
 ### Added

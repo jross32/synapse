@@ -314,3 +314,33 @@ def test_circuit_breaker_also_covers_public_config_probe(tmp_path: Path) -> None
     summary = manager.summary()
     assert "native" in summary.available_auth_providers
     assert summary.account_backend_reachable is False
+
+
+def test_local_cli_detection_is_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Local CLI/service detection shells out (`where claude`, `gh auth status`, …). It must be cached
+    # across profile reads so /profile/service-connections isn't ~1.5s every poll -- but an explicit
+    # connect/verify must bypass the cache for a fresh probe.
+    import synapse_daemon.profile as profile_mod
+
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    manager = ProfileManager(storage, accounts_client=_UnreachableAccounts())
+
+    calls = {"n": 0}
+
+    def counting_resolve(cmd: str):  # noqa: ANN202 - test stub
+        calls["n"] += 1
+        return None  # nothing on PATH -> deterministic + no real subprocess
+
+    monkeypatch.setattr(profile_mod, "resolve_command", counting_resolve)
+
+    manager.list_service_connections()
+    first = calls["n"]
+    assert first > 0, "first read should actually probe the local CLIs"
+
+    manager.list_service_connections()
+    assert calls["n"] == first, "second read within the TTL must hit the detection cache (no re-probe)"
+
+    manager.verify_service(provider="claude-code")
+    assert calls["n"] > first, "an explicit verify must bypass the cache and re-probe"
