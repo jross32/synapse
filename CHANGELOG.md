@@ -10,6 +10,13 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.49] -- 2026-07-09
+
+### Added
+- **Version-drift guard test.** `daemon/tests/test_version_consistency.py` fails if `package.json`,
+  `pyproject.toml`, and `synapse_daemon.__version__` don't all match — the drift that bit 0.1.40 (a
+  missed pyproject bump) can no longer land silently. Resolves inbox idea 11ac413441c8.
+
 ## [0.1.48] -- 2026-07-09
 
 ### Fixed
