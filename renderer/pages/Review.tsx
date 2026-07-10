@@ -194,8 +194,13 @@ function plainSnippet(markdown: string): string {
 }
 
 // Compact, clickable summary row -- opens the full detail popup.
+function proposalAddressedBy(proposal: Proposal): string {
+  return typeof proposal.metadata?.addressed_by === 'string' ? proposal.metadata.addressed_by : '';
+}
+
 function ProposalSummaryCard({ proposal, onOpen }: { proposal: Proposal; onOpen: () => void }): JSX.Element {
   const snippet = plainSnippet(proposal.rationale_md).slice(0, 130);
+  const addressed = proposalAddressedBy(proposal);
   return (
     <Card className='p-0'>
       <button
@@ -207,6 +212,11 @@ function ProposalSummaryCard({ proposal, onOpen }: { proposal: Proposal; onOpen:
         <div className='min-w-0 flex-1'>
           <div className='flex items-center gap-2'>
             <h3 className='truncate font-semibold'>{proposal.title}</h3>
+            {addressed && (
+              <span className='shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200'>
+                possibly addressed
+              </span>
+            )}
             {proposal.est_effort && (
               <span className='shrink-0 rounded bg-secondary/60 px-1.5 py-0.5 text-[10px] text-muted-foreground'>
                 {proposal.est_effort}
@@ -236,6 +246,7 @@ function ProposalDetailModal({
   const [err, setErr] = useState<string | null>(null);
   const kind = proposalKind(proposal);
   const impact = typeof proposal.metadata?.impact === 'string' ? proposal.metadata.impact : '';
+  const addressed = proposalAddressedBy(proposal);
 
   async function run(fn: () => Promise<unknown>): Promise<void> {
     setBusy(true);
@@ -269,6 +280,16 @@ function ProposalDetailModal({
           <div className='rounded-md border border-border bg-secondary/20 p-3'>
             <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>What this means for you</p>
             <p className='mt-1 text-sm'>{impact}</p>
+          </div>
+        )}
+
+        {addressed && (
+          <div className='rounded-md border border-amber-500/30 bg-amber-500/10 p-3'>
+            <p className='text-xs font-medium uppercase tracking-wide text-amber-200'>Possibly already done</p>
+            <p className='mt-1 text-sm text-muted-foreground'>
+              A recent commit references this idea: <span className='font-mono text-xs'>{addressed}</span>. If it's
+              handled, <span className='text-foreground'>Approve</span> to clear it from the inbox.
+            </p>
           </div>
         )}
 

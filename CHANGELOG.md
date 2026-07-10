@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.51] -- 2026-07-09
+
+### Changed
+- **Flagged ideas now show "possibly addressed" in the Review inbox (completes the v0.1.50 reconcile
+  loop).** When `POST /review/proposals/reconcile` flags an open idea whose fix already landed in a
+  commit, the inbox renders a small amber *"possibly addressed"* badge on the card and a *"Possibly
+  already done — a recent commit references this idea"* note in the detail popup, so you can confirm and
+  Approve to clear it. Renderer-only; verified via `tsc`.
+
 ## [0.1.50] -- 2026-07-09
 
 ### Added
