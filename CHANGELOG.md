@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.50] -- 2026-07-09
+
+### Added
+- **Stale-idea reconciliation for the inbox.** `POST /api/v1/review/proposals/reconcile` scans recent
+  commit messages and, for any **open** idea whose id is referenced in a commit, **flags** it as
+  *possibly addressed* (`metadata.addressed_by` = the matching commit) — it never auto-resolves, so a
+  richer idea is never silently removed; the human confirms and closes it. Fixes the case Justin raised:
+  a bug fixed in passing that leaves its idea stale in the inbox. Core matcher + flagger are pure/
+  isolated and unit-tested (`test_proposals_reconcile.py`); advertised to in-app AIs via
+  `GET /api/v1/ai/context`.
+
 ## [0.1.49] -- 2026-07-09
 
 ### Added

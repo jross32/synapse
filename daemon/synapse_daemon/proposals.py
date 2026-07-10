@@ -155,3 +155,46 @@ def resolve_proposal(
         (status.value, note.strip(), now, now, proposal_id),
     )
     return get_proposal(conn, proposal_id)
+
+
+def find_addressed_proposal_ids(proposals: list[Proposal], commit_texts: list[str]) -> set[str]:
+    """Ids of proposals whose id string is mentioned in any commit text.
+
+    Proposal ids are random hex, so a commit mentioning one almost certainly landed *after*
+    the idea was filed and is referencing it -- a strong "this was likely addressed" signal.
+    Pure + side-effect-free so it is trivially testable without a git repo.
+    """
+    blob = "\n".join(commit_texts)
+    return {p.id for p in proposals if p.id and p.id in blob}
+
+
+def mark_proposal_addressed(conn: sqlite3.Connection, proposal_id: str, commit_hint: str) -> Proposal:
+    """Flag a proposal as *possibly addressed* by a commit -- WITHOUT resolving it.
+
+    Sets ``metadata.addressed_by`` and leaves ``status`` open so the human confirms and closes
+    it. Deliberately non-destructive: the richer parts of an idea are never removed on a hunch.
+    """
+    proposal = get_proposal(conn, proposal_id)
+    metadata = dict(proposal.metadata)
+    metadata["addressed_by"] = commit_hint.strip()
+    conn.execute(
+        "UPDATE improvement_proposals SET metadata_json = ?, updated_at = ? WHERE id = ?",
+        (json.dumps(metadata), to_iso(utc_now()), proposal_id),
+    )
+    return get_proposal(conn, proposal_id)
+
+
+def reconcile_addressed_proposals(conn: sqlite3.Connection, commit_texts: list[str]) -> list[Proposal]:
+    """Flag every OPEN proposal whose id appears in a recent commit as possibly addressed.
+
+    Fixes the "a bug was fixed but its idea stayed stale in the inbox" case without ever
+    auto-closing an idea. Returns the proposals that were newly flagged.
+    """
+    open_proposals = list_proposals(conn, ProposalStatus.OPEN)
+    flagged: list[Proposal] = []
+    for proposal_id in find_addressed_proposal_ids(open_proposals, commit_texts):
+        hint = next((text for text in commit_texts if proposal_id in text), "")
+        # First line of the matching commit is the most useful hint.
+        first_line = hint.strip().splitlines()[0] if hint.strip() else ""
+        flagged.append(mark_proposal_addressed(conn, proposal_id, first_line[:200]))
+    return flagged

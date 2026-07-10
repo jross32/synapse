@@ -168,4 +168,33 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
     async def get_review_proposal(proposal_id: str) -> proposals_module.Proposal:
         return proposals_module.get_proposal(storage.conn, proposal_id)
 
+    @router.post("/proposals/reconcile", response_model=None)
+    async def reconcile_proposals_route() -> dict[str, Any]:
+        # Scan recent commit messages for open-proposal ids and FLAG matches as possibly
+        # addressed (metadata.addressed_by) -- never auto-resolves. Catches ideas whose fix
+        # landed without the AI closing the proposal.
+        import subprocess
+
+        from .runtime_paths import repo_root
+
+        commit_texts: list[str] = []
+        try:
+            result = subprocess.run(
+                ["git", "log", "-n", "300", "--format=%h %s%n%b%x1e"],
+                cwd=str(repo_root()),
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+            if result.stdout:
+                commit_texts = [chunk.strip() for chunk in result.stdout.split("\x1e") if chunk.strip()]
+        except Exception:  # noqa: BLE001 - git may be unavailable; reconcile is best-effort
+            commit_texts = []
+        with storage.transaction() as conn:
+            flagged = proposals_module.reconcile_addressed_proposals(conn, commit_texts)
+        for proposal in flagged:
+            await bus.publish(event_name("review", "proposal_filed"), {"id": proposal.id})
+        return {"flagged": [p.model_dump(mode="json") for p in flagged], "count": len(flagged)}
+
     return router
