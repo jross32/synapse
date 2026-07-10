@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.52] -- 2026-07-10
+
+### Added
+- **The nav now shows a live "needs review" count badge (UI/UX audit fix #1 -- findability).** The Review
+  inbox was invisible in the nav, so AI-handed-back work and filed ideas piled up unseen. A new shared
+  `useReviewCount` hook fetches the inbox count and refreshes on the `v1.review.*` / `v1.agent_work_item*`
+  events the daemon already broadcasts; the AI Coding sidebar item renders a numeric badge (with an
+  aria-label) whenever items need review. Verified live with Playwright: the badge shows "5 items need
+  review", app connected, 0 console errors. Renderer-only. From the parallel UI/UX audit (53 findings).
+
 ## [0.1.51] -- 2026-07-09
 
 ### Changed

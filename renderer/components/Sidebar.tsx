@@ -10,6 +10,7 @@ import {
   type AppRoute,
 } from '@shared/nav';
 import { cn } from '@shared/utils';
+import { useReviewCount } from '@shared/use-review-count';
 
 export interface SidebarProps {
   active: AppRoute;
@@ -26,6 +27,7 @@ export function Sidebar({
 }: SidebarProps): JSX.Element {
   const { connState } = useDaemon();
   const online = connState === 'open';
+  const reviewCount = useReviewCount();
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const shortcutKey = isMac ? '⌘K' : 'Ctrl+K';
 
@@ -88,21 +90,35 @@ export function Sidebar({
               {section.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = routeMatches(item.route, active);
+                const showReviewBadge =
+                  item.route.kind === 'core' && item.route.page === 'ai-coding' && reviewCount > 0;
                 return (
                   <button
                     key={item.route.kind === 'core' ? item.route.page : item.route.id}
                     type='button'
-                    title={item.description}
+                    title={
+                      showReviewBadge
+                        ? `${item.description} — ${reviewCount} need review`
+                        : item.description
+                    }
                     aria-current={isActive ? 'page' : undefined}
                     onClick={() => onNavigate(item.route)}
                     className={cn(
-                      'group flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition-colors',
+                      'group relative flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       isActive
                         ? 'bg-accent text-foreground'
                         : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
                     )}
                   >
+                    {showReviewBadge && (
+                      <span
+                        aria-label={`${reviewCount} item${reviewCount === 1 ? '' : 's'} need review`}
+                        className='absolute right-1 top-1 min-w-[16px] rounded-full bg-primary px-1 text-center text-[9px] font-semibold leading-4 text-primary-foreground'
+                      >
+                        {reviewCount > 99 ? '99+' : reviewCount}
+                      </span>
+                    )}
                     <Icon
                       className={cn('h-5 w-5', isActive ? 'text-primary' : 'text-current')}
                       aria-hidden='true'
