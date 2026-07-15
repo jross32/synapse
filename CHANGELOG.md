@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.55] -- 2026-07-10
+
+### Changed
+- **Consistent name for the coder surface (UI/UX audit fix #4 -- consistency).** The main AI-Coding
+  section tab was labeled "Workspace" while the command palette calls the same destination "Coder
+  Workspace" -- one place, two names. The tab (and the hub's help text) now say **"Coder Workspace"**,
+  matching the palette, so the same destination reads the same everywhere. `renderer/pages/AiCoding.tsx`,
+  renderer-only, tsc-clean.
+
+### Notes
+- Verified the web-scraper MCP is healthy (v2.5.9, 93 tools, REST server 200, Playwright + browser
+  automation on) and Playwright MCP works -- both usable for verification/analysis.
+
 ## [0.1.54] -- 2026-07-10
 
 ### Fixed

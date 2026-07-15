@@ -27,7 +27,7 @@ export function AiCodingPage({
       <PageHeader
         title='AI Coding'
         subtitle='Your coder workspace: project threads, runtime switching, Agent Squads, assistant, and review inbox in one place.'
-        helpText='AI Coding is where you run AI coders (Claude, Codex, Copilot) on your projects. Use Workspace for structured threads, Squads to coordinate multiple AI workers, and Review to act on AI work that needs human sign-off.'
+        helpText='AI Coding is where you run AI coders (Claude, Codex, Copilot) on your projects. Use Coder Workspace for structured threads, Squads to coordinate multiple AI workers, and Review to act on AI work that needs human sign-off.'
       />
 
       <div
@@ -39,7 +39,7 @@ export function AiCodingPage({
           active={section === 'sessions'}
           onClick={() => onSectionChange?.('sessions')}
           icon={Sparkles}
-          label='Workspace'
+          label='Coder Workspace'
         />
         <TopTab
           active={section === 'squads'}
