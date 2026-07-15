@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.56] -- 2026-07-10
+
+### Fixed
+- **Apps no longer flashes "No projects yet" during load or on a daemon error (UI/UX audit fix #2 --
+  states, Contract #13).** `daemon-context` now exposes `projectsLoaded` + `projectsError`; the Apps page
+  shows a "Loading your projects..." card while the first fetch is in flight, an error card (role=alert)
+  with a Retry button if it fails, and the "No projects yet" empty state only once loading has settled
+  with zero projects. Verified live with Playwright: Apps shows the loading card, then the real project
+  tiles, never a false empty state, 0 console errors. (Home's welcome card gets the same treatment in a
+  follow-up.) Renderer-only.
+
 ## [0.1.55] -- 2026-07-10
 
 ### Changed

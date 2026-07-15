@@ -53,6 +53,10 @@ export interface DaemonContextValue {
   profile: ProfileSummary | null;
   profileError: string | null;
   projects: Project[];
+  /** False until the first projects fetch settles -- lets pages show "loading" vs "empty". */
+  projectsLoaded: boolean;
+  /** Non-null when the last projects fetch failed (so pages can show an error, not "no projects"). */
+  projectsError: string | null;
   resourcesById: Record<string, ResourceSnapshot>;
   /** Most recent events, newest first (capped) -- handy for Home / debugging. */
   recentEvents: SynapseEvent[];
@@ -87,6 +91,8 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [profile, setProfile] = useState<ProfileSummary | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
   const [resourcesById, setResourcesById] = useState<Record<string, ResourceSnapshot>>({});
   const [recentEvents, setRecentEvents] = useState<SynapseEvent[]>([]);
   const wsRef = useRef<SynapseWsClient | null>(null);
@@ -107,8 +113,11 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   const refreshProjects = useCallback(async () => {
     try {
       setProjects(await listProjects());
-    } catch {
-      // The Apps page surfaces load errors; the context stays quiet.
+      setProjectsError(null);
+    } catch (err) {
+      setProjectsError(err instanceof Error ? err.message : 'Failed to load projects');
+    } finally {
+      setProjectsLoaded(true);
     }
   }, []);
 
@@ -223,6 +232,8 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
     profile,
     profileError,
     projects,
+    projectsLoaded,
+    projectsError,
     resourcesById,
     recentEvents,
     subscribeRaw,

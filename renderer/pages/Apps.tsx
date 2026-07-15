@@ -4,7 +4,7 @@
 // resource snapshots, refresh. No own WebSocket.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BookOpen, Download, FolderSearch, HelpCircle, Plus, Search, X } from 'lucide-react';
+import { Activity, BookOpen, Download, FolderSearch, HelpCircle, Loader2, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
@@ -62,8 +62,15 @@ export interface AppsPageProps {
 }
 
 export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.Element {
-  const { projects, resourcesById, refreshProjects, upsertProjectLocal, removeProjectLocal } =
-    useDaemon();
+  const {
+    projects,
+    projectsLoaded,
+    projectsError,
+    resourcesById,
+    refreshProjects,
+    upsertProjectLocal,
+    removeProjectLocal,
+  } = useDaemon();
   const [section, setSection] = useState<AppsSection>(initialSection);
   const [memoryProjectId, setMemoryProjectId] = useState<string>('');
 
@@ -317,7 +324,21 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
         </p>
       )}
 
-      {projects.length === 0 ? (
+      {!projectsLoaded ? (
+        <Card className='flex items-center justify-center gap-2 border-dashed p-12 text-center text-sm text-muted-foreground'>
+          <Loader2 className='h-4 w-4 animate-spin' /> Loading your projects…
+        </Card>
+      ) : projectsError ? (
+        <Card className='border-dashed p-12 text-center'>
+          <h3 className='text-lg font-semibold'>Couldn&apos;t load your projects</h3>
+          <p role='alert' className='mx-auto mt-2 max-w-md text-sm text-destructive'>{projectsError}</p>
+          <div className='mt-4 flex justify-center'>
+            <Button variant='outline' onClick={() => void refreshProjects()}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : projects.length === 0 ? (
         <Card className='border-dashed p-12 text-center'>
           <h3 className='text-lg font-semibold'>No projects yet</h3>
           <p className='mx-auto mt-2 max-w-md text-sm text-muted-foreground'>
