@@ -14,17 +14,6 @@ Every commit must append an entry under the in-progress version header.
 
 ### Fixed
 - **Section tab rows no longer overflow the page on mobile (UI/UX audit fix #5 -- responsive).** The AI
-  Coding (5 tabs), My Tools, and Apps tab strips used `inline-flex w-fit` with no wrapping, so at 375px
-  they ran off the right edge and forced the whole page to scroll sideways -- pushing the Review tab
-  off-screen (the inbox that was built mobile-first was hardest to reach on a phone). They now use
-  `flex flex-wrap`, so tabs reflow onto multiple rows within the viewport. Verified live with Playwright
-  at 375px: no horizontal page overflow (scrollWidth == clientWidth == 375), tab row fully within the
-  viewport. Renderer-only.
-
-## [0.1.53] -- 2026-07-10
-
-### Fixed
-- **Section tab rows no longer overflow the page on mobile (UI/UX audit fix #5 -- responsive).** The AI
   Coding (5 tabs), My Tools (4 tabs), and Apps section tablists used `inline-flex w-fit` with no wrap, so
   at 375px they forced the whole page to scroll sideways and pushed the rightmost tabs (Review, ChatGPT)
   off-screen. They now use `flex flex-wrap` so tabs reflow onto multiple rows within the viewport.
