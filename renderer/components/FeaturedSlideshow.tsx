@@ -40,9 +40,16 @@ export function FeaturedSlideshow({
     if (index >= count && count > 0) setIndex(0);
   }, [count, index]);
 
-  // Auto-advance unless paused or there's nothing to rotate.
+  // Auto-advance unless paused, there's nothing to rotate, or the user asked for
+  // reduced motion (respect prefers-reduced-motion -- no auto-sliding banner).
   useEffect(() => {
     if (paused || count < 2) return;
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return;
+    }
     const timer = setTimeout(() => setIndex((i) => (i + 1) % count), AUTO_ADVANCE_MS);
     return () => clearTimeout(timer);
   }, [safeIndex, paused, count]);
@@ -61,6 +68,10 @@ export function FeaturedSlideshow({
       className='relative h-[228px] overflow-hidden border-border p-0'
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setPaused(false);
+      }}
     >
       <div className='absolute inset-0 bg-gradient-to-br from-primary/20 via-secondary to-secondary' />
       {/* Decorative watermark */}

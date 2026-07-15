@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.54] -- 2026-07-10
+
+### Fixed
+- **Home carousel now respects reduced motion + keyboard focus (UI/UX audit fix #7 -- a11y).** The
+  featured-projects banner auto-advanced every 6.5s regardless of the user's `prefers-reduced-motion`
+  setting and only paused on hover. It now skips the auto-advance timer entirely when reduced motion is
+  requested, and pauses while any child control has keyboard focus (onFocus/onBlur), mirroring the hover
+  pause. `renderer/components/FeaturedSlideshow.tsx`, renderer-only, tsc-clean.
+
 ## [0.1.53] -- 2026-07-10
 
 ### Fixed
