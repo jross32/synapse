@@ -203,7 +203,7 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
       <div
         role='tablist'
         aria-label='Apps sections'
-        className='inline-flex w-fit gap-1 rounded-lg border border-border bg-secondary/30 p-1'
+        className='flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/30 p-1'
       >
         <TopTab
           active={section === 'projects'}
