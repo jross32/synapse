@@ -23,6 +23,7 @@ import {
 } from '@shared/nav';
 import { listTools } from '@shared/tools-client';
 import { useDaemon } from '@shared/daemon-context';
+import { handleTablistKeydown } from '@shared/tablist';
 import { getCatalogState } from '@shared/profile-client';
 import { cn } from '@shared/utils';
 import { Card } from '../components/ui/card';
@@ -191,6 +192,7 @@ export function ToolsPage({
       <div
         role='tablist'
         aria-label='My Tools sections'
+        onKeyDown={handleTablistKeydown}
         className='flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/30 p-1'
       >
         <TopTab
@@ -224,6 +226,7 @@ export function ToolsPage({
           <div
             role='tablist'
             aria-label='Tools view'
+            onKeyDown={handleTablistKeydown}
             className='flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/30 p-1'
           >
             <TopTab

@@ -9,6 +9,7 @@ import { Activity, BookOpen, Download, FolderSearch, HelpCircle, Loader2, Plus, 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
 import { useDaemon } from '@shared/daemon-context';
+import { handleTablistKeydown } from '@shared/tablist';
 import { KIND_META, KIND_ORDER, kindMeta } from '@shared/project-kinds';
 import { cn } from '@shared/utils';
 import {
@@ -210,6 +211,7 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
       <div
         role='tablist'
         aria-label='Apps sections'
+        onKeyDown={handleTablistKeydown}
         className='flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/30 p-1'
       >
         <TopTab

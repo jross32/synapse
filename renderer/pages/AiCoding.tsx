@@ -2,6 +2,7 @@ import { Bot, Inbox, MessagesSquare, Sparkles, Users } from 'lucide-react';
 
 import type { AiCodingSection } from '@shared/nav';
 import { cn } from '@shared/utils';
+import { handleTablistKeydown } from '@shared/tablist';
 import { PageHeader } from '../components/PageHeader';
 import { AssistantPage } from './Assistant';
 import { ChatgptCompanionPage } from './ChatgptCompanion';
@@ -33,6 +34,7 @@ export function AiCodingPage({
       <div
         role='tablist'
         aria-label='AI Coding sections'
+        onKeyDown={handleTablistKeydown}
         className='flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/30 p-1'
       >
         <TopTab

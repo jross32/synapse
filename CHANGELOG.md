@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.58] -- 2026-07-10
+
+### Fixed
+- **Section tabs are keyboard-navigable (UI/UX audit fix #8 -- a11y).** The `role="tablist"` rows had a
+  roving tabindex but no arrow-key handler, so keyboard/screen-reader users couldn't move between tabs
+  the way a tab strip should behave. A shared `handleTablistKeydown` helper (`renderer/lib/tablist.ts`)
+  now handles Arrow Left/Right (wrapping) + Home/End on the tablist container, moving focus and
+  activating the tab -- wired into all four tab rows across AI Coding, My Tools, and Apps. Renderer-only,
+  tsc-clean.
+
 ## [0.1.57] -- 2026-07-10
 
 ### Fixed
