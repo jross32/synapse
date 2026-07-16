@@ -56,6 +56,31 @@ def test_register_heartbeat_and_list(tmp_path: Path) -> None:
     assert [s.id for s in listed] == [session.id]
 
 
+def test_heartbeat_reactivates_a_gone_session(tmp_path: Path) -> None:
+    # A bare heartbeat (no explicit status) must resurrect a session that was ended
+    # or swept as 'gone' -- e.g. a coder that comes back after its session lapsed --
+    # and clear ended_at (coordination.py heartbeat_session).
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        session = _register(conn, runtime_id="codex", agent_label="Codex")
+        coord.end_session(conn, session.id)
+    assert coord.get_session(storage.conn, session.id).status == coord.AgentSessionStatus.GONE
+
+    with storage.transaction() as conn:
+        revived = coord.heartbeat_session(conn, session.id, coord.AgentSessionHeartbeat())
+    assert revived.status == coord.AgentSessionStatus.ACTIVE
+    assert revived.ended_at is None
+
+    # An explicit status on the heartbeat is honored instead of being forced to active.
+    with storage.transaction() as conn:
+        coord.end_session(conn, session.id)
+        held = coord.heartbeat_session(
+            conn, session.id, coord.AgentSessionHeartbeat(status=coord.AgentSessionStatus.HOLDING)
+        )
+    assert held.status == coord.AgentSessionStatus.HOLDING
+    assert held.ended_at is None
+
+
 def test_stale_session_is_flagged_then_expired(tmp_path: Path) -> None:
     storage = _storage(tmp_path)
     with storage.transaction() as conn:

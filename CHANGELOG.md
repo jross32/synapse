@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.60] -- 2026-07-10
+
+### Notes
+- **Bug-hunt: the multi-AI coordination substrate (ADR-0024) is clean + well-covered.** Reviewed
+  `coordination.py` (session presence + staleness, the stale sweep, advisory file-lane overlap
+  detection, repo-vs-project scope isolation, git-collision detection) -- no bugs found; the logic is
+  sound and well-defended. Added the one missing regression test,
+  `test_heartbeat_reactivates_a_gone_session`: a bare heartbeat resurrects a gone/swept session and
+  clears `ended_at`, while an explicit status on the heartbeat is honored. Coordination suite: 18 passed.
+
 ## [0.1.59] -- 2026-07-10
 
 ### Fixed
