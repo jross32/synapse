@@ -24,7 +24,7 @@ export interface HomePageProps {
 }
 
 export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
-  const { projects, recentEvents, health, upsertProjectLocal } = useDaemon();
+  const { projects, projectsLoaded, recentEvents, health, upsertProjectLocal } = useDaemon();
 
   const [launchBusyId, setLaunchBusyId] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
@@ -92,7 +92,11 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
         }
       />
 
-      {featured.length > 0 ? (
+      {!projectsLoaded ? (
+        <Card className='flex items-center justify-center gap-2 border-dashed p-10 text-center text-sm text-muted-foreground'>
+          <Loader2 className='h-4 w-4 animate-spin' /> Loading your projects…
+        </Card>
+      ) : featured.length > 0 ? (
         <FeaturedSlideshow
           projects={featured}
           busyId={launchBusyId}

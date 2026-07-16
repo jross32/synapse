@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.57] -- 2026-07-10
+
+### Fixed
+- **Home no longer flashes "Welcome to Synapse" (as if you have no projects) during load (completes
+  UI/UX audit fix #2).** The home banner chose between the featured-projects slideshow and a "Welcome"
+  card purely on whether any projects had loaded yet, so during the initial fetch it showed the new-user
+  welcome even when projects exist. It now shows a "Loading your projects..." card until `projectsLoaded`
+  settles, then the slideshow (or the welcome only when genuinely empty). `renderer/pages/Home.tsx`,
+  renderer-only, tsc-clean.
+
 ## [0.1.56] -- 2026-07-10
 
 ### Fixed
