@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.59] -- 2026-07-10
+
+### Fixed
+- **Status chips + badges follow the theme instead of fixed off-brand colors (UI/UX audit fix #6 --
+  completes the 8-fix audit).** Review, Tools, and ToolCard used raw Tailwind palette tints
+  (`bg-emerald-500/15`, `bg-amber-500/15`, `text-sky-300`, `border-yellow-400/40`, ...) that don't adapt
+  to the light/hacker/surfer themes and drop contrast in light mode. Swapped them for the semantic
+  status tokens the rest of the app already uses: `bg-status-launched/15 text-status-launched` for
+  success/ready, `bg-status-launching/15 text-status-launching` for warning/blocked, and `primary` for
+  idea highlights. Verified live with Playwright: the tokens resolve to real per-theme colors with
+  correct opacity (e.g. `status-launched` -> `rgba(26,230,100,.15)`), 0 console errors. Renderer-only.
+
 ## [0.1.58] -- 2026-07-10
 
 ### Fixed

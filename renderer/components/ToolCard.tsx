@@ -289,7 +289,7 @@ export function ToolCard({
       {(catalogState?.favorite || catalogState?.used_before || catalogState?.previously_installed) && (
         <div className='flex flex-wrap gap-1.5 text-[10px]'>
           {catalogState.favorite && (
-            <Badge variant='outline' className='rounded-full border-yellow-400/40 bg-yellow-400/10 text-yellow-200'>
+            <Badge variant='outline' className='rounded-full border-status-launching/40 bg-status-launching/10 text-status-launching'>
               Favorite
             </Badge>
           )}

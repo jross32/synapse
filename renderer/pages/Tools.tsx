@@ -448,11 +448,11 @@ function StatusPill({ status }: { status: InstalledPageView['status'] }): JSX.El
   > = {
     connected: {
       label: 'Connected',
-      cls: 'bg-emerald-500/15 text-emerald-300',
+      cls: 'bg-status-launched/15 text-status-launched',
     },
     available: {
       label: 'Available',
-      cls: 'bg-sky-500/15 text-sky-200',
+      cls: 'bg-primary/10 text-primary',
     },
     offline: {
       label: 'Offline',

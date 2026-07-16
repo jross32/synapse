@@ -208,12 +208,12 @@ function ProposalSummaryCard({ proposal, onOpen }: { proposal: Proposal; onOpen:
         onClick={onOpen}
         className='flex w-full items-center gap-3 rounded-lg p-4 text-left transition-colors hover:bg-secondary/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
       >
-        <Lightbulb className='h-4 w-4 shrink-0 text-sky-300' />
+        <Lightbulb className='h-4 w-4 shrink-0 text-primary' />
         <div className='min-w-0 flex-1'>
           <div className='flex items-center gap-2'>
             <h3 className='truncate font-semibold'>{proposal.title}</h3>
             {addressed && (
-              <span className='shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200'>
+              <span className='shrink-0 rounded bg-status-launching/15 px-1.5 py-0.5 text-[10px] text-status-launching'>
                 possibly addressed
               </span>
             )}
@@ -264,7 +264,7 @@ function ProposalDetailModal({
     <Modal open onClose={onClose} labelledBy='proposal-detail-title' className='max-w-2xl'>
       <div className='flex flex-col gap-3'>
         <div className='flex flex-wrap items-center gap-2'>
-          <span className='inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-200'>
+          <span className='inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary'>
             <Lightbulb className='h-3 w-3' /> {CATEGORY_LABELS[kind] ?? kind}
           </span>
           {proposal.est_effort && (
@@ -284,8 +284,8 @@ function ProposalDetailModal({
         )}
 
         {addressed && (
-          <div className='rounded-md border border-amber-500/30 bg-amber-500/10 p-3'>
-            <p className='text-xs font-medium uppercase tracking-wide text-amber-200'>Possibly already done</p>
+          <div className='rounded-md border border-status-launching/30 bg-status-launching/10 p-3'>
+            <p className='text-xs font-medium uppercase tracking-wide text-status-launching'>Possibly already done</p>
             <p className='mt-1 text-sm text-muted-foreground'>
               A recent commit references this idea: <span className='font-mono text-xs'>{addressed}</span>. If it's
               handled, <span className='text-foreground'>Approve</span> to clear it from the inbox.
@@ -364,7 +364,7 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
         <span
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-            blocked ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-300'
+            blocked ? 'bg-status-launching/15 text-status-launching' : 'bg-status-launched/15 text-status-launched'
           )}
         >
           {blocked ? <AlertTriangle className='h-3 w-3' /> : <CheckCircle2 className='h-3 w-3' />}
