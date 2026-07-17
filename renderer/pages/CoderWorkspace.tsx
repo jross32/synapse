@@ -1040,6 +1040,8 @@ function ProjectThreadRail({
                     type='button'
                     variant='ghost'
                     size='sm'
+                    aria-label={`New thread in ${project.name}`}
+                    title={`New thread in ${project.name}`}
                     disabled={busyKey === `new:${project.id}`}
                     onClick={() => {
                       void onCreateThread(project.id);
@@ -1127,6 +1129,8 @@ function ProjectThreadRail({
                                 type='button'
                                 variant='ghost'
                                 size='sm'
+                                aria-label={`Delete thread ${summary.thread.title}`}
+                                title={`Delete thread ${summary.thread.title}`}
                                 className='h-7 px-2 text-destructive hover:bg-destructive/10'
                                 onClick={() => {
                                   void onDeleteThread(summary);

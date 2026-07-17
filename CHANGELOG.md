@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.67] -- 2026-07-17
+
+### Fixed
+- **Two icon-only buttons in the Coder Workspace thread rail had no accessible name (UI/UX audit,
+  Contract #23, a11y).** The per-project "new thread" button (MessageSquarePlus) and the per-thread
+  delete button (Trash2) rendered an icon with no text, `aria-label`, or `title`, so screen readers
+  announced each as an unlabeled "button". Added descriptive `aria-label` + `title` to both:
+  `New thread in {project.name}` and `Delete thread {thread.title}`. Playwright-verified against the
+  running renderer: of 34 visible icon-only buttons, 0 are now unlabeled; the new-thread buttons read
+  e.g. "New thread in AI Operating System" and delete buttons read e.g. "Delete thread run the app".
+  tsc 0 errors.
+
 ## [0.1.66] -- 2026-07-17
 
 ### Fixed
