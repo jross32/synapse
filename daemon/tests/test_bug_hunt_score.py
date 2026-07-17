@@ -48,6 +48,39 @@ def test_duplicate_finding_not_double_counted() -> None:
     assert score.false_positives == 0
 
 
+def test_finding_naming_two_bugs_credits_the_still_open_one() -> None:
+    # A single finding blob contains phrases for two distinct bugs. The first (A) is already
+    # claimed by an earlier finding; the second (B) is still open. The finding must get credit
+    # for B rather than being dropped as a duplicate of A -- otherwise true_positives (and the
+    # headline bugs_per_1k_tokens the topology benchmark ranks on) are deflated.
+    key = {
+        "bugs": [
+            {"id": "A", "match": ["slow load"]},
+            {"id": "B", "match": ["broken link"]},
+        ]
+    }
+    findings = [
+        {"text": "the homepage has a slow load"},  # claims A
+        {"text": "still a slow load, and also a broken link in the footer"},  # matches A (claimed) + B (open)
+    ]
+    score = score_bug_hunt(key, findings, total_tokens=10_000)
+    assert score.true_positives == 2  # A and B, not 1 + a dropped duplicate
+    assert score.duplicates == 0
+    assert score.missed == []
+
+
+def test_true_duplicate_still_counts_when_no_other_bug_matches() -> None:
+    # Guard the fix's boundary: a finding matching ONLY an already-claimed bug is still a duplicate.
+    findings = [
+        {"text": "empty submit, no validation"},
+        {"text": "yet another empty submit, no validation"},  # only ever matches X1 (claimed)
+    ]
+    score = score_bug_hunt(_INLINE_KEY, findings, total_tokens=5_000)
+    assert score.true_positives == 1
+    assert score.duplicates == 1
+    assert score.false_positives == 0
+
+
 def test_zero_tokens_gives_none_efficiency() -> None:
     score = score_bug_hunt(_INLINE_KEY, [{"text": "nav overlap, unclickable"}], total_tokens=0)
     assert score.true_positives == 1

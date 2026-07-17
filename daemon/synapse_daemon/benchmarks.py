@@ -1059,18 +1059,24 @@ def score_bug_hunt(
 
     for idx, finding in enumerate(findings):
         blob = _norm_text(finding.get("text", "")) + " " + _norm_text(finding.get("surface", ""))
-        matched_id: str | None = None
+        matched_ids: list[str] = []
         for bug in bugs:
             terms = [_norm_text(t) for t in bug.get("match", [])]
-            if any(term and term in blob for term in terms):
-                matched_id = bug.get("id")
-                break
-        if matched_id is None:
+            bug_id = bug.get("id")
+            if bug_id is not None and any(term and term in blob for term in terms):
+                matched_ids.append(bug_id)
+        if not matched_ids:
             false_positives += 1
-        elif matched_id in claimed:
+            continue
+        # Prefer the first *unclaimed* matching bug: a finding that names two issues (one
+        # already credited to an earlier-listed bug) still gets credit for the distinct,
+        # still-open bug instead of being dropped as a duplicate -- which would deflate
+        # true_positives and the headline bugs_per_1k_tokens the topology benchmark ranks on.
+        unclaimed = next((bug_id for bug_id in matched_ids if bug_id not in claimed), None)
+        if unclaimed is None:
             duplicates += 1
         else:
-            claimed[matched_id] = idx
+            claimed[unclaimed] = idx
 
     true_positives = len(claimed)
     missed = [b.get("id") for b in bugs if b.get("id") not in claimed]

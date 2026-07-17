@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.61] -- 2026-07-16
+
+### Fixed
+- **Bug-hunt scoring (`benchmarks.score_bug_hunt`) under-counted true positives.** A finding whose
+  text names two distinct bugs was greedily attributed to the *first* one in answer-key order and, if
+  that bug was already claimed by an earlier finding, dropped as a `duplicate` -- even when it was a
+  valid, unique match for a different, still-open bug. That deflated `true_positives` and the headline
+  `bugs_per_1k_tokens` the topology benchmark (Plan 3 Phase 2) ranks on. Now the scorer collects every
+  matching bug and credits the first *unclaimed* one, only counting a duplicate when every matched bug
+  is already claimed. Behaviour is unchanged when a finding's first match is unclaimed (all prior tests
+  still pass). Added `test_finding_naming_two_bugs_credits_the_still_open_one` +
+  `test_true_duplicate_still_counts_when_no_other_bug_matches` (18 bug-hunt tests pass).
+
 ## [0.1.60] -- 2026-07-10
 
 ### Notes
