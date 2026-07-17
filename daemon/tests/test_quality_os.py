@@ -104,6 +104,44 @@ def test_repeated_failure_keeps_one_open_gate(tmp_path: Path) -> None:
         assert c.get(f"/api/v1/quality-gates/{gate1['id']}").json()["status"] == "open"
 
 
+def test_pass_does_not_clobber_a_waived_gate(tmp_path: Path) -> None:
+    # Regression: a human waives a known-issue gate (accepts it), then a later contract PASS
+    # run carrying that gate_id must NOT silently flip the waiver back to "passed" -- that would
+    # erase the human decision and leave an inconsistent status=passed / waiver_state=waived.
+    client = _harness(tmp_path)
+    with client as c:
+        failed = c.post(
+            "/api/v1/ui-contracts/project-detail-close-button/run",
+            json={"subject_type": "ai_case", "subject_id": "case-waive", "verdict": "fail", "label": "broken"},
+        )
+        assert failed.status_code == 200, failed.text
+        gate_id = failed.json()["gate"]["id"]
+
+        waived = c.post(
+            f"/api/v1/quality-gates/{gate_id}/waive",
+            json={"resolved_by": "justin", "note": "known cosmetic issue, ship anyway"},
+        )
+        assert waived.status_code == 200, waived.text
+        assert waived.json()["status"] == "waived"
+
+        # A PASS run that explicitly references the waived gate.
+        passed = c.post(
+            "/api/v1/ui-contracts/project-detail-close-button/run",
+            json={
+                "subject_type": "ai_case",
+                "subject_id": "case-waive",
+                "gate_id": gate_id,
+                "verdict": "pass",
+                "label": "later green run",
+            },
+        )
+        assert passed.status_code == 200, passed.text
+        # The waiver stands -- the human decision is not overwritten by an automated pass.
+        after = c.get(f"/api/v1/quality-gates/{gate_id}").json()
+        assert after["status"] == "waived"
+        assert after["waiver_state"] == "waived"
+
+
 def test_evidence_records_whether_artifact_screenshot_exists(tmp_path: Path) -> None:
     # Evidence honesty: a "browser-proof" screenshot path is checked at record time
     # so consumers can trust the proof exists (absolute paths only).

@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.63] -- 2026-07-17
+
+### Fixed
+- **A contract PASS could silently clobber a human-waived quality gate (`quality_os.run_contract`).**
+  When a caller ran a UI contract with `verdict=pass` and an explicit `gate_id` pointing at a gate a
+  human had already **waived** (accepted the known issue), the PASS branch called `resolve_gate`
+  unconditionally -- flipping the gate to `status=passed` while `waiver_state` stayed `waived`, an
+  inconsistent state that erased the human decision. The PASS branch now resolves a gate only when it
+  is still `OPEN` (the auto-discovery path already filtered to OPEN; this protects the explicit-`gate_id`
+  path and also makes a redundant PASS on an already-resolved gate idempotent). Added
+  `test_pass_does_not_clobber_a_waived_gate` (8 quality_os tests pass).
+
 ## [0.1.62] -- 2026-07-16
 
 ### Fixed

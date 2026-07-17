@@ -720,7 +720,11 @@ def run_contract(
                 matching_gate = gate
                 break
 
-    if payload.verdict == QualityEvidenceVerdict.PASS and matching_gate is not None:
+    if (
+        payload.verdict == QualityEvidenceVerdict.PASS
+        and matching_gate is not None
+        and matching_gate.status == QualityGateStatus.OPEN
+    ):
         matching_gate = resolve_gate(
             conn,
             matching_gate.id,
