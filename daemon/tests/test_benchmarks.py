@@ -186,3 +186,42 @@ def test_direct_ingest_rescore_and_export(tmp_path: Path) -> None:
         assert Path(paths["json_path"]).exists()
         assert Path(paths["md_path"]).exists()
         assert Path(paths["lessons_path"]).exists()
+
+
+def _candidate(key: str, quality: float, tokens: float, elapsed: float):
+    from synapse_daemon.benchmarks import BenchmarkCandidateSummary, BenchmarkSurfaceKind
+
+    return BenchmarkCandidateSummary(
+        candidate_key=key,
+        surface_kind=BenchmarkSurfaceKind.DIRECT_CLI,
+        intended_runtime_id="claude",
+        median_quality_score_100=quality,
+        median_total_tokens=tokens,
+        median_elapsed_seconds=elapsed,
+    )
+
+
+def test_efficiency_frontier_zero_tokens_is_most_efficient_not_least() -> None:
+    # Regression: a zero-token candidate is the *most* token-efficient. A prior `x or math.inf`
+    # guard treated its 0 as "missing" and substituted inf (the worst), inverting Pareto
+    # domination so the best candidate was wrongly kicked off the frontier.
+    from synapse_daemon.benchmarks import _mark_efficiency_frontier
+
+    free = _candidate("free", quality=90.0, tokens=0.0, elapsed=10.0)   # equal quality/time, 0 tokens
+    costly = _candidate("costly", quality=90.0, tokens=500.0, elapsed=10.0)
+    _mark_efficiency_frontier([free, costly])
+    assert free.efficiency_frontier is True   # 0 tokens dominates 500 at equal quality + time
+    assert costly.efficiency_frontier is False
+
+
+def test_efficiency_frontier_basic_pareto_still_holds() -> None:
+    # Non-zero sanity check: unchanged from prior behaviour.
+    from synapse_daemon.benchmarks import _mark_efficiency_frontier
+
+    best = _candidate("best", quality=95.0, tokens=100.0, elapsed=5.0)
+    worse = _candidate("worse", quality=80.0, tokens=200.0, elapsed=9.0)
+    tradeoff = _candidate("tradeoff", quality=99.0, tokens=900.0, elapsed=20.0)  # higher quality, pricier
+    _mark_efficiency_frontier([best, worse, tradeoff])
+    assert best.efficiency_frontier is True      # dominates `worse` outright
+    assert worse.efficiency_frontier is False
+    assert tradeoff.efficiency_frontier is True   # not dominated -- best-in-class quality

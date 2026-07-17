@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.62] -- 2026-07-16
+
+### Fixed
+- **Benchmark efficiency-frontier (`benchmarks._mark_efficiency_frontier`) inverted Pareto domination
+  for zero-valued metrics.** The domination check used `x or math.inf` / `x or -math.inf` fallbacks,
+  which treat a legitimate `0` as falsy ("missing"). A zero-token candidate -- the *most* token-efficient
+  -- got `0 or math.inf` = `inf` (the worst), so the best candidate was wrongly marked dominated and
+  kicked off the efficiency frontier. The fallbacks were also dead code: `comparable` already guarantees
+  all three metrics are non-`None`. Now the check compares the real values directly. Added
+  `test_efficiency_frontier_zero_tokens_is_most_efficient_not_least` (proves the fix) +
+  `test_efficiency_frontier_basic_pareto_still_holds` (non-zero sanity). Full benchmarks + bug-hunt
+  suites green (21 tests).
+
 ## [0.1.61] -- 2026-07-16
 
 ### Fixed

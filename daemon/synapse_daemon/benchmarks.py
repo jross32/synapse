@@ -1296,16 +1296,22 @@ def _mark_efficiency_frontier(candidates: list[BenchmarkCandidateSummary]) -> li
         for other in comparable:
             if other.candidate_key == candidate.candidate_key:
                 continue
-            if (
-                (other.median_quality_score_100 or -math.inf) >= (candidate.median_quality_score_100 or -math.inf)
-                and (other.median_total_tokens or math.inf) <= (candidate.median_total_tokens or math.inf)
-                and (other.median_elapsed_seconds or math.inf) <= (candidate.median_elapsed_seconds or math.inf)
-                and (
-                    (other.median_quality_score_100 or -math.inf) > (candidate.median_quality_score_100 or -math.inf)
-                    or (other.median_total_tokens or math.inf) < (candidate.median_total_tokens or math.inf)
-                    or (other.median_elapsed_seconds or math.inf) < (candidate.median_elapsed_seconds or math.inf)
-                )
-            ):
+            # All three metrics are non-None within `comparable`, so compare the real values
+            # directly. A prior `x or math.inf` / `x or -math.inf` guard treated a legitimate 0
+            # as falsy ("missing") -- e.g. a zero-token candidate (the *most* efficient) got
+            # `0 or math.inf` = inf (the worst), inverting Pareto domination and wrongly kicking
+            # the best candidate off the frontier.
+            better_or_equal = (
+                other.median_quality_score_100 >= candidate.median_quality_score_100
+                and other.median_total_tokens <= candidate.median_total_tokens
+                and other.median_elapsed_seconds <= candidate.median_elapsed_seconds
+            )
+            strictly_better = (
+                other.median_quality_score_100 > candidate.median_quality_score_100
+                or other.median_total_tokens < candidate.median_total_tokens
+                or other.median_elapsed_seconds < candidate.median_elapsed_seconds
+            )
+            if better_or_equal and strictly_better:
                 dominated = True
                 break
         candidate.efficiency_frontier = not dominated
