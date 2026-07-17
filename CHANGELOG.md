@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.68] -- 2026-07-17
+
+### Fixed
+- **Four bare `<select>` controls in the Agent Squads view had no accessible name (UI/UX audit,
+  Contract #23, a11y).** The new-squad project + lead-role selects, the new-work-item role select, and
+  the delegate-role select were unwrapped and unlabeled, so screen readers announced them as unnamed
+  combo boxes (unlike the handoff-section selects, which are label-wrapped). Added a descriptive
+  `aria-label` to each: "Project for new squad", "Lead role for new squad", "Assigned role for new work
+  item", "Assigned role for delegated work item". Playwright-verified against the running renderer: all
+  7 visible selects on the Squads view now have an accessible name (0 unnamed). tsc 0 errors.
+
 ## [0.1.67] -- 2026-07-17
 
 ### Fixed

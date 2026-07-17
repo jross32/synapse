@@ -511,6 +511,7 @@ export function AgentSquadsView({
             </Button>
           </div>
           <select
+            aria-label='Project for new squad'
             value={squadForm.project_id}
             onChange={(e) => setSquadForm((prev) => ({ ...prev, project_id: e.target.value }))}
             className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
@@ -527,6 +528,7 @@ export function AgentSquadsView({
             placeholder='Release hardening squad'
           />
           <select
+            aria-label='Lead role for new squad'
             value={squadForm.lead_role_id}
             onChange={(e) => setSquadForm((prev) => ({ ...prev, lead_role_id: e.target.value }))}
             className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
@@ -827,6 +829,7 @@ export function AgentSquadsView({
                   placeholder='Implement the toolbar state model'
                 />
                 <select
+                  aria-label='Assigned role for new work item'
                   value={workItemForm.assigned_role_id}
                   onChange={(e) =>
                     setWorkItemForm((prev) => ({
@@ -1061,6 +1064,7 @@ export function AgentSquadsView({
             placeholder='Review the changed files for regressions'
           />
           <select
+            aria-label='Assigned role for delegated work item'
             value={delegateForm.assigned_role_id}
             onChange={(e) =>
               setDelegateForm((prev) => ({
