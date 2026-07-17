@@ -455,7 +455,7 @@ export function AgentSquadsView({
     <div
       className={
         selectedSquad
-          ? 'grid gap-4 xl:grid-cols-[320px,minmax(0,1fr),360px]'
+          ? 'grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]'
           : 'mx-auto flex w-full max-w-2xl flex-col gap-4'
       }
     >

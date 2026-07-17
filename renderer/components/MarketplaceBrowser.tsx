@@ -418,7 +418,7 @@ export function MarketplaceBrowser({
       )}
 
       {ready && catalog.length > 0 && (
-        <div className='grid gap-6 lg:grid-cols-[240px,minmax(0,1fr)]'>
+        <div className='grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]'>
           <aside className='hidden self-start lg:block'>
             <div className='sticky top-6 grid max-h-[calc(100vh-3rem)] grid-rows-[minmax(0,1fr)_auto_auto] gap-4'>
               <Card className='flex min-h-0 flex-col p-4'>

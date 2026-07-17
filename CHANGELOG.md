@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.65] -- 2026-07-17
+
+### Changed
+- **Normalized two arbitrary `grid-template-columns` Tailwind classes from commas to underscores**
+  (`AgentSquadsView.tsx` squad cockpit `xl:grid-cols-[320px_minmax(0,1fr)_360px]`,
+  `MarketplaceBrowser.tsx` `lg:grid-cols-[240px_minmax(0,1fr)]`). Underscore is Tailwind's documented
+  separator for spaces in arbitrary values, and every other grid in the repo already uses it. **No
+  visual change**: a UI audit flagged the comma form as producing an invalid declaration that collapses
+  the grid to a single column, but Playwright inspection of the generated CSS showed this Tailwind
+  version normalizes the top-level commas to spaces, so both forms compiled to the same valid multi-track
+  grid. The change removes reliance on that undocumented comma-normalization (which could break under a
+  different Tailwind version or a non-JIT production build) and restores repo consistency. Verified: tsc
+  0 errors; generated CSS for both classes is `grid-template-columns: 320px minmax(0,1fr) 360px` /
+  `240px minmax(0,1fr)`.
+
 ## [0.1.64] -- 2026-07-17
 
 ### Fixed
