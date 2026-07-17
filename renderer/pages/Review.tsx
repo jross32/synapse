@@ -121,11 +121,28 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
   return (
     <div className='flex h-full flex-col gap-4'>
       {header}
-      {error && <p role='alert' className='text-xs text-destructive'>{error}</p>}
+      {/* Stale-refresh error: a prior load succeeded but a later refresh failed -- show the message
+          above the still-rendered data. A first-load failure (no inbox) uses the dedicated card below. */}
+      {error && inbox && <p role='alert' className='text-xs text-destructive'>{error}</p>}
 
       {loading ? (
         <Card className='flex items-center gap-2 p-6 text-sm text-muted-foreground'>
           <Loader2 className='h-4 w-4 animate-spin' /> Loading the inbox…
+        </Card>
+      ) : error && !inbox ? (
+        <Card role='alert' className='mx-auto flex max-w-md flex-col items-center gap-3 p-10 text-center'>
+          <AlertTriangle className='h-8 w-8 text-destructive' />
+          <h2 className='text-lg font-semibold'>Couldn’t load the inbox</h2>
+          <p className='text-sm text-muted-foreground'>{error}</p>
+          <Button
+            variant='outline'
+            onClick={() => {
+              setLoading(true);
+              void refresh();
+            }}
+          >
+            <RotateCcw className='h-4 w-4' /> Retry
+          </Button>
         </Card>
       ) : isEmpty ? (
         <Card className='mx-auto flex max-w-md flex-col items-center gap-2 p-10 text-center'>

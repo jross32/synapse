@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.66] -- 2026-07-17
+
+### Fixed
+- **Review inbox showed a contradictory error + "All caught up" at once on a failed load (UI/UX audit,
+  Contract #13).** When `getReviewInbox()` failed, `error` was set but `inbox` stayed null, so `isEmpty`
+  was true and the page rendered BOTH the red error line and the "All caught up" empty card — telling
+  the user everything is fine and something failed simultaneously, with no way to recover. Added a
+  dedicated first-load error branch (`error && !inbox`) with a `role='alert'` card and a **Retry**
+  button (re-runs `refresh()`), placed before the empty branch so a failed load never renders "All
+  caught up". The small top-of-page error line is now gated to `error && inbox` (a stale-refresh
+  failure that still has data to show). Playwright-verified against the running renderer: happy path
+  unchanged (list renders); on a simulated `/review/inbox` failure the error card + message + Retry
+  render, "All caught up" is absent, and exactly one `role='alert'` exists (was two); clicking Retry
+  after recovery restores the list. tsc 0 errors.
+
 ## [0.1.65] -- 2026-07-17
 
 ### Changed
