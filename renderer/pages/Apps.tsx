@@ -166,7 +166,7 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
         }
         action={
           section === 'projects' &&
-          <div className='flex gap-2'>
+          <div className='flex flex-wrap justify-end gap-2'>
             <div className='flex items-stretch gap-1'>
               <Button
                 variant='outline'

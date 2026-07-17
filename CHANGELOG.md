@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.64] -- 2026-07-17
+
+### Fixed
+- **Apps page header actions overflowed the viewport on mobile (UI/UX audit, important).** The
+  header action cluster (Import ChatGPT export + help, Scan for projects, Add Project ~500px+) was a
+  non-wrapping `flex gap-2` row, so at 375px the buttons ran past the ~343px content width and got
+  clipped. Added `flex-wrap justify-end` so the actions stack onto additional rows (right-aligned) on
+  narrow widths. Playwright-verified: at 375px the 3 actions wrap to 3 rows with the cluster right edge
+  at 342px (within the 375px viewport) and zero horizontal page overflow; at 1280px they stay on a
+  single row, unchanged.
+
 ## [0.1.63] -- 2026-07-17
 
 ### Fixed
