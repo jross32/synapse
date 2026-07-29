@@ -69,6 +69,10 @@ like it. Two habits, both backed by the daemon's REST API. The daemon runs on `1
 trusted-local token is in `data/auth-token`, sent as the `X-Synapse-Token` header. (The daemon is the
 Synapse app itself, so it is almost always running while you work on this repo.)
 
+> **Want to actually _drive_ Synapse (spin up squads, run workflows, harvest the web, evaluate an app)?**
+> See **[docs/DRIVE-SYNAPSE-FROM-AI.md](docs/DRIVE-SYNAPSE-FROM-AI.md)** — the task-oriented guide with real
+> `curl` flows. The full endpoint surface + schemas are live at `GET /api/v1/openapi.json` (ADR-0027).
+
 ### 1. Check in so agents don't collide (coordination — ADR-0024)
 
 At the **start** of any Synapse work session, and periodically as you work:

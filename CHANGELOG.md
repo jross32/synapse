@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.74] -- 2026-07-29
+
+### Added
+- **`docs/DRIVE-SYNAPSE-FROM-AI.md` — a task-oriented guide for driving Synapse from another AI (ADR-0027).**
+  The second increment of the AI-drivable effort: connect + auth (`X-Synapse-Token` from `data/auth-token`,
+  localhost or the WAN URL), orient (`/ai/context`, `/openapi.json`, `/coordination/snapshot`), then real
+  `curl` flows for the core capabilities — drive an AI squad (create → add work-item → launch → monitor →
+  handoff/delegate → kill switch), run a workflow (quick-action), harvest the web (web-scraper MCP), register
+  + evaluate an app (projects / Quality OS / benchmarks / review inbox), capture notes, and drive remotely via
+  the `/mcp/<token>` connector over the auto-on WAN tunnel — plus a security note (the token is the trust
+  boundary). Endpoints verified against `routes_*.py`; exact bodies deferred to the live `/api/v1/openapi.json`
+  so the guide can't drift from the code. Linked from `AGENTS.md` + `README.md`.
+
 ## [0.1.73] -- 2026-07-29
 
 ### Added

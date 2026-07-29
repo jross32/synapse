@@ -122,6 +122,16 @@ None of this requires you to know how to code. You describe the goal; the squad 
 
 ---
 
+## Driving Synapse from an AI
+
+Another AI (a Claude Code session on this machine, or a remote AI over the WAN tunnel) can drive Synapse's
+full capability — spin up squads, run workflows, harvest the web, register + evaluate an app — over the HTTP
+API. Start with **[docs/DRIVE-SYNAPSE-FROM-AI.md](./docs/DRIVE-SYNAPSE-FROM-AI.md)** (task-oriented `curl`
+flows) and the live schema at `GET /api/v1/openapi.json`. The daemon is token-guarded (`X-Synapse-Token`), and
+the Cloudtap WAN tunnel auto-opens so it's reachable from anywhere (ADR-0026 / ADR-0027).
+
+---
+
 ## Using the Web Scraper MCP through Synapse
 
 Synapse's **fused automation MCP** (ADR-0022) is the owner's own general-purpose web scraper, wired in as a first-class, installable marketplace tool. Once installed, *any* AI operating inside Synapse — not just the one you're chatting with — can call it directly. It's proxied through the daemon (`GET/POST /api/v1/installed-pages/web-scraper/...`), so the renderer and any AI session talk to one trusted origin instead of hitting arbitrary external MCP servers.
