@@ -57,6 +57,21 @@ def harness(tmp_path: Path):
         storage.close()
 
 
+def test_openapi_discovery_is_enabled(harness) -> None:
+    # An AI driving Synapse must be able to enumerate the endpoint surface (ADR-0027).
+    c, *_ = harness
+    schema = c.get("/api/v1/openapi.json")
+    assert schema.status_code == 200, schema.text
+    body = schema.json()
+    paths = body.get("paths", {})
+    # A rich surface, including the endpoints an AI drives Synapse through.
+    assert len(paths) > 100
+    assert "/api/v1/health" in paths
+    assert "/api/v1/agent-squads" in paths
+    # Swagger UI is served too (human convenience); ReDoc likewise.
+    assert c.get("/api/v1/docs").status_code == 200
+
+
 def test_health_returns_contract_shape(harness) -> None:
     c, *_ = harness
     res = c.get("/api/v1/health")

@@ -143,9 +143,13 @@ def build_app(
     app = FastAPI(
         title="Synapse daemon",
         version=__version__,
-        docs_url=None,         # /docs deferred until Milestone H mobile UI
-        redoc_url=None,
-        openapi_url=None,
+        # API discovery is ON so any AI driving Synapse can enumerate the full
+        # endpoint surface + schemas (ADR-0027). The schema is the API *contract*
+        # only -- every data read / action still requires the X-Synapse-Token, so
+        # exposing the shape (even over the WAN tunnel) carries no data/action risk.
+        openapi_url="/api/v1/openapi.json",
+        docs_url="/api/v1/docs",
+        redoc_url="/api/v1/redoc",
     )
 
     app.add_middleware(

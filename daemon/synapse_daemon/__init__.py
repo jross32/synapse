@@ -1,6 +1,6 @@
 """Synapse Execution Layer — FastAPI daemon owning all managed processes."""
 
-__version__ = "0.1.71"
+__version__ = "0.1.72"
 __all__ = ["__version__"]
 
 

@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.72] -- 2026-07-29
+
+### Added
+- **API discovery is ON — an AI can now enumerate Synapse's full endpoint surface (ADR-0027).** The
+  daemon's `openapi_url` / `docs_url` / `redoc_url` were disabled; they're now served at
+  `/api/v1/openapi.json`, `/api/v1/docs` (Swagger UI), and `/api/v1/redoc`. This is the first increment
+  of making Synapse fully drivable from another AI chat (a same-machine Claude Code over `localhost:7878`,
+  or a remote AI over the auto-on WAN tunnel). The schema is the API **contract** only — every data read
+  / action still requires the `X-Synapse-Token`, so exposing the shape carries no data/action risk. Next
+  increments (ADR-0027): a `docs/DRIVE-SYNAPSE-FROM-AI.md` driver guide and a drive-capable extension of
+  the `/mcp/<token>` connector. New test: `test_openapi_discovery_is_enabled` (schema lists 100+ paths incl.
+  `/api/v1/agent-squads`; Swagger UI serves).
+
 ## [0.1.71] -- 2026-07-29
 
 ### Added
