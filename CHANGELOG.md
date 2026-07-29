@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.76] -- 2026-07-29
+
+### Added
+- **GitHub repo-health templates + policy files (repo audit).** CI (`ci.yml` — typecheck + pytest on
+  push/PR) and `LICENSE` were already present; added the high-impact missing pieces: a **PR template**
+  (`.github/PULL_REQUEST_TEMPLATE.md`) that enforces the repo's own version/CHANGELOG/tests/docs-sync +
+  coordination discipline, a **bug-report issue template** (`.github/ISSUE_TEMPLATE/bug_report.md`), a
+  **`SECURITY.md`** documenting the token / WAN (Cloudtap) / MCP trust model + secret handling + private
+  reporting (ties to ADR-0026/0027), and an **`.editorconfig`** matching the documented style (2-space JS/TS,
+  4-space Python, 120 cols, CRLF for `.ps1`/`.cmd`). Left for the owner to decide (not added): CODE_OF_CONDUCT,
+  CONTRIBUTING (AGENTS.md already covers norms), automated GitHub Releases, branch protection, status badges.
+
 ## [0.1.75] -- 2026-07-29
 
 ### Added
