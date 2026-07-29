@@ -7,6 +7,7 @@ import { apiFetch } from './api-client';
 
 export interface NetworkStatus {
   bind_lan_persisted: boolean;
+  wan_auto_start: boolean;
   bound_host: string;
   bound_port: number;
   lan_ips: string[];
@@ -27,4 +28,15 @@ export async function patchNetworkBindLan(
     bound_host: string;
     restart_required: boolean;
   }>('/system/network', { method: 'PATCH', body: { bind_lan: bindLan } });
+}
+
+// Auto-open the Cloudtap WAN tunnel on daemon start (ADR-0026). Persisted server-side;
+// takes effect on the next daemon start (no live restart needed to change the setting).
+export async function patchNetworkWanAutoStart(
+  wanAutoStart: boolean
+): Promise<{ wan_auto_start: boolean }> {
+  return apiFetch<{ wan_auto_start: boolean }>('/system/network', {
+    method: 'PATCH',
+    body: { wan_auto_start: wanAutoStart },
+  });
 }

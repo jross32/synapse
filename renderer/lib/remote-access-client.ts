@@ -2,6 +2,7 @@ import { apiFetch } from './api-client';
 
 export interface RemoteAccessNetwork {
   bind_lan_persisted: boolean;
+  wan_auto_start: boolean;
   bound_host: string;
   bound_port: number;
   lan_ips: string[];

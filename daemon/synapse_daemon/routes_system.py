@@ -89,6 +89,7 @@ class NetworkPatch(BaseModel):
 
 class RemoteAccessNetwork(BaseModel):
     bind_lan_persisted: bool
+    wan_auto_start: bool = True
     bound_host: str
     bound_port: int
     lan_ips: list[str]

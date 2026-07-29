@@ -114,6 +114,15 @@ def test_patch_network_both_knobs_at_once(tmp_path: Path) -> None:
     assert body["restart_required"] is True
 
 
+def test_remote_access_network_carries_wan_auto_start(tmp_path: Path) -> None:
+    # PhoneAccessPanel reads the WAN auto-start toggle from the /remote-access aggregate's
+    # `network` object -- so RemoteAccessNetwork must carry the field (default on).
+    client, _ = _harness(tmp_path)
+    with client as c:
+        body = c.get("/api/v1/remote-access").json()
+    assert body["network"]["wan_auto_start"] is True
+
+
 def test_get_network_requires_auth(tmp_path: Path) -> None:
     storage = Storage(tmp_path / "data")
     storage.open()

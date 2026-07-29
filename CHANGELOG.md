@@ -10,6 +10,20 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.78] -- 2026-07-29
+
+### Added
+- **WAN auto-start toggle in Settings (finishes ADR-0026; PLAN 5 Phase 0).** The `wan_auto_start`
+  preference (default on, since v0.1.71) now has a UI: an "Auto-connect on startup" switch in the
+  Settings → Phone Access → **WAN via Cloudtap** section (`PhoneAccessPanel`), wired to
+  `PATCH /api/v1/system/network {wan_auto_start}` with a note that it takes effect on the next daemon
+  start. `RemoteAccessNetwork` (the `/remote-access` aggregate the panel reads) now carries
+  `wan_auto_start`; added `patchNetworkWanAutoStart` to the system client. (The orphaned `NetworkPanel`
+  component is not mounted — the live network UI is `PhoneAccessPanel`.) Verified: tsc 0 errors; the
+  toggle renders in the running app; `test_remote_access_network_carries_wan_auto_start` + the existing
+  `/system/network` wan tests pass. The live toggle reflects its true state once the daemon reloads the
+  updated model (next launch) — not force-restarted here to avoid disrupting an active AI session.
+
 ## [0.1.77] -- 2026-07-29
 
 ### Fixed

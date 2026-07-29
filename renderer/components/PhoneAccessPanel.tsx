@@ -35,6 +35,7 @@ import { canRestart, openExternal, restartApp } from '@shared/electron-bridge';
 import { runToolAction } from '@shared/tools-client';
 import {
   patchNetworkBindLan,
+  patchNetworkWanAutoStart,
 } from '@shared/system-client';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -176,6 +177,19 @@ export function PhoneAccessPanel(): JSX.Element {
       await refresh();
     } catch (err) {
       setError((err as Error).message || 'Could not update LAN access.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleWan(wanAutoStart: boolean): Promise<void> {
+    setBusy('wan-toggle');
+    setError(null);
+    try {
+      await patchNetworkWanAutoStart(wanAutoStart);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message || 'Could not update WAN auto-start.');
     } finally {
       setBusy(null);
     }
@@ -631,6 +645,36 @@ export function PhoneAccessPanel(): JSX.Element {
                 </div>
               ) : (
                 <div className='space-y-4'>
+                  {/* Auto-start toggle (ADR-0026): open the tunnel automatically on every daemon start. */}
+                  <div className='flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-4'>
+                    <div>
+                      <p className='text-sm font-medium text-foreground'>Auto-connect on startup</p>
+                      <p className='mt-1 text-xs text-muted-foreground'>
+                        When on (default), Synapse opens the Cloudtap tunnel automatically each time the daemon
+                        starts, so it&apos;s reachable from anywhere. Applies on the next start — use the controls
+                        below to open or close the tunnel right now.
+                      </p>
+                    </div>
+                    <button
+                      type='button'
+                      role='switch'
+                      aria-checked={status.network.wan_auto_start}
+                      aria-label='Auto-connect WAN on startup'
+                      disabled={busy === 'wan-toggle'}
+                      onClick={() => void toggleWan(!status.network.wan_auto_start)}
+                      className={[
+                        'relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50',
+                        status.network.wan_auto_start ? 'bg-primary' : 'bg-secondary',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'absolute top-1 h-4 w-4 rounded-full bg-card transition-all',
+                          status.network.wan_auto_start ? 'left-6' : 'left-1',
+                        ].join(' ')}
+                      />
+                    </button>
+                  </div>
                   <div className='rounded-2xl border border-border/70 bg-background/55 p-4'>
                     <div className='flex flex-wrap items-start justify-between gap-3'>
                       <div>
