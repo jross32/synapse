@@ -10,6 +10,24 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.75] -- 2026-07-29
+
+### Added
+- **Drive-capable MCP connector (ADR-0027, increment 3).** The `/mcp/<token>` connector (ADR-0012) was
+  read-only; it now offers **drive tools** for MCP-native clients (e.g. the claude.ai web connector over the
+  auto-on WAN tunnel), gated behind `SYNAPSE_MCP_ALLOW_WRITES=1` (default **off**):
+  - `synapse_create_squad` — create an Agent Squad on a project.
+  - `synapse_add_work_item` — assign a work item (role + title) to a squad.
+  - `synapse_capture_note` — append a note to a project's AI memory or backlog.
+  These are in-process (storage-only) writes; **launching** a worker stays on the REST path
+  (`POST /agent-work-items/{id}/launch`, reachable over the same tunnel), which is the riskier capability. The
+  `initialize` instructions now announce drive-mode when writes are on. Note: the WAN tunnel already exposes the
+  *whole* token-guarded REST API, so any HTTP-capable AI (another Claude Code) has full remote drive over the
+  tunnel URL today — the MCP tools are specifically for MCP-protocol clients. Docs: `DRIVE-SYNAPSE-FROM-AI.md`
+  §8 rewritten (two remote paths) + ADR-0027 consequences. Tests: 4 new (`test_mcp_connector`) — drive tools
+  hidden/uncallable when off; create-squad→add-work-item + capture succeed when on; unknown project is a tool
+  error. 17 connector tests pass.
+
 ## [0.1.74] -- 2026-07-29
 
 ### Added

@@ -156,3 +156,66 @@ def test_writes_opt_in_exposes_add_idea(tmp_path: Path, monkeypatch: pytest.Monk
     result = res.json()["result"]
     assert result["isError"] is False
     assert "Use Redis" in result["content"][0]["text"]
+
+
+def test_drive_tools_hidden_when_writes_off(tmp_path: Path) -> None:
+    # Default = read-only: drive tools are neither advertised nor callable (ADR-0027).
+    client, token = _harness(tmp_path)
+    names = {t["name"] for t in _rpc(client, token, "tools/list").json()["result"]["tools"]}
+    for tool in ("synapse_create_squad", "synapse_add_work_item", "synapse_capture_note"):
+        assert tool not in names
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_create_squad", "arguments": {"project_id": "demo-project", "name": "X"}},
+    )
+    assert res.json()["result"]["isError"] is True  # writes disabled -> tool error
+
+
+def test_drive_create_squad_then_add_work_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    names = {t["name"] for t in _rpc(client, token, "tools/list").json()["result"]["tools"]}
+    assert {"synapse_create_squad", "synapse_add_work_item", "synapse_capture_note"} <= names
+
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_create_squad", "arguments": {"project_id": "demo-project", "name": "Drive test"}},
+    )
+    result = res.json()["result"]
+    assert result["isError"] is False, result
+    squad = json.loads(result["content"][0]["text"])
+    assert squad["project_id"] == "demo-project"
+
+    res2 = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_add_work_item",
+         "arguments": {"squad_id": squad["id"], "title": "do the thing", "assigned_role_id": "implementer"}},
+    )
+    r2 = res2.json()["result"]
+    assert r2["isError"] is False, r2
+    work_item = json.loads(r2["content"][0]["text"])
+    assert work_item["title"] == "do the thing"
+    assert work_item["squad_id"] == squad["id"]
+
+
+def test_drive_create_squad_unknown_project_is_tool_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_create_squad", "arguments": {"project_id": "nope", "name": "X"}},
+    )
+    assert res.json()["result"]["isError"] is True
+
+
+def test_drive_capture_note(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_capture_note",
+         "arguments": {"project_id": "demo-project", "content": "remember the /orders 500", "destination": "ai_context"}},
+    )
+    assert res.json()["result"]["isError"] is False, res.text

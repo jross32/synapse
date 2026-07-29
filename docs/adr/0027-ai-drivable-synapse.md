@@ -29,6 +29,7 @@ Make Synapse drivable by an AI along two complementary paths, shipped in increme
 
 ## Consequences
 
-- A same-machine Claude Code can enumerate the API (`/api/v1/openapi.json`) + follow the guide to drive squads/workflows/scraper/eval today.
-- Over the (now auto-on) WAN tunnel, a remote AI can introspect now and, once the drive tools land, fully drive Synapse.
+- A same-machine Claude Code can enumerate the API (`/api/v1/openapi.json`) + follow the guide to drive squads/workflows/scraper/eval today. **Dogfooded live (v0.1.74):** openapi lists 184 paths, and the full squad drive cycle (create → add work-item → read → capacity → delete → 404) works over REST.
+- **Key insight:** the WAN tunnel exposes the *whole* token-guarded REST API, so any HTTP-capable AI already has full remote drive over the tunnel URL — the `/mcp` connector is specifically for MCP-native clients.
+- **Drive-capable MCP shipped (v0.1.75):** the `/mcp/<token>` connector gained `synapse_create_squad` / `synapse_add_work_item` / `synapse_capture_note` behind `SYNAPSE_MCP_ALLOW_WRITES` (default off). Launching a worker stays on REST (`POST /agent-work-items/{id}/launch`), reachable over the same tunnel.
 - Each increment ships verified (dogfooded against the live API) + docs-synced.

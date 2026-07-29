@@ -102,13 +102,20 @@ curl -s "$SYN/capture" -X POST -H "X-Synapse-Token: $TOK" -H 'Content-Type: appl
 `destination: "backlog"` files a backlog item instead; `ai_context` appends to the project's shared
 `.synapse-ai-context.md` so the next agent run sees it.
 
-## 8. Drive Synapse remotely — the MCP connector
+## 8. Drive Synapse remotely — two ways
 
-Synapse exposes a Model Context Protocol server at **`/mcp/<token>`** (ADR-0012), reachable over the auto-on
-WAN tunnel. Today it is **read-only** (`synapse_get_context`, `synapse_list_projects/tools/quick_actions/agent_squads`,
-`synapse_get_project_records`). Drive tools (create/launch squad, run quick-action) are gated behind
-`SYNAPSE_MCP_ALLOW_WRITES` and are being added incrementally (ADR-0027). `GET /api/v1/mcp/connector` returns the
-ready-made connector URL (tunnel URL + path token).
+**The WAN tunnel exposes the whole token-guarded REST API**, not just `/mcp`. So the simplest way for any
+HTTP-capable AI (another Claude Code, a script, anything that can send headers) to drive Synapse **from
+anywhere** is: use the everything above with the **tunnel URL as the base** instead of `localhost:7878`, and
+the same `X-Synapse-Token`. Full drive — including `POST /agent-work-items/{id}/launch` — works remotely this way.
+
+**For MCP-native clients** (e.g. the claude.ai web custom connector) Synapse also speaks Model Context Protocol
+at **`/mcp/<token>`** (ADR-0012). Read tools are always on (`synapse_get_context`,
+`synapse_list_projects/tools/quick_actions/agent_squads`, `synapse_get_project_records`). **Drive tools**
+(`synapse_create_squad`, `synapse_add_work_item`, `synapse_capture_note`, `synapse_add_project_idea`) are gated
+behind `SYNAPSE_MCP_ALLOW_WRITES=1` (default **off**) — set it to let a remote MCP client set up work; launching a
+worker stays on the REST path (`POST /agent-work-items/{id}/launch`, reachable over the same tunnel). `GET
+/api/v1/mcp/connector` returns the ready-made connector URL (tunnel URL + path token).
 
 > **Security:** the `X-Synapse-Token` (and the connector's path token) is the whole trust boundary — with the
 > WAN tunnel on, anyone holding the token can drive Synapse. Treat it like a password; don't paste it into

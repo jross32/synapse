@@ -84,20 +84,72 @@ def _tool_specs() -> list[dict[str, Any]]:
         },
     ]
     if _writes_allowed():
-        specs.append(
-            {
-                "name": "synapse_add_project_idea",
-                "description": "Capture a quick idea / draft ADR on a project (status=idea). Promote it later in the UI.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "title": {"type": "string", "description": "One-line idea or decision."},
+        # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
+        # remote MCP client (e.g. the claude.ai connector over the WAN tunnel) SET UP work:
+        # capture context, create a squad, and assign work items. LAUNCHING a worker (which
+        # spawns a real process) stays on the REST API (POST /agent-work-items/{id}/launch),
+        # reachable over the same tunnel -- see docs/DRIVE-SYNAPSE-FROM-AI.md.
+        specs.extend(
+            [
+                {
+                    "name": "synapse_add_project_idea",
+                    "description": "Capture a quick idea / draft ADR on a project (status=idea). Promote it later in the UI.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "title": {"type": "string", "description": "One-line idea or decision."},
+                        },
+                        "required": ["project_id", "title"],
+                        "additionalProperties": False,
                     },
-                    "required": ["project_id", "title"],
-                    "additionalProperties": False,
                 },
-            }
+                {
+                    "name": "synapse_capture_note",
+                    "description": "Append a note to a project's shared AI memory (destination=ai_context) or backlog (destination=backlog) so the next agent run sees it.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "content": {"type": "string", "description": "The note text."},
+                            "destination": {"type": "string", "enum": ["ai_context", "backlog"], "description": "Default ai_context."},
+                            "title": {"type": "string", "description": "Backlog title (defaults to the first line)."},
+                        },
+                        "required": ["project_id", "content"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_create_squad",
+                    "description": "Create an Agent Squad (a team of AI workers) on a project. Returns the squad id. Add work items next, then launch via REST.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "name": {"type": "string", "description": "Squad name, e.g. 'Backend hardening'."},
+                            "goal_md": {"type": "string", "description": "Optional goal/brief (markdown)."},
+                            "lead_role_id": {"type": "string", "description": "Lead role id (default 'planner'). See synapse_list_agent_squads / GET /agent-role-templates."},
+                        },
+                        "required": ["project_id", "name"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_add_work_item",
+                    "description": "Add a work item (a unit of work assigned to a role) to a squad. Returns the work-item id; launch it via REST POST /agent-work-items/{id}/launch.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "squad_id": {"type": "string"},
+                            "title": {"type": "string", "description": "What to do, e.g. 'Add input validation to /orders'."},
+                            "instructions_md": {"type": "string", "description": "Optional detailed instructions (markdown)."},
+                            "assigned_role_id": {"type": "string", "description": "Role id, e.g. 'implementer' / 'reviewer'."},
+                        },
+                        "required": ["squad_id", "title"],
+                        "additionalProperties": False,
+                    },
+                },
+            ]
         )
     return specs
 
@@ -163,6 +215,62 @@ def build_mcp_router(
             with storage.transaction() as conn:
                 adr = records.create_adr(conn, project_id, ProjectAdrCreate(title=title))
             return adr.model_dump(mode="json")
+        if name == "synapse_capture_note":
+            if not _writes_allowed():
+                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            from .capture import CaptureDestination, CaptureRequest, capture
+
+            project_id = str(args.get("project_id", "")).strip()
+            content = str(args.get("content", "")).strip()
+            if not content:
+                raise ValueError("content is required")
+            dest = str(args.get("destination", "ai_context")).strip() or "ai_context"
+            req = CaptureRequest(
+                project_id=project_id,
+                content=content,
+                destination=CaptureDestination(dest),
+                title=args.get("title"),
+            )
+            with storage.transaction() as conn:
+                result = capture(conn, storage.data_dir, req)
+            return result.model_dump(mode="json")
+        if name == "synapse_create_squad":
+            if not _writes_allowed():
+                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            project_id = str(args.get("project_id", "")).strip()
+            name_arg = str(args.get("name", "")).strip()
+            if not name_arg:
+                raise ValueError("name is required")
+            with storage.transaction() as conn:
+                projects_module.get(conn, project_id)  # 404s if the project is unknown
+                squad = squads.create_squad(
+                    conn,
+                    squads.AgentSquadCreate(
+                        project_id=project_id,
+                        name=name_arg,
+                        goal_md=str(args.get("goal_md", "") or ""),
+                        lead_role_id=(args.get("lead_role_id") or "planner"),
+                    ),
+                )
+            return squad.model_dump(mode="json")
+        if name == "synapse_add_work_item":
+            if not _writes_allowed():
+                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            squad_id = str(args.get("squad_id", "")).strip()
+            title = str(args.get("title", "")).strip()
+            if not title:
+                raise ValueError("title is required")
+            with storage.transaction() as conn:
+                work_item = squads.create_work_item(  # get_squad() inside 404s if squad unknown
+                    conn,
+                    squad_id,
+                    squads.AgentWorkItemCreate(
+                        title=title,
+                        instructions_md=str(args.get("instructions_md", "") or ""),
+                        assigned_role_id=args.get("assigned_role_id"),
+                    ),
+                )
+            return work_item.model_dump(mode="json")
         raise ValueError(f"Unknown tool: {name}")
 
     def _handle(msg: Any) -> dict[str, Any] | None:
@@ -184,7 +292,15 @@ def build_mcp_router(
                     "protocolVersion": requested or DEFAULT_PROTOCOL_VERSION,
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {"name": "synapse", "version": __version__},
-                    "instructions": "Synapse read-only connector. Call synapse_get_context first.",
+                    "instructions": (
+                        "Synapse connector. Call synapse_get_context first. "
+                        + (
+                            "Drive tools (create squad / add work item / capture note) are ENABLED; "
+                            "launch a work item via REST POST /agent-work-items/{id}/launch."
+                            if _writes_allowed()
+                            else "Read-only (set SYNAPSE_MCP_ALLOW_WRITES=1 to enable drive tools)."
+                        )
+                    ),
                 },
             )
         if method == "ping":
