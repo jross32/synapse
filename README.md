@@ -6,7 +6,7 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.73`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and now gives operators a clearer "what needs attention / what was last proven" snapshot right on Home. The most recent waves shipped WAN auto-start, API discovery (`/api/v1/openapi.json`, `/docs`, `/redoc`), and a first pass at the new **AI operator experience** surface: Home-level attention + trust cards backed by the review inbox and AI health report. **684 automated tests pass** (`14 skipped`).
+> **Status:** early development (`v0.1.77`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and now gives operators a clearer "what needs attention / what was last proven" snapshot right on Home. The most recent waves shipped WAN auto-start, API discovery (`/api/v1/openapi.json`, `/docs`, `/redoc`), the AI-driving guide + drive-capable MCP connector follow-up, repo-health templates, and a local-browser auth bootstrap fix that prefers the trusted local daemon token over stale remembered paired-device tokens in plain local browser sessions. **688 automated tests pass** (`14 skipped`).
 >
 > 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit, the ChatGPT companion, and the Web Scraper harvest workspace), refreshed as the UI evolves.
 

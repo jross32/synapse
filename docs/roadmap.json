@@ -131,6 +131,14 @@
       "summary": "Home-level trust signals for the last green tests, latest browser proof, and latest successful review pass, with more honest verification recency over time."
     },
     {
+      "id": "local-browser-auth-bootstrap",
+      "title": "Clean local browser auth bootstrap",
+      "status": "shipped",
+      "phase": "AI operator experience",
+      "adr": null,
+      "summary": "The local browser shell now prefers the daemon's trusted local token over stale remembered paired-device tokens, so a plain dev-browser load no longer bursts into temporary 401s before settling."
+    },
+    {
       "id": "runtime-launch-trust",
       "title": "Trustworthy delegated runtime launches",
       "status": "coming",

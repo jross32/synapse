@@ -50,6 +50,16 @@ export function currentBrowserBaseUrl(): string {
   return window.location.origin;
 }
 
+function canUseTrustedLocalBootstrap(base: string): boolean {
+  try {
+    const url = new URL(base);
+    const host = url.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
 function sameOrigin(url: string): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -225,20 +235,34 @@ export async function bootstrapRuntimeAuth(): Promise<RuntimeAuthMode> {
   }
 
   if (claimReady) return 'claiming';
-  const token = handoff?.token ?? getStoredDeviceToken();
-  if (token) {
-    setDaemonBase(currentBrowserBaseUrl());
-    rememberDeviceToken(token);
+  const browserBase = currentBrowserBaseUrl();
+  setDaemonBase(browserBase);
+  const canBootstrapLocal = canUseTrustedLocalBootstrap(browserBase);
+  const handoffToken = handoff?.token;
+  if (handoffToken) {
+    rememberDeviceToken(handoffToken);
+    return 'paired-device';
+  }
+  const storedToken = getStoredDeviceToken();
+  // The local desktop/browser shell should prefer the daemon's trusted-local
+  // token over any remembered paired-device token. Otherwise a stale `/mobile`
+  // token can cause a burst of initial 401s on the full shell before apiFetch
+  // eventually refreshes back to the local token.
+  if (canBootstrapLocal) {
+    try {
+      await withTimeout(bootstrapLocalToken(), AUTH_BOOTSTRAP_TIMEOUT_MS);
+      return 'local';
+    } catch {
+      // Fall back to a stored device token when local bootstrap is unavailable.
+    }
+  }
+  if (storedToken) {
+    rememberDeviceToken(storedToken);
     return 'paired-device';
   }
 
-  try {
-    setDaemonBase(currentBrowserBaseUrl());
-    await withTimeout(bootstrapLocalToken(), AUTH_BOOTSTRAP_TIMEOUT_MS);
-  } catch {
-    // Fall through to the desktop shell instead of pinning the app on the
-    // boot splash forever if auth bootstrap stalls.
-  }
+  // No remembered paired-device auth is available here. Fall through to the
+  // local shell and let DaemonProvider surface any later daemon/auth state.
   return 'local';
 }
 

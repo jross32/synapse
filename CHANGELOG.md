@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.77] -- 2026-07-29
+
+### Fixed
+- **Local browser auth bootstrap no longer bursts into temporary `401`s on first load.** On
+  non-mobile trusted-local browser routes such as `http://127.0.0.1:5173`, Synapse now prefers the
+  daemon's trusted-local token (`/api/v1/auth/local-token`) before reusing a remembered paired-device
+  token from `/mobile`. That keeps stale remembered mobile tokens from briefly failing protected
+  routes such as `/projects`, `/profile`, `/review/inbox`, `/ai/health-report`, and
+  `/installed-pages` before the shell recovers. Explicit handoff tokens and `/mobile` paired-device
+  flows still keep their intended precedence.
+- **Top-level repo status headers are back in sync with the actual shipped version.** `README.md`
+  and `PROGRESS.md` now reflect the real `0.1.74`–`0.1.77` state instead of stopping at `0.1.73`.
+
+### Notes
+- Verification: `npm run typecheck`; live Playwright reloads against `http://127.0.0.1:5173`
+  finished with `0 errors` (only the existing early WebSocket-close warning) and the Home shell
+  loaded normally; full daemon suite `688 passed, 14 skipped, 2 warnings` in `529.90s`.
+
+
 ## [0.1.76] -- 2026-07-29
 
 ### Added
@@ -3050,6 +3069,7 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
+
 
 
 
