@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from . import boot_config
 from .api_versions import API_PREFIX, event_name
 from .auth import AuthManager, ensure_local_token, require_token
 from .errors import ErrorEnvelope, SynapseError
@@ -103,6 +104,7 @@ def build_app(
     tool_registry: ToolRegistry | None = None,
     auth: AuthManager | None = None,
     allow_web_scraper_download_bootstrap: bool = False,
+    allow_wan_autostart: bool = False,
 ) -> FastAPI:
     """Construct the FastAPI app bound to a Storage + EventBus.
 
@@ -439,6 +441,45 @@ def build_app(
                 },
             )
     app.router.on_startup.append(_autostart_mcp_servers)
+
+    async def _autostart_wan_tunnel() -> None:
+        # Auto-open the Cloudtap WAN tunnel on daemon start when enabled (default on,
+        # boot-config `wan_auto_start`). Best-effort + idempotent: a missing Cloudtap
+        # tool or a tunnel failure must NEVER abort daemon startup, and a tunnel already
+        # open for the bound port is left alone (so a reconnect/restart doesn't stack
+        # tunnels). Mirrors `_autostart_mcp_servers`. The user turns this off in
+        # Settings -> Network; a fresh install ships with WAN on.
+        try:
+            cfg = boot_config.load(storage.data_dir)
+            if not cfg.wan_auto_start:
+                return
+            try:
+                tool_registry.get_manifest("cloudtap")
+            except Exception:
+                log.info("WAN auto-start: Cloudtap tool not installed; skipping.")
+                return
+            bound_port = getattr(app.state, "bound_port", 7878)
+            try:
+                state = tool_registry.get_state("cloudtap")
+            except Exception:
+                state = None
+            already_open = bool(
+                state is not None
+                and any(item.result.get("local_port") == bound_port for item in state.items)
+            )
+            if already_open:
+                log.info("WAN auto-start: a Cloudtap tunnel is already open on port %d.", bound_port)
+                return
+            await tool_registry.run_action("cloudtap", "tunnel", {"port": bound_port})
+            log.info("WAN auto-start: opened Cloudtap WAN tunnel on port %d.", bound_port)
+        except Exception:  # a WAN-tunnel failure must NEVER abort daemon startup
+            log.exception("WAN auto-start failed; continuing daemon startup.")
+
+    # Only the real daemon run opens a tunnel. TestClient app-builds (and any
+    # embedding that doesn't opt in) must never spawn cloudflared -- otherwise
+    # every test that builds the app would leak a real WAN tunnel.
+    if allow_wan_autostart:
+        app.router.on_startup.append(_autostart_wan_tunnel)
     # What's New + Roadmap surface (ADR-0019) -- serves the changelog + roadmap.
     app.include_router(
         build_about_router(),

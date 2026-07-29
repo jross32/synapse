@@ -81,7 +81,10 @@ def _detect_lan_ips() -> list[str]:
 
 
 class NetworkPatch(BaseModel):
-    bind_lan: bool
+    # Both optional so a caller can toggle just one knob (e.g. the WAN switch sends
+    # only `wan_auto_start`). A field left None is untouched.
+    bind_lan: bool | None = None
+    wan_auto_start: bool | None = None
 
 
 class RemoteAccessNetwork(BaseModel):
@@ -147,6 +150,7 @@ def _network_status(request: Request, data_dir: Path) -> dict[str, Any]:
     lan_ips = _detect_lan_ips() if live_host == LAN_HOST else _detect_lan_ips()
     return {
         "bind_lan_persisted": cfg.bind_lan,
+        "wan_auto_start": cfg.wan_auto_start,
         "bound_host": live_host,
         "bound_port": port,
         "lan_ips": lan_ips,
@@ -395,28 +399,36 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
         payload: NetworkPatch, request: Request
     ) -> dict[str, Any]:
         cfg = boot_config.load(data_dir)
-        previous = cfg.bind_lan
-        cfg.bind_lan = payload.bind_lan
-        boot_config.save(data_dir, cfg)
-        with storage.transaction() as conn:
-            audit(
-                conn,
-                AuditRecord(
-                    entity_type="system",
-                    entity_id="network",
-                    action="network.bind_lan.set",
-                    source=AuditSource.DESKTOP,
-                    result="success",
-                    details={"previous": previous, "current": payload.bind_lan},
-                ),
+        changes: dict[str, dict[str, bool]] = {}
+        if payload.bind_lan is not None and payload.bind_lan != cfg.bind_lan:
+            changes["bind_lan"] = {"previous": cfg.bind_lan, "current": payload.bind_lan}
+            cfg.bind_lan = payload.bind_lan
+        if payload.wan_auto_start is not None and payload.wan_auto_start != cfg.wan_auto_start:
+            changes["wan_auto_start"] = {"previous": cfg.wan_auto_start, "current": payload.wan_auto_start}
+            cfg.wan_auto_start = payload.wan_auto_start
+        if changes:
+            boot_config.save(data_dir, cfg)
+            with storage.transaction() as conn:
+                for key, delta in changes.items():
+                    audit(
+                        conn,
+                        AuditRecord(
+                            entity_type="system",
+                            entity_id="network",
+                            action=f"network.{key}.set",
+                            source=AuditSource.DESKTOP,
+                            result="success",
+                            details=delta,
+                        ),
+                    )
+            await request.app.state.bus.publish(
+                event_name("remote_access", "updated"),
+                {"reason": "network-updated"},
             )
-        await request.app.state.bus.publish(
-            event_name("remote_access", "updated"),
-            {"reason": "network-bind-updated"},
-        )
         live_host = getattr(request.app.state, "bound_host", None) or LOOPBACK_HOST
         return {
             "bind_lan_persisted": cfg.bind_lan,
+            "wan_auto_start": cfg.wan_auto_start,
             "bound_host": live_host,
             "restart_required": cfg.bind_lan != (live_host == LAN_HOST),
         }

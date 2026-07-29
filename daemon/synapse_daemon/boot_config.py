@@ -11,7 +11,8 @@ next knob is one key, not a migration.
 Schema::
 
     {
-      "bind_lan": false        // true = bind 0.0.0.0, false = 127.0.0.1
+      "bind_lan": false,        // true = bind 0.0.0.0, false = 127.0.0.1
+      "wan_auto_start": true    // true = auto-open the Cloudtap WAN tunnel on daemon start
     }
 
 Missing file / bad JSON / unknown keys all degrade gracefully to defaults.
@@ -35,6 +36,9 @@ class BootConfig:
     """User-overridable boot settings. See module docstring."""
 
     bind_lan: bool = False
+    # Auto-open the Cloudtap WAN tunnel on daemon start (default on). The user can
+    # turn this off in Settings -> Network; a fresh install ships with WAN on.
+    wan_auto_start: bool = True
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -62,6 +66,8 @@ def load(data_dir: Path) -> BootConfig:
     cfg = BootConfig()
     if isinstance(raw.get("bind_lan"), bool):
         cfg.bind_lan = raw["bind_lan"]
+    if isinstance(raw.get("wan_auto_start"), bool):
+        cfg.wan_auto_start = raw["wan_auto_start"]
     return cfg
 
 

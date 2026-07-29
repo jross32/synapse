@@ -222,6 +222,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         tool_registry=registry,
         auth=auth,
         allow_web_scraper_download_bootstrap=True,
+        allow_wan_autostart=True,
     )
     app.state.bound_port = args.port
     app.state.bound_host = host

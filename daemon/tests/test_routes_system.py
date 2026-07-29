@@ -75,6 +75,42 @@ def test_get_network_after_toggle_reflects_persisted(tmp_path: Path) -> None:
         body = c.get("/api/v1/system/network").json()
     assert body["bind_lan_persisted"] is True
     assert body["bound_host"] == "127.0.0.1"
+
+
+def test_network_status_reports_wan_auto_start_on_by_default(tmp_path: Path) -> None:
+    client, _ = _harness(tmp_path)
+    with client as c:
+        body = c.get("/api/v1/system/network").json()
+    assert body["wan_auto_start"] is True
+
+
+def test_patch_wan_auto_start_persists_without_touching_bind_lan(tmp_path: Path) -> None:
+    client, storage = _harness(tmp_path)
+    with client as c:
+        # Toggle ONLY wan_auto_start -- bind_lan must be left untouched.
+        res = c.patch("/api/v1/system/network", json={"wan_auto_start": False})
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["wan_auto_start"] is False
+        assert body["bind_lan_persisted"] is False  # unchanged
+        # Persisted to disk + reflected on GET.
+        assert boot_config.load(storage.data_dir).wan_auto_start is False
+        assert c.get("/api/v1/system/network").json()["wan_auto_start"] is False
+        # Audited under its own action key.
+        actions = [r["action"] for r in c.get("/api/v1/audit?limit=10").json()["entries"]]
+        assert "network.wan_auto_start.set" in actions
+
+
+def test_patch_network_both_knobs_at_once(tmp_path: Path) -> None:
+    client, storage = _harness(tmp_path)
+    with client as c:
+        res = c.patch("/api/v1/system/network", json={"bind_lan": True, "wan_auto_start": False})
+        assert res.status_code == 200, res.text
+        body = res.json()
+    cfg = boot_config.load(storage.data_dir)
+    assert cfg.bind_lan is True
+    assert cfg.wan_auto_start is False
+    # Flipping bind_lan on a loopback daemon signals a restart is needed.
     assert body["restart_required"] is True
 
 

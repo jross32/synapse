@@ -72,7 +72,7 @@ If that's all you needed to know, skip to **[Getting started](#getting-started)*
 - **🛒 A marketplace** — install tools, local AI models, MCP servers, workers, and ready-made teams with one click. Point-and-click for a human; a single `POST /api/v1/marketplace/install/{id}` for an AI.
   *Why it's better:* extending a chatbot means copy-pasting instructions into every new chat. Extending Synapse means installing a tool once — every future AI session (yours or a teammate's) sees it.
 
-- **📱 Control it from your phone** — pair once, then start, stop, or approve AI work from anywhere over Wi-Fi or a secure tunnel.
+- **📱 Control it from your phone** — pair once, then start, stop, or approve AI work from anywhere over Wi-Fi or a secure tunnel. The WAN tunnel (via Cloudtap) now **auto-opens on startup by default** — a fresh install is reachable from anywhere out of the box; turn it off any time in Settings → Network (ADR-0026).
   *Why it's better:* a chatbot session lives on the device you opened it on. Synapse's engine is the source of truth, so the phone is just another window onto the same live state as your desktop.
 
 - **🧠 A built-in local AI** — an optional on-device assistant (via Ollama), so routine or sensitive work can run privately and for free, while hard problems still route to a frontier model.

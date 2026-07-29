@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.71] -- 2026-07-29
+
+### Added
+- **WAN auto-start (ADR-0026) — the Cloudtap tunnel now opens on daemon boot by default.** Previously
+  reaching Synapse from off-LAN meant clicking "Expose to WAN via Cloudtap" every launch. Now a persisted
+  `wan_auto_start` boot setting (default **on**) drives a startup hook (`_autostart_wan_tunnel`) that opens
+  the tunnel on the bound port automatically. It mirrors `_autostart_mcp_servers`: best-effort (a tunnel
+  failure never aborts startup), idempotent (won't stack tunnels if one is already open for the port),
+  graceful when Cloudtap isn't installed, and gated by a new `allow_wan_autostart` flag (default off; only
+  the real daemon sets it) so TestClient app-builds never spawn a real `cloudflared`. `GET/PATCH
+  /api/v1/system/network` now carry `wan_auto_start` (both patch knobs optional; each change audited under
+  `network.<knob>.set`) so the Settings toggle + the API can flip it. This makes the ADR-0012 `/mcp/<token>`
+  connector reachable remotely out of the box. Verified live: on daemon restart the tunnel auto-opened at a
+  public `*.trycloudflare.com` URL and reached `ready` in ~5s with no manual action. The Settings +
+  onboarding toggle ships next. New tests: `test_boot_config` (wan_auto_start default/roundtrip/type-guard)
+  + `test_routes_system` (patch persists/audits/GET reflects, single-knob + both-knobs).
+
 ## [0.1.70] -- 2026-07-17
 
 ### Fixed

@@ -15,6 +15,18 @@ def test_load_missing_returns_defaults(tmp_path: Path) -> None:
     cfg = load(tmp_path)
     assert cfg == BootConfig()
     assert cfg.bind_lan is False
+    # WAN auto-start ships ON by default (a fresh install exposes over Cloudtap).
+    assert cfg.wan_auto_start is True
+
+
+def test_wan_auto_start_roundtrip_and_type_guard(tmp_path: Path) -> None:
+    save(tmp_path, BootConfig(bind_lan=True, wan_auto_start=False))
+    reloaded = load(tmp_path)
+    assert reloaded.bind_lan is True
+    assert reloaded.wan_auto_start is False
+    # A wrong-typed value degrades to the default (True), never crashes.
+    (tmp_path / "boot-config.json").write_text('{"wan_auto_start": "no"}', encoding="utf-8")
+    assert load(tmp_path).wan_auto_start is True
 
 
 def test_save_load_roundtrip(tmp_path: Path) -> None:
