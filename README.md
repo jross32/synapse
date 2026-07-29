@@ -6,7 +6,7 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.39`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), and connects from your phone. The newest shipped wave hardens the first-party **Web Scraper MCP** so the real daemon auto-installs and auto-starts it on boot, rehomes stale seeded project paths to the active checkout, and tightens desktop restart reliability in the tray/desktop bridge. **663 automated tests pass** (`14 skipped`).
+> **Status:** early development (`v0.1.73`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and now gives operators a clearer "what needs attention / what was last proven" snapshot right on Home. The most recent waves shipped WAN auto-start, API discovery (`/api/v1/openapi.json`, `/docs`, `/redoc`), and a first pass at the new **AI operator experience** surface: Home-level attention + trust cards backed by the review inbox and AI health report. **684 automated tests pass** (`14 skipped`).
 >
 > 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit, the ChatGPT companion, and the Web Scraper harvest workspace), refreshed as the UI evolves.
 
@@ -58,6 +58,9 @@ If that's all you needed to know, skip to **[Getting started](#getting-started)*
 
 - **🛠 Improve Synapse from inside Synapse** — a bundled **Synapse Self** project points at the local repo, the **Improve Synapse** quick-action opens a real coder thread there, and guarded self-improvement endpoints expose a health report plus the first safe developer-loop test actions.
   *Why it's better:* the AI no longer needs a side-process or a fresh terminal ritual every time it wants to help Synapse itself. The same thread, review, benchmark, and project-record surfaces used for any other app can now be used on Synapse.
+
+- **👀 See what needs attention — and what was actually proven** — Home now shows a concise operator snapshot: review inbox count, AI-filed improvement proposals, blocking quality gates, last test run, latest browser proof, and the latest successful review pass.
+  *Why it's better:* an AI or human operator no longer has to hunt across Review, Quality, and thread history just to answer "what needs me?" or "how fresh is the proof behind this state?"
 
 - **💬 Use ChatGPT from inside Synapse** — the new experimental **ChatGPT Companion** keeps sign-in browser-managed, lets Synapse see the visible project/chat context, drafts prompts, captures visible replies, and saves the parts you choose back into the current Synapse project as normal files.
   *Why it's better:* you keep the familiar ChatGPT workflow, but the useful output stops being trapped in one chat tab. Synapse turns it into durable project memory another AI can continue from.

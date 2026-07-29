@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from synapse_daemon import coder_workspace
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -86,3 +87,52 @@ def test_ai_context_inlines_files_per_project(tmp_path: Path) -> None:
         )
         body = c.get("/api/v1/ai/context").json()
         assert any(f["original_name"] == "shared.md" for f in body["shared_files"])
+
+
+def test_ai_health_report_includes_latest_successful_review_pass(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    with storage.transaction() as conn:
+        create(
+            conn,
+            Project(
+                id="demo",
+                name="Demo",
+                path=str(tmp_path),
+                launch_cmd="echo hi",
+            ),
+        )
+        thread = coder_workspace.create_thread(
+            conn,
+            "demo",
+            coder_workspace.CoderThreadCreate(title="Main build thread"),
+        )
+        review_pass = coder_workspace.create_review_pass(
+            conn,
+            thread.id,
+            coder_workspace.CoderReviewPassCreate(
+                title="UX reviewer pass",
+                summary_md="Checked the main shell for clarity and state handling.",
+            ),
+        )
+        conn.execute(
+            "UPDATE coder_review_passes SET status = ?, updated_at = ? WHERE id = ?",
+            (
+                coder_workspace.CoderReviewPassStatus.COMPLETED.value,
+                "2026-07-29T05:00:00Z",
+                review_pass.id,
+            ),
+        )
+    app = build_app(storage, EventBus())
+    client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    with client as c:
+        res = c.get("/api/v1/ai/health-report")
+        assert res.status_code == 200
+        body = res.json()
+        latest = body["review"]["latest_successful_pass"]
+        assert latest["id"] == review_pass.id
+        assert latest["thread_id"] == thread.id
+        assert latest["thread_title"] == "Main build thread"
+        assert latest["title"] == "UX reviewer pass"
+        assert latest["summary_md"] == "Checked the main shell for clarity and state handling."

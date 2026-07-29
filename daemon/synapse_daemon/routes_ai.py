@@ -91,6 +91,26 @@ def build_ai_router(
         uptime_s = 0.0
         if started_at is not None:
             uptime_s = max(0.0, (now - started_at).total_seconds())
+        latest_successful_review_pass = None
+        review_row = storage.conn.execute(
+            "SELECT r.id, r.thread_id, r.title, r.summary_md, r.updated_at, "
+            "t.title AS thread_title, t.project_id AS project_id "
+            "FROM coder_review_passes r "
+            "LEFT JOIN coder_threads t ON t.id = r.thread_id "
+            "WHERE r.status = ? "
+            "ORDER BY r.updated_at DESC LIMIT 1",
+            (coder_workspace_module.CoderReviewPassStatus.COMPLETED.value,),
+        ).fetchone()
+        if review_row is not None:
+            latest_successful_review_pass = {
+                "id": review_row["id"],
+                "thread_id": review_row["thread_id"],
+                "thread_title": review_row["thread_title"] or "Untitled thread",
+                "project_id": review_row["project_id"],
+                "title": review_row["title"] or "Review pass",
+                "summary_md": review_row["summary_md"] or "",
+                "updated_at": review_row["updated_at"],
+            }
         return {
             "version": __version__,
             "uptime_s": round(uptime_s, 3),
@@ -118,6 +138,9 @@ def build_ai_router(
             },
             "git": synapse_dev_manager.git_summary() if synapse_dev_manager is not None else {},
             "quality": quality_os_module.quality_summary(storage.conn),
+            "review": {
+                "latest_successful_pass": latest_successful_review_pass,
+            },
         }
 
     @router.get("/context", response_model=None)

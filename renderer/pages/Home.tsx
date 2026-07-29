@@ -4,14 +4,29 @@
 // HUD, then live activity + quick jumps. The slideshow can launch a project
 // straight from the hero.
 
-import { useMemo, useState } from 'react';
-import { Activity, CircleAlert, CirclePlay, CircleStop, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  CheckCircle2,
+  CircleAlert,
+  CirclePlay,
+  CircleStop,
+  ClipboardList,
+  FlaskConical,
+  Inbox,
+  Loader2,
+  MessagesSquare,
+  ShieldCheck,
+  TriangleAlert,
+} from 'lucide-react';
 
 import { useDaemon } from '@shared/daemon-context';
+import { getAiHealthReport, type AiHealthReport } from '@shared/ai-client';
 import { launchProject } from '@shared/projects-client';
-import { formatLocal } from '@shared/format-time';
+import { formatLocal, formatUptime } from '@shared/format-time';
 import type { Project } from '@shared/generated-types';
 import type { NavigationIntent } from '@shared/nav';
+import { getReviewInbox, type ReviewInbox } from '@shared/review-client';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { PageHeader } from '../components/PageHeader';
@@ -24,11 +39,22 @@ export interface HomePageProps {
 }
 
 export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
-  const { projects, projectsLoaded, recentEvents, health, upsertProjectLocal } = useDaemon();
+  const {
+    projects,
+    projectsLoaded,
+    recentEvents,
+    health,
+    subscribeRaw,
+    upsertProjectLocal,
+  } = useDaemon();
 
   const [launchBusyId, setLaunchBusyId] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [activityExpanded, setActivityExpanded] = useState(false);
+  const [reviewInbox, setReviewInbox] = useState<ReviewInbox | null>(null);
+  const [healthReport, setHealthReport] = useState<AiHealthReport | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   // Status breakdown -- Contract #2's six states. Per v0.1.36 A3 we
   // collapse idle + stopped into a single "Not running" tile because
@@ -68,6 +94,59 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
       return true;
     });
   }, [recentEvents]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshInsights(): Promise<void> {
+      const [inboxRes, reportRes] = await Promise.allSettled([
+        getReviewInbox(),
+        getAiHealthReport(),
+      ]);
+      if (cancelled) return;
+
+      const errors: string[] = [];
+      if (inboxRes.status === 'fulfilled') {
+        setReviewInbox(inboxRes.value);
+      } else {
+        errors.push(inboxRes.reason instanceof Error ? inboxRes.reason.message : 'Could not load review inbox.');
+      }
+      if (reportRes.status === 'fulfilled') {
+        setHealthReport(reportRes.value);
+      } else {
+        errors.push(reportRes.reason instanceof Error ? reportRes.reason.message : 'Could not load health report.');
+      }
+      setInsightsError(errors.length ? errors.join(' ') : null);
+      setInsightsLoading(false);
+    }
+
+    void refreshInsights();
+    const interval = window.setInterval(() => {
+      void refreshInsights();
+    }, 30000);
+    const unsubscribe = subscribeRaw((event) => {
+      if (
+        event.name === 'v1.review.resolved' ||
+        event.name === 'v1.review.proposal_filed' ||
+        event.name.startsWith('v1.agent_work_item')
+      ) {
+        void refreshInsights();
+      }
+    });
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      unsubscribe();
+    };
+  }, [subscribeRaw]);
+
+  const attentionCount =
+    (reviewInbox?.count ?? 0) +
+    (reviewInbox?.proposals.length ?? 0) +
+    (reviewInbox?.quality_gates.length ?? 0);
+  const latestProof = healthReport?.quality?.latest_browser_proof?.[0] ?? null;
+  const latestReviewPass = healthReport?.review?.latest_successful_pass ?? null;
+  const testSummary = healthReport?.tests ?? null;
 
   async function handleLaunch(project: Project): Promise<void> {
     setLaunchBusyId(project.id);
@@ -155,6 +234,151 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           label='Total projects'
           value={projects.length}
         />
+      </div>
+
+      <div className='grid grid-cols-1 gap-6 xl:grid-cols-2'>
+        <Card className='flex flex-col gap-4 p-6'>
+          <div className='flex items-start justify-between gap-3'>
+            <div>
+              <h2 className='text-lg font-semibold'>Needs attention</h2>
+              <p className='text-sm text-muted-foreground'>
+                One place to see what an AI or human operator should look at next.
+              </p>
+            </div>
+            <span
+              className={
+                attentionCount > 0
+                  ? 'rounded-full bg-status-launching/15 px-2.5 py-1 text-xs font-medium text-status-launching'
+                  : 'rounded-full bg-status-launched/15 px-2.5 py-1 text-xs font-medium text-status-launched'
+              }
+            >
+              {attentionCount > 0 ? `${attentionCount} open` : 'Clear'}
+            </span>
+          </div>
+
+          {insightsError && (
+            <p role='alert' className='text-xs text-destructive'>
+              {insightsError}
+            </p>
+          )}
+
+          {insightsLoading && !reviewInbox ? (
+            <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+              <Loader2 className='h-4 w-4 animate-spin' /> Loading operator summary…
+            </div>
+          ) : (
+            <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
+              <MiniSignal
+                icon={<Inbox className='h-4 w-4 text-primary' />}
+                label='Review inbox'
+                value={`${reviewInbox?.count ?? 0}`}
+                detail={
+                  (reviewInbox?.count ?? 0) === 1
+                    ? '1 item needs a decision'
+                    : `${reviewInbox?.count ?? 0} items need decisions`
+                }
+              />
+              <MiniSignal
+                icon={<ClipboardList className='h-4 w-4 text-primary' />}
+                label='Open proposals'
+                value={`${reviewInbox?.proposals.length ?? 0}`}
+                detail={
+                  (reviewInbox?.proposals.length ?? 0) === 1
+                    ? '1 AI-filed improvement idea'
+                    : `${reviewInbox?.proposals.length ?? 0} AI-filed improvement ideas`
+                }
+              />
+              <MiniSignal
+                icon={<TriangleAlert className='h-4 w-4 text-status-launching' />}
+                label='Blocking gates'
+                value={`${reviewInbox?.quality_gates.length ?? 0}`}
+                detail={
+                  (reviewInbox?.quality_gates.length ?? 0) === 0
+                    ? 'No blocking quality gates'
+                    : `${reviewInbox?.quality_gates.length ?? 0} blocking quality gates`
+                }
+              />
+            </div>
+          )}
+
+          <div className='flex flex-wrap gap-2'>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={() => onNavigate({ page: 'ai-coding', section: 'review' })}
+            >
+              Open Review
+            </Button>
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={() => onNavigate({ page: 'ai-coding', section: 'sessions' })}
+            >
+              Open Coder Workspace
+            </Button>
+          </div>
+        </Card>
+
+        <Card className='flex flex-col gap-4 p-6'>
+          <div className='flex items-start justify-between gap-3'>
+            <div>
+              <h2 className='text-lg font-semibold'>Trust signals</h2>
+              <p className='text-sm text-muted-foreground'>
+                The freshest proof Synapse has about tests, reviews, and browser verification.
+              </p>
+            </div>
+            <span className='rounded-full bg-secondary/70 px-2.5 py-1 text-xs font-medium text-muted-foreground'>
+              {health ? `Up ${formatUptime(health.started_at)}` : 'Connecting'}
+            </span>
+          </div>
+
+          {insightsLoading && !healthReport ? (
+            <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+              <Loader2 className='h-4 w-4 animate-spin' /> Loading trust signals…
+            </div>
+          ) : (
+            <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
+              <MiniSignal
+                icon={
+                  testSummary?.last_run_ok ? (
+                    <CheckCircle2 className='h-4 w-4 text-status-launched' />
+                  ) : (
+                    <FlaskConical className='h-4 w-4 text-status-launching' />
+                  )
+                }
+                label='Latest tests'
+                value={testSummary?.last_run_ok ? 'Green' : testSummary?.last_run_ok === false ? 'Failed' : 'Unknown'}
+                detail={describeTestSummary(testSummary)}
+              />
+              <MiniSignal
+                icon={<ShieldCheck className='h-4 w-4 text-primary' />}
+                label='Browser proof'
+                value={latestProof ? formatLocal(latestProof.created_at, 'relative') : 'None'}
+                detail={
+                  latestProof
+                    ? `${latestProof.label || 'Latest browser proof'} · ${formatLocal(latestProof.created_at, 'short')}`
+                    : 'No browser proof recorded yet'
+                }
+              />
+              <MiniSignal
+                icon={<MessagesSquare className='h-4 w-4 text-primary' />}
+                label='Review pass'
+                value={latestReviewPass ? formatLocal(latestReviewPass.updated_at, 'relative') : 'None'}
+                detail={
+                  latestReviewPass
+                    ? `${latestReviewPass.title} · ${latestReviewPass.thread_title}`
+                    : 'No successful review pass recorded yet'
+                }
+              />
+            </div>
+          )}
+
+          <div className='flex flex-wrap gap-2 text-xs text-muted-foreground'>
+            <span>Daemon v{healthReport?.version ?? health?.version ?? '—'}</span>
+            <span>•</span>
+            <span>{healthReport?.quality?.open_count ?? 0} open quality gates</span>
+          </div>
+        </Card>
       </div>
 
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]'>
@@ -265,6 +489,38 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           </Button>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function describeTestSummary(tests: AiHealthReport['tests'] | null): string {
+  if (!tests || !tests.last_run_at) return 'No recorded test run yet';
+  const counts = `${tests.passed} passed${tests.failed ? `, ${tests.failed} failed` : ''}${tests.skipped ? `, ${tests.skipped} skipped` : ''}`;
+  if (tests.last_run_ok) {
+    return `${counts} · ${formatLocal(tests.last_run_at, 'relative')}`;
+  }
+  return `${counts} · last run ${formatLocal(tests.last_run_at, 'relative')}`;
+}
+
+function MiniSignal({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+}): JSX.Element {
+  return (
+    <div className='rounded-lg border border-border/70 bg-secondary/25 p-3'>
+      <div className='flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground'>
+        {icon}
+        {label}
+      </div>
+      <div className='mt-2 text-base font-semibold'>{value}</div>
+      <p className='mt-1 text-xs text-muted-foreground'>{detail}</p>
     </div>
   );
 }

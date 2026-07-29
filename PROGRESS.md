@@ -6,15 +6,18 @@
 
 ## Current version
 
-`0.1.71`
+`0.1.73`
 
-> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.71`
+> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.73`
 > landed a large UI/UX + reliability wave — an 8-fix UI/UX audit (`0.1.52`–`0.1.59`), a run of verified
 > daemon bug-fixes (bug-hunt scoring under-count, benchmark efficiency-frontier zero-value Pareto
 > inversion, a quality-gate PASS clobbering a human waiver — each with regression tests), several
 > Contract #13/#23 renderer fixes (Review inbox error+Retry, Coder Workspace loading states + icon/select
-> aria-labels + error-banner `role="alert"`, Apps mobile header wrap), and **WAN auto-start (`0.1.71`,
-> ADR-0026)**. A fuller reconciliation of this wall to `0.1.71` is a tracked follow-up.
+> aria-labels + error-banner `role="alert"`, Apps mobile header wrap), **WAN auto-start (`0.1.71`,
+> ADR-0026)**, **API discovery (`0.1.72`, ADR-0027)**, and the first **AI operator experience**
+> slice (`0.1.73`: Home attention + trust cards, `ai/health-report` latest review-pass summary,
+> roadmap/backlog entries for the remaining operator gaps). A fuller reconciliation of this wall to
+> `0.1.73` is a tracked follow-up.
 
 ## Current milestone
 

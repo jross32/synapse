@@ -145,6 +145,12 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-07-05 | `POST /api/v1/quick-actions/{id}/launch` (extended) | additive | Launch now supports `launch_mode="coder-thread"`, may lazy-create the bundled `synapse-self` project, and returns `thread_id` + `coder_run_id` when a quick action launches as a real coder thread rather than a plain PTY. |
 | 2026-07-05 | `POST /api/v1/coder-threads/{id}/review-passes` / `POST /api/v1/coder-review-passes/{id}/launch` (metadata extended) | additive | Review-pass metadata may now carry `review_kind`, `preset_label`, `reason`, `focus_points`, and `escalation_policy`, which the coder workspace surfaces as explicit "why this pass ran" context for UX/QA/token-efficiency/judge loops. |
 
+### Shipped in v0.1.73 (AI operator trust + attention, first slice)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-07-29 | `GET /api/v1/ai/health-report` (extended) | additive | Adds `quality.latest_browser_proof` / `quality.failing_contracts` to the compact trust payload and a new `review.latest_successful_pass` summary (`id`, `thread_id`, `thread_title`, `project_id`, `title`, `summary_md`, `updated_at`). This lets lightweight operator surfaces answer "what was last actually proven?" without pulling the full `ai/context` digest. |
+
 ### Shipped in v0.1.36-dev (AI Factory + advanced case engine foundation)
 
 | Date | Endpoint or event | Kind | Notes |

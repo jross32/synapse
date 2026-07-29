@@ -91,6 +91,8 @@ Lighter than full context. Returns:
 - Last 5 error-only audit entries
 - Git status of the repo
 - Last test run result (if `synapse_dev` is enabled)
+- `quality` summary: open/blocking gate counts, failing contracts, and latest browser-proof evidence
+- `review.latest_successful_pass`: the freshest completed coder review pass, if any
 
 ---
 

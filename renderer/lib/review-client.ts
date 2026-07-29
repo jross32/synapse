@@ -45,6 +45,7 @@ export interface Proposal {
 export interface ReviewInbox {
   items: ReviewItem[];
   count: number;
+  quality_gates: Array<{ id: string; title: string; opened_at?: string }>;
   proposals: Proposal[];
 }
 

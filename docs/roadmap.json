@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-07-08",
+  "generated_at": "2026-07-29",
   "items": [
     {
       "id": "ai-council-review",
@@ -113,6 +113,46 @@
       "phase": "AI-coding power",
       "adr": "ADR-0007",
       "summary": "A bundled Synapse Self workspace, an Improve Synapse quick-action, guarded health/test endpoints, and explicit review/benchmark/record loop scaffolding so Synapse can improve itself through Synapse-native workflows."
+    },
+    {
+      "id": "operator-attention-hub",
+      "title": "Operator attention hub",
+      "status": "in_progress",
+      "phase": "AI operator experience",
+      "adr": null,
+      "summary": "A clear 'what needs attention now' path across blocked work, review inbox items, quality gates, and AI-filed proposals, so an operator does not have to hunt across surfaces."
+    },
+    {
+      "id": "operator-trust-signals",
+      "title": "Operator trust signals",
+      "status": "in_progress",
+      "phase": "AI operator experience",
+      "adr": null,
+      "summary": "Home-level trust signals for the last green tests, latest browser proof, and latest successful review pass, with more honest verification recency over time."
+    },
+    {
+      "id": "runtime-launch-trust",
+      "title": "Trustworthy delegated runtime launches",
+      "status": "coming",
+      "phase": "AI operator experience",
+      "adr": null,
+      "summary": "Delegated Codex, Claude, and Copilot launches that are explicitly non-interactive, timeout-aware, and honest about idle versus actually finished work."
+    },
+    {
+      "id": "session-hygiene",
+      "title": "Automatic AI session hygiene",
+      "status": "coming",
+      "phase": "AI operator experience",
+      "adr": null,
+      "summary": "Auto-orient and auto-coordinate launched AI sessions, with stronger reminders or auto-recording for handoffs, token ledger updates, and shared memory notes."
+    },
+    {
+      "id": "context-recovery",
+      "title": "Faster AI context recovery",
+      "status": "coming",
+      "phase": "AI operator experience",
+      "adr": null,
+      "summary": "Faster summaries over transcripts, shared memory, review history, and project records so a new AI can re-enter a project without rereading raw logs."
     },
     {
       "id": "chatgpt-companion",

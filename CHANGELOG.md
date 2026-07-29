@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.73] -- 2026-07-29
+
+### Added
+- **Home now surfaces the first operator-grade attention + trust snapshot.** The Home page gained a
+  new **Needs attention** card (review inbox items, AI-filed proposals, blocking quality gates, quick
+  jump into Review/Coder Workspace) plus a **Trust signals** card (last recorded test run, latest
+  browser proof, latest successful review pass, daemon version/uptime). This is the first concrete
+  product slice of the broader "AI operator experience" gap list.
+- **Synapse's own plan now tracks the AI-operator follow-up work explicitly.** The `synapse-self`
+  backlog records the five next operator improvements: attention hub, trust signals, runtime-launch
+  trust, automatic session hygiene, and faster AI context recovery. The public roadmap gained matching
+  items under a new **AI operator experience** phase.
+
+### Changed
+- **`GET /api/v1/ai/health-report` is now useful for lightweight trust surfaces, not just self-test
+  loops.** It now includes `review.latest_successful_pass` alongside the existing compact quality/test
+  summary, so a Home-level operator card can answer "what was last actually reviewed?" without pulling
+  the full `ai/context` digest.
+- **The Home trust snapshot tolerates older daemon payloads during a rolling update.** Nested trust
+  fields are read defensively, so the renderer can fall back gracefully if it is talking to a daemon
+  that has not yet picked up the new `review.latest_successful_pass` shape.
+
+### Notes
+- Verification: `npm run typecheck`, `npm run build:renderer`, targeted `python -m pytest
+  daemon/tests/test_routes_ai.py -q`, and full daemon suite `684 passed, 14 skipped` in 503.51s.
+- Playwright reached the live dev shell at `http://127.0.0.1:5173`, but a local-token bootstrap/auth
+  issue returned repeated `401` responses on protected routes, so no trustworthy signed-in browser proof
+  was claimed for this slice.
+
+
 ## [0.1.72] -- 2026-07-29
 
 ### Added
@@ -2977,5 +3007,6 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
+
 
 
