@@ -628,7 +628,7 @@ export function CoderWorkspacePage({
       </div>
 
       {error && (
-        <Card className='border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive'>
+        <Card role='alert' className='border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive'>
           {error}
         </Card>
       )}

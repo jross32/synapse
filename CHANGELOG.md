@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.70] -- 2026-07-17
+
+### Fixed
+- **Coder Workspace top-level error banner was not announced to screen readers (UI/UX audit, Contract
+  #23, a11y).** The error `Card` was set dynamically but lacked `role='alert'`/aria-live, so assistive
+  tech never announced a workspace error — inconsistent with `Review.tsx` and `AgentSquadsView.tsx`,
+  which both mark their error displays as alerts. Added `role='alert'` to the card. Playwright-verified
+  against the running renderer: with the thread-list fetch forced to fail, the error card renders as
+  the page's single `role='alert'` carrying the error text. tsc 0 errors.
+
 ## [0.1.69] -- 2026-07-17
 
 ### Fixed
