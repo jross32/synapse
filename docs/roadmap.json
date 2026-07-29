@@ -136,7 +136,7 @@
       "status": "shipped",
       "phase": "AI operator experience",
       "adr": null,
-      "summary": "The local browser shell now prefers the daemon's trusted local token over stale remembered paired-device tokens, so a plain dev-browser load no longer bursts into temporary 401s before settling."
+      "summary": "Trusted-local shells now prefer the daemon's local token over stale remembered paired-device tokens, and the desktop shell no longer blocks Home/Apps on that token warm-up before the first protected loads begin."
     },
     {
       "id": "runtime-launch-trust",

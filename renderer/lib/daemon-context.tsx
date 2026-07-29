@@ -194,21 +194,31 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
       }
     });
 
-    // Auth bootstrap (Milestone H): grab the local token before any protected
-    // request or the WebSocket handshake. /health is open so it can go first.
+    // Auth bootstrap (Milestone H): warm the trusted-local token in the
+    // background, but do not block the shell on it. Protected REST calls can
+    // already self-refresh on a first 401, and the WS client can recover
+    // after a 1008 auth close. Keeping token bootstrap on the critical path
+    // made Home/Apps look stuck on "Loading..." even while /health was green.
     void (async () => {
       void refreshHealth();
       if (!getAuthToken()) {
-        try {
-          await bootstrapLocalToken();
-        } catch {
-          // Off-machine or daemon down — protected calls will surface the error.
-        }
+        void bootstrapLocalToken()
+          .then(() => {
+            if (cancelled) return;
+            // A successful warm-up deserves one clean second pass so a first
+            // unauthenticated fetch doesn't leave the shell in a stale/error
+            // state until some unrelated later event happens.
+            void refreshProjects();
+            void refreshProfile();
+          })
+          .catch(() => {
+            // Off-machine or daemon down — protected calls will surface the error.
+          });
       }
       if (cancelled) return;
+      ws.start();
       void refreshProjects();
       void refreshProfile();
-      ws.start();
     })();
 
     return () => {

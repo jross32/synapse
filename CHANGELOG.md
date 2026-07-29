@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.79] -- 2026-07-29
+
+### Fixed
+- **Desktop startup no longer blocks the whole shell on trusted-local auth bootstrap.** In the
+  renderer's `DaemonProvider`, `/health` still starts immediately, but the desktop shell no longer
+  waits for `/api/v1/auth/local-token` before it kicks off `/projects`, `/profile`, and the main
+  WebSocket. Local-token bootstrap is now an opportunistic background warm-up instead of a hard
+  startup gate, which lets the existing REST `401 -> tryRefreshLocalToken()` retry path and the WS
+  `1008 -> tryRefreshLocalToken()` recovery path do their jobs without leaving Home/Apps stuck on
+  global loading states when the trusted-local token call is slow. A successful background bootstrap
+  now also triggers one clean second-pass refresh for projects/profile, and Home shows a real retryable
+  project-load error instead of a false "no projects yet" empty state if that first protected load fails.
+
+### Notes
+- Verification: `npm run typecheck`; fresh `synapse.cmd` relaunch under Electron renderer inspection
+  reached a live Home shell immediately, then settled the slower operator cards normally; click-through
+  proof reached the Apps page on the same relaunch; full daemon suite `689 passed, 14 skipped, 2 warnings`
+  in `598.33s`.
+
+
 ## [0.1.78] -- 2026-07-29
 
 ### Added
@@ -3083,6 +3103,7 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
+
 
 
 

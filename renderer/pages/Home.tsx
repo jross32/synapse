@@ -42,8 +42,10 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
   const {
     projects,
     projectsLoaded,
+    projectsError,
     recentEvents,
     health,
+    refreshProjects,
     subscribeRaw,
     upsertProjectLocal,
   } = useDaemon();
@@ -171,7 +173,19 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
         }
       />
 
-      {!projectsLoaded ? (
+      {projectsError ? (
+        <Card className='border-dashed p-10 text-center'>
+          <h2 className='text-lg font-semibold'>Couldn&apos;t load your projects</h2>
+          <p role='alert' className='mx-auto mt-2 max-w-md text-sm text-destructive'>
+            {projectsError}
+          </p>
+          <div className='mt-4 flex justify-center'>
+            <Button variant='outline' onClick={() => void refreshProjects()}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : !projectsLoaded ? (
         <Card className='flex items-center justify-center gap-2 border-dashed p-10 text-center text-sm text-muted-foreground'>
           <Loader2 className='h-4 w-4 animate-spin' /> Loading your projects…
         </Card>
