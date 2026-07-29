@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.69] -- 2026-07-17
+
+### Fixed
+- **Coder Workspace thread rail showed a false "No threads yet" during the initial load (UI/UX audit,
+  Contract #13).** `threadsByProject` starts `{}` and `refreshThreads` only batch-populates it after all
+  per-project `listProjectCoderThreads` calls resolve, so on first mount every project rendered the
+  empty copy "No threads yet. Start one from this project." while the fetch was still in flight —
+  loading indistinguishable from genuinely empty. Added a `threadsLoaded` flag (false until the first
+  `refreshThreads` settles, set in a `finally` so it flips even on error) threaded into
+  `ProjectThreadRail`; each project now shows a "Loading threads…" spinner while unloaded and the empty
+  copy only after the fetch completes. Playwright-verified against the running renderer (with the
+  coder-threads fetch delayed): during load the rail shows "Loading threads…" with a per-project spinner
+  and no "No threads yet"; after load it resolves to the thread list or the genuine empty state. tsc 0
+  errors.
+
 ## [0.1.68] -- 2026-07-17
 
 ### Fixed

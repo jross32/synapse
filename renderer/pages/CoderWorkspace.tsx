@@ -201,6 +201,8 @@ export function CoderWorkspacePage({
 }: CoderWorkspacePageProps): JSX.Element {
   const { projects, recentEvents } = useDaemon();
   const [threadsByProject, setThreadsByProject] = useState<Record<string, CoderThreadSummary[]>>({});
+  // Distinguish "still loading the thread lists" from "loaded, genuinely no threads" (Contract #13).
+  const [threadsLoaded, setThreadsLoaded] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CoderThreadDetail | null>(null);
@@ -301,13 +303,19 @@ export function CoderWorkspacePage({
   }, []);
 
   const refreshThreads = useCallback(async () => {
-    const entries = await Promise.all(
-      sortedProjects.map(async (project) => {
-        const threads = await listProjectCoderThreads(project.id);
-        return [project.id, threads] as const;
-      })
-    );
-    setThreadsByProject(Object.fromEntries(entries));
+    try {
+      const entries = await Promise.all(
+        sortedProjects.map(async (project) => {
+          const threads = await listProjectCoderThreads(project.id);
+          return [project.id, threads] as const;
+        })
+      );
+      setThreadsByProject(Object.fromEntries(entries));
+    } finally {
+      // Mark loaded whether the fetch succeeded or threw, so the rail stops showing a
+      // spinner and either renders threads or the genuine "No threads yet" empty state.
+      setThreadsLoaded(true);
+    }
   }, [sortedProjects]);
 
   const refreshThreadState = useCallback(async (threadId: string) => {
@@ -630,6 +638,7 @@ export function CoderWorkspacePage({
           <ProjectThreadRail
             projects={visibleProjects}
             threadsByProject={threadsByProject}
+            threadsLoaded={threadsLoaded}
             selectedProjectId={selectedProjectId}
             selectedThreadId={selectedThreadId}
             search={search}
@@ -850,6 +859,7 @@ export function CoderWorkspacePage({
         <ProjectThreadRail
           projects={visibleProjects}
           threadsByProject={threadsByProject}
+          threadsLoaded={threadsLoaded}
           selectedProjectId={selectedProjectId}
           selectedThreadId={selectedThreadId}
           search={search}
@@ -961,6 +971,7 @@ function EmptyWorkspace({
 function ProjectThreadRail({
   projects,
   threadsByProject,
+  threadsLoaded,
   selectedProjectId,
   selectedThreadId,
   search,
@@ -977,6 +988,7 @@ function ProjectThreadRail({
 }: {
   projects: Array<{ id: string; name: string; path: string }>;
   threadsByProject: Record<string, CoderThreadSummary[]>;
+  threadsLoaded: boolean;
   selectedProjectId: string | null;
   selectedThreadId: string | null;
   search: string;
@@ -1050,7 +1062,11 @@ function ProjectThreadRail({
                     <MessageSquarePlus className='h-4 w-4' />
                   </Button>
                 </div>
-                {threads.length === 0 ? (
+                {!threadsLoaded ? (
+                  <p className='flex items-center gap-2 px-3 pb-3 text-xs text-muted-foreground'>
+                    <Loader2 className='h-3.5 w-3.5 animate-spin' /> Loading threads…
+                  </p>
+                ) : threads.length === 0 ? (
                   <p className='px-3 pb-3 text-xs text-muted-foreground'>
                     No threads yet. Start one from this project.
                   </p>
