@@ -12,10 +12,11 @@ delivers the numbering + overlap gate independently for pre-commit use.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from . import coordination as coord
@@ -46,20 +47,69 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
 
     # -- presence -------------------------------------------------------------
 
+    async def _mcp_all_connected(request: Request) -> bool:
+        """Best-effort: are all *enabled* MCP servers available to a new AI session?
+
+        STDIO servers count as available (the AI launches them on demand); HTTP servers
+        must be CONNECTED. Any probe failure -- or a bare test app with no mcp_manager --
+        defaults to True so we never report a degraded connection on bad information.
+        """
+        manager = getattr(request.app.state, "mcp_manager", None)
+        if manager is None:
+            return True
+        try:
+            from . import mcp_servers as _mcp
+
+            servers = [s for s in _mcp.list_servers(storage.conn) if s.enabled]
+
+            async def _probe() -> bool:
+                for server in servers:
+                    status, _detail = await manager.status(server)
+                    if status not in (_mcp.McpServerStatus.CONNECTED, _mcp.McpServerStatus.STDIO_READY):
+                        return False
+                return True
+
+            return await asyncio.wait_for(_probe(), timeout=3.0)
+        except Exception:  # noqa: BLE001 -- a probe failure must never fail registration
+            return True
+
     @router.post("/sessions", response_model=coord.AgentSession)
-    async def register_session(payload: coord.AgentSessionRegister) -> coord.AgentSession:
+    async def register_session(
+        payload: coord.AgentSessionRegister, request: Request
+    ) -> coord.AgentSession:
+        mcp_ok = await _mcp_all_connected(request)
         with storage.transaction() as conn:
-            session = coord.register_session(conn, payload)
+            session = coord.register_session(conn, payload, mcp_all_connected=mcp_ok)
             audit(
                 conn,
                 AuditRecord(
                     entity_type="agent_session",
                     entity_id=session.id,
                     action="coordination.register",
-                    details={"runtime_id": session.runtime_id, "project_id": session.project_id},
+                    details={
+                        "runtime_id": session.runtime_id,
+                        "project_id": session.project_id,
+                        "seq": session.seq,
+                        "connection_level": session.connection_level,
+                        "connection_code": session.connection_code,
+                    },
                 ),
             )
-        await _emit("session_registered", {"session_id": session.id, "project_id": session.project_id})
+        # The "an AI connected" signal (ADR-0028): the notification projector + Live View
+        # key off this enriched payload.
+        await _emit(
+            "session_registered",
+            {
+                "session_id": session.id,
+                "project_id": session.project_id,
+                "seq": session.seq,
+                "runtime_id": session.runtime_id,
+                "agent_label": session.agent_label,
+                "task": session.task,
+                "connection_level": session.connection_level,
+                "connection_code": session.connection_code,
+            },
+        )
         return session
 
     @router.post("/sessions/{session_id}/heartbeat", response_model=coord.AgentSession)

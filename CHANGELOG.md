@@ -10,6 +10,22 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.83] -- 2026-07-29
+
+### Added
+- **Session numbers + graded connections for AI sessions (ADR-0028, PLAN 5 Phase 1 step 2).** When an AI
+  registers a coordination session, it now gets:
+  - a monotonic operator-facing **session number** (`seq` — #001, #002, …; migration `027_session_connection`
+    backfills existing sessions by registration order and adds a unique index), and
+  - a stored **connection grade** (`connection_level` green/yellow/red + `connection_code`), computed at
+    register time via `connection_codes.classify()` — `has_project` from the payload, `mcp_all_connected`
+    probed best-effort by the route from the live MCP manager (STDIO servers count available; HTTP must be
+    CONNECTED; any probe failure or a bare test app defaults to available so registration is never wrongly
+    degraded, guarded by a 3s timeout).
+  The register route's audit row and the **`v1.coordination.session_registered` event are enriched** with
+  `seq`, `runtime_id`, `agent_label`, `task`, `connection_level`, `connection_code` — this is the "an AI
+  connected" signal the notification projector + Live View key off. 5 new tests (`test_coordination`).
+
 ## [0.1.82] -- 2026-07-29
 
 ### Added

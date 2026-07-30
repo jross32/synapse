@@ -38,6 +38,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from . import connection_codes
 from .errors import invalid, not_found
 from .time_utils import from_iso, to_iso, utc_now
 
@@ -73,6 +74,9 @@ class FileLaneStatus(str, Enum):
 
 class AgentSession(BaseModel):
     id: str
+    # Human-friendly monotonic session number (#001, #002, ...) -- ADR-0028. Stable per
+    # install; the operator-facing identity for "which AI run was this".
+    seq: int = 0
     project_id: str | None = None
     runtime_id: str = ""
     agent_label: str = ""
@@ -80,6 +84,10 @@ class AgentSession(BaseModel):
     task: str = ""
     status: AgentSessionStatus = AgentSessionStatus.ACTIVE
     last_intent: str = ""
+    # Connection classification at register time (connection_codes.py):
+    # green = full control, yellow = degraded, red = failed.
+    connection_level: str = "green"
+    connection_code: str = "ok"
     registered_at: datetime
     last_heartbeat_at: datetime
     ended_at: datetime | None = None
@@ -216,6 +224,7 @@ def _row_to_session(row: sqlite3.Row, *, now: datetime | None = None) -> AgentSe
     stale = (ref - last_hb) > timedelta(seconds=SESSION_STALE_SECONDS)
     return AgentSession(
         id=row["id"],
+        seq=int(row["seq"] or 0),
         project_id=row["project_id"],
         runtime_id=row["runtime_id"] or "",
         agent_label=row["agent_label"] or "",
@@ -223,6 +232,8 @@ def _row_to_session(row: sqlite3.Row, *, now: datetime | None = None) -> AgentSe
         task=row["task"] or "",
         status=AgentSessionStatus(row["status"]),
         last_intent=row["last_intent"] or "",
+        connection_level=row["connection_level"] or "green",
+        connection_code=row["connection_code"] or "ok",
         registered_at=from_iso(row["registered_at"]),
         last_heartbeat_at=last_hb,
         ended_at=from_iso(row["ended_at"]) if row["ended_at"] else None,
@@ -250,22 +261,39 @@ def _row_to_lane(row: sqlite3.Row) -> FileLane:
 # -- Presence CRUD ------------------------------------------------------------
 
 
-def register_session(conn: sqlite3.Connection, payload: AgentSessionRegister) -> AgentSession:
+def register_session(
+    conn: sqlite3.Connection,
+    payload: AgentSessionRegister,
+    *,
+    mcp_all_connected: bool = True,
+) -> AgentSession:
     now = to_iso(utc_now())
     session_id = _new_id()
+    # Monotonic operator-facing session number (#001, #002, ...) -- ADR-0028.
+    seq = int(conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM agent_sessions").fetchone()[0])
+    # Grade the connection so the operator sees green/yellow/red at a glance. The caller
+    # (route) supplies the mcp signal best-effort; has_project comes from the payload.
+    grade = connection_codes.classify(
+        mcp_all_connected=mcp_all_connected,
+        has_project=bool((payload.project_id or "").strip()),
+    )
     conn.execute(
         "INSERT INTO agent_sessions "
-        "(id, project_id, runtime_id, agent_label, coder_thread_id, task, status, "
-        " last_intent, registered_at, last_heartbeat_at, ended_at, metadata_json) "
-        "VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, NULL, '{}')",
+        "(id, seq, project_id, runtime_id, agent_label, coder_thread_id, task, status, "
+        " last_intent, connection_level, connection_code, registered_at, last_heartbeat_at, "
+        " ended_at, metadata_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, NULL, '{}')",
         (
             session_id,
+            seq,
             payload.project_id,
             payload.runtime_id.strip(),
             payload.agent_label.strip(),
             payload.coder_thread_id,
             payload.task.strip(),
             payload.last_intent.strip(),
+            grade.level.value,
+            grade.code,
             now,
             now,
         ),

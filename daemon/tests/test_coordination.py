@@ -363,3 +363,56 @@ def test_router_next_numbers_and_overlap_and_invalid(tmp_path: Path) -> None:
     # Empty globs -> 422 invalid envelope.
     bad = client.post("/api/v1/coordination/lanes", json={"session_id": sid, "path_globs": []})
     assert bad.status_code == 422
+
+
+# -- session identity + connection grade (ADR-0028) ---------------------------
+
+def test_session_seq_is_monotonic(tmp_path: Path) -> None:
+    s = _storage(tmp_path)
+    with s.transaction() as conn:
+        a = _register(conn, runtime_id="claude")
+        b = _register(conn, runtime_id="codex")
+        c = _register(conn, runtime_id="copilot")
+    assert (a.seq, b.seq, c.seq) == (1, 2, 3)
+
+
+def test_register_grades_green_with_project(tmp_path: Path) -> None:
+    s = _storage(tmp_path)
+    with s.transaction() as conn:
+        create_project(conn, Project(id="p1", name="P1", path=str(tmp_path), launch_cmd="echo"))
+        sess = _register(conn, runtime_id="claude", project_id="p1")
+    assert sess.connection_level == "green"
+    assert sess.connection_code == "ok"
+
+
+def test_register_grades_yellow_without_project(tmp_path: Path) -> None:
+    s = _storage(tmp_path)
+    with s.transaction() as conn:
+        sess = _register(conn, runtime_id="claude")
+    assert sess.connection_level == "yellow"
+    assert sess.connection_code == "degraded.no_project"
+
+
+def test_register_grades_mcp_unavailable_first(tmp_path: Path) -> None:
+    # An offline MCP server outranks the missing-project note (most-severe-first).
+    s = _storage(tmp_path)
+    with s.transaction() as conn:
+        sess = coord.register_session(
+            conn, coord.AgentSessionRegister(runtime_id="claude"), mcp_all_connected=False
+        )
+    assert sess.connection_level == "yellow"
+    assert sess.connection_code == "degraded.mcp_unavailable"
+
+
+def test_router_register_returns_seq_and_connection(tmp_path: Path) -> None:
+    client = _client(_storage(tmp_path))
+    r = client.post("/api/v1/coordination/sessions", json={"runtime_id": "claude", "agent_label": "Claude"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["seq"] == 1
+    # Bare test app has no mcp_manager -> mcp defaults available; no project -> yellow.
+    assert body["connection_level"] == "yellow"
+    assert body["connection_code"] == "degraded.no_project"
+    # A second registration gets the next number.
+    r2 = client.post("/api/v1/coordination/sessions", json={"runtime_id": "codex"})
+    assert r2.json()["seq"] == 2
