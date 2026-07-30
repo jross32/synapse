@@ -25,7 +25,7 @@ Every commit must append an entry under the in-progress version header.
   New `routes_activity.py`: `GET /api/v1/activity/notifications?unread=&limit=` (+`unread_count`),
   `POST .../{id}/read`, `POST .../read-all`, `GET /activity/sessions` (full #-numbered history, newest
   first — via new `coordination.list_all_sessions`), `GET /activity/sessions/{id}` (session + its
-  project's squads/work-items + real token rollups + its notifications). 9 tests incl. a live
+  project's squads/work-items + real token rollups + its notifications). 8 tests incl. a live
   end-to-end: registering a coordination session produces the "Session #001 … connected" notification
   through the real bus→projector→feed chain. Next: the Notification Center UI (bell + list + detail).
 
