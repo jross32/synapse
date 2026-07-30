@@ -77,6 +77,25 @@ def test_summary_flags_reachable_accounts_backend(tmp_path: Path) -> None:
     assert "google" in summary.available_auth_providers
 
 
+def test_state_row_creation_is_race_safe(tmp_path: Path) -> None:
+    # Regression: profile_state is a singleton (id=1). A duplicate creation -- from a
+    # concurrent caller or a stale read snapshot that missed the row -- must NOT raise
+    # "UNIQUE constraint failed: profile_state.id"; the fix uses INSERT OR IGNORE.
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    manager = ProfileManager(storage, accounts_client=_UnreachableAccounts())
+    row = manager._state_row()  # creates the singleton
+    assert row is not None
+    # A second singleton insert (what the racing path does) is a no-op, not an error.
+    with storage.transaction() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO profile_state (id, sync_enabled, provider_identities_json, "
+            "preferences_json, created_at, updated_at) VALUES (1, 0, '[]', '{}', '', '')"
+        )
+    assert storage.conn.execute("SELECT COUNT(*) FROM profile_state").fetchone()[0] == 1
+
+
 def test_profile_config_patch_persists_local_sync_setting(tmp_path: Path) -> None:
     client, _, _ = _harness(tmp_path)
     with client as c:

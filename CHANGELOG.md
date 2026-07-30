@@ -10,6 +10,16 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.80] -- 2026-07-29
+
+### Fixed
+- **`profile._state_row()` could raise `UNIQUE constraint failed: profile_state.id`.** The singleton
+  `profile_state` row (id=1) was created with a check-then-`INSERT`: a concurrent caller — or a stale read
+  snapshot that missed the existing row — would try to insert id=1 a second time and crash the profile read
+  (seen in the daemon log). Changed to `INSERT OR IGNORE` so the duplicate creation is a no-op; the row
+  exists either way. Added `test_state_row_creation_is_race_safe`. (Diagnosed while restoring a wedged daemon
+  that left the desktop stuck on "loading" — the restart itself was clean; this removes the latent state bug.)
+
 ## [0.1.79] -- 2026-07-29
 
 ### Fixed

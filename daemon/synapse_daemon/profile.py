@@ -1131,9 +1131,12 @@ class ProfileManager:
             return row
         now = _now_iso()
         with self._storage.transaction() as conn:
+            # INSERT OR IGNORE so a concurrent caller that already created the singleton
+            # row (or a stale read snapshot that missed it) can't raise
+            # "UNIQUE constraint failed: profile_state.id" -- the row exists either way.
             conn.execute(
                 """
-                INSERT INTO profile_state (
+                INSERT OR IGNORE INTO profile_state (
                     id,
                     sync_enabled,
                     provider_identities_json,
