@@ -61,6 +61,7 @@ from .routes_assistant import build_assistant_router
 from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
+from .routes_activity import build_activity_router
 from .routes_capture import build_capture_router
 from .routes_coordination import build_coordination_router
 from .routes_token_ledger import build_token_ledger_router
@@ -367,6 +368,13 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    # AI-activity notifications + session history -- the Notification Center /
+    # Live View read surface (ADR-0028).
+    app.include_router(
+        build_activity_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
     # MCP-server marketplace + manager (ADR-0017 MW2).
     mcp_manager = McpServerManager()
     app.state.mcp_manager = mcp_manager
@@ -508,6 +516,11 @@ def build_app(
     async def _subscribe_agent_events() -> None:
         await subscribe_agent_squad_events(storage, bus)
         await subscribe_ai_case_events(storage, bus)
+        # Event -> notification projector (ADR-0028): milestones an AI hits while
+        # driving Synapse become rows the Notification Center renders.
+        from .activity import subscribe_activity_projector
+
+        await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
 
     # Serve the phone-facing Web UI. Prefer the built React renderer (the

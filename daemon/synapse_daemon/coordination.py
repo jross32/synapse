@@ -363,6 +363,17 @@ def list_sessions(
     return sessions
 
 
+def list_all_sessions(conn: sqlite3.Connection) -> list[AgentSession]:
+    """Every session ever registered (any project, incl. gone), newest number first.
+
+    The activity / Live View history view (ADR-0028) -- unlike :func:`list_sessions`,
+    which scopes to one project and hides gone sessions for the presence snapshot.
+    """
+    now = utc_now()
+    rows = conn.execute("SELECT * FROM agent_sessions ORDER BY seq DESC, registered_at DESC").fetchall()
+    return [_row_to_session(row, now=now) for row in rows]
+
+
 def expire_stale_sessions(conn: sqlite3.Connection) -> int:
     """Mark sessions with no recent heartbeat as ``gone`` and expire their active
     lanes. Returns the count expired. Safe to call on every heartbeat/snapshot."""
