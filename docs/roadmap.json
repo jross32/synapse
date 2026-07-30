@@ -8,7 +8,7 @@
       "status": "in_progress",
       "phase": "Quality",
       "adr": "ADR-0023",
-      "summary": "Before and after meaningful work, the AI consults a small panel of expert reviewers (2-10, by task size) and synthesizes their feedback — so it doesn't work alone. Ships as a launchable workflow + discipline; a native council engine is a later step."
+      "summary": "Before and after meaningful work, the AI consults a small panel of expert reviewers (2-10, by task size) and synthesizes their feedback \u2014 so it doesn't work alone. Ships as a launchable workflow + discipline; a native council engine is a later step."
     },
     {
       "id": "local-llm",
@@ -16,7 +16,7 @@
       "status": "shipped",
       "phase": "Local LLM",
       "adr": "ADR-0014",
-      "summary": "A private, on-device LLM (Ollama) you can chat with about your projects and Synapse itself — off by default."
+      "summary": "A private, on-device LLM (Ollama) you can chat with about your projects and Synapse itself \u2014 off by default."
     },
     {
       "id": "model-marketplace",
@@ -32,7 +32,7 @@
       "status": "shipped",
       "phase": "Voice",
       "adr": "ADR-0015",
-      "summary": "Dictate into the command pad + the assistant — great on the phone."
+      "summary": "Dictate into the command pad + the assistant \u2014 great on the phone."
     },
     {
       "id": "review-inbox",
@@ -40,7 +40,7 @@
       "status": "shipped",
       "phase": "Remote cockpit",
       "adr": "ADR-0016",
-      "summary": "Approve, revise, or reject what your AI workforce hands back — from your desk or your phone."
+      "summary": "Approve, revise, or reject what your AI workforce hands back \u2014 from your desk or your phone."
     },
     {
       "id": "capture",
@@ -88,7 +88,7 @@
       "status": "in_progress",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0019",
-      "summary": "This page — see what shipped and what's coming, as a path."
+      "summary": "This page \u2014 see what shipped and what's coming, as a path."
     },
     {
       "id": "workers-personalities",
@@ -96,7 +96,7 @@
       "status": "in_progress",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0018",
-      "summary": "Download workers as a role + a personality — two AIs can share a role but differ in personality, so they collaborate and debate."
+      "summary": "Download workers as a role + a personality \u2014 two AIs can share a role but differ in personality, so they collaborate and debate."
     },
     {
       "id": "ai-bundles",
@@ -216,7 +216,7 @@
       "status": "coming",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0018",
-      "summary": "Pick a team for a goal — a UI/UX crew, an SEO sweep, a scraping pipeline, a security review — in one tap."
+      "summary": "Pick a team for a goal \u2014 a UI/UX crew, an SEO sweep, a scraping pipeline, a security review \u2014 in one tap."
     },
     {
       "id": "publishing",
@@ -256,7 +256,7 @@
       "status": "coming",
       "phase": "AI-coding power",
       "adr": "ADR-0020",
-      "summary": "Before a big change, the AI shows a few cheap mockups (e.g. 3 nav-bar options) side by side — you pick, then it builds the one you chose."
+      "summary": "Before a big change, the AI shows a few cheap mockups (e.g. 3 nav-bar options) side by side \u2014 you pick, then it builds the one you chose."
     },
     {
       "id": "live-preview",
@@ -297,6 +297,30 @@
       "phase": "Voice",
       "adr": "ADR-0015",
       "summary": "A downloadable local Whisper model for private, offline speech recognition."
+    },
+    {
+      "id": "ai-activity-live-view",
+      "title": "AI Activity: connection status, session #s, Notification Center + Live View",
+      "status": "in_progress",
+      "phase": "PLAN 5",
+      "adr": "ADR-0028",
+      "summary": "See when an AI connects (green/yellow/red + error codes), track each run as session #001..., a global notification center with rich detail + jump-to links + token usage, and a Live View tab to watch each AI work live with an app preview."
+    },
+    {
+      "id": "one-window-ui-standard",
+      "title": "One-window UI standard (inner-scroll panels, styled scrollbars)",
+      "status": "in_progress",
+      "phase": "PLAN 5",
+      "adr": "ADR-0028",
+      "summary": "New surfaces are a fixed-height shell whose inner panels scroll (not the page), with professional scrollbars. Live View pilots it; Apps + AI Coding refactor to it."
+    },
+    {
+      "id": "docs-sync-gate",
+      "title": "Docs-sync CI gate",
+      "status": "shipped",
+      "phase": "PLAN 5",
+      "adr": "ADR-0028",
+      "summary": "scripts/docs_sync_check.py + pytest tests enforce version-file agreement, a CHANGELOG entry, and a current README on every commit/push."
     }
   ]
 }

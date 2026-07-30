@@ -10,6 +10,22 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.81] -- 2026-07-29
+
+### Added
+- **Docs-sync gate + the plan, in-repo (ADR-0028).** Three owner directives, made durable:
+  - **Docs-sync is enforced.** `scripts/docs_sync_check.py` fails a commit if the three version files
+    disagree, if `CHANGELOG.md` lacks a `## [<version>]` entry, or if `README.md` doesn't name the current
+    version. Mirrored as `test_version_consistency` pytest tests so CI enforces it on every push, and added
+    to the `AGENTS.md` pre-commit ritual. (It immediately caught that v0.1.80 left the README at 0.1.79.)
+  - **The plan lives in the repo.** ADR-0028 + `docs/roadmap.json` entries capture the AI Activity feature
+    (connection status, session #s, notification center, Live View) so any AI — Claude, **Codex**, Copilot —
+    codes to the same plan, not one AI's private notes. `AGENTS.md` now points every AI at the in-repo plan.
+  - **One-window UI standard.** A binding frontend convention in `AGENTS.md`: new surfaces are a fixed-height
+    shell whose *inner* panels scroll (never the page), with styled professional scrollbars; Apps + AI Coding
+    refactor to it, and the upcoming Live View pilots it.
+- Verified: `docs_sync_check.py` passes at 0.1.81; the new tests pass; README/PROGRESS/roadmap synced.
+
 ## [0.1.80] -- 2026-07-29
 
 ### Fixed

@@ -40,3 +40,22 @@ def test_version_files_agree() -> None:
         "version-file drift -- run scripts/version-bump.ps1 to sync all three: "
         f"__init__.py={init_v!r}, package.json={pkg_v!r}, pyproject.toml={pyproject_v!r}"
     )
+
+
+def test_changelog_has_current_version_entry() -> None:
+    # Docs-sync gate (ADR-0028): every version bump must carry a CHANGELOG entry. Mirrors
+    # scripts/docs_sync_check.py so CI (pytest) enforces it on every push.
+    version = _init_version()
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert f"## [{version}]" in changelog, (
+        f"CHANGELOG.md has no `## [{version}]` entry -- describe what this version changed."
+    )
+
+
+def test_readme_names_current_version() -> None:
+    # Keep the public front page from lagging the release (owner directive; docs-sync gate).
+    version = _init_version()
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert version in readme, (
+        f"README.md does not mention the current version ({version}) -- update the status line."
+    )

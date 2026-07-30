@@ -42,5 +42,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Docs-sync gate (versions agree + CHANGELOG + README current)
+        run: python scripts/docs_sync_check.py
+
       - name: Run pytest
         run: pytest -q

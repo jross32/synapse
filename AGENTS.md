@@ -1,6 +1,6 @@
 # AGENTS.md — Synapse
 
-Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`PROGRESS.md`](./PROGRESS.md) first to know where the project is.
+Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`PROGRESS.md`](./PROGRESS.md) first to know where the project is. **The current active plan lives in-repo** — see the latest ADRs in [`docs/adr/`](./docs/adr/) (e.g. ADR-0028) + [`docs/roadmap.json`](./docs/roadmap.json). The plan is here, in the repo, on purpose: every AI (Claude, Codex, Copilot) codes to the same plan, not to one AI's private notes.
 
 > **More than one AI works this repo, sometimes concurrently.** If another
 > agent may be editing right now, read [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md)
@@ -156,6 +156,18 @@ Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings.
 
 ---
 
+## Frontend UI standard — one window (ADR-0028)
+
+Build every new surface as a **fixed-height shell whose inner panels scroll, not the page.** Model it on Claude / Claude-Code's split layout.
+
+- **The page body never scrolls.** The route root is `h-full min-h-0 flex` (or grid). Each region — left rail, main area, any right-side panel — is its own scroll container: `min-h-0 overflow-y-auto`. No `overflow` on the outer page; nothing makes the whole page taller than the viewport.
+- **Right-side panels (Plan / Files / Diff / Terminal / Preview) open and close** — they're absent when unused, not always-on dead space.
+- **Styled scrollbars, never the OS default.** Use the shared `.scrollbar-thin` utility (theme-var `::-webkit-scrollbar` + Firefox `scrollbar-width`/`scrollbar-color`) on every inner scroll area.
+- Keep the 6-tier responsive rules + CSS-variable-only colors. Verify no page-body scroll (horizontal *or* vertical) at 375 / 1024 / 1280 / 2560.
+- **Apps** and **AI Coding** are the long-scroll offenders — refactor them to this pattern. New work sets the standard; old surfaces converge to it.
+
+---
+
 ## Commit rules (non-negotiable)
 
 1. **Every commit bumps a version** via `scripts/version-bump.ps1` (updates `package.json`, `pyproject.toml`, and `daemon/synapse_daemon/__init__.py` together).
@@ -219,9 +231,16 @@ made it.
 10. **Never force-push.** Never `reset --hard`. Never bypass hooks (`--no-verify`).
 11. **Commit AND push after every logical change** (a feature, a bug fix, a UI/UX change) — once it's green (typecheck + pytest per #9, plus the E2E pass per Rule #6 for code bumps). **Green then push.** Don't batch unrelated changes into one commit. Push frequency vs. concurrent-edit safety defers to [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md).
 
-### Docs-sync pre-flight (run mentally before every commit)
+### Docs-sync pre-flight (run before every commit)
 
-> Open `README.md` and `PROGRESS.md`. Does the **first 30 lines** of each still accurately describe the repo after my change? If no, edit them now.
+> **Hard gate — run `python scripts/docs_sync_check.py` before staging.** It fails if the three version
+> files disagree, if `CHANGELOG.md` has no `## [<version>]` entry for the current version, or if
+> `README.md` doesn't name the current version. CI runs the same checks (as `test_version_consistency`
+> tests), so a stale-docs commit is caught either way (ADR-0028).
+
+> Then, by judgement: open `README.md` and `PROGRESS.md`. Does the **first 30 lines** of each still
+> accurately describe the repo + its **capabilities** after my change? Keep the README current with what
+> the app can now do — not just the version number. If no, edit them now.
 
 If a commit ever ships with a stale README header, that's a regression — open a follow-up commit immediately.
 

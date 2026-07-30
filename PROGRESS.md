@@ -6,9 +6,9 @@
 
 ## Current version
 
-`0.1.79`
+`0.1.81`
 
-> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.79`
+> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.81`
 > landed a large UI/UX + reliability wave — an 8-fix UI/UX audit (`0.1.52`–`0.1.59`), a run of verified
 > daemon bug-fixes (bug-hunt scoring under-count, benchmark efficiency-frontier zero-value Pareto
 > inversion, a quality-gate PASS clobbering a human waiver — each with regression tests), several
@@ -18,12 +18,14 @@
 > slice (`0.1.73`: Home attention + trust cards, `ai/health-report` latest review-pass summary,
 > roadmap/backlog entries for the remaining operator gaps). `0.1.74` added the task-oriented
 > AI-driving guide, `0.1.75` added the drive-capable MCP connector follow-up, `0.1.76` added
-> repo-health/policy templates, `0.1.77` fixed a local-browser auth-bootstrap bug where stale
-> remembered paired-device tokens could cause a burst of temporary `401`s before the full shell
-> recovered, `0.1.78` added the WAN auto-start Settings toggle, and `0.1.79` removed the desktop
-> shell's remaining startup gate on trusted-local token bootstrap so Home/Apps no longer sit in a
-> global loading state while `/auth/local-token` warms up. A fuller reconciliation of this wall to
-> `0.1.79` is a tracked follow-up.
+> repo-health/policy templates, `0.1.77` fixed a local-browser auth-bootstrap bug (stale paired-device
+> tokens caused a burst of temporary `401`s), `0.1.78` added the WAN auto-start Settings toggle, `0.1.79`
+> removed the desktop shell's remaining startup gate on trusted-local token bootstrap (Home/Apps no
+> longer sit in a global loading state while `/auth/local-token` warms up), `0.1.80` fixed a
+> `profile_state` singleton UNIQUE-constraint race, and `0.1.81` added a **docs-sync CI gate** plus
+> **ADR-0028** — the AI Activity (connections, notification center, Live View) plan + the one-window UI
+> standard, now durable in-repo so any AI codes to the same plan. A fuller reconciliation of this wall to
+> `0.1.81` is a tracked follow-up.
 
 ## Current milestone
 
