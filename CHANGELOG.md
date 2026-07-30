@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.82] -- 2026-07-29
+
+### Added
+- **Connection status codes for AI sessions (ADR-0028, PLAN 5 Phase 1, step 1).** New
+  `daemon/synapse_daemon/connection_codes.py`: a pure catalog + `classify()` that grades an AI's
+  connection as **green** (`ok` — full control), **yellow** (`degraded.mcp_unavailable` /
+  `degraded.no_project` — connected but a capability is offline), or **red** (`failed.internal`), each
+  with a stable machine code + a plain-language explanation + a remedy so degraded/failed connections are
+  self-diagnosing. This is the foundation the notification center renders and that sessions/`ai/context`
+  will report. 6 tests (`test_connection_codes`). Next: the session sequence number (#001…) + emitting
+  `v1.agent_session.connected` on register.
+
 ## [0.1.81] -- 2026-07-29
 
 ### Added
