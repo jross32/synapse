@@ -21,6 +21,20 @@ He also set two **standing directives** that this ADR codifies repo-wide:
 2. **One-window UI standard** is a binding frontend convention (recorded in `AGENTS.md` + `CLAUDE.md`): fixed-height shell, `min-h-0 overflow-y-auto` inner panes, a shared `.scrollbar-thin` utility (theme-var `::-webkit-scrollbar` + Firefox `scrollbar-*`), page body never scrolls. New UI is built this way; Apps + AI Coding are refactored to it.
 3. **Docs-sync is a hard gate.** `scripts/docs_sync_check.py` verifies the three version files agree, a `## [<version>]` CHANGELOG entry exists, and README names the current version. It runs in CI (mirrored as pytest tests) and is a required pre-commit step in `AGENTS.md`. Subjective freshness (README reflects *capabilities*, PROGRESS/roadmap narrative) stays in the PR-template checklist + the AGENTS.md docs-sync rule.
 
+## What shipped (Phases 0–6, v0.1.78 → v0.1.88)
+
+| Phase | Version | What landed |
+|---|---|---|
+| 0 | `0.1.78` | WAN auto-start toggle in Settings (finished ADR-0026). |
+| 1 | `0.1.82`–`0.1.83` | `connection_codes.py` (green/`ok`, yellow/`degraded.*`, red/`failed.*` + explanation + remedy); migration `027` adding `seq` (#001…) + `connection_level`/`connection_code` to `agent_sessions`; register grades the connection (MCP probed best-effort) and emits an enriched `session_registered` event. |
+| 2 | `0.1.84` | Migration `028` + `activity.py` — an event→notification **projector** over the daemon's own bus (session connected, squad created, work created/handed off, idea filed, project launched/errored, tool ran) writing truthful rows with token rollups + jump-to links; `routes_activity.py` (`/activity/notifications`, read, read-all, `/activity/sessions`, session detail). |
+| 3 | `0.1.85` | **Notification Center** — global bell + unread badge, dismissible list with status dots, detail with token usage + working jump-to links; `.scrollbar-thin` utility. |
+| 4 | `0.1.86` | **Live View** top-level hub — session rail + live timeline (persisted milestones + live events incl. the AI's terminal output); the reference implementation of the one-window standard. |
+| 5 | `0.1.87` | **Live app preview** — iframes the real running project (device widths, reload, logs, open-in-browser); **CSP `frame-src` fix** (see below). |
+| 6 | `0.1.88` | AI-facing: `ai_activity` block in `GET /ai/context`; sessions in `/coordination/snapshot` carry `seq` + grade; read-only MCP tools `synapse_list_sessions` + `synapse_recent_activity`; driver-guide section. |
+
+**Notable finding (Phase 5):** the preview iframe rendered *nothing* because the app's CSP (`default-src 'self'`, no `frame-src`) made Chrome refuse to frame the project. Types and tests passed; only driving the real UI caught it. Fixed with a **loopback-scoped** `frame-src` (Synapse-launched projects only). This is why the ADR's E2E-before-complete rule exists.
+
 ## Consequences
 
 - Every AI that opens the repo finds the plan here → Codex/Copilot code to the same plan as Claude.

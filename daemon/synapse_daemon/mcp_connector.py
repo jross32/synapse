@@ -82,6 +82,22 @@ def _tool_specs() -> list[dict[str, Any]]:
             "description": "List Agent Squads (multi-AI teams) and their high-level state.",
             "inputSchema": empty,
         },
+        {
+            "name": "synapse_list_sessions",
+            "description": (
+                "List AI sessions connected to Synapse -- each with its operator-facing number (#001...), "
+                "runtime, status, and green/yellow/red connection grade (ADR-0028)."
+            ),
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_recent_activity",
+            "description": (
+                "Recent AI-activity feed: what the AIs driving Synapse just did (sessions connecting, "
+                "squads created, work handed off, ideas filed to the review inbox)."
+            ),
+            "inputSchema": empty,
+        },
     ]
     if _writes_allowed():
         # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
@@ -181,6 +197,38 @@ def build_mcp_router(
             return [_quick_action_dict(a) for a in load_templates()]
         if name == "synapse_list_agent_squads":
             return [s.model_dump(mode="json") for s in squads.list_squads(storage.conn)]
+        if name == "synapse_list_sessions":
+            from . import coordination as _coordination
+
+            return [
+                {
+                    "seq": s.seq,
+                    "session_id": s.id,
+                    "runtime_id": s.runtime_id,
+                    "agent_label": s.agent_label,
+                    "task": s.task,
+                    "status": s.status.value,
+                    "stale": s.stale,
+                    "connection_level": s.connection_level,
+                    "connection_code": s.connection_code,
+                    "project_id": s.project_id,
+                }
+                for s in _coordination.list_all_sessions(storage.conn)[:25]
+            ]
+        if name == "synapse_recent_activity":
+            from . import activity as _activity
+
+            return [
+                {
+                    "title": n.title,
+                    "kind": n.kind,
+                    "level": n.level,
+                    "seq": n.seq,
+                    "created_at": n.created_at.isoformat(),
+                    "body_md": n.body_md,
+                }
+                for n in _activity.list_notifications(storage.conn, limit=20)
+            ]
         if name == "synapse_get_project_records":
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown

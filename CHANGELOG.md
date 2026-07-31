@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.88] -- 2026-07-31
+
+### Added
+- **AI Activity is now AI-facing too — the feature is complete (ADR-0028, PLAN 5 Phase 6).** An AI driving
+  Synapse can see the same picture the operator sees:
+  - `GET /api/v1/ai/context` carries a new **`ai_activity`** block: the connected sessions (each with its
+    `#NNN` number, runtime/label/task, status, and green/yellow/red grade + code) and the last 10
+    notifications, plus a hint on how to register and read the feed.
+  - `GET /api/v1/coordination/snapshot` already returns full `AgentSession` objects, so every session there
+    now carries `seq` + `connection_level` + `connection_code` (from Phase 1).
+  - Two **read-only MCP tools** (always available, no writes flag): **`synapse_list_sessions`** (numbered
+    sessions with runtime/status/grade) and **`synapse_recent_activity`** (the recent feed) — so an MCP
+    client over the WAN tunnel can see who's connected and what just happened.
+  - `docs/DRIVE-SYNAPSE-FROM-AI.md` gained a **"Your session"** section: the grade table (register with a
+    `project_id` to come up green), what the operator sees, and how to read sessions/activity via REST + MCP.
+  - ADR-0028 records the full Phase 0–6 shipping table, including the CSP finding from Phase 5.
+
 ## [0.1.87] -- 2026-07-30
 
 ### Added

@@ -36,6 +36,36 @@ Always start here so you know what exists:
 - `GET /api/v1/coordination/snapshot` — who else (other AIs) is working + which files are claimed. Register
   yourself + claim a lane before editing shared files (see `AGENTS.md`).
 
+## 2b. Your session — you are visible, and that's the point (ADR-0028)
+
+When you register (`POST /api/v1/coordination/sessions`) Synapse gives you a **session number**
+(`seq` → shown to the operator as `#007`) and grades your connection:
+
+| level | code | means |
+|---|---|---|
+| 🟢 green | `ok` | you're connected with full control |
+| 🟡 yellow | `degraded.mcp_unavailable` | an enabled MCP server you may need is offline |
+| 🟡 yellow | `degraded.no_project` | you registered without a `project_id`, so project-scoped work is unavailable |
+| 🔴 red | `failed.internal` | registration failed |
+
+**Register with a `project_id` to come up green.** The register response carries your `seq`,
+`connection_level`, and `connection_code` — read them back to know how you look to the operator.
+
+The human sees this immediately: a **notification** ("Session #007 — Claude connected"), a bell badge, and
+a **Live** tab where they watch your milestones and terminal output stream in — plus a **Preview** of the
+running app you're building. So: use meaningful `agent_label` + `task` values on register, and file real
+progress (handoffs, proposals) — that's what shows up.
+
+Read the same picture yourself:
+
+```bash
+curl -s "$SYN/activity/sessions"        -H "X-Synapse-Token: $TOK"   # every session, #-numbered
+curl -s "$SYN/activity/notifications"   -H "X-Synapse-Token: $TOK"   # the operator's feed
+curl -s "$SYN/coordination/snapshot"    -H "X-Synapse-Token: $TOK"   # live peers + claimed file lanes
+```
+`GET /api/v1/ai/context` also carries an `ai_activity` block (connected sessions + the recent feed).
+Over MCP: `synapse_list_sessions` and `synapse_recent_activity` (read-only, always available).
+
 ## 3. Drive an AI squad (build / debug / review an app)
 
 A **squad** is a team of role-based AI workers. Canonical flow:

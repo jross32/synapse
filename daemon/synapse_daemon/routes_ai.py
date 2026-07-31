@@ -320,11 +320,51 @@ def build_ai_router(
                 }
             )
 
+        # AI activity (ADR-0028): who else is connected right now (with their #NNN
+        # session number + green/yellow/red connection grade) and the recent operator
+        # feed -- so an AI orienting itself knows its peers and what just happened.
+        from . import activity as _activity
+        from . import coordination as _coordination
+
+        ai_sessions = _coordination.list_all_sessions(storage.conn)
+        activity_block = {
+            "sessions": [
+                {
+                    "id": s.id,
+                    "seq": s.seq,
+                    "runtime_id": s.runtime_id,
+                    "agent_label": s.agent_label,
+                    "task": s.task,
+                    "status": s.status.value,
+                    "stale": s.stale,
+                    "connection_level": s.connection_level,
+                    "connection_code": s.connection_code,
+                    "project_id": s.project_id,
+                }
+                for s in ai_sessions[:15]
+            ],
+            "recent": [
+                {
+                    "title": n.title,
+                    "kind": n.kind,
+                    "level": n.level,
+                    "seq": n.seq,
+                    "created_at": n.created_at.isoformat(),
+                }
+                for n in _activity.list_notifications(storage.conn, limit=10)
+            ],
+            "hint": (
+                "Register yourself with POST /api/v1/coordination/sessions to get your own "
+                "session number + connection grade; read GET /api/v1/activity/notifications for the feed."
+            ),
+        }
+
         return {
             "schema": "synapse.ai.context/v1",
             "projects": projects,
             "tools": tools,
             "sessions": sessions,
+            "ai_activity": activity_block,
             "agent_squads": agent_squads,
             "ai_cases": ai_cases,
             "coder_threads": coder_threads,

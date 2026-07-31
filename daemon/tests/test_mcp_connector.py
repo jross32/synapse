@@ -219,3 +219,42 @@ def test_drive_capture_note(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
          "arguments": {"project_id": "demo-project", "content": "remember the /orders 500", "destination": "ai_context"}},
     )
     assert res.json()["result"]["isError"] is False, res.text
+
+
+# -- AI activity read tools (ADR-0028 Phase 6) --------------------------------
+
+def test_activity_read_tools_are_always_available(tmp_path: Path) -> None:
+    # These are READ tools -- available without SYNAPSE_MCP_ALLOW_WRITES.
+    client, token = _harness(tmp_path)
+    names = {t["name"] for t in _rpc(client, token, "tools/list").json()["result"]["tools"]}
+    assert {"synapse_list_sessions", "synapse_recent_activity"} <= names
+
+
+def test_list_sessions_returns_numbered_sessions(tmp_path: Path) -> None:
+    import json
+
+    client, token = _harness(tmp_path)
+    with client as c:
+        c.post("/api/v1/coordination/sessions", json={"runtime_id": "claude", "agent_label": "Claude"},
+               headers={"X-Synapse-Token": token})
+        res = _rpc(c, token, "tools/call", {"name": "synapse_list_sessions", "arguments": {}})
+        result = res.json()["result"]
+        assert result["isError"] is False, result
+        sessions = json.loads(result["content"][0]["text"])
+        assert sessions and sessions[0]["seq"] == 1
+        assert sessions[0]["runtime_id"] == "claude"
+        # The connection grade an AI can read about itself.
+        assert sessions[0]["connection_level"] in {"green", "yellow", "red"}
+        assert sessions[0]["connection_code"]
+
+
+def test_recent_activity_returns_the_feed(tmp_path: Path) -> None:
+    import json
+
+    client, token = _harness(tmp_path)
+    with client as c:
+        c.post("/api/v1/coordination/sessions", json={"runtime_id": "codex"},
+               headers={"X-Synapse-Token": token})
+        res = _rpc(c, token, "tools/call", {"name": "synapse_recent_activity", "arguments": {}})
+        rows = json.loads(res.json()["result"]["content"][0]["text"])
+        assert any(r["kind"] == "session.connected" for r in rows), rows
