@@ -6,9 +6,9 @@
 
 ## Current version
 
-`0.1.81`
+`0.1.88`
 
-> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.81`
+> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.88`
 > landed a large UI/UX + reliability wave — an 8-fix UI/UX audit (`0.1.52`–`0.1.59`), a run of verified
 > daemon bug-fixes (bug-hunt scoring under-count, benchmark efficiency-frontier zero-value Pareto
 > inversion, a quality-gate PASS clobbering a human waiver — each with regression tests), several
@@ -24,8 +24,13 @@
 > longer sit in a global loading state while `/auth/local-token` warms up), `0.1.80` fixed a
 > `profile_state` singleton UNIQUE-constraint race, and `0.1.81` added a **docs-sync CI gate** plus
 > **ADR-0028** — the AI Activity (connections, notification center, Live View) plan + the one-window UI
-> standard, now durable in-repo so any AI codes to the same plan. A fuller reconciliation of this wall to
-> `0.1.81` is a tracked follow-up.
+> standard, now durable in-repo so any AI codes to the same plan. **`0.1.82`–`0.1.88` shipped the whole
+> AI Activity feature (ADR-0028, Phases 1–6):** connection grading (green/yellow/red + explained codes),
+> session numbers (#001…), a persisted activity feed + `/activity` API driven by an event→notification
+> projector, the global **Notification Center**, the **Live View** tab (the one-window reference
+> implementation), a **live app preview** (+ a CSP `frame-src` fix found only by live verification), and
+> AI-facing access (`ai_activity` in `/ai/context` + read-only MCP tools). A fuller reconciliation of this
+> wall to `0.1.88` is a tracked follow-up.
 
 ## Current milestone
 

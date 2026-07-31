@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.89] -- 2026-07-31
+
+### Changed
+- **AI Activity (ADR-0028) marked complete — docs finalized.** ADR-0028 status is now
+  "accepted — Phases 0–6 shipped (v0.1.78–v0.1.88)" with the full shipping table; the
+  `ai-activity-live-view` and `one-window-ui-standard` roadmap items are **shipped**; `PROGRESS.md` records
+  the whole wave; and the README leads with what the feature actually gives you — see the moment an AI
+  connects (graded green/yellow/red with an explained code), a session number per run, a notification
+  center with token usage + jump-to links, and a **Live** tab to watch it work with a preview of the app
+  it's building. Feature summary: 7 versions (`0.1.82`–`0.1.88`), 2 migrations, 3 new daemon modules
+  (`connection_codes`, `activity`, `routes_activity`), 5 new renderer modules, 2 read-only MCP tools, and
+  ~25 new tests — every phase verified live against the running stack, not just typechecked.
+
 ## [0.1.88] -- 2026-07-31
 
 ### Added

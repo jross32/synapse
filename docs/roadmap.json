@@ -301,18 +301,18 @@
     {
       "id": "ai-activity-live-view",
       "title": "AI Activity: connection status, session #s, Notification Center + Live View",
-      "status": "in_progress",
+      "status": "shipped",
       "phase": "PLAN 5",
       "adr": "ADR-0028",
-      "summary": "See when an AI connects (green/yellow/red + error codes), track each run as session #001..., a global notification center with rich detail + jump-to links + token usage, and a Live View tab to watch each AI work live with an app preview."
+      "summary": "SHIPPED (v0.1.82-0.1.88): connection grading (green/yellow/red + codes), session numbers #001..., a persisted activity feed + /activity API, the global Notification Center, the Live View tab (one-window reference impl), a live app preview, and AI-facing access (ai/context ai_activity block + read-only MCP tools)."
     },
     {
       "id": "one-window-ui-standard",
       "title": "One-window UI standard (inner-scroll panels, styled scrollbars)",
-      "status": "in_progress",
+      "status": "shipped",
       "phase": "PLAN 5",
       "adr": "ADR-0028",
-      "summary": "New surfaces are a fixed-height shell whose inner panels scroll (not the page), with professional scrollbars. Live View pilots it; Apps + AI Coding refactor to it."
+      "summary": "SHIPPED: .scrollbar-thin utility + the Live View reference implementation (fixed-height shell, independently scrolling inner panes, page never scrolls). Apps + AI Coding still to converge."
     },
     {
       "id": "docs-sync-gate",

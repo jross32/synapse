@@ -1,6 +1,6 @@
 # ADR-0028: AI Activity (connections, notifications, Live View), the one-window UI standard, and docs-sync enforcement
 
-- **Status:** accepted (rolling — built in phases)
+- **Status:** accepted — Phases 0-6 shipped (v0.1.78-v0.1.88)
 - **Date:** 2026-07-29
 - **Deciders:** Justin (owner), Claude
 - **Related:** ADR-0024 (coordination sessions — the "connection" signal), ADR-0025 (review inbox — where AIs file bugs/ideas), ADR-0026 (WAN auto-start), ADR-0027 (AI-drivable Synapse), Contract #5 (durable WS replay), Contract #11 (audit log), the token ledger (per-work-item tokens).
