@@ -12,7 +12,7 @@
 //              including the AI's own terminal output.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Loader2, Radio, RefreshCw, Terminal } from 'lucide-react';
+import { Activity, Loader2, MonitorPlay, Radio, RefreshCw, Terminal } from 'lucide-react';
 
 import {
   getActivitySessionDetail,
@@ -25,6 +25,8 @@ import {
 import { useDaemon } from '@shared/daemon-context';
 import { formatLocal } from '@shared/format-time';
 import { cn } from '@shared/utils';
+import { AppPreview, previewUrl } from '../components/AppPreview';
+import { renderInlineBold } from '../components/InlineBold';
 import { Card } from '../components/ui/card';
 import { PageHeader } from '../components/PageHeader';
 
@@ -75,7 +77,8 @@ function notificationToEntry(n: ActivityNotification): TimelineEntry {
 }
 
 export function LiveViewPage(): JSX.Element {
-  const { subscribeRaw, connState } = useDaemon();
+  const { subscribeRaw, connState, projects } = useDaemon();
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [sessions, setSessions] = useState<ActivitySession[] | null>(null);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -174,6 +177,13 @@ export function LiveViewPage(): JSX.Element {
     () => sessions?.find((s) => s.id === selectedId) ?? null,
     [sessions, selectedId]
   );
+
+  // The app this session is working on -- previewable only while it's actually running.
+  const sessionProject = useMemo(
+    () => (selected?.project_id ? projects.find((p) => p.id === selected.project_id) ?? null : null),
+    [projects, selected]
+  );
+  const canPreview = previewUrl(sessionProject) !== null;
 
   const timeline = useMemo<TimelineEntry[]>(() => {
     const persisted = (detail?.notifications ?? []).map(notificationToEntry);
@@ -306,6 +316,21 @@ export function LiveViewPage(): JSX.Element {
                     <Activity className='h-3.5 w-3.5 animate-pulse' aria-hidden='true' /> live
                   </span>
                 )}
+                {canPreview && (
+                  <button
+                    type='button'
+                    onClick={() => setPreviewOpen((v) => !v)}
+                    aria-pressed={previewOpen}
+                    title={`Preview ${sessionProject?.name ?? 'the app'} while the AI builds it`}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary hover:text-foreground',
+                      previewOpen && 'border-primary text-foreground'
+                    )}
+                  >
+                    <MonitorPlay className='h-3.5 w-3.5' aria-hidden='true' />
+                    Preview
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -351,7 +376,7 @@ export function LiveViewPage(): JSX.Element {
                       </p>
                       {entry.detail && (
                         <p className='mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground'>
-                          {entry.detail}
+                          {renderInlineBold(entry.detail)}
                         </p>
                       )}
                     </div>
@@ -361,6 +386,13 @@ export function LiveViewPage(): JSX.Element {
             )}
           </div>
         </Card>
+
+        {/* Preview pane -- opens beside the timeline, closes away entirely (one-window). */}
+        {previewOpen && canPreview && sessionProject && (
+          <Card className='flex min-h-0 flex-col overflow-hidden p-0 lg:w-[28rem] xl:w-[34rem]'>
+            <AppPreview project={sessionProject} onClose={() => setPreviewOpen(false)} />
+          </Card>
+        )}
       </div>
     </div>
   );

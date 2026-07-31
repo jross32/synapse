@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.87] -- 2026-07-30
+
+### Added
+- **Live app preview — watch the app an AI is building, inside Live View (ADR-0028, PLAN 5 Phase 5).**
+  A **Preview** toggle appears on a session whose project is actually running; it opens a pane beside the
+  timeline that **iframes the live project URL** (`http://localhost:{expected_port}`). Because Synapse
+  launches real dev servers, this is the *real* app — full framework, real backend/data, and it updates as
+  the AI edits — which beats a sandboxed artifact snapshot (the approach researched for ADR-0028). The pane
+  has **device widths** (mobile 375 / tablet 768 / desktop), **Reload**, **Logs** (reuses `LogViewer`), and
+  **Open in browser**, and closes away entirely — one-window, not a new page.
+- Shared `InlineBold` helper so the Live View timeline renders activity bodies as cleanly as the
+  Notification Center (no raw `**` markers); the Notification Center now imports it instead of its local copy.
+
+### Fixed
+- **The preview was blocked by the app's Content-Security-Policy** (`default-src 'self'` with no
+  `frame-src`, so Chrome refused to frame the project — the iframe existed but rendered nothing). Added a
+  **loopback-scoped** `frame-src 'self' http://localhost:* http://127.0.0.1:*` — Synapse-launched projects
+  only, never arbitrary origins. Caught by live verification, not by types.
+
+### Verified (live, against the running stack)
+Launched a real project (`fast-money-client-ops`, port 8740 → HTTP 200), registered a session bound to it —
+it graded **green (`ok`)**, confirming the whole grading path — then in the browser: the **Preview** button
+appeared *only* for that project-bound running session, opening it rendered the live app in the iframe
+(517×887, `src=http://localhost:8740`) with all 7 controls, **0 console errors** after the CSP fix, and the
+page still does not scroll (3 `.scrollbar-thin` panes). `tsc` 0 errors.
+
 ## [0.1.86] -- 2026-07-30
 
 ### Added

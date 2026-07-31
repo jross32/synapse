@@ -14,6 +14,7 @@ import { formatLocal } from '@shared/format-time';
 import { useActivity } from '@shared/use-activity';
 import type { ActivityLevel, ActivityNotification } from '@shared/activity-client';
 import { cn } from '@shared/utils';
+import { renderInlineBold } from './InlineBold';
 
 // Level -> the app's semantic status tokens (never raw palette colours).
 const LEVEL_DOT: Record<ActivityLevel, string> = {
@@ -29,21 +30,6 @@ const LEVEL_LABEL: Record<ActivityLevel, string> = {
   red: 'Failed',
   info: 'Activity',
 };
-
-// Notification bodies are markdown-ish (`**Status:** yellow`). There's no markdown
-// renderer in the app, and raw `**` markers read as noise -- so honour just the one
-// construct the projector emits (inline bold) and leave everything else verbatim.
-function renderInlineBold(text: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') && part.length > 4 ? (
-      <strong key={i} className='font-semibold text-foreground'>
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      part
-    )
-  );
-}
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
