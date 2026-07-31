@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -90,6 +91,134 @@ def test_pick_runtime_prefers_first_installed_runtime(monkeypatch: pytest.Monkey
 
     chosen = agent_squads.pick_runtime(role)
     assert chosen == "claude"
+
+
+def test_codex_work_item_launch_injects_enabled_mcp_servers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    captured: dict[str, object] = {}
+
+    async def _fake_spawn(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            session_id=kwargs["session_id"],
+            summary=lambda: SimpleNamespace(
+                session_id=kwargs["session_id"],
+                argv=kwargs["argv"],
+                cwd=kwargs["cwd"],
+                rows=kwargs["rows"],
+                cols=kwargs["cols"],
+                started_at="now",
+                exit_code=None,
+                alive=True,
+                project_id=kwargs["project_id"],
+            ),
+        )
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        reflex = c.post(
+            "/api/v1/mcp-servers/install",
+            json={
+                "id": "reflex",
+                "name": "Reflex",
+                "transport": "stdio",
+                "command": "node",
+                "args": ["C:/reflex/mcp-server.js"],
+            },
+        )
+        assert reflex.status_code == 201, reflex.text
+        github = c.post(
+            "/api/v1/mcp-servers/install",
+            json={
+                "id": "github",
+                "name": "GitHub",
+                "transport": "stdio",
+                "command": "npx",
+                "env": {"GITHUB_TOKEN": "supersecret"},
+            },
+        )
+        assert github.status_code == 201, github.text
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "codex", "open_in_tab": False},
+        )
+        assert launched.status_code == 200, launched.text
+
+    argv = captured["argv"]
+    env = captured["env"]
+    assert isinstance(argv, list)
+    assert isinstance(env, dict)
+    assert "mcp_servers.reflex.command=\"node\"" in argv
+    assert "mcp_servers.github.env_vars=[\"GITHUB_TOKEN\"]" in argv
+    assert "supersecret" not in " ".join(argv)
+    assert env["GITHUB_TOKEN"] == "supersecret"
+
+
+def test_copilot_work_item_launch_injects_session_only_mcp_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    captured: dict[str, object] = {}
+
+    async def _fake_spawn(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            session_id=kwargs["session_id"],
+            summary=lambda: SimpleNamespace(
+                session_id=kwargs["session_id"],
+                argv=kwargs["argv"],
+                cwd=kwargs["cwd"],
+                rows=kwargs["rows"],
+                cols=kwargs["cols"],
+                started_at="now",
+                exit_code=None,
+                alive=True,
+                project_id=kwargs["project_id"],
+            ),
+        )
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        installed = c.post(
+            "/api/v1/mcp-servers/install",
+            json={
+                "id": "reflex",
+                "name": "Reflex",
+                "transport": "stdio",
+                "command": "node",
+                "args": ["C:/reflex/mcp-server.js"],
+                "env": {"REFLEX_AGENT_NAME": "Copilot Worker"},
+            },
+        )
+        assert installed.status_code == 201, installed.text
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "copilot", "open_in_tab": False},
+        )
+        assert launched.status_code == 200, launched.text
+
+    argv = captured["argv"]
+    env = captured["env"]
+    assert isinstance(argv, list)
+    assert isinstance(env, dict)
+    config_arg = next(value for value in argv if value.startswith("--additional-mcp-config=@"))
+    config_path = Path(config_arg.split("@", 1)[1])
+    config_text = config_path.read_text(encoding="utf-8")
+    assert "${REFLEX_AGENT_NAME}" in config_text
+    assert "Copilot Worker" not in config_text
+    assert env["REFLEX_AGENT_NAME"] == "Copilot Worker"
 
 
 def test_delegate_creates_child_work_item_linked_by_parent_id(tmp_path: Path) -> None:

@@ -6,7 +6,23 @@
 
 ## Current version
 
-`0.1.90`
+`0.1.91`
+
+> **Reflex + restart note (2026-07-31):** ADR-0030 now translates the role-scoped enabled MCP list for
+> every built-in squad runtime (Claude, Codex, and GitHub Copilot), discovers the owner's local Reflex
+> checkout at production startup, and keeps Reflex per-worker/on-demand with no shared fixed health port.
+> ADR-0031 gives startup and tray/API restart a visible cross-process progress window, measured green checks,
+> audited REST/WS state, duplicate/stale protection, and stable `SYN-RST-*` / `SYN-BOOT-*` diagnostics.
+> Reflex itself is registered durably for Codex and Claude at version 2.6.0 with a named takeover bar,
+> Pause/Resume, Release, Emergency Stop, Exit Reflex, cursor replacement, and injected-Esc filtering.
+> Live Windows proof: the actual tray command cleanly replaced daemon/Vite/Electron, moved the running app
+> from `0.1.89` to `0.1.91`, and the instrumented follow-up restart persisted all five stages as successful
+> before auto-closing the progress window. Reflex is enabled in Synapse as an on-demand stdio MCP, durable
+> Codex + Claude registrations contain no fixed health port, and `/ai/context` advertises the runtime-neutral
+> worker path. Final release rerun: renderer + Electron typecheck, docs synchronization, and **734 passed /
+> 14 skipped**; MCP credential/isolation rules are synced in `docs/security.md`, and only the two
+> pre-existing Windows asyncio transport-cleanup warnings remain. The verified all-green restart result is
+> preserved in `docs/screenshots/restart-progress-desktop.png`.
 
 > **Warden marketplace note (2026-07-31):** ADR-0029 shipped an optional, additive Warden MCP install.
 > Synapse pins upstream Warden `0.2.1` to immutable commit
@@ -432,4 +448,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by v0.1.90 — optional, version-pinned Warden MCP marketplace integration (ADR-0029), verified on Windows without restricting direct Synapse tools._
+_Last updated by v0.1.91 — runtime-neutral managed MCP injection + isolated Reflex bootstrap (ADR-0030) and visible, diagnosable whole-app restart (ADR-0031)._

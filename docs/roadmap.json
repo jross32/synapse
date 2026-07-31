@@ -71,8 +71,8 @@
       "title": "MCP servers for your AI",
       "status": "shipped",
       "phase": "Marketplace & Workforce",
-      "adr": "ADR-0017",
-      "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically, including a first-party Web Scraper entry that can download the official repo, keep its MCP/UI ports aligned, and auto-start with the real Synapse daemon on boot."
+      "adr": "ADR-0017, ADR-0030",
+      "summary": "Install MCP servers, see if they're running, and automatically give the role-scoped set to every built-in AI worker (Claude, Codex, and GitHub Copilot). Reflex is discovered locally and launched as an isolated per-worker stdio child instead of one shared fixed-port controller; Web Scraper keeps its first-party bootstrap and daemon autorun path."
     },
     {
       "id": "warden-mcp-marketplace",
@@ -81,6 +81,14 @@
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0029",
       "summary": "Install Chris Asmussen's Warden from an immutable verified commit, use its compact search/router alongside every direct Synapse MCP server, auto-sync enabled stdio tools without copying secrets into Warden JSON, and retain verified releases for rollback."
+    },
+    {
+      "id": "observable-synapse-restart",
+      "title": "Visible, diagnosable Synapse restart",
+      "status": "shipped",
+      "phase": "Reliability",
+      "adr": "ADR-0031",
+      "summary": "Restart Synapse from the tray, desktop, or API and watch request, shutdown, desktop, daemon-health, and interface checks turn green. A cross-process handoff keeps the splash visible, while stable SYN-RST/SYN-BOOT codes and copyable diagnostics explain failures."
     },
     {
       "id": "launch-art",

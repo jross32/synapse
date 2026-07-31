@@ -6,9 +6,9 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.90`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and now gives operators a clearer "what needs attention / what was last proven" snapshot right on Home. The most recent waves shipped WAN auto-start (with a Settings toggle), API discovery (`/api/v1/openapi.json`, `/docs`, `/redoc`), the AI-driving guide + drive-capable MCP connector, repo-health templates, a local-browser auth bootstrap fix, a `profile_state` race fix, and a **docs-sync CI gate** that keeps the version, CHANGELOG, and this README in step on every commit. The newest waves shipped the whole **AI Activity** experience (ADR-0028) plus optional, version-pinned **Warden** installation from the MCP marketplace (ADR-0029): Warden's compact search/router sits beside all direct MCP tools, is verified before activation, and can roll back to a retained release. **730 automated tests pass** (`14 skipped`).
+> **Status:** early development (`v0.1.91`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release makes the installed MCP list truly runtime-neutral for every built-in worker—Claude, Codex, and GitHub Copilot—auto-discovers local **Reflex** as an isolated per-worker controller, and replaces the tray's invisible restart gap with a resumable startup window, measured green checks, and stable copyable diagnostics (ADRs 0030–0031). The immediately preceding waves shipped the whole **AI Activity** experience (ADR-0028) and optional version-pinned **Warden** installation (ADR-0029). **734 automated tests pass** (`14 skipped`).
 >
-> 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (Home, mobile, the AI Coding cockpit, the ChatGPT companion, and the Web Scraper harvest workspace), refreshed as the UI evolves.
+> 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (including the new verified restart checklist), refreshed as the UI evolves.
 
 ---
 
@@ -76,7 +76,10 @@ If that's all you needed to know, skip to **[Getting started](#getting-started)*
   *Why it's better:* it doesn't just execute a task and forget — it writes durable ADRs and updates `.synapse-ai-context.md` as it goes, so the **next** run (next week, a different AI) starts smarter instead of re-deriving the same plan from zero. That's Synapse improving its own working knowledge, not just shipping one app.
 
 - **🛒 A marketplace** — install tools, local AI models, MCP servers, workers, and ready-made teams with one click. This now includes **Warden** as an optional, version-pinned MCP search/router: an AI can use its five compact tools to find and route across local MCP capabilities while GitHub, Playwright, Web Scraper, and every other direct tool remain available normally. Synapse verifies the exact upstream commit before activation and retains verified releases for rollback. Point-and-click for a human; REST-callable for an AI.
-  *Why it's better:* extending a chatbot means copy-pasting instructions into every new chat. Extending Synapse means installing a tool once — every future AI session (yours or a teammate's) sees it.
+  *Why it's better:* extending a chatbot means copy-pasting instructions into every new chat. Extending Synapse means installing a tool once — every newly launched Claude, Codex, or GitHub Copilot worker receives the role-scoped set automatically. Reflex stays isolated per worker instead of running one shared fixed-port controller.
+
+- **🔄 A restart you can actually watch** — **Restart Synapse** now opens a focused progress window before anything exits, carries its state across the old and new desktop processes, and checks request acceptance, service shutdown, desktop relaunch, daemon health, and interface readiness. Failures stay visible with a stable `SYN-RST-*` / `SYN-BOOT-*` code and copyable diagnostics; the same lifecycle is observable through REST + WebSocket.
+  *Why it's better:* the app no longer vanishes and asks you to guess whether it is restarting, stuck, or broken.
 
 - **📱 Control it from your phone** — pair once, then start, stop, or approve AI work from anywhere over Wi-Fi or a secure tunnel. The WAN tunnel (via Cloudtap) now **auto-opens on startup by default** — a fresh install is reachable from anywhere out of the box; turn it off any time in Settings → Network (ADR-0026).
   *Why it's better:* a chatbot session lives on the device you opened it on. Synapse's engine is the source of truth, so the phone is just another window onto the same live state as your desktop.
@@ -278,7 +281,7 @@ Before any AI coder (or you) starts a change, run `pwsh -NoProfile -File scripts
 | Packaging | PyInstaller (engine) · electron-builder + NSIS (installer) |
 
 - **Repo conventions, the 28 design contracts, and the cross-AI workflow** → [`AGENTS.md`](./AGENTS.md)
-- **Architecture decisions** → [`docs/adr/`](./docs/adr/) (latest: ADR-0022, one Synapse + the coding cockpit + the usage-aware auto-router)
+- **Architecture decisions** → [`docs/adr/`](./docs/adr/) (latest: ADR-0031, observable whole-app restart lifecycle)
 - **What shipped** → [`CHANGELOG.md`](./CHANGELOG.md) · **Where we are** → [`PROGRESS.md`](./PROGRESS.md) · **Where we're headed** → [`docs/roadmap.json`](./docs/roadmap.json) (also shown in-app under **What's New**)
 
 ### How any AI can connect to Synapse
@@ -288,8 +291,8 @@ Synapse doesn't have a closed integration story — any AI that can make an HTTP
 **In simple terms:** if a friend's AI assistant can browse the web or run commands, it can talk to Synapse — Synapse just needs to be running (`synapse.cmd`), and the AI needs the local address (`http://localhost:7878`) and a token from **Settings**. From there, that AI can see your projects, launch work, and read results, the same as Claude or Codex do inside Synapse today.
 
 **In developer terms:**
-1. **As an MCP tool consumer** — install a marketplace tool and any MCP-aware client can call it; the daemon proxies the calls so the client never needs the tool's own credentials.
-2. **As a squad worker** — any CLI-based coding agent can be registered as a `preferred_runtime` on an `agent-role-template` (`POST /api/v1/agent-role-templates`) and launched the same way Claude/Codex/Copilot are (`POST /api/v1/agent-work-items/{id}/launch`), which injects `SYNAPSE_SQUAD_ID` / `SYNAPSE_WORK_ITEM_ID` / `SYNAPSE_API` / `SYNAPSE_TOKEN` into its environment so it can read/write back into the same project.
+1. **As an MCP tool consumer** — install a marketplace tool and a compatible MCP host can call it. Synapse's built-in Claude, Codex, and GitHub Copilot launch adapters translate the same enabled, role-scoped server list into each host's session format automatically.
+2. **As a squad worker** — any CLI-based coding agent can be registered as a `preferred_runtime` on an `agent-role-template` (`POST /api/v1/agent-role-templates`) and launched through `POST /api/v1/agent-work-items/{id}/launch`, which injects `SYNAPSE_SQUAD_ID` / `SYNAPSE_WORK_ITEM_ID` / `SYNAPSE_API` / `SYNAPSE_TOKEN` into its environment. New runtimes need a small MCP translation adapter before Synapse can promise their installed MCP set too.
 3. **As a direct REST/WS client** — authenticate with `X-Synapse-Token` (from `GET /api/v1/auth/local-token` locally, or a paired token remotely), start at `GET /api/v1/ai/context` for a full orientation digest, then drive projects, files, squads, coder threads, and benchmarks through the same versioned `/api/v1/...` surface the UI uses. Every endpoint and event is documented and changelogged in [`docs/api-changes.md`](./docs/api-changes.md).
 4. **As a local model** — Ollama models are supported as a built-in runtime option for private, free, on-device work, routed the same way as any other coder.
 

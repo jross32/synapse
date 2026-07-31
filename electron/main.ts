@@ -14,6 +14,14 @@ import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import {
+  RestartProgress,
+  RestartStageKey,
+  RestartStageState,
+  createRestartProgress,
+  restartProgressHtml,
+  updateRestartStage,
+} from './restart-progress';
 
 const isDev = !app.isPackaged;
 const daemonHost = '127.0.0.1';
@@ -61,6 +69,11 @@ let daemonAuthTokenPromise: Promise<string> | null = null;
 let daemonOutputTail: string[] = [];
 let daemonLastExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
 let restartInFlight = false;
+let restartWindow: BrowserWindow | null = null;
+let restartWindowReady = false;
+let currentRestartProgress: RestartProgress | null = null;
+let restartRequestPollTimer: ReturnType<typeof setInterval> | null = null;
+let handledRestartOperationId: string | null = null;
 
 const repoRoot = path.resolve(__dirname, '..');
 
@@ -79,6 +92,169 @@ function resolveIconPath(): string {
   // In dev, __dirname is .../dist-electron, so the icons folder is at ../electron/icons/.
   // In packaged builds, electron-builder copies electron/icons/ into resources/.
   return app.isPackaged ? iconPathPackaged : iconPath;
+}
+
+function runtimeDataDir(): string {
+  return app.isPackaged
+    ? path.join(app.getPath('userData'), 'data')
+    : path.join(repoRoot, 'data');
+}
+
+function restartMarkerPath(): string {
+  return path.join(runtimeDataDir(), 'restart-progress.json');
+}
+
+function saveRestartMarker(progress: RestartProgress): void {
+  if (progress.kind !== 'restart') return;
+  const target = restartMarkerPath();
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const temp = `${target}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(progress, null, 2), 'utf-8');
+  fs.renameSync(temp, target);
+}
+
+function clearRestartMarker(): void {
+  try {
+    fs.unlinkSync(restartMarkerPath());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error('[synapse] could not clear restart progress:', error);
+    }
+  }
+}
+
+function loadRestartMarker(): RestartProgress | null {
+  const target = restartMarkerPath();
+  if (!fs.existsSync(target)) return null;
+  try {
+    const value = JSON.parse(fs.readFileSync(target, 'utf-8')) as RestartProgress;
+    if (
+      value.kind !== 'restart' ||
+      typeof value.operationId !== 'string' ||
+      !Array.isArray(value.stages) ||
+      !Number.isFinite(Date.parse(value.updatedAt)) ||
+      Date.now() - Date.parse(value.updatedAt) > 10 * 60 * 1000
+    ) {
+      throw new Error('The restart progress record is incomplete or more than 10 minutes old.');
+    }
+    return value;
+  } catch (error) {
+    const fallback = createRestartProgress('restart', `invalid-${Date.now()}`, 'startup');
+    return updateRestartStage(
+      fallback,
+      'desktop',
+      'error',
+      'The saved restart record could not be read.',
+      'SYN-BOOT-301',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
+function pushRestartProgressToWindow(): void {
+  if (!restartWindow || restartWindow.isDestroyed() || !restartWindowReady || !currentRestartProgress) {
+    return;
+  }
+  const payload = JSON.stringify(currentRestartProgress);
+  void restartWindow.webContents
+    .executeJavaScript(`window.updateRestartProgress(${payload})`, true)
+    .catch((error) => console.error('[synapse] restart window update failed:', error));
+}
+
+function showRestartWindow(progress: RestartProgress): void {
+  currentRestartProgress = progress;
+  if (progress.kind === 'restart') saveRestartMarker(progress);
+  if (restartWindow && !restartWindow.isDestroyed()) {
+    restartWindow.setClosable(Boolean(progress.errorCode));
+    restartWindow.show();
+    restartWindow.focus();
+    pushRestartProgressToWindow();
+    return;
+  }
+
+  restartWindowReady = false;
+  restartWindow = new BrowserWindow({
+    width: 680,
+    height: progress.kind === 'restart' ? 590 : 460,
+    minWidth: 560,
+    minHeight: 420,
+    resizable: false,
+    maximizable: false,
+    minimizable: true,
+    closable: Boolean(progress.errorCode),
+    show: false,
+    alwaysOnTop: true,
+    autoHideMenuBar: true,
+    backgroundColor: '#07110c',
+    title: progress.kind === 'restart' ? 'Restarting Synapse' : 'Starting Synapse',
+    icon: resolveIconPath(),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  restartWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  restartWindow.webContents.on('did-finish-load', () => {
+    restartWindowReady = true;
+    pushRestartProgressToWindow();
+    restartWindow?.show();
+    restartWindow?.focus();
+  });
+  restartWindow.on('closed', () => {
+    restartWindow = null;
+    restartWindowReady = false;
+  });
+  const html = restartProgressHtml(progress);
+  void restartWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`).catch((error) => {
+    console.error('[synapse] restart window failed to load:', error);
+  });
+}
+
+function setRestartStage(
+  key: RestartStageKey,
+  state: RestartStageState,
+  detail: string,
+  errorCode?: string,
+  errorMessage?: string
+): void {
+  if (!currentRestartProgress) return;
+  currentRestartProgress = updateRestartStage(
+    currentRestartProgress,
+    key,
+    state,
+    detail,
+    errorCode,
+    errorMessage
+  );
+  if (currentRestartProgress.kind === 'restart') saveRestartMarker(currentRestartProgress);
+  restartWindow?.setClosable(state === 'error');
+  pushRestartProgressToWindow();
+  if (currentRestartProgress.kind === 'restart') {
+    void reportRestartStage(currentRestartProgress.operationId, key, state, detail, errorCode, errorMessage)
+      .catch(() => undefined);
+  }
+}
+
+function finishRestartWindow(): void {
+  if (!currentRestartProgress) return;
+  const progress = currentRestartProgress;
+  if (!progress.stages.every((stage) => stage.state === 'success')) return;
+  const timer = setTimeout(() => {
+    if (progress.kind === 'restart') clearRestartMarker();
+    const completedWindow = restartWindow;
+    if (completedWindow && !completedWindow.isDestroyed()) {
+      // Keep the progress window protected from accidental user closure while
+      // work is active, then explicitly permit the successful auto-close.
+      completedWindow.setClosable(true);
+      completedWindow.close();
+      if (!completedWindow.isDestroyed()) completedWindow.destroy();
+    }
+    currentRestartProgress = null;
+  // Leave the all-green result visible long enough for a person to actually
+  // read it before handing focus back to the main Synapse window.
+  }, 3200);
+  timer.unref();
 }
 
 function isBrokenPipeError(error: unknown): error is NodeJS.ErrnoException {
@@ -325,7 +501,7 @@ async function shutdownSpawnedDaemon(timeoutMs = 5_000): Promise<void> {
 // instead of assuming the repo's data/auth-token file still matches.
 function httpTextRequest(
   url: string,
-  init: { method: string; timeout?: number; headers?: Record<string, string> }
+  init: { method: string; timeout?: number; headers?: Record<string, string>; body?: string }
 ): Promise<{ statusCode: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
@@ -347,6 +523,7 @@ function httpTextRequest(
       req.destroy();
       reject(new Error('daemon request timed out'));
     });
+    if (init.body) req.write(init.body);
     req.end();
   });
 }
@@ -381,7 +558,8 @@ async function fetchDaemonLocalToken(forceRefresh = false): Promise<string> {
 async function daemonRequest<T = unknown>(
   method: string,
   apiPath: string,
-  allowRefresh = true
+  allowRefresh = true,
+  payload?: unknown
 ): Promise<T> {
   let token: string | null = daemonAuthToken;
   if (!token) {
@@ -392,21 +570,92 @@ async function daemonRequest<T = unknown>(
     }
   }
 
+  const serialized = payload === undefined ? undefined : JSON.stringify(payload);
+  const headers: Record<string, string> = token
+    ? { 'X-Synapse-Token': token, Accept: 'application/json' }
+    : { Accept: 'application/json' };
+  if (serialized !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    headers['Content-Length'] = String(Buffer.byteLength(serialized));
+  }
   const { statusCode, body } = await httpTextRequest(`${daemonUrl}/api/v1${apiPath}`, {
     method,
-    headers: token ? { 'X-Synapse-Token': token, Accept: 'application/json' } : { Accept: 'application/json' },
+    headers,
+    body: serialized,
   });
 
   if (statusCode === 401 && allowRefresh) {
     daemonAuthToken = null;
     await fetchDaemonLocalToken(true);
-    return daemonRequest<T>(method, apiPath, false);
+    return daemonRequest<T>(method, apiPath, false, payload);
   }
   if (statusCode >= 400) {
     throw new Error(`HTTP ${statusCode} on ${apiPath}`);
   }
 
   return body ? (JSON.parse(body) as T) : (null as T);
+}
+
+interface DaemonRestartOperation {
+  operation_id: string;
+  source: string;
+  status: 'requested' | 'restarting' | 'complete' | 'error';
+}
+
+async function registerRestartOperation(operationId: string, source: string): Promise<void> {
+  await daemonRequest('POST', '/system/restart', true, {
+    operation_id: operationId,
+    source,
+  });
+}
+
+async function reportRestartStage(
+  operationId: string,
+  stage: RestartStageKey,
+  state: RestartStageState,
+  detail: string,
+  errorCode?: string,
+  errorMessage?: string
+): Promise<void> {
+  await daemonRequest('POST', `/system/restart/${encodeURIComponent(operationId)}/stage`, true, {
+    stage,
+    state,
+    detail,
+    error_code: errorCode,
+    error_message: errorMessage,
+  });
+}
+
+async function syncRestartProgressToDaemon(progress: RestartProgress): Promise<void> {
+  for (const stage of progress.stages) {
+    if (stage.state === 'pending') continue;
+    await reportRestartStage(
+      progress.operationId,
+      stage.key,
+      stage.state,
+      stage.detail,
+      stage.errorCode,
+      progress.errorMessage
+    );
+  }
+}
+
+async function pollForApiRestartRequest(): Promise<void> {
+  if (restartInFlight) return;
+  try {
+    const response = await daemonRequest<{ operation: DaemonRestartOperation | null }>(
+      'GET',
+      '/system/restart'
+    );
+    const operation = response.operation;
+    if (!operation || operation.status !== 'requested') return;
+    if (handledRestartOperationId === operation.operation_id) return;
+    handledRestartOperationId = operation.operation_id;
+    await restartApp(operation.source || 'api', operation.operation_id);
+  } catch {
+    // The daemon can be between shutdown and startup; the visible restart
+    // window owns that state, so polling simply resumes on the next tick.
+  }
 }
 
 function bundleBootstrapFilePath(): string {
@@ -446,6 +695,16 @@ async function applyBootstrapAiBundles(): Promise<void> {
 
 // ── window + tray ─────────────────────────────────────────────────────────
 function createWindow(): void {
+  let interfaceReady = false;
+  const interfaceReadyTimer = setTimeout(() => {
+    if (interfaceReady || !currentRestartProgress) return;
+    setRestartStage(
+      'interface',
+      'error',
+      'The interface did not become ready within 20 seconds.',
+      'SYN-BOOT-202'
+    );
+  }, 20_000);
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -471,6 +730,10 @@ function createWindow(): void {
       mainWindow?.hide();
     }
   });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    clearTimeout(interfaceReadyTimer);
+  });
 
   // External links open in the user's browser, not in an Electron window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -478,17 +741,38 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173').catch((err) => {
-      console.error('Failed to load Vite dev server:', err);
-    });
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).catch((err) => {
-      console.error('Failed to load packaged renderer:', err);
-    });
-  }
+  mainWindow.webContents.on('did-fail-load', (_event, code, description) => {
+    if (code === -3) return; // navigation superseded/aborted
+    setRestartStage(
+      'interface',
+      'error',
+      `Interface load failed (${code}).`,
+      'SYN-BOOT-201',
+      description
+    );
+  });
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  const loadPromise = isDev
+    ? mainWindow.loadURL('http://localhost:5173')
+    : mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  void loadPromise.catch((error) => {
+    console.error('Failed to load Synapse interface:', error);
+    setRestartStage(
+      'interface',
+      'error',
+      'The Synapse interface could not be loaded.',
+      'SYN-BOOT-201',
+      error instanceof Error ? error.message : String(error)
+    );
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    interfaceReady = true;
+    clearTimeout(interfaceReadyTimer);
+    mainWindow?.show();
+    setRestartStage('interface', 'success', 'The Synapse interface is loaded and visible.');
+    finishRestartWindow();
+  });
 }
 
 function createTray(): void {
@@ -531,7 +815,7 @@ function buildTrayMenu(): Electron.Menu {
     {
       label: 'Restart Synapse',
       click: () => {
-        void restartApp();
+        void restartApp('tray');
       },
     },
     {
@@ -550,30 +834,108 @@ function buildTrayMenu(): Electron.Menu {
  * boot-config changes (e.g. the LAN-exposure toggle the user just flipped in
  * Settings → Network).
  */
-async function restartApp(): Promise<boolean> {
-  if (restartInFlight) return false;
+async function restartApp(source = 'desktop', requestedOperationId?: string): Promise<boolean> {
+  if (restartInFlight) {
+    restartWindow?.show();
+    restartWindow?.focus();
+    console.warn('[synapse] SYN-RST-001: restart already in progress');
+    return false;
+  }
   restartInFlight = true;
+  const operationId = requestedOperationId ?? `restart-${Date.now().toString(36)}-${process.pid}`;
+  handledRestartOperationId = operationId;
+  const progress = createRestartProgress('restart', operationId, source);
+  showRestartWindow(progress);
+
+  if (!requestedOperationId) {
+    try {
+      await registerRestartOperation(operationId, source);
+    } catch (error) {
+      let liveOperation: DaemonRestartOperation | null = null;
+      try {
+        const response = await daemonRequest<{ operation: DaemonRestartOperation | null }>(
+          'GET',
+          '/system/restart'
+        );
+        liveOperation = response.operation;
+      } catch {
+        // If the daemon itself is unavailable, continuing the local restart is
+        // the recovery path. A reachable live operation is the only hard stop.
+      }
+      if (liveOperation?.status === 'requested' || liveOperation?.status === 'restarting') {
+        setRestartStage(
+          'request',
+          'error',
+          'Another Synapse restart is already in progress.',
+          'SYN-RST-001',
+          `Existing operation: ${liveOperation.operation_id}`
+        );
+        clearRestartMarker();
+        restartInFlight = false;
+        tray?.setToolTip('Synapse · restart already in progress (SYN-RST-001)');
+        return false;
+      }
+      console.warn('[synapse] restart API registration unavailable; continuing locally:', error);
+    }
+  }
+  setRestartStage('request', 'success', `Restart accepted from ${source}.`);
+  setRestartStage('stop', 'active', 'Stopping the previous Synapse services…');
+  await new Promise((resolve) => setTimeout(resolve, 400));
 
   if (isDev && process.env.SYNAPSE_DEV_WRAPPER === '1') {
     console.log('[synapse] requesting full wrapper restart');
+    setRestartStage(
+      'desktop',
+      'active',
+      'The development wrapper is restarting the daemon, interface server, and desktop process…'
+    );
     isQuitting = true;
+    await new Promise((resolve) => setTimeout(resolve, 650));
     app.exit(FULL_DEV_RESTART_EXIT_CODE);
     return true;
   }
 
   console.log('[synapse] restarting app');
-  isQuitting = true;
   try {
     await shutdownSpawnedDaemon();
-    app.relaunch();
+    if (spawnedDaemon && (await probeHealth())) {
+      throw new Error('The previous daemon is still answering after the shutdown sequence.');
+    }
+    setRestartStage(
+      'stop',
+      'success',
+      spawnedDaemon
+        ? 'The previous Synapse daemon stopped cleanly.'
+        : 'The shared Synapse daemon is healthy and did not require replacement.'
+    );
+    setRestartStage('desktop', 'active', 'Scheduling the new Synapse desktop process…');
+    const relaunchArgs = process.argv
+      .slice(1)
+      .filter((value) => !value.startsWith('--synapse-restart='));
+    relaunchArgs.push(`--synapse-restart=${operationId}`);
+    app.relaunch({ args: relaunchArgs });
+    isQuitting = true;
+    await new Promise((resolve) => setTimeout(resolve, 650));
     app.exit(0);
     return true;
   } catch (error) {
     console.error('[synapse] restart failed:', error);
+    const stage: RestartStageKey = currentRestartProgress?.stages.find(
+      (item) => item.state === 'active'
+    )?.key ?? 'desktop';
+    const code = stage === 'stop' ? 'SYN-RST-101' : 'SYN-RST-201';
+    setRestartStage(
+      stage,
+      'error',
+      stage === 'stop' ? 'The previous services could not be stopped.' : 'The relaunch could not be scheduled.',
+      code,
+      error instanceof Error ? error.message : String(error)
+    );
+    clearRestartMarker();
     restartInFlight = false;
     isQuitting = false;
-    tray?.setToolTip('Synapse · restart failed');
-    showWindow();
+    tray?.setToolTip(`Synapse · restart failed (${code})`);
+    restartWindow?.setClosable(true);
     return false;
   }
 }
@@ -728,7 +1090,7 @@ ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
 
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
-ipcMain.handle('synapse:restart', () => restartApp());
+ipcMain.handle('synapse:restart', () => restartApp('desktop'));
 ipcMain.handle('synapse:exit', () => {
   isQuitting = true;
   app.quit();
@@ -794,6 +1156,26 @@ app.whenReady().then(async () => {
   });
 
   refuseAdminIfNeeded();
+  const restoredRestart = loadRestartMarker();
+  if (restoredRestart) {
+    showRestartWindow(restoredRestart);
+    if (restoredRestart.errorCode) {
+      clearRestartMarker();
+    } else {
+      setRestartStage('stop', 'success', 'The previous Synapse processes have exited.');
+      setRestartStage('desktop', 'success', 'The new Synapse desktop process is running.');
+      setRestartStage('daemon', 'active', 'Checking the restarted Synapse services…');
+    }
+  } else {
+    const startupProgress = createRestartProgress(
+      'startup',
+      `startup-${Date.now().toString(36)}-${process.pid}`,
+      'startup'
+    );
+    showRestartWindow(startupProgress);
+    setRestartStage('desktop', 'success', 'The Synapse desktop process is running.');
+    setRestartStage('daemon', 'active', 'Starting Synapse services…');
+  }
   let daemonBootError: Error | null = null;
 
   // Attach to a daemon that's already running (e.g. one that survived an
@@ -808,6 +1190,13 @@ app.whenReady().then(async () => {
     } catch (error) {
       daemonBootError = error instanceof Error ? error : new Error(String(error));
       console.error('[synapse] daemon failed to spawn:', daemonBootError);
+      setRestartStage(
+        'daemon',
+        'error',
+        'The Synapse daemon process could not be started.',
+        'SYN-BOOT-101',
+        daemonBootError.message
+      );
     }
   }
   createTray();
@@ -819,15 +1208,37 @@ app.whenReady().then(async () => {
     await waitForDaemon();
     await applyBootstrapAiBundles();
     console.log('[synapse] daemon ready');
+    setRestartStage('daemon', 'success', 'Health check passed; Synapse services are running.');
+    if (currentRestartProgress?.kind === 'restart') {
+      await syncRestartProgressToDaemon(currentRestartProgress).catch((error) => {
+        console.warn('[synapse] could not sync restart progress to daemon:', error);
+      });
+    }
     // Populate the tray's Projects submenu + keep it fresh.
     void refreshTrayMenu();
     trayRefreshTimer = setInterval(() => void refreshTrayMenu(), 20_000);
+    void pollForApiRestartRequest();
+    restartRequestPollTimer = setInterval(() => void pollForApiRestartRequest(), 1000);
   } catch (err) {
     console.error('[synapse] daemon failed to start:', err);
-    tray?.setToolTip('Synapse | daemon failed to start');
+    if (!daemonBootError) {
+      setRestartStage(
+        'daemon',
+        'error',
+        'The Synapse daemon did not become healthy in time.',
+        'SYN-BOOT-102',
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+    tray?.setToolTip(
+      `Synapse | daemon failed to start (${daemonBootError ? 'SYN-BOOT-101' : 'SYN-BOOT-102'})`
+    );
     // Still open the window so the user can see the error state.
   }
 
+  if (currentRestartProgress?.stages.some((stage) => stage.state === 'pending' && stage.key === 'interface')) {
+    setRestartStage('interface', 'active', 'Loading the Synapse interface…');
+  }
   createWindow();
 
   if (INSPECT_RENDERER) {
@@ -849,6 +1260,10 @@ app.on('will-quit', () => {
   if (trayRefreshTimer) {
     clearInterval(trayRefreshTimer);
     trayRefreshTimer = null;
+  }
+  if (restartRequestPollTimer) {
+    clearInterval(restartRequestPollTimer);
+    restartRequestPollTimer = null;
   }
   // Only stop the daemon if *we* started it. If we attached to one that was
   // already running, leave it alone — something else owns its lifecycle.

@@ -95,6 +95,10 @@ curl -s "$SYN/agent-squads/$SQUAD/capacity" -H "X-Synapse-Token: $TOK"  # concur
 curl -s "$SYN/agent-squads/$SQUAD/stop" -X POST -H "X-Synapse-Token: $TOK"
 ```
 
+The same installed MCP list is translated at launch for Synapse's three built-in CLI runtimes: Claude,
+Codex, and GitHub Copilot. Role binding still applies. A newly enabled MCP appears in the **next** worker;
+an already-running AI process cannot acquire a new MCP dynamically.
+
 ## 4. Run a workflow (quick-action)
 
 "Workflows" are **quick-actions** — curated, one-call AI recipes (e.g. `autonomous-boss`, `bug-hunt-squad`).
@@ -152,6 +156,24 @@ worker stays on the REST path (`POST /agent-work-items/{id}/launch`, reachable o
 > untrusted places. Turn WAN off in Settings → Network (or `PATCH /api/v1/system/network {"wan_auto_start":false}`)
 > if you don't want remote exposure.
 
+## 9. Restart Synapse and follow the handoff
+
+Use this only when the operator intends to recycle the whole app. It triggers the same visible flow as
+**Restart Synapse** in the tray: the user sees each measured stage and a stable code if anything fails.
+
+```bash
+OP=$(curl -s "$SYN/system/restart" -X POST \
+  -H "X-Synapse-Token: $TOK" -H 'Content-Type: application/json' \
+  -d '{"source":"auto"}' | jq -r .operation.operation_id)
+
+# The current connection may drop while services restart. Reconnect, then inspect:
+curl -s "$SYN/system/restart" -H "X-Synapse-Token: $TOK" | jq .operation
+curl -s "$SYN/system/restart/errors" -H "X-Synapse-Token: $TOK" | jq .error_catalog
+```
+
+Do not post stage updates yourself; Electron owns those measured facts. A duplicate live request returns
+`SYN-RST-001`, and an abandoned operation expires as `SYN-BOOT-301` after ten minutes.
+
 ---
 
 ## Quick reference
@@ -170,5 +192,6 @@ worker stays on the REST path (`POST /agent-work-items/{id}/launch`, reachable o
 | Evaluate | `/ui-contracts`, `/quality-gates`, `POST /benchmarks/score-bug-hunt` |
 | Review inbox | `GET /review/inbox` |
 | Remote connector URL | `GET /mcp/connector` |
+| Restart Synapse | `POST /system/restart`, then `GET /system/restart` |
 
 _All paths are under `/api/v1` unless noted. Exact bodies: `GET /api/v1/openapi.json`._

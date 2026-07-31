@@ -22,12 +22,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import socket
 import urllib.error
 import urllib.request
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -35,6 +36,7 @@ from pydantic import BaseModel, Field
 from . import boot_config
 from .api_versions import event_name
 from .audit import AuditRecord, audit
+from .errors import conflict, not_found
 from .models import AuditSource
 from .storage import Storage
 from .time_utils import to_iso, utc_now
@@ -44,6 +46,17 @@ log = logging.getLogger(__name__)
 LAN_HOST = "0.0.0.0"
 LOOPBACK_HOST = "127.0.0.1"
 CLOUDTAP_WARMUP_GRACE_SECONDS = 90
+RESTART_STAGE_KEYS = ("request", "stop", "desktop", "daemon", "interface")
+RESTART_ERROR_CODES = {
+    "SYN-RST-001": "A restart is already running. Wait for the current restart window to finish.",
+    "SYN-RST-101": "Synapse could not stop its previous services cleanly.",
+    "SYN-RST-201": "Electron could not schedule or hand off the relaunch.",
+    "SYN-BOOT-101": "The Synapse daemon process could not be started.",
+    "SYN-BOOT-102": "The Synapse daemon started but did not become healthy in time.",
+    "SYN-BOOT-201": "The desktop interface could not be loaded.",
+    "SYN-BOOT-202": "The desktop interface loaded but never became ready to show.",
+    "SYN-BOOT-301": "The saved restart progress record was invalid or unreadable.",
+}
 
 
 def _detect_lan_ips() -> list[str]:
@@ -85,6 +98,116 @@ class NetworkPatch(BaseModel):
     # only `wan_auto_start`). A field left None is untouched.
     bind_lan: bool | None = None
     wan_auto_start: bool | None = None
+
+
+class RestartRequest(BaseModel):
+    operation_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9._-]{6,80}$",
+    )
+    source: AuditSource = AuditSource.AUTO
+
+
+class RestartStageUpdate(BaseModel):
+    stage: Literal["request", "stop", "desktop", "daemon", "interface"]
+    state: Literal["pending", "active", "success", "error"]
+    detail: str = Field(min_length=1, max_length=1000)
+    error_code: str | None = Field(default=None, max_length=80)
+    error_message: str | None = Field(default=None, max_length=4000)
+    source: AuditSource = AuditSource.DESKTOP
+
+
+def _loads_restart_details(value: str | None) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value) if value else {}
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _restart_operation(storage: Storage, operation_id: str | None = None) -> dict[str, Any] | None:
+    params: list[Any] = []
+    where = "entity_type = 'system_restart' AND action = 'restart.requested'"
+    if operation_id is not None:
+        where += " AND entity_id = ?"
+        params.append(operation_id)
+    request_row = storage.conn.execute(
+        f"SELECT * FROM audit_log WHERE {where} ORDER BY id DESC LIMIT 1",
+        tuple(params),
+    ).fetchone()
+    if request_row is None:
+        return None
+
+    operation_id = str(request_row["entity_id"])
+    request_details = _loads_restart_details(request_row["details_json"])
+    stages: dict[str, dict[str, Any]] = {
+        key: {
+            "stage": key,
+            "state": "pending",
+            "detail": "Waiting",
+            "updated_at": request_row["timestamp_utc"],
+            "error_code": None,
+            "error_message": None,
+        }
+        for key in RESTART_STAGE_KEYS
+    }
+    rows = storage.conn.execute(
+        "SELECT * FROM audit_log WHERE entity_type = 'system_restart' AND entity_id = ? "
+        "AND action = 'restart.stage' ORDER BY id",
+        (operation_id,),
+    ).fetchall()
+    for row in rows:
+        details = _loads_restart_details(row["details_json"])
+        stage = details.get("stage")
+        if stage not in stages:
+            continue
+        stages[stage] = {
+            "stage": stage,
+            "state": details.get("state", "pending"),
+            "detail": details.get("detail", "Waiting"),
+            "updated_at": row["timestamp_utc"],
+            "error_code": row["error_code"],
+            "error_message": details.get("error_message"),
+        }
+
+    ordered = [stages[key] for key in RESTART_STAGE_KEYS]
+    states = {stage["state"] for stage in ordered}
+    if "error" in states:
+        status = "error"
+    elif all(stage["state"] == "success" for stage in ordered):
+        status = "complete"
+    elif rows:
+        status = "restarting"
+    else:
+        status = "requested"
+    try:
+        updated_at = datetime.fromisoformat(
+            rows[-1]["timestamp_utc"] if rows else request_row["timestamp_utc"]
+        )
+        if status in {"requested", "restarting"} and updated_at < utc_now() - timedelta(minutes=10):
+            status = "error"
+            stalled_stage = next(
+                (stage for stage in ordered if stage["state"] in {"pending", "active"}),
+                ordered[-1],
+            )
+            stalled_stage.update(
+                {
+                    "state": "error",
+                    "detail": "Restart progress expired before this stage completed.",
+                    "error_code": "SYN-BOOT-301",
+                    "error_message": "No restart progress was reported for more than ten minutes.",
+                }
+            )
+    except (TypeError, ValueError):
+        pass
+    return {
+        "operation_id": operation_id,
+        "source": request_details.get("source", request_row["source"]),
+        "status": status,
+        "requested_at": request_row["timestamp_utc"],
+        "updated_at": rows[-1]["timestamp_utc"] if rows else request_row["timestamp_utc"],
+        "stages": ordered,
+    }
 
 
 class RemoteAccessNetwork(BaseModel):
@@ -300,6 +423,88 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
     @router.get("/system/network", response_model=None)
     async def get_network(request: Request) -> dict[str, Any]:
         return _network_status(request, data_dir)
+
+    @router.get("/system/restart", response_model=None)
+    async def get_restart_operation() -> dict[str, Any]:
+        return {
+            "operation": _restart_operation(storage),
+            "error_catalog": RESTART_ERROR_CODES,
+        }
+
+    @router.get("/system/restart/errors", response_model=None)
+    async def get_restart_error_catalog() -> dict[str, Any]:
+        return {"error_catalog": RESTART_ERROR_CODES}
+
+    @router.post("/system/restart", response_model=None, status_code=202)
+    async def request_restart(payload: RestartRequest, request: Request) -> dict[str, Any]:
+        latest = _restart_operation(storage)
+        if latest is not None and latest["status"] in {"requested", "restarting"}:
+            raise conflict(
+                "system_restart",
+                "A Synapse restart is already in progress.",
+                operation_id=latest["operation_id"],
+                diagnostic_code="SYN-RST-001",
+            )
+        operation_id = payload.operation_id or f"restart-{secrets.token_hex(6)}"
+        with storage.transaction() as conn:
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="system_restart",
+                    entity_id=operation_id,
+                    action="restart.requested",
+                    source=payload.source,
+                    result="success",
+                    details={"source": payload.source.value},
+                ),
+            )
+        await request.app.state.bus.publish(
+            event_name("system", "restart_requested"),
+            {
+                "operation_id": operation_id,
+                "source": payload.source.value,
+            },
+        )
+        return {
+            "operation": _restart_operation(storage, operation_id),
+            "error_catalog": RESTART_ERROR_CODES,
+        }
+
+    @router.post("/system/restart/{operation_id}/stage", response_model=None)
+    async def report_restart_stage(
+        operation_id: str,
+        payload: RestartStageUpdate,
+        request: Request,
+    ) -> dict[str, Any]:
+        if _restart_operation(storage, operation_id) is None:
+            raise not_found("system_restart", operation_id)
+        with storage.transaction() as conn:
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="system_restart",
+                    entity_id=operation_id,
+                    action="restart.stage",
+                    source=payload.source,
+                    result="error" if payload.state == "error" else "success",
+                    error_code=payload.error_code,
+                    details={
+                        "stage": payload.stage,
+                        "state": payload.state,
+                        "detail": payload.detail,
+                        "error_message": payload.error_message,
+                    },
+                ),
+            )
+        operation = _restart_operation(storage, operation_id)
+        await request.app.state.bus.publish(
+            event_name("system", "restart_progress"),
+            {"operation": operation},
+        )
+        return {
+            "operation": operation,
+            "error_catalog": RESTART_ERROR_CODES,
+        }
 
     @router.get("/remote-access", response_model=RemoteAccessResponse)
     async def get_remote_access(request: Request) -> RemoteAccessResponse:

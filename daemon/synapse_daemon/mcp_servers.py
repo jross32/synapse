@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -23,7 +24,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
-from .errors import conflict, invalid, not_found
+from .errors import SynapseError, conflict, invalid, not_found
 from .runtime_paths import bundled_mcp_servers_sample, repo_root
 from .secrets import SECRET_PLACEHOLDER
 from .time_utils import to_iso, utc_now
@@ -35,6 +36,10 @@ WEB_SCRAPER_GIT_URL = "https://github.com/jross32/wbscrper.git"
 WEB_SCRAPER_APP_BASE_URL = "http://127.0.0.1:12345"
 WEB_SCRAPER_MCP_PORT = 12000
 WEB_SCRAPER_DEFAULT_URL = f"http://127.0.0.1:{WEB_SCRAPER_MCP_PORT}/mcp"
+REFLEX_SERVER_ID = "reflex"
+REFLEX_SHARED_PORT_ENV_NAMES = {"REFLEX_HEALTH_PORT", "OS_BRIDGE_HEALTH_PORT"}
+_MCP_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class McpTransport(str, Enum):
@@ -165,6 +170,43 @@ def discover_local_web_scraper_repo() -> Path | None:
     return None
 
 
+def looks_like_reflex_repo(path: Path) -> bool:
+    candidate = Path(path)
+    if not (candidate / "mcp-server.js").is_file():
+        return False
+    package_json = candidate / "package.json"
+    if not package_json.is_file():
+        return False
+    try:
+        payload = json.loads(package_json.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return False
+    return payload.get("name") == REFLEX_SERVER_ID
+
+
+def discover_local_reflex_repo() -> Path | None:
+    configured = os.environ.get("REFLEX_REPO_PATH")
+    candidates = [
+        Path(configured) if configured else None,
+        repo_root().parent / "mcp-servers" / REFLEX_SERVER_ID,
+        Path.home() / "mcp-servers" / REFLEX_SERVER_ID,
+    ]
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if looks_like_reflex_repo(resolved):
+            return resolved
+    return None
+
+
 def find_known_web_scraper_server(conn: sqlite3.Connection) -> McpServer | None:
     for server_id in WEB_SCRAPER_KNOWN_IDS:
         row = conn.execute("SELECT * FROM mcp_servers WHERE id = ?", (server_id,)).fetchone()
@@ -289,6 +331,71 @@ def ensure_bootstrap_web_scraper(
         patch_kwargs["enabled"] = True
     if not server.autorun:
         patch_kwargs["autorun"] = True
+    if patch_kwargs:
+        server = update_server(conn, server.id, McpServerUpdate(**patch_kwargs))
+    return server
+
+
+def reflex_install_request(source_path: Path) -> McpServerInstallRequest:
+    return McpServerInstallRequest(
+        id=REFLEX_SERVER_ID,
+        name="Reflex",
+        publisher="The WhatIf Company",
+        description=(
+            "Visible, consent-aware Windows computer control for AI operators, "
+            "launched separately for each AI session."
+        ),
+        transport=McpTransport.STDIO,
+        command="node",
+        args=[str(Path(source_path) / "mcp-server.js")],
+        env={},
+    )
+
+
+def ensure_bootstrap_reflex(
+    conn: sqlite3.Connection,
+    *,
+    source_path: Path | None = None,
+) -> McpServer | None:
+    """Register a local Reflex checkout as an enabled, per-session stdio MCP.
+
+    Reflex deliberately does not autorun as a shared daemon: every AI runtime
+    launches its own stdio child, which keeps control leases and shutdown state
+    isolated between simultaneous workers.
+    """
+    source = source_path or discover_local_reflex_repo()
+    if source is None or not looks_like_reflex_repo(source):
+        return None
+
+    desired = reflex_install_request(source)
+    try:
+        server = get_server(conn, REFLEX_SERVER_ID)
+    except SynapseError as exc:
+        if exc.envelope.code != "mcp_server.not_found":
+            raise
+        server = install_server(conn, desired, McpCatalog(servers=[]))
+
+    isolated_env = {
+        name: value
+        for name, value in server.env.items()
+        if name not in REFLEX_SHARED_PORT_ENV_NAMES
+    }
+    desired.env = isolated_env
+    if (
+        server.transport != McpTransport.STDIO
+        or server.command != desired.command
+        or server.args != desired.args
+    ):
+        delete_server(conn, server.id)
+        server = install_server(conn, desired, McpCatalog(servers=[]))
+
+    patch_kwargs: dict[str, object] = {}
+    if server.env != isolated_env:
+        patch_kwargs["env"] = isolated_env
+    if not server.enabled:
+        patch_kwargs["enabled"] = True
+    if server.autorun:
+        patch_kwargs["autorun"] = False
     if patch_kwargs:
         server = update_server(conn, server.id, McpServerUpdate(**patch_kwargs))
     return server
@@ -468,6 +575,118 @@ def build_mcp_config(servers: list[McpServer], allow_ids: list[str] | None = Non
                 entry["env"] = s.env
             out[s.id] = entry
     return {"mcpServers": out}
+
+
+def build_codex_mcp_overrides(
+    servers: list[McpServer],
+    allow_ids: list[str] | None = None,
+) -> tuple[list[str], dict[str, str]]:
+    """Build one-launch Codex config overrides without exposing MCP secrets.
+
+    Codex accepts repeatable ``--config key=value`` arguments. Environment
+    values remain in the worker process environment; ``env_vars`` only names
+    the variables that Codex should pass through to each stdio MCP child.
+    """
+    argv: list[str] = []
+    worker_env: dict[str, str] = {}
+    for server in servers:
+        if not server.enabled:
+            continue
+        if allow_ids is not None and server.id not in allow_ids:
+            continue
+        if not _MCP_ID_PATTERN.fullmatch(server.id):
+            raise invalid(
+                "mcp_server",
+                f"MCP server id '{server.id}' cannot be injected into Codex.",
+            )
+
+        prefix = f"mcp_servers.{server.id}"
+        if server.transport == McpTransport.HTTP and server.url:
+            argv.extend(("--config", f"{prefix}.url={json.dumps(server.url)}"))
+            continue
+        if not server.command:
+            continue
+
+        argv.extend(("--config", f"{prefix}.command={json.dumps(server.command)}"))
+        argv.extend(("--config", f"{prefix}.args={json.dumps(server.args)}"))
+        env_names: list[str] = []
+        for name, value in server.env.items():
+            if not _ENV_NAME_PATTERN.fullmatch(name):
+                raise invalid(
+                    "mcp_server",
+                    f"MCP server '{server.id}' has an invalid environment variable name: {name}",
+                )
+            if name in worker_env and worker_env[name] != value:
+                raise conflict(
+                    "mcp_server",
+                    f"Enabled MCP servers assign different values to environment variable '{name}'.",
+                    environment_variable=name,
+                )
+            worker_env[name] = value
+            env_names.append(name)
+        if env_names:
+            argv.extend(("--config", f"{prefix}.env_vars={json.dumps(env_names)}"))
+    return argv, worker_env
+
+
+def build_copilot_mcp_config(
+    servers: list[McpServer],
+    allow_ids: list[str] | None = None,
+) -> tuple[dict[str, dict[str, dict[str, object]]], dict[str, str]]:
+    """Build a session-only GitHub Copilot CLI MCP config.
+
+    Copilot expands ``$VAR`` references in local MCP ``env`` values. The
+    generated JSON therefore contains only variable names while the actual
+    values stay in the worker environment, matching the Codex secret boundary.
+    """
+    configured: dict[str, dict[str, object]] = {}
+    worker_env: dict[str, str] = {}
+    for server in servers:
+        if not server.enabled:
+            continue
+        if allow_ids is not None and server.id not in allow_ids:
+            continue
+        if not _MCP_ID_PATTERN.fullmatch(server.id):
+            raise invalid(
+                "mcp_server",
+                f"MCP server id '{server.id}' cannot be injected into Copilot.",
+            )
+
+        if server.transport == McpTransport.HTTP and server.url:
+            configured[server.id] = {
+                "type": "http",
+                "url": server.url,
+                "tools": ["*"],
+            }
+            continue
+        if not server.command:
+            continue
+
+        entry: dict[str, object] = {
+            "type": "stdio",
+            "command": server.command,
+            "args": server.args,
+            "tools": ["*"],
+        }
+        referenced_env: dict[str, str] = {}
+        for name, value in server.env.items():
+            if not _ENV_NAME_PATTERN.fullmatch(name):
+                raise invalid(
+                    "mcp_server",
+                    f"MCP server '{server.id}' has an invalid environment variable name: {name}",
+                )
+            if name in worker_env and worker_env[name] != value:
+                raise conflict(
+                    "mcp_server",
+                    f"Enabled MCP servers assign different values to environment variable '{name}'.",
+                    environment_variable=name,
+                )
+            worker_env[name] = value
+            referenced_env[name] = f"${{{name}}}"
+        if referenced_env:
+            entry["env"] = referenced_env
+        configured[server.id] = entry
+    return {"mcpServers": configured}, worker_env
 
 
 # ── Process manager (status + launch for http servers) ───────────────────────

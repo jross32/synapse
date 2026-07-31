@@ -10,6 +10,48 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.91] -- 2026-07-31
+
+### Added
+- **Observable startup and whole-app restart (ADR-0031).** Every desktop start now opens a focused progress
+  window. Tray, Settings, and AI/API restarts share one cross-process lifecycle: request accepted, previous
+  services stopped, desktop relaunched, daemon health passed, and interface visible. Checks turn green only
+  after the corresponding fact is measured.
+- New AI-discoverable restart control plane: `GET/POST /api/v1/system/restart`, `GET
+  /api/v1/system/restart/errors`, `POST /api/v1/system/restart/{operation_id}/stage`, plus
+  `v1.system.restart_requested` and `v1.system.restart_progress` events. Requests and stages are audited.
+- Stable, plain-language restart diagnostics: `SYN-RST-001/101/201` and `SYN-BOOT-101/102/201/202/301`.
+  Failures stay visible and offer **Copy diagnostics** instead of disappearing into a console log.
+- **First-party Reflex bootstrap (ADR-0030).** Production startup discovers a valid local Reflex checkout and
+  reconciles an enabled stdio MCP entry automatically.
+
+### Changed
+- **Managed MCP injection is runtime-neutral for every built-in worker.** Claude receives additive
+  `--mcp-config`, Codex receives one-launch `mcp_servers.*` overrides, and GitHub Copilot CLI receives
+  `--additional-mcp-config`. The same role binding semantics apply to all three.
+- Codex/Copilot MCP credentials remain in the worker environment: Codex arguments contain only variable names,
+  and Copilot's generated JSON contains only `${NAME}` references. Conflicting values fail before launch.
+- Reflex is `autorun=false` with no shared health port. Each AI host starts its own stdio child on demand, so
+  simultaneous workers do not share control leases, pause/emergency state, or a stale fixed-port process.
+
+### Fixed
+- Tray restart can no longer race an already-requested API restart into a second untracked operation.
+- Abandoned restart operations now age out with diagnostic `SYN-BOOT-301` instead of remaining ambiguously
+  active, and a failed local handoff cannot poison the next normal startup with a stale marker.
+- The native progress page now emits valid inline JavaScript, keeps the all-green result readable for 3.2
+  seconds, and explicitly unlocks/closes its protected window so a successful boot cannot leave an orphaned
+  splash behind.
+- Reflex reconciliation removes only obsolete shared-port variables while preserving other user-configured
+  per-worker settings.
+
+### Verified
+- Full regression coverage is green at **734 passed, 14 skipped**; renderer + Electron TypeScript and the
+  version/CHANGELOG/README synchronization gate pass.
+- A real Windows tray restart upgraded the running app from `0.1.89` to `0.1.91`; a follow-up instrumented
+  restart recorded all five stages as successful, returned daemon health `ok`, and left exactly one Synapse
+  window. The final native checklist is captured in `docs/screenshots/restart-progress-desktop.png`.
+
+
 ## [0.1.90] -- 2026-07-31
 
 ### Added

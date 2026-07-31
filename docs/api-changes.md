@@ -161,6 +161,18 @@ Every entry below must include: the date, the new version added, what changed, a
 | 2026-07-31 | `POST /api/v1/mcp-servers/warden/rollback` | additive | Atomically points the installed Warden MCP record at the newest previous verified release and resynchronizes its registry. |
 | 2026-07-31 | `v1.mcp_server.updated` (extended reasons) | additive | May now carry `installing`, `warden_registry_synced`, `warden_updated`, or `warden_rolled_back` reasons. Existing clients may ignore unknown reasons. |
 
+### Shipped in v0.1.91 (runtime-neutral MCP injection + observable restart)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-07-31 | `POST /api/v1/agent-work-items/{id}/launch` (extended) | additive | Enabled, role-scoped MCP servers are now translated for every built-in CLI runtime: Claude `--mcp-config`, Codex one-launch `mcp_servers.*` overrides, and GitHub Copilot CLI `--additional-mcp-config`. Codex/Copilot secret values remain only in the worker environment. |
+| 2026-07-31 | `GET /api/v1/system/restart` | additive | Returns the latest audited whole-Synapse restart operation, ordered stages, overall status, and stable error catalog. |
+| 2026-07-31 | `GET /api/v1/system/restart/errors` | additive | Returns plain-language meanings for `SYN-RST-*` and `SYN-BOOT-*` diagnostics. |
+| 2026-07-31 | `POST /api/v1/system/restart` | additive | Requests an audited visible restart (`202`). A second live operation returns the normal conflict envelope with diagnostic `SYN-RST-001`. |
+| 2026-07-31 | `POST /api/v1/system/restart/{operation_id}/stage` | additive | Electron records measured `request`, `stop`, `desktop`, `daemon`, and `interface` stage state. |
+| 2026-07-31 | `v1.system.restart_requested` | additive | Payload `{operation_id, source}`; the desktop process observes this and runs the same restart path as the tray. |
+| 2026-07-31 | `v1.system.restart_progress` | additive | Payload `{operation}` after each audited stage report. |
+
 ### Shipped in v0.1.36-dev (AI Factory + advanced case engine foundation)
 
 | Date | Endpoint or event | Kind | Notes |

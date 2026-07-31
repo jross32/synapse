@@ -153,6 +153,8 @@ Daemon replies `{"type": "pong"}`.
 | `v1.tool.primitive_ran` | tool_id, action_id, result |
 | `v1.model.pull_progress` | name, status, percent |
 | `v1.mcp_server.updated` | reason, server_id |
+| `v1.system.restart_requested` | operation_id, source |
+| `v1.system.restart_progress` | operation |
 | `v1.device.paired` | device_id |
 | `v1.device.reconnected` | device_id |
 | `v1.device.revoked` | device_id |
@@ -194,6 +196,12 @@ API and your project context.**
 | `SYNAPSE_ROLE_PROMPT_FILE` | path to role prompt `.md` | Read your instructions |
 | `SYNAPSE_AI_CONTEXT` | path to `.synapse-ai-context.md` | **Shared project memory** |
 | `SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT` | reminder text | Read context before starting |
+
+Enabled MCP servers are also injected at this launch boundary, scoped by the role's
+`mcp_server_ids`: Claude gets additive `--mcp-config`, Codex gets one-launch
+`mcp_servers.*` overrides, and GitHub Copilot CLI gets `--additional-mcp-config`.
+MCP secret values stay in the worker environment; Codex receives only variable
+names and Copilot's generated file contains only `${NAME}` references.
 
 ### AI Case Sessions (`POST /api/v1/ai-cases/{id}/run`)
 | Variable | Value | Use |
@@ -669,6 +677,16 @@ The web scraper MCP server, when installed, can be used through these proxy endp
 | POST | `/mcp-servers/warden/update` | Install and activate the catalog-pinned release only after source/package verification |
 | POST | `/mcp-servers/warden/rollback` | Restore the most recent previous verified Warden release |
 
+**Automatic worker injection:** installing/enabling an MCP server here makes it available to newly launched
+Claude, Codex, and GitHub Copilot CLI squad workers. `agent_role_templates.mcp_server_ids` still controls the
+per-role subset (`null` = all enabled, `[]` = none, explicit ids = only those servers). Existing AI processes
+do not gain a new MCP dynamically; launch a new worker after changing the MCP list.
+
+**Reflex:** production startup discovers a valid local `reflex` checkout and reconciles an enabled stdio
+entry. It intentionally remains `autorun=false`: each AI host launches its own isolated Reflex child only
+when needed, so workers do not share a fixed port, control lease, pause state, or emergency stop. The obsolete
+`REFLEX_HEALTH_PORT` / `OS_BRIDGE_HEALTH_PORT` settings are removed while other worker-specific settings remain.
+
 Warden is **additive**, not an exclusive gateway. Enabled MCP servers are still wired directly into an AI,
 and Warden is wired beside them when installed and AI-enabled. Its Synapse-managed registry includes enabled
 stdio servers but excludes itself, disabled servers, and HTTP servers. HTTP servers such as Web Scraper stay
@@ -815,6 +833,15 @@ Requires `SYNAPSE_DEV_ENABLED=1` in the daemon's environment.
 | GET | `/system/network` | Network interfaces and LAN IP |
 | GET | `/remote-access` | Remote access (Cloudtap) status |
 | PATCH | `/system/network` | Toggle LAN exposure |
+| GET | `/system/restart` | Latest whole-app restart operation, stage states, and error catalog |
+| GET | `/system/restart/errors` | Stable `SYN-RST-*` / `SYN-BOOT-*` code meanings |
+| POST | `/system/restart` | Request the same visible restart used by tray/Desktop; returns 202 |
+| POST | `/system/restart/{operation_id}/stage` | Electron reports measured restart stage progress |
+
+`POST /system/restart` emits `v1.system.restart_requested`; Electron executes the request and reports
+`request → stop → desktop → daemon → interface` progress through `v1.system.restart_progress`. A second live
+operation is rejected with `SYN-RST-001`. Operations with no progress for ten minutes become a coded
+`SYN-BOOT-301` error instead of looping forever.
 
 ### 5AE. Auth & Pairing
 

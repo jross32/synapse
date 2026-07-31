@@ -105,6 +105,7 @@ def build_app(
     tool_registry: ToolRegistry | None = None,
     auth: AuthManager | None = None,
     allow_web_scraper_download_bootstrap: bool = False,
+    allow_reflex_bootstrap: bool = False,
     allow_wan_autostart: bool = False,
 ) -> FastAPI:
     """Construct the FastAPI app bound to a Storage + EventBus.
@@ -395,6 +396,7 @@ def build_app(
         from .seed import WBSCRPER_PROJECT_ID, reconcile_web_scraper_project
 
         bootstrapped_server = None
+        bootstrapped_reflex = None
         try:
             with storage.transaction() as conn:
                 bootstrapped_server = _mcp.ensure_bootstrap_web_scraper(
@@ -405,6 +407,15 @@ def build_app(
             log.warning("Web Scraper bootstrap skipped: %s", exc.envelope.message)
         except Exception:  # pragma: no cover - defensive boot logging
             log.exception("Web Scraper bootstrap failed unexpectedly.")
+
+        if allow_reflex_bootstrap:
+            try:
+                with storage.transaction() as conn:
+                    bootstrapped_reflex = _mcp.ensure_bootstrap_reflex(conn)
+            except SynapseError as exc:
+                log.warning("Reflex bootstrap skipped: %s", exc.envelope.message)
+            except Exception:  # pragma: no cover - defensive boot logging
+                log.exception("Reflex bootstrap failed unexpectedly.")
 
         if bootstrapped_server is not None:
             try:
@@ -420,6 +431,16 @@ def build_app(
                     "reason": "bootstrapped",
                     "server_id": bootstrapped_server.id,
                     "server": _mcp.client_dump(bootstrapped_server),
+                },
+            )
+
+        if bootstrapped_reflex is not None:
+            await bus.publish(
+                event_name("mcp_server", "updated"),
+                {
+                    "reason": "bootstrapped",
+                    "server_id": bootstrapped_reflex.id,
+                    "server": _mcp.client_dump(bootstrapped_reflex),
                 },
             )
 

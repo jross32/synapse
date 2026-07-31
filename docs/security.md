@@ -116,6 +116,22 @@ surface from `/api/v1`, because claude.ai's connector dialog sends only the URL
   publishes a surface on the public internet via Cloudtap; close it from
   `Settings → Phone access` when not in use.
 
+## Squad-worker MCP injection (ADR-0030)
+
+Enabled MCP servers are translated per launch for Claude, Codex, and GitHub
+Copilot workers. Role bindings still determine the allowed server subset.
+
+- Secret MCP environment values stay in the spawned worker's environment.
+  Codex launch arguments carry environment-variable names only, and Copilot's
+  temporary JSON carries `${NAME}` references rather than plaintext values.
+- Conflicting values for one environment-variable name fail the launch before
+  a worker starts; Synapse never silently chooses one server's credential.
+- Reflex is an on-demand stdio child with no shared fixed health port. Every AI
+  host owns its own process and control lease, preventing credentials and
+  emergency/pause state from leaking between simultaneous workers.
+- Changing the enabled MCP list affects newly launched workers. Synapse does
+  not mutate an already-running AI process or grant it a new server silently.
+
 ## Secrets
 
 No secrets are stored in plaintext by Synapse. Project env vars marked as `secret: true` are stored encrypted at rest (Windows DPAPI on the daemon's user account). The UI never round-trips secret values back to the client after the initial save — only a `(set)` placeholder is shown.

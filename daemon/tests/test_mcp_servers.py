@@ -7,6 +7,7 @@ import json
 import socket
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from synapse_daemon import mcp_servers as mcp
@@ -18,6 +19,8 @@ from synapse_daemon.mcp_servers import (
     McpServerManager,
     McpServerStatus,
     McpTransport,
+    build_codex_mcp_overrides,
+    build_copilot_mcp_config,
     build_mcp_config,
 )
 from synapse_daemon.process_manager import ProcessManager
@@ -48,6 +51,16 @@ def _fake_web_scraper_repo(path: Path) -> Path:
     (path / "mcp-server.js").write_text("// fake web scraper mcp\n", encoding="utf-8")
     (path / "package.json").write_text(
         json.dumps({"name": "web-scraper-app", "scripts": {"mcp:http": "node mcp-server.js --http"}}),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _fake_reflex_repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "mcp-server.js").write_text("// fake reflex mcp\n", encoding="utf-8")
+    (path / "package.json").write_text(
+        json.dumps({"name": "reflex", "version": "1.0.0"}),
         encoding="utf-8",
     )
     return path
@@ -173,6 +186,66 @@ def test_ensure_bootstrap_web_scraper_rehomes_known_server_to_first_party(tmp_pa
     assert server.launch_command in {"npm", "npm.cmd"}
     assert server.autorun is True
     assert server.env["SCRAPER_URL"] == "http://127.0.0.1:12345"
+
+
+def test_ensure_bootstrap_reflex_creates_isolated_stdio_server(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    checkout = _fake_reflex_repo(tmp_path / "reflex")
+
+    with storage.transaction() as conn:
+        server = mcp.ensure_bootstrap_reflex(conn, source_path=checkout)
+
+    assert server is not None
+    assert server.id == "reflex"
+    assert server.transport == McpTransport.STDIO
+    assert server.command == "node"
+    assert server.args == [str(checkout / "mcp-server.js")]
+    assert server.enabled is True
+    assert server.autorun is False
+    assert server.env == {}
+
+
+def test_reflex_bootstrap_removes_shared_port_but_preserves_worker_settings(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    checkout = _fake_reflex_repo(tmp_path / "reflex")
+    with storage.transaction() as conn:
+        mcp.install_server(
+            conn,
+            mcp.McpServerInstallRequest(
+                id="reflex",
+                name="Reflex",
+                transport="stdio",
+                command="node",
+                args=[str(checkout / "mcp-server.js")],
+                env={"REFLEX_HEALTH_PORT": "11300", "REFLEX_AGENT_NAME": "Synapse Worker"},
+            ),
+            mcp.McpCatalog(servers=[]),
+        )
+        server = mcp.ensure_bootstrap_reflex(conn, source_path=checkout)
+
+    assert server is not None
+    assert server.env == {"REFLEX_AGENT_NAME": "Synapse Worker"}
+
+
+def test_startup_discovers_and_bootstraps_reflex(tmp_path: Path, monkeypatch) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    checkout = _fake_reflex_repo(tmp_path / "reflex")
+    monkeypatch.setattr(mcp, "discover_local_reflex_repo", lambda: checkout)
+    app = build_app(storage, EventBus(), allow_reflex_bootstrap=True)
+
+    with TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token}):
+        pass
+
+    stored = mcp.get_server(storage.conn, "reflex")
+    assert stored.args == [str(checkout / "mcp-server.js")]
+    assert stored.enabled is True
+    assert stored.autorun is False
 
 
 def test_startup_bootstraps_web_scraper_from_checkout_and_launches_project(
@@ -309,3 +382,71 @@ def test_build_mcp_config_filters_and_shapes() -> None:
     assert cfg["fs"] == {"command": "npx", "args": ["-y", "server-fs"]}
     assert cfg["http"] == {"type": "http", "url": "http://127.0.0.1:9/mcp"}
     assert cfg["gh"]["env"] == {"TOKEN": "x"}
+
+
+def test_build_codex_mcp_overrides_filters_and_keeps_secrets_out_of_argv() -> None:
+    servers = [
+        _server(id="reflex", command="node", args=["C:/reflex/mcp-server.js"], enabled=True),
+        _server(id="off", command="npx", enabled=False),
+        _server(
+            id="github",
+            command="npx",
+            args=["-y", "github-mcp"],
+            env={"GITHUB_TOKEN": "supersecret"},
+            enabled=True,
+        ),
+        _server(id="remote", transport=McpTransport.HTTP, url="http://127.0.0.1:9/mcp", enabled=True),
+    ]
+
+    argv, worker_env = build_codex_mcp_overrides(servers)
+    joined = " ".join(argv)
+    assert "mcp_servers.reflex.command=\"node\"" in argv
+    assert "mcp_servers.reflex.args=[\"C:/reflex/mcp-server.js\"]" in argv
+    assert "mcp_servers.github.env_vars=[\"GITHUB_TOKEN\"]" in argv
+    assert "mcp_servers.remote.url=\"http://127.0.0.1:9/mcp\"" in argv
+    assert "off" not in joined
+    assert "supersecret" not in joined
+    assert worker_env == {"GITHUB_TOKEN": "supersecret"}
+
+
+def test_build_codex_mcp_overrides_honors_role_binding() -> None:
+    servers = [
+        _server(id="reflex", command="node", enabled=True),
+        _server(id="github", command="npx", enabled=True),
+    ]
+    argv, _env = build_codex_mcp_overrides(servers, ["reflex"])
+    joined = " ".join(argv)
+    assert "reflex" in joined
+    assert "github" not in joined
+
+
+def test_build_codex_mcp_overrides_rejects_conflicting_env_values() -> None:
+    servers = [
+        _server(id="one", command="node", env={"TOKEN": "a"}, enabled=True),
+        _server(id="two", command="node", env={"TOKEN": "b"}, enabled=True),
+    ]
+    with pytest.raises(Exception) as exc_info:
+        build_codex_mcp_overrides(servers)
+    assert exc_info.value.envelope.code == "mcp_server.conflict"
+
+
+def test_build_copilot_mcp_config_uses_env_references_and_role_binding() -> None:
+    servers = [
+        _server(
+            id="reflex",
+            command="node",
+            args=["C:/reflex/mcp-server.js"],
+            env={"REFLEX_AGENT_NAME": "Copilot Worker"},
+            enabled=True,
+        ),
+        _server(id="github", command="npx", enabled=True),
+    ]
+    config, worker_env = build_copilot_mcp_config(servers, ["reflex"])
+
+    assert list(config["mcpServers"]) == ["reflex"]
+    reflex = config["mcpServers"]["reflex"]
+    assert reflex["type"] == "stdio"
+    assert reflex["tools"] == ["*"]
+    assert reflex["env"] == {"REFLEX_AGENT_NAME": "${REFLEX_AGENT_NAME}"}
+    assert "Copilot Worker" not in json.dumps(config)
+    assert worker_env == {"REFLEX_AGENT_NAME": "Copilot Worker"}

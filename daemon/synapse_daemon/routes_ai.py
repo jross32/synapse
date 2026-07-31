@@ -478,6 +478,11 @@ def build_ai_router(
                     "path": "/api/v1/agent-squads/{id}/work-items | /api/v1/agent-work-items/{id}/launch | /handoff | /status",
                 },
                 {
+                    "purpose": "launch a Claude, Codex, or GitHub Copilot worker with the role-scoped enabled MCP set translated automatically for that runtime",
+                    "method": "POST",
+                    "path": "/api/v1/agent-work-items/{id}/launch (uses /api/v1/mcp-servers + agent_role_templates.mcp_server_ids)",
+                },
+                {
                     "purpose": "create, run, inspect, stop, and export AI Operating System cases",
                     "method": "GET | POST",
                     "path": "/api/v1/ai-cases | /api/v1/ai-cases/meta | /api/v1/ai-cases/{id} | /graph | /spawn | /run | /stop | /bundle | /export/{kind}",
@@ -566,6 +571,11 @@ def build_ai_router(
                     "purpose": "inspect, sync, update, or roll back the optional version-pinned Warden MCP search/router; direct MCP access remains enabled alongside Warden",
                     "method": "GET | POST",
                     "path": "/api/v1/mcp-servers/warden/status | /sync | /update | /rollback",
+                },
+                {
+                    "purpose": "request a visible whole-Synapse restart, follow its measured stages, or read stable restart error meanings",
+                    "method": "GET | POST",
+                    "path": "/api/v1/system/restart | /api/v1/system/restart/{operation_id}/stage | /api/v1/system/restart/errors",
                 },
                 {
                     "purpose": "global search across projects, tools, actions, and settings",

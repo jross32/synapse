@@ -135,6 +135,106 @@ def test_get_network_requires_auth(tmp_path: Path) -> None:
     assert res.status_code == 401
 
 
+def test_restart_operation_tracks_stages_and_error_catalog(tmp_path: Path) -> None:
+    client, _storage = _harness(tmp_path)
+    operation_id = "restart-test-001"
+    with client as c:
+        empty = c.get("/api/v1/system/restart")
+        assert empty.status_code == 200
+        assert empty.json()["operation"] is None
+        assert "SYN-BOOT-102" in empty.json()["error_catalog"]
+
+        requested = c.post(
+            "/api/v1/system/restart",
+            json={"operation_id": operation_id, "source": "tray"},
+        )
+        assert requested.status_code == 202, requested.text
+        assert requested.json()["operation"]["status"] == "requested"
+
+        progress = c.post(
+            f"/api/v1/system/restart/{operation_id}/stage",
+            json={
+                "stage": "request",
+                "state": "success",
+                "detail": "Restart accepted from tray.",
+                "source": "tray",
+            },
+        )
+        assert progress.status_code == 200, progress.text
+        assert progress.json()["operation"]["status"] == "restarting"
+        request_stage = progress.json()["operation"]["stages"][0]
+        assert request_stage["stage"] == "request"
+        assert request_stage["state"] == "success"
+
+        failed = c.post(
+            f"/api/v1/system/restart/{operation_id}/stage",
+            json={
+                "stage": "daemon",
+                "state": "error",
+                "detail": "Daemon health timed out.",
+                "error_code": "SYN-BOOT-102",
+                "error_message": "No health response after 15 seconds.",
+            },
+        )
+        assert failed.status_code == 200, failed.text
+        assert failed.json()["operation"]["status"] == "error"
+        daemon_stage = failed.json()["operation"]["stages"][3]
+        assert daemon_stage["error_code"] == "SYN-BOOT-102"
+
+
+def test_restart_request_refuses_a_second_live_operation(tmp_path: Path) -> None:
+    client, _storage = _harness(tmp_path)
+    with client as c:
+        first = c.post(
+            "/api/v1/system/restart",
+            json={"operation_id": "restart-first", "source": "desktop"},
+        )
+        assert first.status_code == 202
+        duplicate = c.post(
+            "/api/v1/system/restart",
+            json={"operation_id": "restart-second", "source": "desktop"},
+        )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "system_restart.conflict"
+    assert duplicate.json()["details"]["diagnostic_code"] == "SYN-RST-001"
+
+
+def test_restart_stage_requires_known_operation(tmp_path: Path) -> None:
+    client, _storage = _harness(tmp_path)
+    with client as c:
+        missing = c.post(
+            "/api/v1/system/restart/missing-operation/stage",
+            json={
+                "stage": "daemon",
+                "state": "success",
+                "detail": "Healthy.",
+            },
+        )
+    assert missing.status_code == 404
+
+
+def test_stale_restart_gets_a_stable_diagnostic_code(tmp_path: Path) -> None:
+    client, storage = _harness(tmp_path)
+    with client as c:
+        requested = c.post(
+            "/api/v1/system/restart",
+            json={"operation_id": "restart-stale", "source": "auto"},
+        )
+        assert requested.status_code == 202
+        storage.conn.execute(
+            "UPDATE audit_log SET timestamp_utc = ? WHERE entity_type = 'system_restart'",
+            ("2026-01-01T00:00:00+00:00",),
+        )
+        storage.conn.commit()
+        status = c.get("/api/v1/system/restart")
+
+    assert status.status_code == 200
+    operation = status.json()["operation"]
+    assert operation["status"] == "error"
+    assert operation["stages"][0]["state"] == "error"
+    assert operation["stages"][0]["error_code"] == "SYN-BOOT-301"
+
+
 def test_remote_access_reports_pairing_code_and_inactive_wan(tmp_path: Path) -> None:
     client, _ = _harness(tmp_path)
     with client as c:

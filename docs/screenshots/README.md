@@ -2,7 +2,7 @@
 
 Real screenshots of the running app, captured from the live renderer (Vite `:5173` + daemon `:7878`) via Playwright. **These evolve as Synapse is built** — when a change alters a user-visible surface, the affected image here is refreshed in the same commit (see the screenshot rule in `AGENTS.md`).
 
-_The original gallery was captured 2026-07-06 against daemon `v0.1.37`. The Warden marketplace proof was captured 2026-07-31 against daemon `v0.1.90` after a real pinned download and verification. The ChatGPT companion captures honestly show the browser-preview fallback message; the signed-in embedded bridge runs in the desktop Electron app._
+_The original gallery was captured 2026-07-06 against daemon `v0.1.37`. The Warden marketplace proof was captured 2026-07-31 against daemon `v0.1.90` after a real pinned download and verification. The restart proof was captured from the same native progress HTML exercised by a real `v0.1.91` Windows relaunch after every recorded stage passed. The ChatGPT companion captures honestly show the browser-preview fallback message; the signed-in embedded bridge runs in the desktop Electron app._
 
 ## Home — mission control (desktop, 1280×800)
 
@@ -56,6 +56,14 @@ their normal Synapse connections.
 
 Phone-width proof of the same verified Warden, direct Memory MCP, and directly connected Web Scraper
 coexisting without horizontal overflow.
+
+## Synapse restart verification — desktop (680×590)
+
+![Synapse restart verification](./restart-progress-desktop.png)
+
+The native startup/restart window after the daemon health probe and desktop renderer both passed. A real
+Windows tray restart first upgraded the running app to `v0.1.91`; the instrumented follow-up persisted all
+five stages as successful, closed this temporary window automatically, and left one healthy Synapse window.
 
 ### Verified finding (2026-07-05) — feeds the cockpit work
 

@@ -59,6 +59,20 @@ def _write_mcp_config(storage: Storage, role=None) -> Path | None:
     return path
 
 
+def _write_copilot_mcp_config(storage: Storage, role=None) -> tuple[Path | None, dict[str, str]]:
+    """Generate a session-only Copilot CLI MCP file with env references only."""
+    servers = mcp_servers_module.list_servers(storage.conn)
+    allow_ids = role.mcp_server_ids if role is not None else None
+    config, worker_env = mcp_servers_module.build_copilot_mcp_config(servers, allow_ids)
+    if not config.get("mcpServers"):
+        return None, worker_env
+    slug = role.id if role is not None else "all"
+    path = storage.data_dir / "mcp" / f"copilot-mcp-{slug}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return path, worker_env
+
+
 def build_agent_squads_router(
     storage: Storage,
     manager: PtySessionManager,
@@ -330,13 +344,24 @@ def build_agent_squads_router(
                     personality = None
             chosen_runtime = squads.pick_runtime(role, body.preferred_runtime or work_item.preferred_runtime)
             argv = squads.argv_for_runtime(chosen_runtime)
-            # Wire the user's enabled MCP servers into a Claude worker (ADR-0017
-            # MW2). `--mcp-config` merges additively, so the project's own
-            # `.mcp.json` (if any) is left untouched.
+            runtime_mcp_env: dict[str, str] = {}
+            # Wire the role's enabled MCP servers into either supported runtime.
+            # Claude receives an additive file; Codex receives one-launch config
+            # overrides plus inherited env names, so secrets never enter argv.
             if chosen_runtime == "claude":
                 mcp_config_path = _write_mcp_config(storage, role)
                 if mcp_config_path is not None:
                     argv = [*argv, "--mcp-config", str(mcp_config_path)]
+            elif chosen_runtime == "codex":
+                mcp_argv, runtime_mcp_env = mcp_servers_module.build_codex_mcp_overrides(
+                    mcp_servers_module.list_servers(storage.conn),
+                    role.mcp_server_ids,
+                )
+                argv = [*argv, *mcp_argv]
+            elif chosen_runtime == "copilot":
+                mcp_config_path, runtime_mcp_env = _write_copilot_mcp_config(storage, role)
+                if mcp_config_path is not None:
+                    argv = [*argv, f"--additional-mcp-config=@{mcp_config_path}"]
             session_id = squads._new_id()
             prompt_file = write_role_prompt(
                 data_dir=storage.data_dir,
@@ -368,6 +393,7 @@ def build_agent_squads_router(
             }
             if body.env:
                 env.update({str(key): str(value) for key, value in body.env.items()})
+            env.update(runtime_mcp_env)
             try:
                 session = await manager.spawn(
                     argv=argv,
