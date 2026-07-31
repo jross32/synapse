@@ -83,6 +83,14 @@
       "summary": "Install Chris Asmussen's Warden from an immutable verified commit, use its compact search/router alongside every direct Synapse MCP server, auto-sync enabled stdio tools without copying secrets into Warden JSON, and retain verified releases for rollback."
     },
     {
+      "id": "benchmarked-portable-skill-packs",
+      "title": "Benchmarked portable AI skill packs",
+      "status": "shipped",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0032",
+      "summary": "Install immutable, AI-discoverable workflow skills through AI Bundles without disabling direct tools. Super Internet Digger v2 is the first pack, with reusable same-model benchmark controls and scoped 4x claim gates instead of unmeasured marketing promises."
+    },
+    {
       "id": "observable-synapse-restart",
       "title": "Visible, diagnosable Synapse restart",
       "status": "shipped",

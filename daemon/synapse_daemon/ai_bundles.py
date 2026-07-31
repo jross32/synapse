@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from . import agent_squads
 from . import ai_factory
 from . import personalities as personalities_module
+from . import skill_packs
 from .errors import conflict, invalid, not_found
 from .runtime_paths import bundled_ai_bundles_sample
 from .time_utils import from_iso, to_iso, utc_now
@@ -33,6 +34,7 @@ class AiBundleAssetKind(str, Enum):
     COMPONENT = "component"
     RECIPE = "recipe"
     SOURCE = "source"
+    SKILL_PACK = "skill_pack"
 
 
 class AiBundleAssetRef(BaseModel):
@@ -91,6 +93,7 @@ class AiBundleManifest(BaseModel):
     components: list[ai_factory.AiComponentCreate] = Field(default_factory=list)
     recipes: list[ai_factory.AiRecipeCreate] = Field(default_factory=list)
     sources: list[ai_factory.AiSourceCreate] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
     quick_actions: list[AiBundleQuickAction] = Field(default_factory=list)
     notes_md: str = ""
 
@@ -242,6 +245,16 @@ def install_bundle(
                 label=recipe.name,
             )
         )
+    for skill_id in bundle.skills:
+        installed_skill = skill_packs.install(data_dir, skill_id)
+        skill_packs.ensure_benchmark_spec(conn, installed_skill)
+        owned_assets.append(
+            AiBundleAssetRef(
+                kind=AiBundleAssetKind.SKILL_PACK,
+                id=skill_id,
+                label=installed_skill.manifest.name,
+            )
+        )
     for action in bundle.quick_actions:
         _write_quick_action(data_dir, action)
         owned_assets.append(
@@ -368,6 +381,7 @@ def _delete_priority(kind: AiBundleAssetKind) -> int:
         AiBundleAssetKind.ROLE_TEMPLATE: 40,
         AiBundleAssetKind.PERSONALITY: 50,
         AiBundleAssetKind.SOURCE: 60,
+        AiBundleAssetKind.SKILL_PACK: 70,
     }
     return order.get(kind, 999)
 
@@ -492,5 +506,8 @@ def _delete_owned_asset(
         target_path = installed_quick_actions_dir(data_dir) / f"{asset.id}.json"
         if target_path.exists():
             target_path.unlink()
+        return
+    if asset.kind == AiBundleAssetKind.SKILL_PACK:
+        skill_packs.uninstall(data_dir, asset.id)
         return
     raise invalid("ai_bundle", f"Unknown owned asset kind '{asset.kind.value}'.")

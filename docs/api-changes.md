@@ -15,6 +15,15 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.92 (portable benchmarked skill packs)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-07-31 | `GET /api/v1/ai-bundles/skills` | additive | Lists bundled portable skill packages and installed immutable versions. |
+| 2026-07-31 | `GET /api/v1/ai-bundles/skills/{skill_id}` | additive | Returns an installed skill manifest, resource inventory, and `SKILL.md` instructions. |
+| 2026-07-31 | `GET /api/v1/ai-bundles/skills/{skill_id}/resources/{resource_path}` | additive | Reads one path-confined UTF-8 skill resource without importing or executing package code. |
+| 2026-07-31 | Synapse local MCP | additive | Adds `synapse_list_skill_packs` and `synapse_get_skill_pack`, and advertises the skill surface through `/api/v1/ai/context`. |
+
 ### Shipped in v0.1.3 (Milestone B)
 
 | Date | Endpoint or event | Kind | Notes |

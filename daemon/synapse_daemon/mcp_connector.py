@@ -29,6 +29,7 @@ from . import projects as projects_module
 from .auth import AuthManager
 from .errors import SynapseError
 from .quick_actions import load_templates
+from . import skill_packs
 from .storage import Storage
 from .tools_registry import ToolRegistry
 
@@ -76,6 +77,23 @@ def _tool_specs() -> list[dict[str, Any]]:
             "name": "synapse_list_quick_actions",
             "description": "List curated AI quick-action workflows available in Synapse.",
             "inputSchema": empty,
+        },
+        {
+            "name": "synapse_list_skill_packs",
+            "description": "List installed, portable Synapse AI skill packs and their benchmark metadata.",
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_get_skill_pack",
+            "description": "Read an installed Synapse skill pack's full instructions and resource inventory.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "skill_id": {"type": "string", "description": "Installed skill id, for example super-internet-digger."}
+                },
+                "required": ["skill_id"],
+                "additionalProperties": False,
+            },
         },
         {
             "name": "synapse_list_agent_squads",
@@ -195,6 +213,13 @@ def build_mcp_router(
             return out
         if name == "synapse_list_quick_actions":
             return [_quick_action_dict(a) for a in load_templates()]
+        if name == "synapse_list_skill_packs":
+            return [item.model_dump(mode="json") for item in skill_packs.list_installed(storage.data_dir)]
+        if name == "synapse_get_skill_pack":
+            skill_id = str(args.get("skill_id", "")).strip()
+            if not skill_id:
+                raise ValueError("skill_id is required")
+            return skill_packs.read_instructions(storage.data_dir, skill_id)
         if name == "synapse_list_agent_squads":
             return [s.model_dump(mode="json") for s in squads.list_squads(storage.conn)]
         if name == "synapse_list_sessions":
@@ -242,13 +267,14 @@ def build_mcp_router(
                     "projects": len(projects),
                     "tools": len(registry.list_manifests()),
                     "squads": len(squad_list),
+                    "skill_packs": len(skill_packs.list_installed_ids(storage.data_dir)),
                 },
                 "projects": [
                     {"id": p.id, "name": p.name, "kind": p.kind, "status": p.status.value, "path": p.path}
                     for p in projects
                 ],
                 "writes_enabled": _writes_allowed(),
-                "hint": "Use synapse_get_project_records for a project's ADRs/backlog/versions.",
+                "hint": "Use synapse_get_project_records for project decisions and synapse_get_skill_pack for reusable AI instructions.",
             }
         if name == "synapse_add_project_idea":
             if not _writes_allowed():

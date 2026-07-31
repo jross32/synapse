@@ -6,7 +6,18 @@
 
 ## Current version
 
-`0.1.91`
+`0.1.92`
+
+> **Benchmarked portable skill-pack note (2026-07-31):** ADR-0032 ships immutable, AI-discoverable
+> instruction/resource packages through the existing AI Bundle Marketplace. Super Internet Digger v2 is
+> installed as the first pack with deterministic plan/rank/inspect helpers, permission and provenance gates,
+> specialist roles, reusable quick actions, REST/MCP discovery, and a generic benchmark template for improving
+> additional Codex skills under the same evidence rules. The honest 15-repeat Windows result on a 5,001-file
+> offline fixture is **5.08x faster warm inspection**, **100/100 vs. 46.92/100 quality**, and **10.82x warm
+> quality-adjusted throughput** with no observed critical safety regression. Cold CLI startup is only 1.45x and
+> the full web/model workflow remains unproven at 4x, so those stay explicit future gates. Live v0.1.92 API and
+> Marketplace proof passed at 1280x900 and 375x812 with no console errors or page-level horizontal overflow;
+> final verification is renderer + Electron typecheck and **744 passed / 14 skipped**.
 
 > **Reflex + restart note (2026-07-31):** ADR-0030 now translates the role-scoped enabled MCP list for
 > every built-in squad runtime (Claude, Codex, and GitHub Copilot), discovers the owner's local Reflex
@@ -448,4 +459,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by v0.1.91 — runtime-neutral managed MCP injection + isolated Reflex bootstrap (ADR-0030) and visible, diagnosable whole-app restart (ADR-0031)._
+_Last updated by v0.1.92 — benchmarked portable AI skill packs and Super Internet Digger v2 (ADR-0032)._

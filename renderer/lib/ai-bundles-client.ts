@@ -48,6 +48,7 @@ export interface AiBundleCatalogItem {
   asset_refs: AiBundleAssetRef[];
   overlap_report: AiBundleOverlap[];
   efficiency: AiBundleEfficiency;
+  skills: string[];
   roles: Array<{ id: string; name: string }>;
   personalities: Array<{ id?: string | null; name: string }>;
   components: Array<{ id: string; name: string }>;

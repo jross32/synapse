@@ -1061,6 +1061,177 @@
         }
       ],
       "notes_md": "The reusable bug-finding team. Point it at a running app URL: user-simulation and edge-case hunters drive a real browser (Playwright) as mobile/desktop users, UX + accessibility critics judge from real screenshots, and a triage + synthesist pass files unique bugs as Quality OS evidence and gates. Browser roles carry only the Playwright MCP; coordination roles carry none — token-lean by design."
+    },
+    {
+      "id": "super-internet-digger",
+      "name": "Super Internet Digger + Skill Lab",
+      "publisher": "The WhatIf Company",
+      "version": "2.0.0",
+      "description": "Installs a portable, permission-aware source research skill, deterministic planning/ranking/inspection helpers, specialist roles, and a controlled baseline-vs-Synapse benchmark.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 8,
+      "tags": ["research", "source-code", "github", "web-scraper", "provenance", "benchmark", "skill-pack"],
+      "recommended_case_modes": ["research", "harvest", "benchmark", "challenge"],
+      "recommended_mission_profiles": ["source-discovery", "release-verification", "authorized-acquisition", "skill-benchmark"],
+      "asset_refs": [
+        {
+          "kind": "skill_pack",
+          "id": "super-internet-digger",
+          "label": "Super Internet Digger",
+          "summary": "Portable SKILL.md package with permission gates, deterministic helpers, and benchmark contract."
+        },
+        {
+          "kind": "recipe",
+          "id": "verified-source-harvest-v2",
+          "label": "Verified Source Harvest",
+          "summary": "Primary-source-first evidence and acquisition workflow."
+        }
+      ],
+      "overlap_report": [
+        {
+          "bundle_id": "deep-research-council",
+          "similarity_percent": 38,
+          "summary": "Both research deeply; this bundle specializes in source/build provenance, acquisition gates, and run readiness.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "parallel-harvest-bakeoff",
+          "similarity_percent": 44,
+          "summary": "Both use parallel intake; this bundle adds source licensing, immutable pins, local inspection, and explicit performance claims.",
+          "complementary": true
+        }
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Separates source, build, docs, and fallback records; provenance and permission gates can block a superficially attractive but unsafe result.",
+        "token_savings_summary": "A deterministic planner, candidate ranker, single-pass project inspector, and early-stop contract remove repeated AI deliberation and redundant web calls.",
+        "speed_gain_summary": "The 15-repeat offline inspection slice measured 5.08x faster warm-engine execution and 10.82x warm quality-adjusted throughput; the full internet/model 4x target remains gated.",
+        "best_for": ["latest release verification", "public or authorized private source discovery", "playable-build research", "repository provenance", "skill benchmarking"],
+        "caveats": ["Fresh-process CLI speed measured 1.45x, not 4x; the full seven-scenario internet/model workflow is still unproven, and unsafe or lower-quality attempts cannot win."]
+      },
+      "skills": ["super-internet-digger"],
+      "roles": [
+        {
+          "id": "source-provenance-researcher",
+          "name": "Source Provenance Researcher",
+          "description": "Finds primary source/release evidence and keeps source, build, web, docs, and mirrors as separate records.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Search official and canonical surfaces first. Every current-version, owner, license, and availability claim needs direct evidence. Stop when the evidence contract is complete.",
+          "enabled": true,
+          "sort_order": 208,
+          "mcp_server_ids": ["web-scraper"]
+        },
+        {
+          "id": "acquisition-guardian",
+          "name": "Acquisition Guardian",
+          "description": "Audits authorization, licensing, confirmation, credential handling, and supply-chain risk before retrieval or execution.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Treat discovery, acquisition, and execution as separate permission gates. Block leaks, circumvention, unclear licenses, credential exposure, and unapproved execution even when the candidate otherwise looks useful.",
+          "enabled": true,
+          "sort_order": 209,
+          "mcp_server_ids": []
+        },
+        {
+          "id": "source-run-plan-inspector",
+          "name": "Source Run-Plan Inspector",
+          "description": "Inspects an acquired project once, identifies runtimes and locks, and proposes reproducible commands without executing them.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "helper",
+          "context_mode": "minimal",
+          "role_tier": "worker",
+          "can_delegate": false,
+          "prompt_preamble_md": "Use the skill's single-pass inspector. Prefer locked, disposable installs; report commands as proposals until execution is explicitly authorized.",
+          "enabled": true,
+          "sort_order": 210,
+          "mcp_server_ids": []
+        },
+        {
+          "id": "skill-benchmark-judge",
+          "name": "Skill Benchmark Judge",
+          "description": "Runs same-model controlled comparisons and permits performance claims only when repeated measurements and safety gates support them.",
+          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "default_visibility": "lead",
+          "context_mode": "standard",
+          "role_tier": "supervisor",
+          "can_delegate": true,
+          "prompt_preamble_md": "Keep the baseline fair: same model, tools, prompt, network, and policy; at least five repeats. Report every dimension and failed attempt. Never publish a 4x claim that the measured multiplier and non-regression gates do not support.",
+          "enabled": true,
+          "sort_order": 211,
+          "mcp_server_ids": []
+        }
+      ],
+      "personalities": [
+        {
+          "id": "evidence-hawk",
+          "name": "The Evidence Hawk",
+          "blurb": "Distrusts unsupported versions, mirrors, and performance claims.",
+          "traits": ["source-first", "skeptical", "precise"],
+          "prompt_preamble_md": "Ask which primary source proves every important claim. Reject convenient but weak provenance and any benchmark conclusion without comparable raw evidence.",
+          "voice": "measured",
+          "sort_order": 73
+        }
+      ],
+      "recipes": [
+        {
+          "id": "verified-source-harvest-v2",
+          "name": "Verified Source Harvest v2",
+          "description": "Parallel primary-source discovery, policy ranking, permission-gated acquisition, and run-plan inspection.",
+          "archetype": "cockpit",
+          "nav_model": "split_pane",
+          "interaction_model": "drawers",
+          "visual_language": "notebook",
+          "data_behavior": "local_first",
+          "density_rule": "density-no-scroll",
+          "component_ids": ["nav-split-pane", "interaction-drawers", "visual-notebook", "quality-default", "density-no-scroll"],
+          "default_directives": {"generation_mode": "prototype", "recipe_selection_mode": "manual"},
+          "tags": ["research", "provenance", "source", "benchmark"],
+          "builtin": false
+        }
+      ],
+      "sources": [
+        {
+          "id": "whatif-source-research-contract",
+          "label": "The WhatIf source research contract",
+          "source_type": "manual",
+          "url": null,
+          "reuse_posture": "user_authorized",
+          "provenance_summary": "Bundled workflow and benchmark rules for public and user-authorized source research.",
+          "metadata": {"bundle_id": "super-internet-digger", "skill_id": "super-internet-digger"},
+          "notes_md": "Requires primary evidence, immutable version pins, separate discovery/acquisition/execution gates, and honest same-environment benchmark claims.",
+          "builtin": false
+        }
+      ],
+      "quick_actions": [
+        {
+          "id": "super-internet-digger",
+          "name": "Super Internet Digger",
+          "description": "Find and verify the best allowed source, build, docs, or playable equivalent, then prepare a reproducible handoff.",
+          "prompt": "Use the installed Synapse skill pack `super-internet-digger`. Read it from GET $SYNAPSE_API/ai-bundles/skills/super-internet-digger with X-Synapse-Token: $SYNAPSE_TOKEN, follow its permission gates and bounded parallel research loop, use direct tools even if Warden is available, and preserve the structured candidate/evidence artifacts. Do not download or execute until the relevant gate is explicitly authorized.",
+          "icon": "search-code",
+          "category": "workflows",
+          "tags": ["research", "source-code", "provenance", "web-scraper"],
+          "default_argv": ["codex"]
+        },
+        {
+          "id": "benchmark-super-internet-digger",
+          "name": "Benchmark Super Internet Digger",
+          "description": "Compare the current Codex skill with the Synapse pack across quality, safety, speed, tokens, calls, cost, and recovery.",
+          "prompt": "Run the installed `super-internet-digger-v2` benchmark through Synapse's /benchmarks API. Compare the current Codex skill and the installed Synapse skill with the same model, tools, network, prompt, and policy for at least five repeats per scenario. Preserve raw artifacts, keep failed attempts, apply the skill's benchmark rubric and critical safety gate, and publish only the claims the measured multipliers support. Treat 4x as a target, never an assumed result.",
+          "icon": "gauge",
+          "category": "benchmarks",
+          "tags": ["benchmark", "skill-lab", "quality", "speed", "tokens"],
+          "default_argv": ["codex"]
+        }
+      ],
+      "notes_md": "This is the first Synapse-native portable skill pack and the template for improving other Codex skills. Installation includes the skill files and seeds a reusable benchmark spec; uninstall removes the skill package but intentionally keeps benchmark records/specs so historical evidence is not destroyed."
     }
   ]
 }

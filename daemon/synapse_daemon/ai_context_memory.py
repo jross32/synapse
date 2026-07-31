@@ -42,6 +42,15 @@ AI_WORKING_AGREEMENT_PROMPT = (
     "work item -- don't rabbit-hole into the idea."
 )
 
+AI_SKILL_PACKS_PROMPT = (
+    "## Synapse skill packs\n"
+    "Before inventing a workflow, inspect installed reusable skills with `GET "
+    "$SYNAPSE_API/ai-bundles/skills` (header `X-Synapse-Token: $SYNAPSE_TOKEN`). "
+    "When one matches the task, read its complete instructions from `GET "
+    "$SYNAPSE_API/ai-bundles/skills/{skill_id}` and follow only the referenced resources needed. "
+    "Skill packs are additive: keep using any direct MCPs and native tools available to your runtime."
+)
+
 
 def project_root(data_dir: Path, project_id: str) -> Path:
     return data_dir / "projects" / project_id
@@ -217,6 +226,8 @@ def write_role_prompt(
             AI_CONTEXT_DIRECTION_PROMPT,
             "",
             AI_WORKING_AGREEMENT_PROMPT,
+            "",
+            AI_SKILL_PACKS_PROMPT,
             "",
             "## AI context excerpt",
             _context_excerpt(context_file, context_mode),

@@ -565,13 +565,18 @@ Designed for multiple AI agents running concurrently to avoid file conflicts.
 
 ### 5L. AI Bundles
 
-Curated bundles that install roles, personalities, quick actions, and factory assets at once.
+Curated bundles that install portable AI skill packs, roles, personalities, quick actions, and factory assets at once. Skill packs are versioned, immutable instruction/resource packages; installing one does not disable direct MCP servers or native tools.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/ai-bundles` | List all available bundles (installed + available) |
 | POST | `/ai-bundles/install/{id}` | Install a bundle |
 | DELETE | `/ai-bundles/install/{id}` | Uninstall a bundle |
+| GET | `/ai-bundles/skills` | List bundled and installed portable skill packs |
+| GET | `/ai-bundles/skills/{skill_id}` | Read an installed skill manifest plus its `SKILL.md` instructions |
+| GET | `/ai-bundles/skills/{skill_id}/resources/{resource_path}` | Read one path-safe UTF-8 skill resource on demand |
+
+The local Synapse MCP connector mirrors discovery and instruction loading through `synapse_list_skill_packs` and `synapse_get_skill_pack`. Spawned AI roles are reminded to inspect installed packs when relevant while retaining their directly enabled tools.
 
 ### 5M. AI Factory (Recipe Builder)
 

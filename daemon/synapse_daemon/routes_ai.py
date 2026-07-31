@@ -498,9 +498,9 @@ def build_ai_router(
                     "path": "/api/v1/benchmarks/specs | /api/v1/benchmarks/runs | /api/v1/benchmarks/runs/{id} | /launch | /rescore | /export | /api/v1/benchmarks/ingest-direct | /api/v1/benchmarks/bug-hunt-fixtures | /api/v1/benchmarks/score-bug-hunt",
                 },
                 {
-                    "purpose": "install or inspect AI-first bundles for roles, personalities, quick actions, and factory assets",
+                    "purpose": "install or inspect AI-first bundles, portable skill packs, their instructions/resources, roles, personalities, quick actions, and factory assets",
                     "method": "GET | POST | DELETE",
-                    "path": "/api/v1/ai-bundles | /api/v1/ai-bundles/install/{id}",
+                    "path": "/api/v1/ai-bundles | /api/v1/ai-bundles/install/{id} | /api/v1/ai-bundles/skills | /skills/{skill_id} | /skills/{skill_id}/resources/{resource_path}",
                 },
                 {
                     "purpose": "read a project's ADRs, backlog, and version history",

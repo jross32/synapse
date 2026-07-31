@@ -9,6 +9,7 @@ _EXPECTED_BUNDLES = {
     "repo-rescue-lab",
     "parallel-harvest-bakeoff",
     "synapse-ux-lab",
+    "super-internet-digger",
 }
 
 
@@ -59,3 +60,22 @@ def test_synapse_ux_lab_bundle_exposes_review_loop_assets() -> None:
     } <= role_ids
     assert {"craft-director", "friction-hunter", "cost-keeper"} <= personality_ids
     assert quick_action_ids == {"synapse-ux-lab-kickoff"}
+
+
+def test_super_internet_digger_bundle_exposes_skill_and_benchmark_actions() -> None:
+    bundle = ai_bundles.bundle_by_id("super-internet-digger")
+    role_ids = {role.id for role in bundle.roles}
+    quick_action_ids = {action.id for action in bundle.quick_actions}
+
+    assert bundle.skills == ["super-internet-digger"]
+    assert {
+        "source-provenance-researcher",
+        "acquisition-guardian",
+        "source-run-plan-inspector",
+        "skill-benchmark-judge",
+    } <= role_ids
+    assert quick_action_ids == {
+        "super-internet-digger",
+        "benchmark-super-internet-digger",
+    }
+    assert "4x" in bundle.efficiency.caveats[0].lower()

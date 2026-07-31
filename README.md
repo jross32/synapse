@@ -6,7 +6,7 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.91`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release makes the installed MCP list truly runtime-neutral for every built-in worker—Claude, Codex, and GitHub Copilot—auto-discovers local **Reflex** as an isolated per-worker controller, and replaces the tray's invisible restart gap with a resumable startup window, measured green checks, and stable copyable diagnostics (ADRs 0030–0031). The immediately preceding waves shipped the whole **AI Activity** experience (ADR-0028) and optional version-pinned **Warden** installation (ADR-0029). **734 automated tests pass** (`14 skipped`).
+> **Status:** early development (`v0.1.92`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release adds **portable, immutable, benchmark-backed AI skill packs** (ADR-0032): Super Internet Digger v2 is installable from AI Bundles, AI-discoverable through REST/MCP, and measured 5.08x faster on its scoped warm inspection workload without replacing direct tools. The immediately preceding waves shipped runtime-neutral MCP injection, isolated **Reflex**, observable restart (ADRs 0030–0031), optional **Warden** (ADR-0029), and the **AI Activity** experience (ADR-0028). **744 automated tests pass** (`14 skipped`).
 >
 > 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (including the new verified restart checklist), refreshed as the UI evolves.
 
@@ -75,7 +75,7 @@ If that's all you needed to know, skip to **[Getting started](#getting-started)*
 - **🧑‍💼 An autonomous "AI boss"** *(ADR-0013)* — give it a goal from the Sessions quick-actions rail and it orients itself (`GET /api/v1/ai/context`), decides or creates the project, posts a visible plan, staffs and launches its own workers, prefers installing an existing marketplace tool over writing one from scratch, and records its decisions as project ADRs. Full autonomy, bounded by one thing: a **kill switch** (`POST /api/v1/agent-squads/{id}/stop`) that stops everything instantly.
   *Why it's better:* it doesn't just execute a task and forget — it writes durable ADRs and updates `.synapse-ai-context.md` as it goes, so the **next** run (next week, a different AI) starts smarter instead of re-deriving the same plan from zero. That's Synapse improving its own working knowledge, not just shipping one app.
 
-- **🛒 A marketplace** — install tools, local AI models, MCP servers, workers, and ready-made teams with one click. This now includes **Warden** as an optional, version-pinned MCP search/router: an AI can use its five compact tools to find and route across local MCP capabilities while GitHub, Playwright, Web Scraper, and every other direct tool remain available normally. Synapse verifies the exact upstream commit before activation and retains verified releases for rollback. Point-and-click for a human; REST-callable for an AI.
+- **🛒 A marketplace** — install tools, local AI models, MCP servers, portable AI skills, workers, and ready-made teams with one click. This includes **Warden** as an optional, version-pinned MCP search/router and **Super Internet Digger v2** as the first immutable, benchmark-backed skill pack. An AI can discover a skill through REST/MCP, read only the instructions/resources it needs, and still use GitHub, Playwright, Web Scraper, Warden, and every other direct tool normally. Point-and-click for a human; REST-callable for an AI.
   *Why it's better:* extending a chatbot means copy-pasting instructions into every new chat. Extending Synapse means installing a tool once — every newly launched Claude, Codex, or GitHub Copilot worker receives the role-scoped set automatically. Reflex stays isolated per worker instead of running one shared fixed-port controller.
 
 - **🔄 A restart you can actually watch** — **Restart Synapse** now opens a focused progress window before anything exits, carries its state across the old and new desktop processes, and checks request acceptance, service shutdown, desktop relaunch, daemon health, and interface readiness. Failures stay visible with a stable `SYN-RST-*` / `SYN-BOOT-*` code and copyable diagnostics; the same lifecycle is observable through REST + WebSocket.
@@ -226,6 +226,12 @@ We scored quality across independent dimensions instead of one number, because "
 
 This is a small, single-run benchmark on a small app — treat it as one honest data point, not a universal law. Synapse's benchmark engine is built to run this same comparison, with repeats and confidence labels, on *your* real projects too.
 
+### Benchmarking improved AI skills, not just apps
+
+Portable skill packs now ship with the same evidence discipline. The first repeatable comparison, [`benchmarks/super-internet-digger/`](./benchmarks/super-internet-digger/), runs the original Codex v1 inspection helper and Synapse v2 on the same Windows machine, same fixtures, same Python runtime, and 15 alternating-order repeats. On the deliberately scoped 5,001-file offline inspection test, v2 measured **5.08x faster warm-engine execution**, **100/100 vs. 46.92/100 quality (+53.08 points)**, and **10.82x warm quality-adjusted throughput** with no observed critical safety regression.
+
+The honest boundary matters: fresh-process CLI speed was only **1.45x**, and the complete internet/model workflow has **not** yet proven 4x. Its seven-scenario same-model/tool/access suite remains the release gate. Synapse records both passing and failing gates so a target cannot quietly turn into a marketing claim.
+
 ---
 
 ## What's been built with Synapse
@@ -264,7 +270,7 @@ pip install -e ".[dev]"
 
 # checks
 npm run typecheck                 # TypeScript passes
-(cd daemon && python -m pytest -q) # 663 tests pass + 14 skipped
+(cd daemon && python -m pytest -q) # 744 tests pass + 14 skipped
 
 # run the dev stack (daemon + Vite + Electron)
 synapse.cmd

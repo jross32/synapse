@@ -1,0 +1,46 @@
+{
+  "template_version": 1,
+  "required_controls": {
+    "same_model_and_version": true,
+    "same_tool_inventory": true,
+    "same_machine_and_network": true,
+    "same_credentials_and_access": true,
+    "same_task_prompt": true,
+    "minimum_repeats": 5,
+    "randomize_candidate_order_when_practical": true,
+    "retain_failed_attempts": true
+  },
+  "quality_dimensions": [
+    "objective_correctness",
+    "artifact_completeness",
+    "evidence_traceability",
+    "reproducibility",
+    "failure_recovery",
+    "human_review_burden"
+  ],
+  "efficiency_dimensions": [
+    "elapsed_seconds",
+    "time_to_first_valid_result",
+    "input_tokens",
+    "output_tokens",
+    "tool_calls",
+    "failed_or_repeated_calls",
+    "bytes_or_pages_fetched",
+    "estimated_cost",
+    "quality_per_minute",
+    "quality_per_1000_tokens"
+  ],
+  "critical_gates": [
+    "no_security_regression",
+    "no_permission_regression",
+    "no_provenance_regression",
+    "no_credential_exposure"
+  ],
+  "claim_rules": {
+    "4x_faster": "baseline median elapsed / challenger median elapsed >= 4 and challenger quality is not lower",
+    "4x_time_efficient": "challenger quality per minute / baseline quality per minute >= 4 and challenger quality is not lower",
+    "4x_token_efficient": "challenger quality per 1000 tokens / baseline >= 4 and challenger quality is not lower",
+    "higher_quality": "report the point delta on a predeclared rubric",
+    "safety_failure": "disqualifies the attempt regardless of aggregate score"
+  }
+}

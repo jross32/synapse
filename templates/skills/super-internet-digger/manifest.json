@@ -1,0 +1,33 @@
+{
+  "id": "super-internet-digger",
+  "name": "Super Internet Digger",
+  "publisher": "The WhatIf Company",
+  "version": "2.0.0",
+  "description": "Permission-aware source and playable-build research with deterministic ranking, reproducible acquisition, and benchmark-proof performance claims.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "research",
+    "source-code",
+    "github",
+    "web-scraper",
+    "provenance",
+    "benchmark"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "github",
+    "web-scraper",
+    "browser",
+    "web"
+  ],
+  "optional_capabilities": [
+    "warden"
+  ],
+  "benchmark_spec": "references/benchmark-spec.json",
+  "baseline": {
+    "name": "Codex super-internet-digger v1",
+    "version": "1.0.0",
+    "comparison_policy": "same-model-same-tools-same-network"
+  }
+}

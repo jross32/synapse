@@ -86,7 +86,7 @@ export function AiBundleBrowser(): JSX.Element {
   }
 
   return (
-    <div className='space-y-5'>
+    <div className='min-w-0 space-y-5'>
       <Card className='border-border/70 bg-gradient-to-br from-card via-card to-secondary/20 p-5'>
         <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
           <div className='max-w-3xl space-y-2'>
@@ -97,8 +97,8 @@ export function AiBundleBrowser(): JSX.Element {
             <div>
               <h2 className='text-2xl font-semibold tracking-tight'>Install AI-first workflow packs</h2>
               <p className='mt-1 text-sm text-muted-foreground'>
-                These bundles are built for AI operators: better roles, stronger personalities, reusable quick
-                actions, and factory assets that reduce setup tokens and improve quality.
+                These bundles are built for AI operators: portable skill packs, measured benchmarks, stronger
+                roles, reusable quick actions, and factory assets that reduce setup tokens and improve quality.
               </p>
             </div>
           </div>
@@ -115,7 +115,7 @@ export function AiBundleBrowser(): JSX.Element {
             placeholder='Search bundles, goals, case modes, or tags...'
             className='h-11 rounded-2xl border-border/70 bg-background/70'
           />
-          <div className='flex gap-2'>
+          <div className='flex flex-wrap gap-2'>
             {(['all', 'installed', 'not-installed'] as FilterMode[]).map((value) => (
               <button
                 key={value}
@@ -145,6 +145,7 @@ export function AiBundleBrowser(): JSX.Element {
         {bundles.map((bundle) => {
           const busy = busyId === bundle.id;
           const assetCount =
+            bundle.skills.length +
             bundle.roles.length +
             bundle.personalities.length +
             bundle.quick_actions.length +
@@ -156,14 +157,14 @@ export function AiBundleBrowser(): JSX.Element {
               key={bundle.id}
               className='flex h-full flex-col gap-4 rounded-3xl border-border/70 bg-gradient-to-br from-card via-card to-secondary/25 p-5'
             >
-              <div className='flex items-start justify-between gap-3'>
-                <div className='flex items-start gap-3'>
-                  <div className='mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/12 text-primary'>
+              <div className='flex flex-col items-start gap-3 sm:flex-row sm:justify-between'>
+                <div className='flex min-w-0 items-start gap-3'>
+                  <div className='mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary'>
                     <Bot className='h-4.5 w-4.5' />
                   </div>
-                  <div>
+                  <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2'>
-                      <h3 className='text-base font-semibold'>{bundle.name}</h3>
+                      <h3 className='break-words text-base font-semibold'>{bundle.name}</h3>
                       {bundle.featured && (
                         <Badge className='rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary'>
                           Featured
@@ -176,7 +177,7 @@ export function AiBundleBrowser(): JSX.Element {
                   </div>
                 </div>
                 {bundle.installed ? (
-                  <span className='inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-300'>
+                  <span className='inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-300'>
                     <CheckCircle2 className='h-3 w-3' />
                     Installed
                   </span>
@@ -196,7 +197,7 @@ export function AiBundleBrowser(): JSX.Element {
               </div>
 
               <div className='grid grid-cols-2 gap-2 text-xs'>
-                <InlineStat label='Modes' value={String(bundle.recommended_case_modes.length)} />
+                <InlineStat label='Skill packs' value={String(bundle.skills.length)} />
                 <InlineStat label='Owned assets' value={String(assetCount)} />
                 <InlineStat label='Quick actions' value={String(bundle.quick_actions.length)} />
                 <InlineStat label='Roles' value={String(bundle.roles.length)} />

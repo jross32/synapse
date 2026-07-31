@@ -2,7 +2,7 @@
 
 Real screenshots of the running app, captured from the live renderer (Vite `:5173` + daemon `:7878`) via Playwright. **These evolve as Synapse is built** — when a change alters a user-visible surface, the affected image here is refreshed in the same commit (see the screenshot rule in `AGENTS.md`).
 
-_The original gallery was captured 2026-07-06 against daemon `v0.1.37`. The Warden marketplace proof was captured 2026-07-31 against daemon `v0.1.90` after a real pinned download and verification. The restart proof was captured from the same native progress HTML exercised by a real `v0.1.91` Windows relaunch after every recorded stage passed. The ChatGPT companion captures honestly show the browser-preview fallback message; the signed-in embedded bridge runs in the desktop Electron app._
+_The original gallery was captured 2026-07-06 against daemon `v0.1.37`. The Warden marketplace proof was captured 2026-07-31 against daemon `v0.1.90` after a real pinned download and verification. The restart proof was captured from the same native progress HTML exercised by a real `v0.1.91` Windows relaunch after every recorded stage passed. The portable-skill Marketplace proof was captured against the live `v0.1.92` renderer after a real Super Internet Digger bundle install. The ChatGPT companion captures honestly show the browser-preview fallback message; the signed-in embedded bridge runs in the desktop Electron app._
 
 ## Home — mission control (desktop, 1280×800)
 
@@ -56,6 +56,21 @@ their normal Synapse connections.
 
 Phone-width proof of the same verified Warden, direct Memory MCP, and directly connected Web Scraper
 coexisting without horizontal overflow.
+
+## AI Bundles + portable skills — desktop (1280×900)
+
+![AI Bundles portable skill desktop](./ai-bundles-desktop.png)
+
+The installed **Super Internet Digger + Skill Lab** card exposes one immutable skill pack alongside its
+roles, quick actions, and owned assets. The explanatory copy keeps the benchmark scope honest and preserves
+direct-tool compatibility.
+
+## AI Bundles + portable skills — mobile (375×812)
+
+![AI Bundles portable skill mobile](./ai-bundles-mobile.png)
+
+Phone-width proof after the live verification pass fixed the filter/header wrapping issue. The page has no
+console errors or page-level horizontal overflow.
 
 ## Synapse restart verification — desktop (680×590)
 

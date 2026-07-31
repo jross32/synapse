@@ -1,0 +1,6 @@
+interface:
+  display_name: "Super Internet Digger"
+  short_description: "Verified source research with benchmark proof"
+  default_prompt: "Use $super-internet-digger to find, verify, compare, and safely prepare the best authorized source or playable build."
+policy:
+  allow_implicit_invocation: true

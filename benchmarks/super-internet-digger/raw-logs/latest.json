@@ -1,0 +1,2598 @@
+{
+  "generated_at": "2026-07-31T19:28:21.736363+00:00",
+  "scope": "deterministic offline project inspection only",
+  "environment": {
+    "python": "3.12.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "repeats": 15,
+    "noise_files": 5000
+  },
+  "inputs": {
+    "baseline": {
+      "path": "C:\\Users\\justi\\.codex\\skills\\super-internet-digger\\scripts\\detect_run_plan.py",
+      "sha256": "e2f7bdd75155b7d535c792aae759f582fd6d62427726bb71b4187ce032787b6b"
+    },
+    "challenger": {
+      "path": "C:\\Users\\justi\\synapse\\templates\\skills\\super-internet-digger\\scripts\\digger_pipeline.py",
+      "sha256": "04cc776de16f9344237e6e7c768760294760bf3e1a3a9a0b126e8474d927dff9"
+    }
+  },
+  "quality": {
+    "baseline_median": 46.92,
+    "challenger_median": 100.0,
+    "point_delta": 53.08,
+    "baseline_runs": [
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 46.92,
+        "detection_recall": 0.5385,
+        "precision": 1.0,
+        "polyglot_complete_rate": 0.0,
+        "evidence_coverage": 0.5385,
+        "reproducible_node_install": false,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      }
+    ],
+    "challenger_runs": [
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      },
+      {
+        "score": 100.0,
+        "detection_recall": 1.0,
+        "precision": 1.0,
+        "polyglot_complete_rate": 1.0,
+        "evidence_coverage": 1.0,
+        "reproducible_node_install": true,
+        "execution_performed": false,
+        "critical_errors": 0,
+        "fixtures": [
+          {
+            "id": "node-python",
+            "expected": [
+              "node-web",
+              "python-app"
+            ],
+            "actual": [
+              "node-web",
+              "python-app"
+            ]
+          },
+          {
+            "id": "dotnet-cmake",
+            "expected": [
+              "cmake",
+              "dotnet"
+            ],
+            "actual": [
+              "cmake",
+              "dotnet"
+            ]
+          },
+          {
+            "id": "rust-static",
+            "expected": [
+              "rust",
+              "static-web"
+            ],
+            "actual": [
+              "rust",
+              "static-web"
+            ]
+          },
+          {
+            "id": "unity-node",
+            "expected": [
+              "node-app",
+              "unity"
+            ],
+            "actual": [
+              "node-app",
+              "unity"
+            ]
+          },
+          {
+            "id": "godot-python",
+            "expected": [
+              "godot",
+              "python-app"
+            ],
+            "actual": [
+              "godot",
+              "python-app"
+            ]
+          },
+          {
+            "id": "unreal-cmake",
+            "expected": [
+              "cmake",
+              "unreal"
+            ],
+            "actual": [
+              "cmake",
+              "unreal"
+            ]
+          },
+          {
+            "id": "static-only",
+            "expected": [
+              "static-web"
+            ],
+            "actual": [
+              "static-web"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "speed": {
+    "warm_engine": {
+      "baseline": {
+        "median_ms": 237.517,
+        "p90_ms": 272.162,
+        "min_ms": 221.254,
+        "max_ms": 281.636,
+        "cv": 0.0731
+      },
+      "challenger": {
+        "median_ms": 46.793,
+        "p90_ms": 54.589,
+        "min_ms": 39.244,
+        "max_ms": 58.207,
+        "cv": 0.1113
+      },
+      "ratio": 5.08,
+      "passes_4x": true
+    },
+    "cold_cli": {
+      "baseline": {
+        "median_ms": 589.877,
+        "p90_ms": 625.607,
+        "min_ms": 550.451,
+        "max_ms": 648.696,
+        "cv": 0.05
+      },
+      "challenger": {
+        "median_ms": 407.94,
+        "p90_ms": 449.246,
+        "min_ms": 368.62,
+        "max_ms": 489.171,
+        "cv": 0.0735
+      },
+      "ratio": 1.45,
+      "passes_4x": false
+    },
+    "quality_adjusted_efficiency": {
+      "warm_engine_ratio": 10.82,
+      "warm_engine_passes_4x": true,
+      "cold_cli_ratio": 3.08,
+      "cold_cli_passes_4x": false
+    }
+  },
+  "claims": {
+    "full_skill_4x": false,
+    "full_skill_reason": "Internet/model workflow has not yet completed the seven-scenario repeated suite.",
+    "critical_safety_regression": false
+  }
+}

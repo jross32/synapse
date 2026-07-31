@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from . import ai_bundles
+from . import ai_bundles, skill_packs
 from .profile import ProfileManager
 from .storage import Storage
 
@@ -35,6 +35,22 @@ def build_ai_bundles_router(
             "installed_ids": sorted(installed_ids),
             "installed": installed,
         }
+
+    @router.get("/skills", response_model=None)
+    async def list_skill_packs() -> dict[str, Any]:
+        catalog = skill_packs.load_catalog(storage.data_dir)
+        return {
+            "catalog": [item.model_dump(mode="json") for item in catalog],
+            "installed_ids": skill_packs.list_installed_ids(storage.data_dir),
+        }
+
+    @router.get("/skills/{skill_id}", response_model=None)
+    async def get_skill_pack(skill_id: str) -> dict[str, Any]:
+        return skill_packs.read_instructions(storage.data_dir, skill_id)
+
+    @router.get("/skills/{skill_id}/resources/{resource_path:path}", response_model=None)
+    async def get_skill_pack_resource(skill_id: str, resource_path: str) -> dict[str, Any]:
+        return skill_packs.read_resource(storage.data_dir, skill_id, resource_path)
 
     @router.post("/install/{bundle_id}", response_model=None)
     async def install_ai_bundle(bundle_id: str, force: bool = False) -> dict[str, Any]:
