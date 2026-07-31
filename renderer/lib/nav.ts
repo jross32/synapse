@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Globe,
   House,
+  Radio,
   Rocket,
   Settings,
   Sparkles,
@@ -19,6 +20,7 @@ export type CorePageId =
   | 'home'
   | 'apps'
   | 'tools'
+  | 'live'
   | 'ai-coding'
   | 'ai-factory'
   | 'settings';
@@ -36,7 +38,7 @@ export type MarketplaceSection = 'tools' | 'bundles' | 'models' | 'workers' | 's
 export type AiCodingSection = 'sessions' | 'squads' | 'assistant' | 'review' | 'chatgpt';
 
 export type NavigationIntent =
-  | { page: 'home' | 'ai-factory' | 'settings' | 'whatsnew' }
+  | { page: 'home' | 'live' | 'ai-factory' | 'settings' | 'whatsnew' }
   | { page: 'apps'; section?: AppsSection }
   | {
       page: 'tools';
@@ -102,6 +104,13 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     section: 'main',
   },
   {
+    id: 'live',
+    label: 'Live',
+    icon: Radio,
+    description: 'Watch your AIs work in real time',
+    section: 'ai',
+  },
+  {
     id: 'ai-coding',
     label: 'AI Coding',
     icon: Sparkles,
@@ -138,8 +147,8 @@ export const DEFAULT_ROUTE: AppRoute = { kind: 'core', page: 'home' };
 
 export interface SidebarLayout {
   main_order: Array<'apps' | 'tools'>;
-  ai_order: Array<'ai-coding' | 'ai-factory'>;
-  hidden_core: Array<'apps' | 'tools' | 'ai-coding' | 'ai-factory'>;
+  ai_order: Array<'live' | 'ai-coding' | 'ai-factory'>;
+  hidden_core: Array<'apps' | 'tools' | 'live' | 'ai-coding' | 'ai-factory'>;
   installed_page_order: string[];
   visible_installed_pages: string[];
 }
@@ -164,10 +173,13 @@ interface LegacySidebarLayout {
 
 const STORAGE_KEY = 'synapse.sidebar.layout';
 const MAIN_DEFAULT: SidebarLayout['main_order'] = ['apps', 'tools'];
-const AI_DEFAULT: SidebarLayout['ai_order'] = ['ai-coding', 'ai-factory'];
+// `completeOrder` appends any default missing from a saved layout, so adding a new
+// hub here makes it appear for existing users too (no migration needed).
+const AI_DEFAULT: SidebarLayout['ai_order'] = ['live', 'ai-coding', 'ai-factory'];
 const HIDEABLE_CORE = new Set<SidebarLayout['hidden_core'][number]>([
   'apps',
   'tools',
+  'live',
   'ai-coding',
   'ai-factory',
 ]);

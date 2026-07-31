@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.86] -- 2026-07-30
+
+### Added
+- **The Live View tab — watch your AIs work in real time (ADR-0028, PLAN 5 Phase 4).** A new top-level
+  **Live** hub in the sidebar (AI section). Left rail: every AI session ever registered, newest number
+  first — `#011 · Claude · active · just now`, with a connection dot (green/yellow/red via the semantic
+  `status-*` tokens) that pulses while the session is live, plus its status/stale flag and task. Main pane:
+  the selected session's story — its persisted milestones from the activity feed, then **live events
+  appended as they happen** (`v1.activity.notification`, work-item/agent-run events, and the AI's own
+  `pty.session_output` terminal lines rendered mono, buffer capped at 300), with a header strip showing the
+  connection code, recorded **token total**, and a pulsing **live** indicator. Real loading / empty / error
+  states throughout (Contract #13), and the timeline auto-follows new entries.
+- **This is the reference implementation of the one-window standard** (AGENTS.md "Frontend UI standard"):
+  a fixed-height shell where the session rail and the timeline are *independent* `min-h-0 overflow-y-auto`
+  panes with `.scrollbar-thin` — **the page body never scrolls**. New surfaces should copy this page's shape.
+- New nav plumbing: `'live'` added to `CorePageId` / `NavigationIntent` / `SidebarLayout`, a `Radio`-icon
+  entry in `CORE_NAV_ITEMS`, and `'live'` added to the AI-section defaults — `completeOrder()` appends any
+  default missing from a **saved** layout, so the new hub shows up for existing installs without a migration.
+
+### Verified (live, against the running stack)
+Clicked **Live** → the rail listed all 10 existing sessions; registering a new AI session by `curl` made
+**#011 appear at the top of the rail instantly** ("just now") and stream into the timeline with the live
+indicator — **no reload**. Page body does not scroll at **1536px** or **375px** (0px overflow at mobile
+width), 2 `.scrollbar-thin` panes present, `tsc` 0 errors, 0 console errors after a full reload.
+
 ## [0.1.85] -- 2026-07-30
 
 ### Added

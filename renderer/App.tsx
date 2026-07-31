@@ -48,6 +48,7 @@ import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
 import { HomePage } from './pages/Home';
+import { LiveViewPage } from './pages/LiveView';
 import { AppsPage } from './pages/Apps';
 import { ToolsPage } from './pages/Tools';
 import { AiCodingPage } from './pages/AiCoding';
@@ -275,6 +276,10 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       setRoute({ kind: 'core', page: 'home' });
       return;
     }
+    if (intent.page === 'live') {
+      setRoute({ kind: 'core', page: 'live' });
+      return;
+    }
     if (intent.page === 'ai-factory') {
       setRoute({ kind: 'core', page: 'ai-factory' });
       return;
@@ -473,6 +478,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
                 onConsumedPendingSession={() => setPendingSession(null)}
               />
             )}
+            {route.kind === 'core' && route.page === 'live' && <LiveViewPage />}
             {route.kind === 'core' && route.page === 'ai-factory' && <AiFactoryPage />}
             {route.kind === 'core' && route.page === 'whatsnew' && <WhatsnewPage />}
             {route.kind === 'core' && route.page === 'settings' && (
