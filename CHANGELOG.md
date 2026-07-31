@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.85] -- 2026-07-30
+
+### Added
+- **The Notification Center — see when an AI connects and what it does (ADR-0028, PLAN 5 Phase 3).** A
+  persistent **bell** with an unread badge, reachable on every screen (desktop + mobile, mounted globally
+  beside the Capture FAB). Opening it shows the AI-activity feed: a coloured status dot per level
+  (green/yellow/red via the app's semantic `status-*` tokens — no raw palette), the title, relative time,
+  a per-row **✕ to dismiss** (marks read), and **Mark all read**. Clicking a row opens a detail view with
+  the full body, the **session number**, a **token-usage** breakdown (in/out/total + per-role) when the
+  daemon recorded one, and the notification's **jump-to links** rendered as buttons that route through the
+  app's existing `navigate()` flow (via the `synapse:navigate` event) — so "Session #7 filed an idea" can
+  take you straight to the Review inbox. New `renderer/lib/activity-client.ts`, `renderer/lib/use-activity.ts`
+  (live via the `v1.activity.notification` event, with optimistic read-marking), and
+  `renderer/components/NotificationCenter.tsx`.
+- **`.scrollbar-thin` utility (one-window standard).** The first piece of the ADR-0028 UI standard lands in
+  `renderer/styles.css`: theme-driven thin scrollbars (WebKit + Firefox) for the *inner* scroll panes every
+  new surface is built from. The Notification Center is built to that standard — a fixed-height panel whose
+  list/detail pane scrolls while the page itself never does.
+
+### Verified (live, against the running stack)
+Registering an AI session by `curl` made the bell badge appear **live over the WebSocket with no reload**
+("AI activity — 1 unread"); the row read "Session #009 — claude connected · just now" with the yellow
+`bg-status-launching` dot; the detail view showed the connection code (`degraded.no_project`), the task, and
+the session number, and auto-marked it read (badge cleared). Page body does not scroll (vertical or
+horizontal). `tsc` 0 errors; 0 console errors after reload.
+
 ## [0.1.84] -- 2026-07-29
 
 ### Added

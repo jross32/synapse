@@ -40,6 +40,7 @@ import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { CaptureButton } from './components/CaptureButton';
+import { NotificationCenter } from './components/NotificationCenter';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
@@ -564,6 +565,8 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <CaptureButton />
+      {/* Global AI-activity bell (ADR-0028) -- reachable on every screen. */}
+      <NotificationCenter />
     </div>
   );
 }
