@@ -3,19 +3,24 @@
 // autorun, and choose which get wired into your AI. Works in the mobile shell.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Download, Loader2, Play, Server, Square, Star, Trash2, Zap } from 'lucide-react';
+import { Check, Download, Loader2, Play, RefreshCw, RotateCcw, Server, Square, Star, Trash2, Zap } from 'lucide-react';
 
 import {
   getMcpRegistry,
+  getWardenStatus,
   installMcpServer,
   listMcpServers,
   removeMcpServer,
+  rollbackWarden,
   startMcpServer,
   stopMcpServer,
+  syncWardenRegistry,
   updateMcpServer,
+  updateWarden,
   type McpCatalogEntry,
   type McpServerStatus,
   type McpServerView,
+  type WardenStatus,
 } from '@shared/mcp-servers-client';
 import { cn } from '@shared/utils';
 import { Button } from './ui/button';
@@ -47,6 +52,7 @@ export function McpServerBrowser(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [wardenStatus, setWardenStatus] = useState<WardenStatus | null>(null);
   const timer = useRef<number | null>(null);
 
   const refreshInstalled = useCallback(async () => {
@@ -60,8 +66,9 @@ export function McpServerBrowser(): JSX.Element {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [cat] = await Promise.all([getMcpRegistry(), refreshInstalled()]);
+      const [cat, , warden] = await Promise.all([getMcpRegistry(), refreshInstalled(), getWardenStatus()]);
       setCatalog(cat.servers);
+      setWardenStatus(warden);
       setError(null);
     } catch (e) {
       setError((e as Error).message || 'Could not load the MCP catalog.');
@@ -132,7 +139,7 @@ export function McpServerBrowser(): JSX.Element {
     <div className='flex flex-col gap-3'>
       {error && <p role='alert' className='text-xs text-destructive'>{error}</p>}
       <p className='text-xs text-muted-foreground'>
-        Installed servers your AI is allowed to use are wired into every Claude worker automatically.
+        AI-enabled servers remain directly available. Warden is optional and adds search/routing without replacing them.
       </p>
       <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3'>
         {rows.map((row) => {
@@ -141,6 +148,7 @@ export function McpServerBrowser(): JSX.Element {
           const isHttp = row.transport === 'http';
           const canLaunch = isHttp && s && (s.status === 'stopped' || s.status === 'error') && !!s.launch_command;
           const canStop = isHttp && s && (s.status === 'connected' || s.status === 'starting');
+          const isWarden = row.id === 'warden';
           return (
             <Card key={row.id} className='flex flex-col gap-2 p-4'>
               <div className='flex items-start justify-between gap-2'>
@@ -163,6 +171,27 @@ export function McpServerBrowser(): JSX.Element {
 
               <p className='line-clamp-2 text-sm text-muted-foreground'>{row.description}</p>
 
+              {isWarden && wardenStatus && (
+                <div className='rounded-md border border-border/70 bg-secondary/20 p-2 text-xs text-muted-foreground'>
+                  {wardenStatus.installed ? (
+                    <>
+                      <p>
+                        <span className='font-medium text-foreground'>Pinned {wardenStatus.active_version ?? wardenStatus.pinned_version}</span>
+                        {' · '}{wardenStatus.verified ? 'verified' : 'verification unavailable'}
+                      </p>
+                      <p className='mt-1'>
+                        Indexing {wardenStatus.registry?.indexed_stdio_servers.length ?? 0} local MCP server(s).
+                        {(wardenStatus.registry?.skipped_http_servers.length ?? 0) > 0
+                          ? ` ${wardenStatus.registry?.skipped_http_servers.length} HTTP server(s) stay directly available.`
+                          : ''}
+                      </p>
+                    </>
+                  ) : (
+                    <p>Downloads a verified, immutable release into Synapse. Git and Python 3.10+ are required.</p>
+                  )}
+                </div>
+              )}
+
               {row.tags.length > 0 && (
                 <div className='flex flex-wrap gap-1'>
                   {row.tags.map((t) => (
@@ -174,7 +203,8 @@ export function McpServerBrowser(): JSX.Element {
               <div className='mt-auto flex flex-wrap items-center gap-2 pt-1'>
                 {!row.installed ? (
                   <Button size='sm' disabled={busy === `install:${row.id}`} onClick={() => void run(`install:${row.id}`, () => installMcpServer({ catalog_id: row.id }))}>
-                    <Download className='h-4 w-4' /> Install
+                    {busy === `install:${row.id}` ? <Loader2 className='h-4 w-4 animate-spin' /> : <Download className='h-4 w-4' />}
+                    {busy === `install:${row.id}` && isWarden ? 'Downloading & verifying…' : 'Install'}
                   </Button>
                 ) : (
                   <>
@@ -208,7 +238,37 @@ export function McpServerBrowser(): JSX.Element {
                         <Zap className='h-3.5 w-3.5' /> Autorun
                       </button>
                     )}
-                    <Button size='sm' variant='ghost' className='ml-auto text-destructive' disabled={busy === `remove:${row.id}`} onClick={() => void run(`remove:${row.id}`, () => removeMcpServer(row.id))}>
+                    {isWarden && s && (
+                      <>
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          disabled={busy === 'warden:sync'}
+                          onClick={() => void run('warden:sync', syncWardenRegistry)}
+                        >
+                          {busy === 'warden:sync' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
+                          Sync
+                        </Button>
+                        {wardenStatus?.update_available && (
+                          <Button size='sm' variant='outline' disabled={busy === 'warden:update'} onClick={() => void run('warden:update', updateWarden)}>
+                            <Download className='h-4 w-4' /> Update
+                          </Button>
+                        )}
+                        {wardenStatus?.rollback_available && (
+                          <Button size='sm' variant='outline' disabled={busy === 'warden:rollback'} onClick={() => void run('warden:rollback', rollbackWarden)}>
+                            <RotateCcw className='h-4 w-4' /> Restore {wardenStatus.rollback_version}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    <Button
+                      size='sm'
+                      variant='ghost'
+                      className='ml-auto text-destructive'
+                      aria-label={`Uninstall ${row.name}`}
+                      disabled={busy === `remove:${row.id}`}
+                      onClick={() => void run(`remove:${row.id}`, () => removeMcpServer(row.id))}
+                    >
                       <Trash2 className='h-4 w-4' />
                     </Button>
                   </>

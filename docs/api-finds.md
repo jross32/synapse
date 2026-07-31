@@ -664,6 +664,17 @@ The web scraper MCP server, when installed, can be used through these proxy endp
 | PATCH | `/mcp-servers/{id}` | Update / enable / disable server |
 | POST | `/mcp-servers/{id}/start` | Start server |
 | POST | `/mcp-servers/{id}/stop` | Stop server |
+| GET | `/mcp-servers/warden/status` | Inspect the optional Warden install, immutable pin, verification, registry coverage, update, and rollback state |
+| POST | `/mcp-servers/warden/sync` | Rebuild Warden's Synapse-managed stdio registry; direct MCP access remains unchanged |
+| POST | `/mcp-servers/warden/update` | Install and activate the catalog-pinned release only after source/package verification |
+| POST | `/mcp-servers/warden/rollback` | Restore the most recent previous verified Warden release |
+
+Warden is **additive**, not an exclusive gateway. Enabled MCP servers are still wired directly into an AI,
+and Warden is wired beside them when installed and AI-enabled. Its Synapse-managed registry includes enabled
+stdio servers but excludes itself, disabled servers, and HTTP servers. HTTP servers such as Web Scraper stay
+directly available. Synapse does not copy managed MCP secrets into Warden's JSON registry; it supplies them
+through the Warden process environment. The current immutable pin is Warden `0.2.1` at commit
+`29cb1355c33f19e8c9c6c6d48ba3136234eeaf2c`.
 
 ### 5R. MCP Protocol Endpoint (Streamable HTTP)
 

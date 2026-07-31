@@ -563,6 +563,11 @@ def build_ai_router(
                     "path": "/api/v1/mcp-servers | /api/v1/models | /api/v1/assistant",
                 },
                 {
+                    "purpose": "inspect, sync, update, or roll back the optional version-pinned Warden MCP search/router; direct MCP access remains enabled alongside Warden",
+                    "method": "GET | POST",
+                    "path": "/api/v1/mcp-servers/warden/status | /sync | /update | /rollback",
+                },
+                {
                     "purpose": "global search across projects, tools, actions, and settings",
                     "method": "GET",
                     "path": "/api/v1/search?q={query}",

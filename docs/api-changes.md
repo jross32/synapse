@@ -151,6 +151,16 @@ Every entry below must include: the date, the new version added, what changed, a
 |---|---|---|---|
 | 2026-07-29 | `GET /api/v1/ai/health-report` (extended) | additive | Adds `quality.latest_browser_proof` / `quality.failing_contracts` to the compact trust payload and a new `review.latest_successful_pass` summary (`id`, `thread_id`, `thread_title`, `project_id`, `title`, `summary_md`, `updated_at`). This lets lightweight operator surfaces answer "what was last actually proven?" without pulling the full `ai/context` digest. |
 
+### Shipped in v0.1.90 (optional Warden marketplace integration)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-07-31 | `GET /api/v1/mcp-servers/warden/status` | additive | Returns the installed/cached/verified state, immutable catalog pin, active release, registry coverage, and rollback availability. |
+| 2026-07-31 | `POST /api/v1/mcp-servers/warden/sync` | additive | Mirrors enabled stdio MCP servers into Warden without disabling direct MCP access. Warden, HTTP servers, disabled servers, and conflicting-secret servers are excluded and reported. |
+| 2026-07-31 | `POST /api/v1/mcp-servers/warden/update` | additive | Downloads the catalog-pinned commit into a versioned isolated environment, verifies it, then activates it. Existing verified releases are retained. |
+| 2026-07-31 | `POST /api/v1/mcp-servers/warden/rollback` | additive | Atomically points the installed Warden MCP record at the newest previous verified release and resynchronizes its registry. |
+| 2026-07-31 | `v1.mcp_server.updated` (extended reasons) | additive | May now carry `installing`, `warden_registry_synced`, `warden_updated`, or `warden_rolled_back` reasons. Existing clients may ignore unknown reasons. |
+
 ### Shipped in v0.1.36-dev (AI Factory + advanced case engine foundation)
 
 | Date | Endpoint or event | Kind | Notes |

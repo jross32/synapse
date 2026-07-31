@@ -1,7 +1,7 @@
 {
   "_comment": "Bundled fallback catalog for the Synapse MCP-server marketplace (ADR-0017). stdio servers are launched by the AI on demand; http servers run standalone and Synapse can launch + health-check them.",
-  "version": 1,
-  "generated_at": "2026-06-24",
+  "version": 2,
+  "generated_at": "2026-07-31",
   "servers": [
     {
       "id": "filesystem",
@@ -69,6 +69,15 @@
       "args": ["mcp-server-fetch"],
       "tags": ["web", "research"],
       "recommended": false
+    },
+    {
+      "id": "warden",
+      "name": "Warden",
+      "publisher": "Chris Asmussen",
+      "description": "Optional MCP search and routing layer that hides large downstream tool catalogs behind five compact tools. Synapse downloads and verifies pinned Warden 0.2.1; all direct MCP servers remain available.",
+      "transport": "stdio",
+      "tags": ["mcp", "routing", "context", "optional", "version-pinned"],
+      "recommended": true
     },
     {
       "id": "web-scraper",

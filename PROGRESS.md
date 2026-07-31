@@ -6,7 +6,16 @@
 
 ## Current version
 
-`0.1.88`
+`0.1.90`
+
+> **Warden marketplace note (2026-07-31):** ADR-0029 shipped an optional, additive Warden MCP install.
+> Synapse pins upstream Warden `0.2.1` to immutable commit
+> `29cb1355c33f19e8c9c6c6d48ba3136234eeaf2c`, downloads it into an isolated versioned environment,
+> verifies it before registration, automatically mirrors enabled stdio MCPs without copying credentials
+> into Warden JSON, leaves HTTP MCPs and every direct tool available, and retains verified releases for
+> rollback. Status/sync/update/rollback are available in the Marketplace and REST/AI discovery surfaces.
+> Final proof: **730 passed, 14 skipped**, production renderer build + typecheck green, and real Windows
+> install and browser checks green at 1280 px and 375 px with no console errors or horizontal overflow.
 
 > **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.88`
 > landed a large UI/UX + reliability wave — an 8-fix UI/UX audit (`0.1.52`–`0.1.59`), a run of verified
@@ -423,4 +432,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by v0.1.36.13 — Codex's self-improvement / Quality OS wave verified + committed by Claude after Codex hit its usage limit, plus native multi-AI coordination (ADR-0024)._
+_Last updated by v0.1.90 — optional, version-pinned Warden MCP marketplace integration (ADR-0029), verified on Windows without restricting direct Synapse tools._

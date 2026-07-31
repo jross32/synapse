@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-07-29",
+  "generated_at": "2026-07-31",
   "items": [
     {
       "id": "ai-council-review",
@@ -73,6 +73,14 @@
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0017",
       "summary": "Install MCP servers, see if they're running, launch them, and wire them into your AI automatically, including a first-party Web Scraper entry that can download the official repo, keep its MCP/UI ports aligned, and auto-start with the real Synapse daemon on boot."
+    },
+    {
+      "id": "warden-mcp-marketplace",
+      "title": "Optional Warden MCP search and routing",
+      "status": "shipped",
+      "phase": "Marketplace & Workforce",
+      "adr": "ADR-0029",
+      "summary": "Install Chris Asmussen's Warden from an immutable verified commit, use its compact search/router alongside every direct Synapse MCP server, auto-sync enabled stdio tools without copying secrets into Warden JSON, and retain verified releases for rollback."
     },
     {
       "id": "launch-art",

@@ -56,6 +56,31 @@ export interface McpServerList {
   servers: McpServerView[];
 }
 
+export interface WardenRegistrySync {
+  synced_at: string;
+  indexed_stdio_servers: string[];
+  skipped_http_servers: string[];
+  skipped_disabled_servers: string[];
+  skipped_conflicting_env_servers: string[];
+  config_path: string;
+}
+
+export interface WardenStatus {
+  installed: boolean;
+  cached: boolean;
+  verified: boolean;
+  pinned_version: string;
+  pinned_commit: string;
+  active_version: string | null;
+  active_commit: string | null;
+  source_url: string;
+  install_path: string | null;
+  update_available: boolean;
+  rollback_available: boolean;
+  rollback_version: string | null;
+  registry: WardenRegistrySync | null;
+}
+
 export interface McpInstallInput {
   catalog_id?: string;
   id?: string;
@@ -108,4 +133,20 @@ export function stopMcpServer(id: string): Promise<{ stopped: boolean }> {
 
 export function removeMcpServer(id: string): Promise<void> {
   return apiFetch<void>(`/mcp-servers/${p(id)}`, { method: 'DELETE' });
+}
+
+export function getWardenStatus(): Promise<WardenStatus> {
+  return apiFetch<WardenStatus>('/mcp-servers/warden/status', { method: 'GET' });
+}
+
+export function syncWardenRegistry(): Promise<WardenRegistrySync> {
+  return apiFetch<WardenRegistrySync>('/mcp-servers/warden/sync', { method: 'POST' });
+}
+
+export function updateWarden(): Promise<WardenStatus> {
+  return apiFetch<WardenStatus>('/mcp-servers/warden/update', { method: 'POST' });
+}
+
+export function rollbackWarden(): Promise<WardenStatus> {
+  return apiFetch<WardenStatus>('/mcp-servers/warden/rollback', { method: 'POST' });
 }

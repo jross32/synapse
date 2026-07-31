@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.90] -- 2026-07-31
+
+### Added
+- **Warden is now an optional, one-click MCP marketplace download (ADR-0029).** Synapse downloads Chris
+  Asmussen's MIT-licensed Warden `0.2.1` from immutable commit
+  `29cb1355c33f19e8c9c6c6d48ba3136234eeaf2c`, installs it in a Synapse-owned isolated environment,
+  verifies Git HEAD + package version + import + CLI before activation, and retains verified releases for
+  rollback. The marketplace card shows the active verified version and local/HTTP coverage, with Sync,
+  Update (when a newer pin ships), and Restore controls.
+- New AI-discoverable Warden lifecycle endpoints: `GET /api/v1/mcp-servers/warden/status` and `POST`
+  `/sync`, `/update`, `/rollback`, with audit entries and `v1.mcp_server.updated` broadcasts.
+
+### Changed
+- **Warden is additive, never exclusive.** Every enabled MCP remains directly available to Claude/Codex;
+  Warden is simply another enabled MCP the AI may choose. Synapse automatically mirrors enabled stdio
+  servers into Warden (excluding Warden itself), while HTTP MCPs such as Web Scraper stay direct-only.
+- Warden's Synapse-managed registry never receives copied credentials. Secrets remain in Synapse's
+  redacted MCP store and are injected into Warden's process environment; a downstream server with a
+  conflicting environment-variable value is skipped from Warden but remains directly available.
+
+### Verified
+- Full regression coverage: **730 passed, 14 skipped**; focused Warden + MCP marketplace coverage is
+  **28 passed**; renderer TypeScript, production build, Python lint, and compile checks are green. A real
+  Windows smoke install cloned the exact pinned commit, built the isolated environment, imported Warden
+  `0.2.1`, and ran its CLI verification successfully. Live browser proof installed Memory beside Warden,
+  verified Warden's Ready state and HTTP-direct count, found zero console errors, and passed 1280 px +
+  375 px horizontal-overflow checks.
+
+
 ## [0.1.89] -- 2026-07-31
 
 ### Changed
@@ -3283,8 +3312,4 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
-
-
-
-
 
