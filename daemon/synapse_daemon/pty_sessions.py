@@ -80,6 +80,20 @@ _SENSITIVE_ENV_KEY_PARTS = (
 _MIN_REDACTED_VALUE_BYTES = 8
 _OUTPUT_REDACTION_MARKER = b"[REDACTED]"
 
+# How long a held-back split-secret suffix may sit unflushed before the terminal
+# self-heals. The chunk-boundary guard retains any trailing bytes that match a *prefix*
+# of a tracked value -- down to a single byte -- so an idle prompt ending in a byte that
+# merely starts like a credential used to have that byte silently missing until the next
+# write, which on an idle interactive session may never come.
+#
+# A real PTY write that splits a credential across reads is separated by microseconds, so
+# after a full second of silence the held bytes were ordinary output and are released
+# as-is. Deliberately NOT paired with a "minimum held-back size" rule: refusing to hold
+# short prefixes would let a secret split after one byte leak that byte *and* leave the
+# remainder unrecognisable as the full value, so it would print unredacted -- trading a
+# cosmetic stall for an actual disclosure.
+REDACTION_IDLE_FLUSH_SECONDS = 1.0
+
 
 def _sensitive_output_values(env: dict[str, str]) -> tuple[bytes, ...]:
     """Return unique, non-trivial credential values that PTY output must hide."""
@@ -414,6 +428,7 @@ class PtySession:
         self._sensitive_output_values = _sensitive_output_values(env)
         self.argv = _redact_display_argv(list(argv), self._sensitive_output_values)
         self._redaction_pending = b""
+        self._redaction_idle_handle: asyncio.TimerHandle | None = None
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -530,6 +545,9 @@ class PtySession:
 
         if not self._sensitive_output_values:
             return chunk
+        # New output arrived, so any armed self-heal timer for the previous suffix is
+        # moot; it is re-armed below if we end up holding bytes back again.
+        self._cancel_redaction_idle_flush()
         combined = self._redaction_pending + chunk
         self._redaction_pending = b""
         # Exact raw replacement catches values inside terminal escape payloads
@@ -563,10 +581,41 @@ class PtySession:
             keep_start = incomplete_escape if keep_start is None else min(keep_start, incomplete_escape)
         if keep_start is not None:
             self._redaction_pending = combined[keep_start:]
+            self._schedule_redaction_idle_flush()
             return combined[:keep_start]
         return combined
 
+    def _cancel_redaction_idle_flush(self) -> None:
+        if self._redaction_idle_handle is not None:
+            self._redaction_idle_handle.cancel()
+            self._redaction_idle_handle = None
+
+    def _schedule_redaction_idle_flush(self) -> None:
+        """Arm the self-heal timer for bytes we are holding back (see the constant)."""
+        self._cancel_redaction_idle_flush()
+        if self._closing:
+            return
+        self._redaction_idle_handle = self._loop.call_later(
+            REDACTION_IDLE_FLUSH_SECONDS, self._on_redaction_idle
+        )
+
+    def _on_redaction_idle(self) -> None:
+        """No further output arrived, so the held bytes were not a split secret.
+
+        Emitted as-is rather than as the redaction marker: substituting `[REDACTED]` for
+        an ordinary prompt tail (`$ w`) would corrupt the visible terminal, which is the
+        very problem this fixes. The end-of-session flush stays conservative, because
+        there no further output can ever arrive to disambiguate.
+        """
+        self._redaction_idle_handle = None
+        pending = self._redaction_pending
+        if not pending:
+            return
+        self._redaction_pending = b""
+        self._record_output(pending)
+
     def _flush_redaction_pending(self) -> None:
+        self._cancel_redaction_idle_flush()
         if not self._redaction_pending:
             return
         pending = self._redaction_pending

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from synapse_daemon import pty_sessions
 from synapse_daemon.pty_sessions import (
     PtySession,
     PtySessionManager,
@@ -180,6 +181,73 @@ async def test_partial_sensitive_value_is_redacted_when_output_finishes() -> Non
     session._flush_redaction_pending()  # noqa: SLF001
 
     assert session.scrollback_bytes() == b"[REDACTED]"
+
+
+async def test_idle_terminal_releases_a_held_back_prefix_instead_of_stalling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A trailing byte that merely *starts* like a secret must not stall forever.
+
+    The chunk-boundary guard holds back any suffix matching a prefix of a tracked
+    value, down to a single byte. A prompt ending in "w" while SYNAPSE_TOKEN starts
+    with "w" therefore vanished from the terminal until the next write -- which, on an
+    idle interactive session, may never come. The held bytes now self-heal after a
+    short idle period: if the rest of the secret never arrived, it was ordinary output.
+    """
+    monkeypatch.setattr(pty_sessions, "REDACTION_IDLE_FLUSH_SECONDS", 0.05)
+    bus = EventBus()
+    session = PtySession(
+        session_id="idle-redaction-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"SYNAPSE_TOKEN": "worker-token-value-123456"},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    session._handle_chunk(b"user@host:~$ w")  # noqa: SLF001
+    await asyncio.sleep(0)
+    # Immediately after the write the "w" is still held back -- that part is correct,
+    # because the next read really might complete the secret.
+    assert session.scrollback_bytes() == b"user@host:~$ "
+
+    assert await _wait_for(
+        lambda: session.scrollback_bytes() == b"user@host:~$ w", timeout=2.0
+    ), f"held-back byte never released; scrollback={session.scrollback_bytes()!r}"
+
+
+async def test_idle_flush_still_redacts_a_secret_split_across_chunks() -> None:
+    """The idle timer must not defeat redaction for a genuinely split secret.
+
+    Guards the fix above: when the remainder does arrive (the normal contiguous case),
+    the value is still redacted rather than leaked a byte at a time.
+    """
+    bus = EventBus()
+    secret = "worker-token-value-123456"
+    session = PtySession(
+        session_id="idle-redaction-split-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"SYNAPSE_TOKEN": secret},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    session._handle_chunk(b"prefix worker-token-")  # noqa: SLF001
+    session._handle_chunk(b"value-123456 suffix")  # noqa: SLF001
+    await asyncio.sleep(0)
+
+    scrollback = session.scrollback_bytes()
+    assert secret.encode() not in scrollback
+    assert b"[REDACTED]" in scrollback
+    assert b"prefix " in scrollback
+    assert b" suffix" in scrollback
 
 
 async def test_sensitive_value_inside_terminal_escape_payload_is_redacted() -> None:

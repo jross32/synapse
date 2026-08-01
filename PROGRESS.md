@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.99`
+`0.1.100`
+
+> **Idle terminals self-heal (2026-08-01):** the output redactor holds back trailing bytes that match a
+> prefix of a credential so a split secret can still be caught -- but nothing released them if no further
+> output arrived, so an idle prompt could sit with its last character missing indefinitely. Held bytes now
+> flush after 1s of silence. Explicitly did not add the alternative "minimum held-back size" rule, which
+> would turn a cosmetic stall into a real disclosure. Closes inbox proposal `81b7e6c5643a`.
 
 > **Lane gate is now usable, and discoverable (2026-08-01):** added `-SessionId` so an agent's own lane
 > stops being reported as a conflict with itself (previously the protocol-following agent was the one
