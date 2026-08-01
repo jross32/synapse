@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.96`
+`0.1.96.5`
+
+> **Dead-code removal (2026-08-01):** deleted the orphaned `renderer/components/NetworkPanel.tsx`.
+> Nothing has imported it since `PhoneAccessPanel` became the live network UI in 0.1.78. It was a
+> trap for AI sessions -- a plausible-looking network panel that is never mounted, so edits to it
+> silently do nothing. Verified orphaned repo-wide (only historical prose references remain) and by
+> a clean typecheck after deletion. Closes inbox proposal `f1d9229c9641`.
 
 > **Modal focus + release-tooling note (2026-08-01):** closing any dialog now returns keyboard focus to
 > the control that opened it. `Modal`'s cleanup checked `panelRef.current?.contains(document.activeElement)`,
