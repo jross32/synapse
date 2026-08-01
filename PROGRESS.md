@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.96.5`
+`0.1.97`
+
+> **Coordination gate repaired (2026-08-01):** `scripts/coordination-preflight.ps1 -Staged` -- ADR-0024's
+> "one enforceable coordination gate" -- was broken twice over: it threw on a `$staged`/`[switch]$Staged`
+> case-insensitive name collision, and once that was fixed it would still have reported "no conflicts"
+> forever, because it sent `project_id = ""` and lanes are strictly partitioned by project (empty string
+> matches no partition). Both fixed and verified live in both directions (conflict -> exit 1 with the
+> right owner; released -> exit 0). Closes inbox proposal `3c439c747ddb`.
 
 > **Dead-code removal (2026-08-01):** deleted the orphaned `renderer/components/NetworkPanel.tsx`.
 > Nothing has imported it since `PhoneAccessPanel` became the live network UI in 0.1.78. It was a

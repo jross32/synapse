@@ -69,17 +69,28 @@ $exitCode = 0
 if ($Staged) {
   Push-Location $repoRoot
   try {
-    $staged = @(git diff --cached --name-only 2>$null | Where-Object { $_ })
+    # NOTE: must not be named $staged -- PowerShell variable names are case-insensitive, so it
+    # would collide with the [switch]$Staged parameter and throw a type-conversion error before
+    # the overlap check ever ran, silently disabling -Staged mode entirely.
+    $stagedPaths = @(git diff --cached --name-only 2>$null | Where-Object { $_ })
   } finally {
     Pop-Location
   }
-  if ($staged.Count -eq 0) {
+  if ($stagedPaths.Count -eq 0) {
     Write-Host 'No staged files -- nothing to check against lanes.' -ForegroundColor Yellow
   } else {
     $base = "http://127.0.0.1:$Port/api/v1"
     $headers = @{}
     if ($Token) { $headers['X-Synapse-Token'] = $Token }
-    $body = @{ paths = $staged; project_id = $ProjectId } | ConvertTo-Json -Depth 5
+    # Only send project_id when one was actually supplied. Lanes are strictly partitioned by
+    # project_id server-side (list_active_lanes: NULL matches only NULL, "x" matches only "x"),
+    # so the previous unconditional send of an unset -ProjectId shipped project_id = "" -- a
+    # partition no lane is ever in. That matched zero lanes on every run, meaning this gate
+    # silently reported "no conflicts" no matter what. Omitting the key yields None server-side,
+    # which is the partition lanes claimed without a project land in.
+    $payload = @{ paths = $stagedPaths }
+    if (-not [string]::IsNullOrWhiteSpace($ProjectId)) { $payload['project_id'] = $ProjectId }
+    $body = $payload | ConvertTo-Json -Depth 5
     try {
       $resp = Invoke-RestMethod -Uri "$base/coordination/overlap" -Method Post -Headers $headers `
         -Body $body -ContentType 'application/json' -TimeoutSec 5

@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.97] -- 2026-08-01
+
+### Fixed
+- **The multi-AI lane-conflict gate actually works now.** `scripts/coordination-preflight.ps1 -Staged` --
+  described in ADR-0024 as "the one enforceable coordination gate" -- was broken two ways at once:
+  1. *It crashed.* The staged-path array was assigned to `$staged`, which PowerShell resolves
+     case-insensitively to the `[switch]$Staged` parameter, so the run died with
+     `Cannot convert value "System.Object[]" to type "SwitchParameter"` before reaching the check.
+     Renamed to `$stagedPaths`.
+  2. *After that, it would have passed silently forever.* Lanes are strictly partitioned by project
+     server-side (`list_active_lanes`: `None` matches only `project_id IS NULL`, a string matches only
+     that exact value). The script always sent `project_id = $ProjectId`, which is `""` when `-ProjectId`
+     is not passed -- a partition no lane is ever in -- so every run matched zero lanes and reported
+     "No lane conflicts" regardless of reality. `project_id` is now sent only when actually supplied.
+
+### Notes
+- Verified end to end against the live daemon, both directions: with a second session holding a lane on
+  the staged file, the script reports `LANE CONFLICT` with the correct lane id and owner and exits 1;
+  after releasing that lane, the same staged file reports no conflicts and exits 0. Before the fix, step
+  one threw, and with only the rename it wrongly reported "no conflicts" while the conflicting lane was
+  demonstrably active -- which is how the second defect was found.
+- Closes review-inbox proposal `3c439c747ddb` (which covered the `$staged` collision; the project_id
+  partition mismatch was found while verifying that fix and is filed separately for the daemon side).
+- Script remains pure ASCII with no BOM, and re-parses cleanly under Windows PowerShell 5.1.
+
+
 ## [0.1.96.5] -- 2026-08-01
 
 ### Removed
@@ -71,7 +97,7 @@ Every commit must append an entry under the in-progress version header.
 - Failed PTY startup now closes the pre-registered worker presence, records an audited error, publishes the
   session end, and leaves the work item safely queued for retry.
 - A Codex CLI account usage limit is classified as an actionable, secret-safe blocker that points to Codex
-  Settings Ã¢â€ â€™ Usage and makes clear that other signed-in runtimes may continue.
+  Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Usage and makes clear that other signed-in runtimes may continue.
 
 ### Notes
 - Focused squad-launch coverage proves the transaction is released across the awaited spawn, concurrent
@@ -121,7 +147,7 @@ Every commit must append an entry under the in-progress version header.
 - On initial load, Live prefers a project-bound root operator over legacy unbound worker sessions, preventing
   an old reviewer from replacing the current parent after restart.
 - Live's session listing now performs the coordination stale sweep, so an exited legacy worker becomes
-  `gone` instead of remaining misleadingly `active Ã‚Â· stale` forever.
+  `gone` instead of remaining misleadingly `active Ãƒâ€šÃ‚Â· stale` forever.
 - New external AI registrations return a one-time session key for bound Live attribution; observe/workspace
   worker credentials enforce self-report/cross-session/global-lifecycle boundaries at the API guard.
 
@@ -144,7 +170,7 @@ Every commit must append an entry under the in-progress version header.
 - PTY EOF/shutdown finalization is single-flight and drains queued output before exit/finalized receipts, so
   duplicate callbacks cannot duplicate lifecycle events or deliver the last redaction marker too late. An
   EOF-first blocked reap now rechecks operator shutdown before choosing its fallback exit code.
-- Live announces appended activity to assistive technology, includes squad-worker plans in Ã¢â‚¬Å“Why this step,Ã¢â‚¬Â
+- Live announces appended activity to assistive technology, includes squad-worker plans in ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œWhy this step,ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
   labels the goals list, and lets Escape cancel an inline goal rename.
 - Live goal create and update calls now pass structured bodies to the shared API client instead of
   double-encoding JSON, so the visually complete Goals inspector also saves successfully end to end.
@@ -178,7 +204,7 @@ Every commit must append an entry under the in-progress version header.
   request/response bodies, auth headers, credentials, and secret values are never copied.
 
 ### Changed
-- Enabled stdio MCP servers are now labeled **Auto-attached Ã‚Â· starts per AI**. Worker launch events carry the
+- Enabled stdio MCP servers are now labeled **Auto-attached Ãƒâ€šÃ‚Â· starts per AI**. Worker launch events carry the
   exact role-scoped MCP ids and emit `v1.agent_mcp.attached`; Reflex remains an isolated per-worker process.
 - The session rail shows five recent sessions by default, with explicit history expansion. Empty squad/tool
   inspectors take no space and squad detail opens only when a real squad exists.
@@ -197,8 +223,8 @@ Every commit must append an entry under the in-progress version header.
 
 ### Notes
 - Release verification: renderer + Electron typecheck, **750 passed / 14 skipped**, real Deep/Summary and
-  squad Ã¢â€ â€™ worker Playwright click-through, and containment proof at 375/1024/1280/2560. The refreshed
-  1280Ãƒâ€”800 + 375Ãƒâ€”812 gallery captures have zero console errors or page/horizontal overflow.
+  squad ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ worker Playwright click-through, and containment proof at 375/1024/1280/2560. The refreshed
+  1280ÃƒÆ’Ã¢â‚¬â€800 + 375ÃƒÆ’Ã¢â‚¬â€812 gallery captures have zero console errors or page/horizontal overflow.
 - Dogfood proof used real Synapse session #025, a five-worker linked squad, Reflex v2.6.0 observation plus
   named takeover/pause/resume/release, a scored `mcp:reflex` search result, and a real all-green whole-app
   restart. WS replay retained `v1.daemon.started` as event 1 for v0.1.93.
@@ -313,20 +339,20 @@ Every commit must append an entry under the in-progress version header.
 ## [0.1.89] -- 2026-07-31
 
 ### Changed
-- **AI Activity (ADR-0028) marked complete Ã¢â‚¬â€ docs finalized.** ADR-0028 status is now
-  "accepted Ã¢â‚¬â€ Phases 0Ã¢â‚¬â€œ6 shipped (v0.1.78Ã¢â‚¬â€œv0.1.88)" with the full shipping table; the
+- **AI Activity (ADR-0028) marked complete ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â docs finalized.** ADR-0028 status is now
+  "accepted ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Phases 0ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“6 shipped (v0.1.78ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“v0.1.88)" with the full shipping table; the
   `ai-activity-live-view` and `one-window-ui-standard` roadmap items are **shipped**; `PROGRESS.md` records
-  the whole wave; and the README leads with what the feature actually gives you Ã¢â‚¬â€ see the moment an AI
+  the whole wave; and the README leads with what the feature actually gives you ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â see the moment an AI
   connects (graded green/yellow/red with an explained code), a session number per run, a notification
   center with token usage + jump-to links, and a **Live** tab to watch it work with a preview of the app
-  it's building. Feature summary: 7 versions (`0.1.82`Ã¢â‚¬â€œ`0.1.88`), 2 migrations, 3 new daemon modules
+  it's building. Feature summary: 7 versions (`0.1.82`ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“`0.1.88`), 2 migrations, 3 new daemon modules
   (`connection_codes`, `activity`, `routes_activity`), 5 new renderer modules, 2 read-only MCP tools, and
-  ~25 new tests Ã¢â‚¬â€ every phase verified live against the running stack, not just typechecked.
+  ~25 new tests ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â every phase verified live against the running stack, not just typechecked.
 
 ## [0.1.88] -- 2026-07-31
 
 ### Added
-- **AI Activity is now AI-facing too Ã¢â‚¬â€ the feature is complete (ADR-0028, PLAN 5 Phase 6).** An AI driving
+- **AI Activity is now AI-facing too ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the feature is complete (ADR-0028, PLAN 5 Phase 6).** An AI driving
   Synapse can see the same picture the operator sees:
   - `GET /api/v1/ai/context` carries a new **`ai_activity`** block: the connected sessions (each with its
     `#NNN` number, runtime/label/task, status, and green/yellow/red grade + code) and the last 10
@@ -334,85 +360,85 @@ Every commit must append an entry under the in-progress version header.
   - `GET /api/v1/coordination/snapshot` already returns full `AgentSession` objects, so every session there
     now carries `seq` + `connection_level` + `connection_code` (from Phase 1).
   - Two **read-only MCP tools** (always available, no writes flag): **`synapse_list_sessions`** (numbered
-    sessions with runtime/status/grade) and **`synapse_recent_activity`** (the recent feed) Ã¢â‚¬â€ so an MCP
+    sessions with runtime/status/grade) and **`synapse_recent_activity`** (the recent feed) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so an MCP
     client over the WAN tunnel can see who's connected and what just happened.
   - `docs/DRIVE-SYNAPSE-FROM-AI.md` gained a **"Your session"** section: the grade table (register with a
     `project_id` to come up green), what the operator sees, and how to read sessions/activity via REST + MCP.
-  - ADR-0028 records the full Phase 0Ã¢â‚¬â€œ6 shipping table, including the CSP finding from Phase 5.
+  - ADR-0028 records the full Phase 0ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“6 shipping table, including the CSP finding from Phase 5.
 
 ## [0.1.87] -- 2026-07-30
 
 ### Added
-- **Live app preview Ã¢â‚¬â€ watch the app an AI is building, inside Live View (ADR-0028, PLAN 5 Phase 5).**
+- **Live app preview ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â watch the app an AI is building, inside Live View (ADR-0028, PLAN 5 Phase 5).**
   A **Preview** toggle appears on a session whose project is actually running; it opens a pane beside the
   timeline that **iframes the live project URL** (`http://localhost:{expected_port}`). Because Synapse
-  launches real dev servers, this is the *real* app Ã¢â‚¬â€ full framework, real backend/data, and it updates as
-  the AI edits Ã¢â‚¬â€ which beats a sandboxed artifact snapshot (the approach researched for ADR-0028). The pane
+  launches real dev servers, this is the *real* app ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â full framework, real backend/data, and it updates as
+  the AI edits ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â which beats a sandboxed artifact snapshot (the approach researched for ADR-0028). The pane
   has **device widths** (mobile 375 / tablet 768 / desktop), **Reload**, **Logs** (reuses `LogViewer`), and
-  **Open in browser**, and closes away entirely Ã¢â‚¬â€ one-window, not a new page.
+  **Open in browser**, and closes away entirely ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â one-window, not a new page.
 - Shared `InlineBold` helper so the Live View timeline renders activity bodies as cleanly as the
   Notification Center (no raw `**` markers); the Notification Center now imports it instead of its local copy.
 
 ### Fixed
 - **The preview was blocked by the app's Content-Security-Policy** (`default-src 'self'` with no
-  `frame-src`, so Chrome refused to frame the project Ã¢â‚¬â€ the iframe existed but rendered nothing). Added a
-  **loopback-scoped** `frame-src 'self' http://localhost:* http://127.0.0.1:*` Ã¢â‚¬â€ Synapse-launched projects
+  `frame-src`, so Chrome refused to frame the project ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the iframe existed but rendered nothing). Added a
+  **loopback-scoped** `frame-src 'self' http://localhost:* http://127.0.0.1:*` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Synapse-launched projects
   only, never arbitrary origins. Caught by live verification, not by types.
 
 ### Verified (live, against the running stack)
-Launched a real project (`fast-money-client-ops`, port 8740 Ã¢â€ â€™ HTTP 200), registered a session bound to it Ã¢â‚¬â€
-it graded **green (`ok`)**, confirming the whole grading path Ã¢â‚¬â€ then in the browser: the **Preview** button
+Launched a real project (`fast-money-client-ops`, port 8740 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ HTTP 200), registered a session bound to it ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
+it graded **green (`ok`)**, confirming the whole grading path ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â then in the browser: the **Preview** button
 appeared *only* for that project-bound running session, opening it rendered the live app in the iframe
-(517Ãƒâ€”887, `src=http://localhost:8740`) with all 7 controls, **0 console errors** after the CSP fix, and the
+(517ÃƒÆ’Ã¢â‚¬â€887, `src=http://localhost:8740`) with all 7 controls, **0 console errors** after the CSP fix, and the
 page still does not scroll (3 `.scrollbar-thin` panes). `tsc` 0 errors.
 
 ## [0.1.86] -- 2026-07-30
 
 ### Added
-- **The Live View tab Ã¢â‚¬â€ watch your AIs work in real time (ADR-0028, PLAN 5 Phase 4).** A new top-level
+- **The Live View tab ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â watch your AIs work in real time (ADR-0028, PLAN 5 Phase 4).** A new top-level
   **Live** hub in the sidebar (AI section). Left rail: every AI session ever registered, newest number
-  first Ã¢â‚¬â€ `#011 Ã‚Â· Claude Ã‚Â· active Ã‚Â· just now`, with a connection dot (green/yellow/red via the semantic
+  first ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `#011 Ãƒâ€šÃ‚Â· Claude Ãƒâ€šÃ‚Â· active Ãƒâ€šÃ‚Â· just now`, with a connection dot (green/yellow/red via the semantic
   `status-*` tokens) that pulses while the session is live, plus its status/stale flag and task. Main pane:
-  the selected session's story Ã¢â‚¬â€ its persisted milestones from the activity feed, then **live events
+  the selected session's story ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â its persisted milestones from the activity feed, then **live events
   appended as they happen** (`v1.activity.notification`, work-item/agent-run events, and the AI's own
   `pty.session_output` terminal lines rendered mono, buffer capped at 300), with a header strip showing the
   connection code, recorded **token total**, and a pulsing **live** indicator. Real loading / empty / error
   states throughout (Contract #13), and the timeline auto-follows new entries.
 - **This is the reference implementation of the one-window standard** (AGENTS.md "Frontend UI standard"):
   a fixed-height shell where the session rail and the timeline are *independent* `min-h-0 overflow-y-auto`
-  panes with `.scrollbar-thin` Ã¢â‚¬â€ **the page body never scrolls**. New surfaces should copy this page's shape.
+  panes with `.scrollbar-thin` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â **the page body never scrolls**. New surfaces should copy this page's shape.
 - New nav plumbing: `'live'` added to `CorePageId` / `NavigationIntent` / `SidebarLayout`, a `Radio`-icon
-  entry in `CORE_NAV_ITEMS`, and `'live'` added to the AI-section defaults Ã¢â‚¬â€ `completeOrder()` appends any
+  entry in `CORE_NAV_ITEMS`, and `'live'` added to the AI-section defaults ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `completeOrder()` appends any
   default missing from a **saved** layout, so the new hub shows up for existing installs without a migration.
 
 ### Verified (live, against the running stack)
-Clicked **Live** Ã¢â€ â€™ the rail listed all 10 existing sessions; registering a new AI session by `curl` made
+Clicked **Live** ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ the rail listed all 10 existing sessions; registering a new AI session by `curl` made
 **#011 appear at the top of the rail instantly** ("just now") and stream into the timeline with the live
-indicator Ã¢â‚¬â€ **no reload**. Page body does not scroll at **1536px** or **375px** (0px overflow at mobile
+indicator ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â **no reload**. Page body does not scroll at **1536px** or **375px** (0px overflow at mobile
 width), 2 `.scrollbar-thin` panes present, `tsc` 0 errors, 0 console errors after a full reload.
 
 ## [0.1.85] -- 2026-07-30
 
 ### Added
-- **The Notification Center Ã¢â‚¬â€ see when an AI connects and what it does (ADR-0028, PLAN 5 Phase 3).** A
+- **The Notification Center ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â see when an AI connects and what it does (ADR-0028, PLAN 5 Phase 3).** A
   persistent **bell** with an unread badge, reachable on every screen (desktop + mobile, mounted globally
   beside the Capture FAB). Opening it shows the AI-activity feed: a coloured status dot per level
-  (green/yellow/red via the app's semantic `status-*` tokens Ã¢â‚¬â€ no raw palette), the title, relative time,
-  a per-row **Ã¢Å“â€¢ to dismiss** (marks read), and **Mark all read**. Clicking a row opens a detail view with
+  (green/yellow/red via the app's semantic `status-*` tokens ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no raw palette), the title, relative time,
+  a per-row **ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¢ to dismiss** (marks read), and **Mark all read**. Clicking a row opens a detail view with
   the full body, the **session number**, a **token-usage** breakdown (in/out/total + per-role) when the
   daemon recorded one, and the notification's **jump-to links** rendered as buttons that route through the
-  app's existing `navigate()` flow (via the `synapse:navigate` event) Ã¢â‚¬â€ so "Session #7 filed an idea" can
+  app's existing `navigate()` flow (via the `synapse:navigate` event) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so "Session #7 filed an idea" can
   take you straight to the Review inbox. New `renderer/lib/activity-client.ts`, `renderer/lib/use-activity.ts`
   (live via the `v1.activity.notification` event, with optimistic read-marking), and
   `renderer/components/NotificationCenter.tsx`.
 - **`.scrollbar-thin` utility (one-window standard).** The first piece of the ADR-0028 UI standard lands in
   `renderer/styles.css`: theme-driven thin scrollbars (WebKit + Firefox) for the *inner* scroll panes every
-  new surface is built from. The Notification Center is built to that standard Ã¢â‚¬â€ a fixed-height panel whose
+  new surface is built from. The Notification Center is built to that standard ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a fixed-height panel whose
   list/detail pane scrolls while the page itself never does.
 
 ### Verified (live, against the running stack)
 Registering an AI session by `curl` made the bell badge appear **live over the WebSocket with no reload**
-("AI activity Ã¢â‚¬â€ 1 unread"); the row read "Session #009 Ã¢â‚¬â€ claude connected Ã‚Â· just now" with the yellow
+("AI activity ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 1 unread"); the row read "Session #009 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â claude connected Ãƒâ€šÃ‚Â· just now" with the yellow
 `bg-status-launching` dot; the detail view showed the connection code (`degraded.no_project`), the task, and
 the session number, and auto-marked it read (badge cleared). Page body does not scroll (vertical or
 horizontal). `tsc` 0 errors; 0 console errors after reload.
@@ -422,34 +448,34 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Added
 - **Persisted AI-activity notifications (ADR-0028, PLAN 5 Phase 2).** The daemon now keeps a truthful
   feed of the milestones an AI hits while driving Synapse. New migration `028_activity_notifications` +
-  `activity.py`: an **eventÃ¢â€ â€™notification projector** subscribed to the daemon's own bus at startup maps
-  `session_registered` (title "Session #007 Ã¢â‚¬â€ Claude connected", level/code from the graded connection),
+  `activity.py`: an **eventÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢notification projector** subscribed to the daemon's own bus at startup maps
+  `session_registered` (title "Session #007 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Claude connected", level/code from the graded connection),
   `agent_squad.created` (quotes the squad's real goal), `agent_work_item.created/handoff` (role, handoff
   summary, squad token rollup via the token ledger), `review.proposal_filed` (reads the proposal's real
-  title Ã¢â‚¬â€ "Idea filed to inbox: Ã¢â‚¬Â¦"), `project.launched/errored` (errored = red), and `tool.primitive_ran`
+  title ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â "Idea filed to inbox: ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦"), `project.launched/errored` (errored = red), and `tool.primitive_ran`
   into rows with jump-to `links` in renderer NavigationIntent shape. A projector failure never breaks the
   bus; each new row is also announced as `v1.activity.notification` so the bell badge can update live.
   New `routes_activity.py`: `GET /api/v1/activity/notifications?unread=&limit=` (+`unread_count`),
   `POST .../{id}/read`, `POST .../read-all`, `GET /activity/sessions` (full #-numbered history, newest
-  first Ã¢â‚¬â€ via new `coordination.list_all_sessions`), `GET /activity/sessions/{id}` (session + its
+  first ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â via new `coordination.list_all_sessions`), `GET /activity/sessions/{id}` (session + its
   project's squads/work-items + real token rollups + its notifications). 8 tests incl. a live
-  end-to-end: registering a coordination session produces the "Session #001 Ã¢â‚¬Â¦ connected" notification
-  through the real busÃ¢â€ â€™projectorÃ¢â€ â€™feed chain. Next: the Notification Center UI (bell + list + detail).
+  end-to-end: registering a coordination session produces the "Session #001 ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ connected" notification
+  through the real busÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢projectorÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢feed chain. Next: the Notification Center UI (bell + list + detail).
 
 ## [0.1.83] -- 2026-07-29
 
 ### Added
 - **Session numbers + graded connections for AI sessions (ADR-0028, PLAN 5 Phase 1 step 2).** When an AI
   registers a coordination session, it now gets:
-  - a monotonic operator-facing **session number** (`seq` Ã¢â‚¬â€ #001, #002, Ã¢â‚¬Â¦; migration `027_session_connection`
+  - a monotonic operator-facing **session number** (`seq` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â #001, #002, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦; migration `027_session_connection`
     backfills existing sessions by registration order and adds a unique index), and
   - a stored **connection grade** (`connection_level` green/yellow/red + `connection_code`), computed at
-    register time via `connection_codes.classify()` Ã¢â‚¬â€ `has_project` from the payload, `mcp_all_connected`
+    register time via `connection_codes.classify()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `has_project` from the payload, `mcp_all_connected`
     probed best-effort by the route from the live MCP manager (STDIO servers count available; HTTP must be
     CONNECTED; any probe failure or a bare test app defaults to available so registration is never wrongly
     degraded, guarded by a 3s timeout).
   The register route's audit row and the **`v1.coordination.session_registered` event are enriched** with
-  `seq`, `runtime_id`, `agent_label`, `task`, `connection_level`, `connection_code` Ã¢â‚¬â€ this is the "an AI
+  `seq`, `runtime_id`, `agent_label`, `task`, `connection_level`, `connection_code` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â this is the "an AI
   connected" signal the notification projector + Live View key off. 5 new tests (`test_coordination`).
 
 ## [0.1.82] -- 2026-07-29
@@ -457,11 +483,11 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Added
 - **Connection status codes for AI sessions (ADR-0028, PLAN 5 Phase 1, step 1).** New
   `daemon/synapse_daemon/connection_codes.py`: a pure catalog + `classify()` that grades an AI's
-  connection as **green** (`ok` Ã¢â‚¬â€ full control), **yellow** (`degraded.mcp_unavailable` /
-  `degraded.no_project` Ã¢â‚¬â€ connected but a capability is offline), or **red** (`failed.internal`), each
+  connection as **green** (`ok` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â full control), **yellow** (`degraded.mcp_unavailable` /
+  `degraded.no_project` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â connected but a capability is offline), or **red** (`failed.internal`), each
   with a stable machine code + a plain-language explanation + a remedy so degraded/failed connections are
   self-diagnosing. This is the foundation the notification center renders and that sessions/`ai/context`
-  will report. 6 tests (`test_connection_codes`). Next: the session sequence number (#001Ã¢â‚¬Â¦) + emitting
+  will report. 6 tests (`test_connection_codes`). Next: the session sequence number (#001ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦) + emitting
   `v1.agent_session.connected` on register.
 
 ## [0.1.81] -- 2026-07-29
@@ -473,7 +499,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
     version. Mirrored as `test_version_consistency` pytest tests so CI enforces it on every push, and added
     to the `AGENTS.md` pre-commit ritual. (It immediately caught that v0.1.80 left the README at 0.1.79.)
   - **The plan lives in the repo.** ADR-0028 + `docs/roadmap.json` entries capture the AI Activity feature
-    (connection status, session #s, notification center, Live View) so any AI Ã¢â‚¬â€ Claude, **Codex**, Copilot Ã¢â‚¬â€
+    (connection status, session #s, notification center, Live View) so any AI ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Claude, **Codex**, Copilot ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
     codes to the same plan, not one AI's private notes. `AGENTS.md` now points every AI at the in-repo plan.
   - **One-window UI standard.** A binding frontend convention in `AGENTS.md`: new surfaces are a fixed-height
     shell whose *inner* panels scroll (never the page), with styled professional scrollbars; Apps + AI Coding
@@ -484,11 +510,11 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 
 ### Fixed
 - **`profile._state_row()` could raise `UNIQUE constraint failed: profile_state.id`.** The singleton
-  `profile_state` row (id=1) was created with a check-then-`INSERT`: a concurrent caller Ã¢â‚¬â€ or a stale read
-  snapshot that missed the existing row Ã¢â‚¬â€ would try to insert id=1 a second time and crash the profile read
+  `profile_state` row (id=1) was created with a check-then-`INSERT`: a concurrent caller ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â or a stale read
+  snapshot that missed the existing row ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â would try to insert id=1 a second time and crash the profile read
   (seen in the daemon log). Changed to `INSERT OR IGNORE` so the duplicate creation is a no-op; the row
   exists either way. Added `test_state_row_creation_is_race_safe`. (Diagnosed while restoring a wedged daemon
-  that left the desktop stuck on "loading" Ã¢â‚¬â€ the restart itself was clean; this removes the latent state bug.)
+  that left the desktop stuck on "loading" ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the restart itself was clean; this removes the latent state bug.)
 
 ## [0.1.79] -- 2026-07-29
 
@@ -515,14 +541,14 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Added
 - **WAN auto-start toggle in Settings (finishes ADR-0026; PLAN 5 Phase 0).** The `wan_auto_start`
   preference (default on, since v0.1.71) now has a UI: an "Auto-connect on startup" switch in the
-  Settings Ã¢â€ â€™ Phone Access Ã¢â€ â€™ **WAN via Cloudtap** section (`PhoneAccessPanel`), wired to
+  Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Phone Access ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ **WAN via Cloudtap** section (`PhoneAccessPanel`), wired to
   `PATCH /api/v1/system/network {wan_auto_start}` with a note that it takes effect on the next daemon
   start. `RemoteAccessNetwork` (the `/remote-access` aggregate the panel reads) now carries
   `wan_auto_start`; added `patchNetworkWanAutoStart` to the system client. (The orphaned `NetworkPanel`
-  component is not mounted Ã¢â‚¬â€ the live network UI is `PhoneAccessPanel`.) Verified: tsc 0 errors; the
+  component is not mounted ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the live network UI is `PhoneAccessPanel`.) Verified: tsc 0 errors; the
   toggle renders in the running app; `test_remote_access_network_carries_wan_auto_start` + the existing
   `/system/network` wan tests pass. The live toggle reflects its true state once the daemon reloads the
-  updated model (next launch) Ã¢â‚¬â€ not force-restarted here to avoid disrupting an active AI session.
+  updated model (next launch) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â not force-restarted here to avoid disrupting an active AI session.
 
 ## [0.1.77] -- 2026-07-29
 
@@ -535,7 +561,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   `/installed-pages` before the shell recovers. Explicit handoff tokens and `/mobile` paired-device
   flows still keep their intended precedence.
 - **Top-level repo status headers are back in sync with the actual shipped version.** `README.md`
-  and `PROGRESS.md` now reflect the real `0.1.74`Ã¢â‚¬â€œ`0.1.77` state instead of stopping at `0.1.73`.
+  and `PROGRESS.md` now reflect the real `0.1.74`ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“`0.1.77` state instead of stopping at `0.1.73`.
 
 ### Notes
 - Verification: `npm run typecheck`; live Playwright reloads against `http://127.0.0.1:5173`
@@ -546,7 +572,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ## [0.1.76] -- 2026-07-29
 
 ### Added
-- **GitHub repo-health templates + policy files (repo audit).** CI (`ci.yml` Ã¢â‚¬â€ typecheck + pytest on
+- **GitHub repo-health templates + policy files (repo audit).** CI (`ci.yml` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â typecheck + pytest on
   push/PR) and `LICENSE` were already present; added the high-impact missing pieces: a **PR template**
   (`.github/PULL_REQUEST_TEMPLATE.md`) that enforces the repo's own version/CHANGELOG/tests/docs-sync +
   coordination discipline, a **bug-report issue template** (`.github/ISSUE_TEMPLATE/bug_report.md`), a
@@ -561,28 +587,28 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **Drive-capable MCP connector (ADR-0027, increment 3).** The `/mcp/<token>` connector (ADR-0012) was
   read-only; it now offers **drive tools** for MCP-native clients (e.g. the claude.ai web connector over the
   auto-on WAN tunnel), gated behind `SYNAPSE_MCP_ALLOW_WRITES=1` (default **off**):
-  - `synapse_create_squad` Ã¢â‚¬â€ create an Agent Squad on a project.
-  - `synapse_add_work_item` Ã¢â‚¬â€ assign a work item (role + title) to a squad.
-  - `synapse_capture_note` Ã¢â‚¬â€ append a note to a project's AI memory or backlog.
+  - `synapse_create_squad` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â create an Agent Squad on a project.
+  - `synapse_add_work_item` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â assign a work item (role + title) to a squad.
+  - `synapse_capture_note` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â append a note to a project's AI memory or backlog.
   These are in-process (storage-only) writes; **launching** a worker stays on the REST path
   (`POST /agent-work-items/{id}/launch`, reachable over the same tunnel), which is the riskier capability. The
   `initialize` instructions now announce drive-mode when writes are on. Note: the WAN tunnel already exposes the
   *whole* token-guarded REST API, so any HTTP-capable AI (another Claude Code) has full remote drive over the
-  tunnel URL today Ã¢â‚¬â€ the MCP tools are specifically for MCP-protocol clients. Docs: `DRIVE-SYNAPSE-FROM-AI.md`
-  Ã‚Â§8 rewritten (two remote paths) + ADR-0027 consequences. Tests: 4 new (`test_mcp_connector`) Ã¢â‚¬â€ drive tools
-  hidden/uncallable when off; create-squadÃ¢â€ â€™add-work-item + capture succeed when on; unknown project is a tool
+  tunnel URL today ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the MCP tools are specifically for MCP-protocol clients. Docs: `DRIVE-SYNAPSE-FROM-AI.md`
+  Ãƒâ€šÃ‚Â§8 rewritten (two remote paths) + ADR-0027 consequences. Tests: 4 new (`test_mcp_connector`) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â drive tools
+  hidden/uncallable when off; create-squadÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢add-work-item + capture succeed when on; unknown project is a tool
   error. 17 connector tests pass.
 
 ## [0.1.74] -- 2026-07-29
 
 ### Added
-- **`docs/DRIVE-SYNAPSE-FROM-AI.md` Ã¢â‚¬â€ a task-oriented guide for driving Synapse from another AI (ADR-0027).**
+- **`docs/DRIVE-SYNAPSE-FROM-AI.md` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a task-oriented guide for driving Synapse from another AI (ADR-0027).**
   The second increment of the AI-drivable effort: connect + auth (`X-Synapse-Token` from `data/auth-token`,
   localhost or the WAN URL), orient (`/ai/context`, `/openapi.json`, `/coordination/snapshot`), then real
-  `curl` flows for the core capabilities Ã¢â‚¬â€ drive an AI squad (create Ã¢â€ â€™ add work-item Ã¢â€ â€™ launch Ã¢â€ â€™ monitor Ã¢â€ â€™
-  handoff/delegate Ã¢â€ â€™ kill switch), run a workflow (quick-action), harvest the web (web-scraper MCP), register
+  `curl` flows for the core capabilities ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â drive an AI squad (create ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ add work-item ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ launch ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ monitor ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
+  handoff/delegate ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ kill switch), run a workflow (quick-action), harvest the web (web-scraper MCP), register
   + evaluate an app (projects / Quality OS / benchmarks / review inbox), capture notes, and drive remotely via
-  the `/mcp/<token>` connector over the auto-on WAN tunnel Ã¢â‚¬â€ plus a security note (the token is the trust
+  the `/mcp/<token>` connector over the auto-on WAN tunnel ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â plus a security note (the token is the trust
   boundary). Endpoints verified against `routes_*.py`; exact bodies deferred to the live `/api/v1/openapi.json`
   so the guide can't drift from the code. Linked from `AGENTS.md` + `README.md`.
 
@@ -619,11 +645,11 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ## [0.1.72] -- 2026-07-29
 
 ### Added
-- **API discovery is ON Ã¢â‚¬â€ an AI can now enumerate Synapse's full endpoint surface (ADR-0027).** The
+- **API discovery is ON ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â an AI can now enumerate Synapse's full endpoint surface (ADR-0027).** The
   daemon's `openapi_url` / `docs_url` / `redoc_url` were disabled; they're now served at
   `/api/v1/openapi.json`, `/api/v1/docs` (Swagger UI), and `/api/v1/redoc`. This is the first increment
   of making Synapse fully drivable from another AI chat (a same-machine Claude Code over `localhost:7878`,
-  or a remote AI over the auto-on WAN tunnel). The schema is the API **contract** only Ã¢â‚¬â€ every data read
+  or a remote AI over the auto-on WAN tunnel). The schema is the API **contract** only ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â every data read
   / action still requires the `X-Synapse-Token`, so exposing the shape carries no data/action risk. Next
   increments (ADR-0027): a `docs/DRIVE-SYNAPSE-FROM-AI.md` driver guide and a drive-capable extension of
   the `/mcp/<token>` connector. New test: `test_openapi_discovery_is_enabled` (schema lists 100+ paths incl.
@@ -632,7 +658,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ## [0.1.71] -- 2026-07-29
 
 ### Added
-- **WAN auto-start (ADR-0026) Ã¢â‚¬â€ the Cloudtap tunnel now opens on daemon boot by default.** Previously
+- **WAN auto-start (ADR-0026) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the Cloudtap tunnel now opens on daemon boot by default.** Previously
   reaching Synapse from off-LAN meant clicking "Expose to WAN via Cloudtap" every launch. Now a persisted
   `wan_auto_start` boot setting (default **on**) drives a startup hook (`_autostart_wan_tunnel`) that opens
   the tunnel on the bound port automatically. It mirrors `_autostart_mcp_servers`: best-effort (a tunnel
@@ -651,7 +677,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Fixed
 - **Coder Workspace top-level error banner was not announced to screen readers (UI/UX audit, Contract
   #23, a11y).** The error `Card` was set dynamically but lacked `role='alert'`/aria-live, so assistive
-  tech never announced a workspace error Ã¢â‚¬â€ inconsistent with `Review.tsx` and `AgentSquadsView.tsx`,
+  tech never announced a workspace error ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â inconsistent with `Review.tsx` and `AgentSquadsView.tsx`,
   which both mark their error displays as alerts. Added `role='alert'` to the card. Playwright-verified
   against the running renderer: with the thread-list fetch forced to fail, the error card renders as
   the page's single `role='alert'` carrying the error text. tsc 0 errors.
@@ -662,12 +688,12 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **Coder Workspace thread rail showed a false "No threads yet" during the initial load (UI/UX audit,
   Contract #13).** `threadsByProject` starts `{}` and `refreshThreads` only batch-populates it after all
   per-project `listProjectCoderThreads` calls resolve, so on first mount every project rendered the
-  empty copy "No threads yet. Start one from this project." while the fetch was still in flight Ã¢â‚¬â€
+  empty copy "No threads yet. Start one from this project." while the fetch was still in flight ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
   loading indistinguishable from genuinely empty. Added a `threadsLoaded` flag (false until the first
   `refreshThreads` settles, set in a `finally` so it flips even on error) threaded into
-  `ProjectThreadRail`; each project now shows a "Loading threadsÃ¢â‚¬Â¦" spinner while unloaded and the empty
+  `ProjectThreadRail`; each project now shows a "Loading threadsÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" spinner while unloaded and the empty
   copy only after the fetch completes. Playwright-verified against the running renderer (with the
-  coder-threads fetch delayed): during load the rail shows "Loading threadsÃ¢â‚¬Â¦" with a per-project spinner
+  coder-threads fetch delayed): during load the rail shows "Loading threadsÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" with a per-project spinner
   and no "No threads yet"; after load it resolves to the thread list or the genuine empty state. tsc 0
   errors.
 
@@ -699,7 +725,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Fixed
 - **Review inbox showed a contradictory error + "All caught up" at once on a failed load (UI/UX audit,
   Contract #13).** When `getReviewInbox()` failed, `error` was set but `inbox` stayed null, so `isEmpty`
-  was true and the page rendered BOTH the red error line and the "All caught up" empty card Ã¢â‚¬â€ telling
+  was true and the page rendered BOTH the red error line and the "All caught up" empty card ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â telling
   the user everything is fine and something failed simultaneously, with no way to recover. Added a
   dedicated first-load error branch (`error && !inbox`) with a `role='alert'` card and a **Retry**
   button (re-runs `refresh()`), placed before the empty branch so a failed load never renders "All
@@ -874,7 +900,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **Flagged ideas now show "possibly addressed" in the Review inbox (completes the v0.1.50 reconcile
   loop).** When `POST /review/proposals/reconcile` flags an open idea whose fix already landed in a
   commit, the inbox renders a small amber *"possibly addressed"* badge on the card and a *"Possibly
-  already done Ã¢â‚¬â€ a recent commit references this idea"* note in the detail popup, so you can confirm and
+  already done ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a recent commit references this idea"* note in the detail popup, so you can confirm and
   Approve to clear it. Renderer-only; verified via `tsc`.
 
 ## [0.1.50] -- 2026-07-09
@@ -882,7 +908,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Added
 - **Stale-idea reconciliation for the inbox.** `POST /api/v1/review/proposals/reconcile` scans recent
   commit messages and, for any **open** idea whose id is referenced in a commit, **flags** it as
-  *possibly addressed* (`metadata.addressed_by` = the matching commit) Ã¢â‚¬â€ it never auto-resolves, so a
+  *possibly addressed* (`metadata.addressed_by` = the matching commit) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it never auto-resolves, so a
   richer idea is never silently removed; the human confirms and closes it. Fixes the case Justin raised:
   a bug fixed in passing that leaves its idea stale in the inbox. Core matcher + flagger are pure/
   isolated and unit-tested (`test_proposals_reconcile.py`); advertised to in-app AIs via
@@ -892,14 +918,14 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 
 ### Added
 - **Version-drift guard test.** `daemon/tests/test_version_consistency.py` fails if `package.json`,
-  `pyproject.toml`, and `synapse_daemon.__version__` don't all match Ã¢â‚¬â€ the drift that bit 0.1.40 (a
+  `pyproject.toml`, and `synapse_daemon.__version__` don't all match ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the drift that bit 0.1.40 (a
   missed pyproject bump) can no longer land silently. Resolves inbox idea 11ac413441c8.
 
 ## [0.1.48] -- 2026-07-09
 
 ### Fixed
 - **Corrected the stale `routes_coordination.py` module docstring** that claimed the coordination router
-  was "mounted as a follow-up once the concurrent wave is committed" Ã¢â‚¬â€ it has been mounted in `app.py`
+  was "mounted as a follow-up once the concurrent wave is committed" ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it has been mounted in `app.py`
   for a while and the `/api/v1/coordination/*` endpoints are live. Resolves the inbox idea filed this
   session; demonstrates the v0.1.47 "close what you address" lifecycle (resolve-on-commit).
 
@@ -910,17 +936,17 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   plain-language impact).** When filing an improvement idea, every AI now must: (1) include a
   plain-language `metadata.impact` line (the inbox renders it as *"What this means for you"*); (2)
   **dedup-check** `GET /review/proposals?status=open` before filing so it doesn't duplicate an existing
-  idea; and (3) **close what it addresses** Ã¢â‚¬â€ if its work resolves an existing open idea, resolve it
+  idea; and (3) **close what it addresses** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if its work resolves an existing open idea, resolve it
   (`POST /review/proposals/{id}/approve`, or reject if obsolete) with a note and reference the idea's id
   in the commit, so a bug fixed in passing no longer leaves a stale idea sitting in the inbox. The
-  richer parts of an idea are never edited away for a partial fix Ã¢â‚¬â€ the rest is left for manual review.
+  richer parts of an idea are never edited away for a partial fix ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the rest is left for manual review.
   Applied to `AGENTS.md` and the prompt injected into every squad worker (`AI_WORKING_AGREEMENT_PROMPT`).
 
 ## [0.1.46] -- 2026-07-09
 
 ### Changed
 - **The Review inbox's AI-filed ideas are now organized + clickable.** Improvement proposals are
-  grouped under friendly categories (Bugs, Design & UX, Performance, Reliability, Docs, Ã¢â‚¬Â¦) so a growing
+  grouped under friendly categories (Bugs, Design & UX, Performance, Reliability, Docs, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦) so a growing
   inbox stays tidy, and each idea is now a compact clickable row that opens a **detail popup** with a
   plain-language *"What this means for you"* summary (from a proposal's optional `metadata.impact`), the
   full why-and-how reasoning, effort, who filed it, and Approve / Reject / Promote actions. Builds on
@@ -933,7 +959,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **AI-filed improvement ideas now actually show in the Review inbox.** The daemon's
   `GET /api/v1/review/inbox` has always returned AI-filed proposals in its `proposals` field (ADR-0025),
   but the renderer (`Review.tsx`) only rendered work-item handoff `items` and drove its "All caught up"
-  empty-state off `count` (handoffs only) Ã¢â‚¬â€ so a filed idea was invisible in the UI. `Review.tsx` now
+  empty-state off `count` (handoffs only) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so a filed idea was invisible in the UI. `Review.tsx` now
   renders a **"Improvement ideas from your AI workforce"** section with each proposal's rationale,
   source, effort, and **Approve / Reject / Promote** (approve + add to backlog) actions; the empty-state
   now accounts for proposals; and the live-refresh subscription also fires on `v1.review.proposal_filed`
@@ -944,7 +970,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 
 ### Fixed
 - **`/profile/service-connections` is no longer ~1.5s on every poll.** Local CLI/service detection
-  shells out (`where claude`, `where codex`, `gh auth status`, Ã¢â‚¬Â¦) for four providers on every call.
+  shells out (`where claude`, `where codex`, `gh auth status`, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦) for four providers on every call.
   Those results are now cached per provider+host for 45s (`_LOCAL_DETECT_CACHE_TTL_SECONDS`); an
   explicit connect/verify (`use_cache=False`) still bypasses the cache for a fresh probe, so a
   just-installed CLI is picked up immediately. Implements the inbox proposal *"Cache local-CLI detection
@@ -954,13 +980,13 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ## [0.1.43] -- 2026-07-09
 
 ### Added
-- **AI Working Agreement Ã¢â‚¬â€ the cross-AI coordination + idea-filing habits are now baked in so every AI
+- **AI Working Agreement ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the cross-AI coordination + idea-filing habits are now baked in so every AI
   actually uses them, not just this session.** The coordination substrate (ADR-0024) and the
   improvement-proposals inbox (ADR-0025) already existed and were advertised via `GET /api/v1/ai/context`,
   but nothing told AIs to *use* them, so no sessions registered and the inbox stayed empty. Now:
-  - `AGENTS.md` gains a canonical **"AI Working Agreement Ã¢â‚¬â€ every AI, every session"** section: at the
+  - `AGENTS.md` gains a canonical **"AI Working Agreement ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â every AI, every session"** section: at the
     start of any Synapse work (even from a terminal outside Synapse), every AI (Claude, Codex, Copilot,
-    local, Ã¢â‚¬Â¦) should (1) **check in** via `GET /api/v1/coordination/snapshot` + register a session +
+    local, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦) should (1) **check in** via `GET /api/v1/coordination/snapshot` + register a session +
     claim a file lane so agents don't collide, and (2) **file improvement ideas** it notices to the
     review inbox (`POST /api/v1/review/proposals`) instead of dropping them or rabbit-holing.
   - New thin entry files **`CLAUDE.md`** and **`.github/copilot-instructions.md`** point tool-specific
@@ -968,7 +994,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   - The same two habits are injected into **every squad/workbench worker's prompt**
     (`ai_context_memory.write_role_prompt`, new `AI_WORKING_AGREEMENT_PROMPT`) using the `$SYNAPSE_API`
     / `$SYNAPSE_TOKEN` / `$SYNAPSE_PROJECT_ID` env vars each worker already gets.
-  - Six real improvement ideas discovered while fixing the 0.1.40Ã¢â‚¬â€œ0.1.42 bugs were filed to the inbox
+  - Six real improvement ideas discovered while fixing the 0.1.40ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“0.1.42 bugs were filed to the inbox
     (scoped `synapse-self`) to seed it. Regression test:
     `test_prompt_includes_working_agreement`.
 
@@ -992,12 +1018,12 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   unreachable, every `GET /profile` and `GET /profile/service-connections` poll called that server with
   a **synchronous `urllib` request on the asyncio event loop** (`profile._refresh_from_remote` ->
   `SynapseAccountsClient._request`), blocking the loop for up to the 12s request timeout. That starved
-  the daemon so it could not serve **any** request Ã¢â‚¬â€ health, projects, web-scraper, everything Ã¢â‚¬â€ which
+  the daemon so it could not serve **any** request ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â health, projects, web-scraper, everything ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â which
   the renderer showed as an endless "Loading..." on every tab (confirmed via a py-spy dump of the hung
-  daemon). Two-part fix: (1) a **circuit breaker** in `_refresh_from_remote` / `_sync_to_remote` Ã¢â‚¬â€ after
+  daemon). Two-part fix: (1) a **circuit breaker** in `_refresh_from_remote` / `_sync_to_remote` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â after
   one remote failure the daemon serves local state for a 60s cooldown instead of re-hitting a known-down
   server on every read; (2) the two hot GET profile routes now run the (possibly blocking) manager call
-  via `asyncio.to_thread`, so a slow/down accounts server Ã¢â‚¬â€ or slow local-CLI detection Ã¢â‚¬â€ can never
+  via `asyncio.to_thread`, so a slow/down accounts server ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â or slow local-CLI detection ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â can never
   freeze the event loop. Synapse stays local-first and fully usable with the accounts server offline.
   Regression test: `test_remote_circuit_breaker_stops_hammering_a_down_accounts_server`.
 
@@ -1008,10 +1034,10 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   starting / it said stopping a daemon").** A previous run that was force-quit or crashed leaves its
   Vite (5173) and/or daemon (7878) child orphaned and still squatting on the port. On the next launch
   Vite then fails with `Port 5173 is already in use` and exits; `scripts/dev.ps1`'s `finally` block
-  stops the daemon and reports a non-zero exit Ã¢â‚¬â€ surfacing as "-> Stopping daemon" and looking like a
+  stops the daemon and reports a non-zero exit ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â surfacing as "-> Stopping daemon" and looking like a
   crash even though the daemon started perfectly. `dev.ps1` now runs a best-effort pre-flight
   `Clear-StalePort` before starting the daemon and Vite, evicting a stale process **only** when its
-  command line is clearly Synapse-owned (`synapse_daemon` / `vite`) Ã¢â‚¬â€ an unrelated process on the same
+  command line is clearly Synapse-owned (`synapse_daemon` / `vite`) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â an unrelated process on the same
   port is left alone and warned about. This is the orchestrator-level twin of the daemon's own 7878
   self-eviction.
 - **Stale-daemon eviction can never abort daemon startup.** `_evict_stale_daemon_on_port` is now fully
@@ -1023,12 +1049,12 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Fixed
 - **Daemon reliably claims port 7878 on startup (fixes "the app is stuck loading everything" + dead
   WAN).** `python -m synapse_daemon` now evicts a *stale* Synapse daemon still listening on the bind
-  port before starting uvicorn Ã¢â‚¬â€ a daemon that outlived its app (a crash, an orphaned tunnel, or a
+  port before starting uvicorn ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a daemon that outlived its app (a crash, an orphaned tunnel, or a
   previous run that was never reaped) previously caused `WinError 10048`, a silent daemon exit, and a
   wedged desktop app / dead Cloudtap WAN. Only a process whose command line is a synapse daemon is
   evicted; anything else on the port is left alone. (Root cause of the stuck-app report.)
 - **The web-scraper boot autorun can never abort daemon startup.** `reconcile_web_scraper_project`
-  and the auto-launch step run inside the fatal `on_startup` handler, so they're now fully wrapped Ã¢â‚¬â€
+  and the auto-launch step run inside the fatal `on_startup` handler, so they're now fully wrapped ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
   a web-scraper hiccup degrades gracefully (logged) instead of taking the whole daemon down.
 
 ### Changed
@@ -1055,13 +1081,13 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Added
 - **Bug-hunt scoring: per-category breakdown.** `score_bug_hunt` / `POST /benchmarks/score-bug-hunt`
   (and the standalone `grade.py`) now return `by_category` (`{category: {found, total}}`) so a
-  topology run shows *where* it's weak Ã¢â‚¬â€ e.g. finds all functional bugs but misses accessibility.
+  topology run shows *where* it's weak ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â e.g. finds all functional bugs but misses accessibility.
 - **Squad capacity check.** `GET /agent-squads/{id}/capacity` reports headroom against the launch
-  gates Ã¢â‚¬â€ `running`/`max_concurrent`, `tokens_spent`/`token_budget`, and a `can_launch` boolean Ã¢â‚¬â€ so
+  gates ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `running`/`max_concurrent`, `tokens_spent`/`token_budget`, and a `can_launch` boolean ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so
   an AI or the UI can check whether there's room before delegating another worker (0 = unlimited).
 - **Promote a proposal to a backlog item.** `POST /review/proposals/{id}/promote` approves a
   project-scoped improvement proposal and turns it into an actionable item in that project's backlog
-  Ã¢â‚¬â€ closing the "agents brainstorm Ã¢â€ â€™ you approve Ã¢â€ â€™ it becomes real work" loop. (Synapse-wide
+  ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â closing the "agents brainstorm ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ you approve ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ it becomes real work" loop. (Synapse-wide
   proposals with no project return 400.)
 - **Project-free "New chat" (Plan 2 Phase A, migration `026`).** Coder threads can now live in a
   "General" scope with no project: `POST /coder-threads/general` creates one and
@@ -1072,24 +1098,24 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   renderer "New chat" entry is the remaining follow-up.)
 - **Migration runner: FK-safe table rebuilds.** A migration can opt into a `runner:foreign_keys=off`
   marker so a SQLite "12-step" table rebuild (DROP + RENAME to change a column constraint) runs with
-  foreign keys disabled Ã¢â‚¬â€ otherwise dropping a parent table silently cascade-deletes its children.
+  foreign keys disabled ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â otherwise dropping a parent table silently cascade-deletes its children.
   The runner toggles the pragma around the transaction and runs `foreign_key_check` before
   committing. This is what lets migration 026 run without destroying coder message/run history.
 - **Delegated children can auto-launch (Plan 3 Phase 3).** `POST /agent-work-items/{id}/delegate`
-  accepts `auto_launch: true` Ã¢â‚¬â€ the child launches immediately, bounded by the squad's concurrency
+  accepts `auto_launch: true` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the child launches immediately, bounded by the squad's concurrency
   cap + token budget; if a gate trips it's left QUEUED (with a `queued_reason`) instead of erroring
   the delegation. Closes the delegate dead-end where a supervisor could create a child it couldn't
-  start. (The launch route body was refactored into a shared `_do_launch` helper Ã¢â‚¬â€ no behavior change
+  start. (The launch route body was refactored into a shared `_do_launch` helper ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no behavior change
   to `POST /agent-work-items/{id}/launch`.)
 - **Bug-hunt fixture discovery.** `GET /benchmarks/bug-hunt-fixtures` lists the shipped fixtures
   (`name` / `fixture` / `total_bugs`) so an AI can discover the valid `fixture` names before scoring.
 - **`score-bug-hunt` accepts a fixture name.** `POST /benchmarks/score-bug-hunt` now takes an
-  optional `fixture` (e.g. `"bug-hunt-fixture"`) instead of a pasted `answer_key` Ã¢â‚¬â€ the daemon loads
+  optional `fixture` (e.g. `"bug-hunt-fixture"`) instead of a pasted `answer_key` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the daemon loads
   the shipped `benchmarks/<fixture>/answer-key.json` (path-validated single segment; 404 if a build
   doesn't ship it, so callers fall back to inline `answer_key`). Much less for a squad synthesist to
   send when scoring itself against the standard fixture.
 
-## [0.1.38] Ã¢â‚¬â€ 2026-07-07
+## [0.1.38] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-07-07
 
 ### Added
 - **ChatGPT Companion, rebuilt (AI Coding).** `ChatgptCompanion.tsx` is now a full companion
@@ -1102,32 +1128,32 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **AI Coding "Squads" tab + Apps "Memory" section.** AI Coding surfaces Agent Squads inline
   (`SessionsPage` in `squads` mode); the Apps hub gains a project-memory section. (Copilot.)
 - **Bug-hunt scoring wired into the benchmark engine (Plan 3 Phase 2).** `benchmarks.score_bug_hunt()`
-  Ã¢â‚¬â€ an in-daemon twin of the fixture grader Ã¢â‚¬â€ plus `POST /benchmarks/score-bug-hunt` (stateless: a
+  ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â an in-daemon twin of the fixture grader ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â plus `POST /benchmarks/score-bug-hunt` (stateless: a
   squad synthesist posts findings + tokens + the answer key, gets `bugs_per_1k_tokens` /
   `false_positive_rate` / `recall` back). `BenchmarkScore` gains `bugs_found_true_positive`,
   `false_positive_rate`, `bugs_per_1k_tokens`. Added to `endpoints_for_ai` + `api-finds.md`.
-- **Bug-hunt benchmark fixture (Plan 3 Phase 2).** `benchmarks/bug-hunt-fixture/` Ã¢â‚¬â€ a deliberately-
+- **Bug-hunt benchmark fixture (Plan 3 Phase 2).** `benchmarks/bug-hunt-fixture/` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a deliberately-
   buggy static site (`app/`) with 12 categorized bugs (functional, state, ui, perf, a11y, edge-case,
   security), a machine-checkable `answer-key.json`, and a zero-dep `grade.py` that scores a run's
   findings into `true_positives` / `false_positive_rate` / `bugs_per_1k_tokens`. This is the fixed
   fixture the topology benchmark (solo-baseline vs flat vs supervisor-tree) scores against to prove
   the "more bugs per 1k tokens with Synapse" claim honestly.
 - **Proposals API completed.** `GET /review/proposals` (optional `?status=open|approved|rejected`)
-  + `GET /review/proposals/{id}` Ã¢â‚¬â€ so a brainstormer can skip already-rejected ideas and the UI
+  + `GET /review/proposals/{id}` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so a brainstormer can skip already-rejected ideas and the UI
   can show the full proposal history.
 - **`brainstorm-improvements` quick-action.** Launch it at a project (or Synapse itself); an AI
   surveys the app + backlog + inbox and files ranked improvement ideas as proposals in your review
-  inbox (propose-only, no changes) Ã¢â‚¬â€ completing the "agents brainstorm, you approve" loop.
+  inbox (propose-only, no changes) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â completing the "agents brainstorm, you approve" loop.
 - **Improvement proposals inbox (Plan 3 Phase 3f, migration `025`).** An AI (or a squad
-  brainstormer) can `POST /review/proposals` to file an improvement idea Ã¢â‚¬â€ for an app or for
-  Synapse itself Ã¢â‚¬â€ into the human review inbox instead of acting on it unilaterally.
+  brainstormer) can `POST /review/proposals` to file an improvement idea ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â for an app or for
+  Synapse itself ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â into the human review inbox instead of acting on it unilaterally.
   `GET /review/inbox` now surfaces open proposals alongside work-item handoffs; approve/reject
   via `/review/proposals/{id}/approve|reject`. The safe "agents brainstorm, you approve" path.
 - **Frictionless token reporting on handoff (ADR-0025).** `POST /agent-work-items/{id}/handoff`
   now accepts optional `input_tokens` / `output_tokens` / `total_tokens` and records them to the
-  token ledger Ã¢â‚¬â€ so a worker reports usage as part of the handoff it already does, instead of a
+  token ledger ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so a worker reports usage as part of the handoff it already does, instead of a
   separate call it forgets (`api-finds.md` GAP-05).
-- **AI-first API discoverability.** `GET /api/v1/ai/context` Ã¢â€ â€™ `endpoints_for_ai` now
+- **AI-first API discoverability.** `GET /api/v1/ai/context` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `endpoints_for_ai` now
   advertises the full AI menu: multi-AI coordination, per-worker token accounting,
   squad kill-switch/cap/budget, delegate, review verdicts, capture, the human review
   inbox, files/transcripts, quick-actions, personalities, MCP/models/assistant, search,
@@ -1136,7 +1162,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   gaps analysis + a session-start protocol).
 
 ### Changed
-- **"Fast Money" tool Ã¢â€ â€™ "Listing Multiplier".** The built-in launcher pivots from a generic
+- **"Fast Money" tool ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ "Listing Multiplier".** The built-in launcher pivots from a generic
   client-ops SaaS starter to a listing-operations SaaS (`Listing Multiplier`): renamed constants,
   brief/config filenames (`APP_BRIEF.md` / `app.config.json`), spawn env vars (`SYNAPSE_STARTER_*`),
   and all scaffold + seed content (listings / drafts / publications / metrics). The internal bundle
@@ -1147,7 +1173,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   in `StatusBadge` / `SquadWizard`).
 - **AGENTS.md Golden rule: "Build for the AI, not just the human."** Every new capability
   must ship a daemon REST endpoint, be advertised in `endpoints_for_ai`, and be documented
-  in `docs/api-finds.md` Ã¢â‚¬â€ a feature an AI can't discover + drive via the API is not shippable.
+  in `docs/api-finds.md` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a feature an AI can't discover + drive via the API is not shippable.
   Mirrored in `docs/MULTI-AI-WORKFLOW.md`.
 
 ## [0.1.37] -- 2026-07-06
@@ -1239,11 +1265,11 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 
 ### Added
 - **QA & Bug-Hunt Squad bundle (Plan 3 Phase 1).** An installable AI bundle shipping a
-  token-efficient bug-finding team: **9 roles** Ã¢â‚¬â€ browser-driving `user-simulator`,
+  token-efficient bug-finding team: **9 roles** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â browser-driving `user-simulator`,
   `edge-case-hunter`, `state-corruptor`, `ux-critic`, `a11y-auditor` + coordination
-  `qa-lead` / `triage-steward` / `bug-report-synthesist` / `token-steward` Ã¢â‚¬â€ and **12
+  `qa-lead` / `triage-steward` / `bug-report-synthesist` / `token-steward` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â and **12
   user personas** (impatient, mobile-thumb, rage-clicker, form-abuser, screen-reader-mimic,
-  first-timer, power-user, Ã¢â‚¬Â¦). Browser roles carry only the Playwright MCP; coordination
+  first-timer, power-user, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦). Browser roles carry only the Playwright MCP; coordination
   roles carry none (dogfooding the v0.1.36.14 role->MCP binding). Findings are meant to land
   as Quality OS evidence + gates. Ships a `qa-bug-hunt-kickoff` quick-action.
 
@@ -1257,7 +1283,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   `--mcp-config` written at launch is keyed per role so different roles don't clobber.
 
 ### Fixed
-- **Every Claude squad worker no longer receives every enabled MCP server** Ã¢â‚¬â€ that
+- **Every Claude squad worker no longer receives every enabled MCP server** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â that
   was a token cost + attack surface. Non-browser roles can run with no servers at all
   (and skip the `--mcp-config` flag entirely); browser roles get only what they need.
 
@@ -1287,7 +1313,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **Native multi-AI coordination (ADR-0024, migration `020_coordination.sql`).**
   A daemon-owned presence registry (`agent_sessions`) + advisory file-lane claims
   (`file_lanes`) with automatic overlap detection, a git-working-tree collision
-  detector, and disk-truth migration/ADR numbering Ã¢â‚¬â€ served at
+  detector, and disk-truth migration/ADR numbering ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â served at
   `/api/v1/coordination/*`, with an enforceable pre-commit gate
   (`scripts/coordination-preflight.ps1`). Turns the manual "read the markdown,
   notice the overlap, hold" dance between concurrent AI coders into an API call
@@ -1300,7 +1326,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   two dimensions the original single-pass with-Synapse build lost, head-to-head
   vs the baseline (same judge scored both apps, live-tested in a browser):
   **backend-correctness 100 vs 88** (was 78) and **adversarial bug-hunt 98 vs 70**
-  (was 42) Ã¢â‚¬â€ both flipped to wins. Combined with the four dimensions Synapse
+  (was 42) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â both flipped to wins. Combined with the four dimensions Synapse
   already won, the reviewed app now leads **all six** (avg 86.0 vs 64.8) at
   build+review tokens still under the 51,314-token baseline.
   `benchmarks/makeup-business-demo/results/quality/reviewed-rescore.md`, with the
@@ -1313,17 +1339,17 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **Benchmark reviewer pass** (`benchmarks/makeup-business-demo/apps/with-synapse-reviewed/`):
   a minimal review-and-fix pass on the with-Synapse Glow Studio app that
   corrects the two documented bugs which lost the original benchmark's
-  backend-correctness + bug-hunt dimensions Ã¢â‚¬â€ (1) contact form falsely
+  backend-correctness + bug-hunt dimensions ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â (1) contact form falsely
   reporting success on empty submits (removed `novalidate`, added a
   `checkValidity()` guard + form reset), (2) mobile nav overlapping/blocking the
-  hamburger at Ã¢â€°Â¤768px (added `visibility:hidden` + `pointer-events:none` to the
+  hamburger at ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¤768px (added `visibility:hidden` + `pointer-events:none` to the
   closed state). **Both fixes empirically verified in a real browser** (Playwright
   @375px): closed nav no longer intercepts the hamburger, and an empty submit no
   longer shows the false success. See `raw-logs/with-synapse-reviewed-run.md`.
 
 ### Notes
 - The full 6-dimension re-score (to show the reviewed app leads all 6 at total
-  tokens under the 51k baseline) is **pending Ã¢â‚¬â€ the reviewer sub-agent hit the
+  tokens under the 51k baseline) is **pending ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the reviewer sub-agent hit the
   account usage limit (resets 2pm ET)**. Committed complete per commit-before-limit;
   re-score resumes after reset.
 
@@ -1334,11 +1360,11 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   arguments (`daemon/synapse_daemon/pty_sessions.py`).** A PTY spawn like
   `claude.CMD --mcp-config <path>` dropped its args under winpty (cmd.exe
   reported the 2nd token as "not recognized"), so **every squad-launched
-  `claude` worker silently failed whenever an MCP server was enabled** Ã¢â‚¬â€ the
+  `claude` worker silently failed whenever an MCP server was enabled** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the
   process exited but the work item stayed "running." Fix: generalize the proven
   Copilot PowerShell-`&` wrapper (`_spawn_argv_for_runtime` via a new
   `_powershell_wrap` helper) to `.cmd`/`.bat` shims with arguments, so the shim
-  forwards args via `%*`. Only `spawn_argv` is wrapped Ã¢â‚¬â€ the UI/transcript still
+  forwards args via `%*`. Only `spawn_argv` is wrapped ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the UI/transcript still
   show the real `claude.CMD` argv. Scoped to the broken multi-arg case
   (single-arg `.cmd` stays on its proven raw-winpty path, locked by a test); if
   `powershell.exe` is missing it now **fails loudly** instead of silently
@@ -1348,7 +1374,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ### Notes
 - Reviewed pre-work by a 4-member AI council (Architect / Skeptic / Tester /
   Security). The Skeptic (REVISE) caught that the wrapper was only proven for
-  space-free args Ã¢â‚¬â€ so the fix is now proven with a **hostile-path integration
+  space-free args ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â so the fix is now proven with a **hostile-path integration
   test** (a real `.cmd` echoing `%*` with a `--mcp-config` path containing a
   space and parens, `a b (x86)`) plus a **live repro**: `claude.CMD --version`
   now prints `2.1.185 (Claude Code)` where it previously errored. 6 new tests.
@@ -1359,13 +1385,13 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ## [0.1.36.9] -- 2026-07-04
 
 ### Added
-- **AI Council Review Ã¢â‚¬â€ first-class workflow + discipline (ADR-0023).** A primary
+- **AI Council Review ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â first-class workflow + discipline (ADR-0023).** A primary
   AI no longer works alone: a **pre-work council** critiques its plan and a
   **post-work council** hunts bugs/gaps before it claims done, with an **adaptive
-  2Ã¢â‚¬â€œ10 reviewer** panel (by task size), prioritized critical/important/optional
+  2ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“10 reviewer** panel (by task size), prioritized critical/important/optional
   findings, and synthesis (not blind-follow). Shipped as:
-  - `templates/quick-actions/ai-council-review.json` Ã¢â‚¬â€ a launchable quick-action
-    (Plan Ã¢â€ â€™ Council Ã¢â€ â€™ Build Ã¢â€ â€™ Council Ã¢â€ â€™ Verify). Runs reviewers as prompt passes
+  - `templates/quick-actions/ai-council-review.json` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a launchable quick-action
+    (Plan ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Council ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Build ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Council ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Verify). Runs reviewers as prompt passes
     by default; **does not spawn reviewer squad-workers on Windows** until the
     Phase 2 multi-arg `.CMD` squad-launch bug is fixed.
   - `docs/adr/0023-ai-council-review.md` (accepted) + index entry.
@@ -1380,7 +1406,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 ## [0.1.36.8] -- 2026-07-04
 
 ### Added
-- **`docs/screenshots/` Ã¢â‚¬â€ a real UI screenshot gallery** (Home desktop + mobile,
+- **`docs/screenshots/` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a real UI screenshot gallery** (Home desktop + mobile,
   the AI Coding cockpit), captured from the running renderer via Playwright, with
   a README that evolves as the UI does. Linked from the top of `README.md`.
 - **`AGENTS.md` docs-sync rule:** a change that alters a user-visible surface must
@@ -1390,19 +1416,19 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
 - **Live E2E state verified (2026-07-04):** launched against the running stack
   (daemon `:7878` + Vite `:5173`); Home + AI Coding render with 0 console errors
   (only a benign token-less-browser WS warning). **Finding:** the AI Coding
-  cockpit works but is **project-scoped only** Ã¢â‚¬â€ no project-free "New chat"
+  cockpit works but is **project-scoped only** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no project-free "New chat"
   (you must pick a registered project before starting a thread). This confirms
   the flagged cockpit gap (project-free New chat) and feeds that upcoming work.
 
 ## [0.1.36.7] -- 2026-07-04
 
 ### Added
-- **`AGENTS.md` Ã¢â‚¬â€ commit-before-limit rule** (Golden rule): when usage/tokens run
+- **`AGENTS.md` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â commit-before-limit rule** (Golden rule): when usage/tokens run
   low for *any* AI coder, the last action must be to bring the current unit to a
   working state and commit + push it (still running the standard fast
-  version-bump + one-line CHANGELOG/PROGRESS ceremony) Ã¢â‚¬â€ never leave the app
+  version-bump + one-line CHANGELOG/PROGRESS ceremony) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â never leave the app
   half-done because credits ran out.
-- **`AGENTS.md` Ã¢â‚¬â€ commit rule #11:** commit AND push after every logical change,
+- **`AGENTS.md` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â commit rule #11:** commit AND push after every logical change,
   green-then-push (typecheck + pytest, plus E2E per Rule #6 for code bumps),
   don't batch unrelated changes; push-vs-concurrency defers to
   `docs/MULTI-AI-WORKFLOW.md`.
@@ -1465,7 +1491,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   README, architecture note, monetization note, seed/demo data), and opens a
   PTY session in that project using runtime precedence `codex -> claude ->
   copilot`.
-- **AI personalities Ã¢â‚¬â€ a worker = role + personality (ADR-0018 MW3).** New
+- **AI personalities ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a worker = role + personality (ADR-0018 MW3).** New
   `personalities` table (migration 015) + CRUD + REST at `/personalities`, with
   five seeded built-ins (Pragmatist, Perfectionist, Skeptic, Visionary,
   Mediator). A roster work-item can carry a `personality_id`; the synthesized
@@ -1473,7 +1499,7 @@ horizontal). `tsc` 0 errors; 0 console errors after reload.
   two same-role workers differ in voice and can collaborate/debate. Built-ins are
   editable but protected from deletion. The Marketplace **Workers** section shows
   the personality + role galleries (create/remove custom personalities), and the
-  **squad builder** now picks a personality per role Ã¢â‚¬â€ add the same role twice
+  **squad builder** now picks a personality per role ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â add the same role twice
   with different personalities and the AIs collaborate/debate.
 - **AI Factory + AI Operating System foundation (ADR-0020).** Synapse now ships
   a native **AI Factory** page plus a separate **AI Operating System** app shell.
@@ -1686,7 +1712,7 @@ A two-day UX wave responding to a long generative user wishlist.
 Phase A polish ships in this release; Phases B / C / D each get
 their own ADR + gate.
 
-### Phase A Ã¢â‚¬â€ UX polish (no ADR)
+### Phase A ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â UX polish (no ADR)
 
 - **A1**: Sessions AI Quick-actions rail becomes a collapsible
   disclosure. Chevron rotates; click anywhere on the header toggles;
@@ -1792,7 +1818,7 @@ open-zed, pip-install-dev. `must_include` set in
 
 - New tray entries: "Restart Synapse" and "Exit Synapse".
   `synapse:restart` + `synapse:exit` IPC channels.
-- Settings Ã¢â€ â€™ Network Ã¢â€ â€™ "Restart now" button when running in
+- Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Network ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ "Restart now" button when running in
   Electron (feature-detected via the preload bridge).
 
 ### Daemon
@@ -1862,7 +1888,7 @@ ships the shortcut; the AI does the work.
 
 ### ADR-0003 Phase E -- ChatGPT export.zip import
 
-Drop the user's ChatGPT *Settings Ã¢â€ â€™ Data Controls Ã¢â€ â€™ Export Data* zip into
+Drop the user's ChatGPT *Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Data Controls ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Export Data* zip into
 Synapse; every conversation lands as a Markdown file under the
 auto-created **imported-chatgpt** project. One-shot ingest -- no
 scraping, no live ChatGPT API, no third-party network (Contract #15).
@@ -1982,7 +2008,7 @@ for many files at once.
 
 The Apps tiles now have an **Open in workbench** button that spawns a
 PTY session pre-`cd`'d into the project's working directory, picking
-Claude Ã¢â€ â€™ Codex Ã¢â€ â€™ shell automatically based on what's on PATH. And the
+Claude ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Codex ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ shell automatically based on what's on PATH. And the
 app now has an explicit AI-facing layer: `GET /api/v1/ai/context`
 returns a compact orientation digest so a Claude / Codex session in a
 Sessions tab can read what's running, what's installed, and which REST
@@ -1991,7 +2017,7 @@ endpoints are designed for it to call.
 #### Added -- daemon
 - `routes_workbench.py` -- `POST /api/v1/projects/{id}/workbench`. Body
   is optional `{argv?, rows?, cols?, source?}`; if `argv` is omitted the
-  daemon picks **`claude` Ã¢â€ â€™ `codex` Ã¢â€ â€™ `powershell.exe`/`zsh`/`bash`**
+  daemon picks **`claude` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `codex` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `powershell.exe`/`zsh`/`bash`**
   via `shutil.which`. Spawns under the project's `cwd`, audits as
   `workbench.open` (Contract #11), returns the PTY summary plus
   `project_id` + `project_name` so the UI knows where to land.
@@ -2068,7 +2094,7 @@ install as a real Synapse session so the user can watch the output live.
   - Help panel (toggle button next to the quick-launches) explaining how
     sessions work, Claude Code's runtime controls (`/permissions`,
     `/tools`, `--dangerously-skip-permissions`), and the **Built for AI
-    agents too** stance Ã¢â‚¬â€ the dashboard exposes its state through REST
+    agents too** stance ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the dashboard exposes its state through REST
     so a Claude session in a tab can introspect what's running.
 
 #### Verified
@@ -2111,7 +2137,7 @@ v0.1.24 marketplace install, and v0.1.26 xterm.js renderer.
   reload.added=[claude]`; `GET /tools` then listed `claude` with
   `runnable=True` -- proof the declarative tier from v0.1.22 makes
   Claude runnable without a Python handler. `DELETE` cleaned up. The
-  Tools card Ã¢â€ â€™ **Open in Sessions** deep link routes to the xterm panel
+  Tools card ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ **Open in Sessions** deep link routes to the xterm panel
   with no extra clicks.
 
 ### ADR-0002 Phase A: done
@@ -2119,7 +2145,7 @@ v0.1.24 marketplace install, and v0.1.26 xterm.js renderer.
 Phases A1 (PTY foundation), A2 (xterm.js renderer) and A3 (marketplace
 bundling) are all shipped:
 
-- Drop into Synapse, open **Tools Ã¢â€ â€™ Browse**, install **Claude Code**,
+- Drop into Synapse, open **Tools ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Browse**, install **Claude Code**,
   hit **Open Claude session**, and a live AI coder appears in a
   **Sessions** tab.
 - No new secrets to hand Synapse, no new auth flow, no agent loop
@@ -2133,7 +2159,7 @@ are still gated on explicit go-aheads per the ADR.
 
 ### Live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2)
 
-The xterm.js half of the AI workbench. **Click Sessions Ã¢â€ â€™ Python REPL,
+The xterm.js half of the AI workbench. **Click Sessions ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Python REPL,
 get a real Python REPL in a tab.** Or PowerShell, or any binary on PATH.
 Each session is a real PTY with colours, line editing and Ctrl+C; the
 daemon's `pty.spawn` from `v0.1.25` plus xterm.js v5 here closes the
@@ -2176,14 +2202,14 @@ loop end-to-end.
 
 #### Verified
 - 291 tests pass (daemon-side suites unchanged); typecheck green.
-- E2E live in the browser at 1280Ãƒâ€”800: clicked **Sessions Ã¢â€ â€™ Python
+- E2E live in the browser at 1280ÃƒÆ’Ã¢â‚¬â€800: clicked **Sessions ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Python
   REPL**, the prompt `>>>` painted; pressed `2+2` + Enter; the terminal
   rendered `>>> 2+2 / 4 / >>>`. 0 console errors. Session lifecycle
   verified -- new sessions appear in `GET /pty` and clean up on DELETE.
 
 #### What's next
 v0.1.27 ships `claude` and `codex` manifests in the bundled marketplace
-registry so the user can install them from Tools Ã¢â€ â€™ Browse and open
+registry so the user can install them from Tools ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Browse and open
 sessions from the marketplace card.
 
 ## [0.1.25] -- 2026-06-09
@@ -2198,7 +2224,7 @@ control plane so curl can already drive it.
 
 #### Added -- docs
 - `docs/adr/0002-ai-workbench.md` -- the design. Three phases (CLI
-  passthrough Ã¢â€ â€™ AI workspace Ã¢â€ â€™ account auth), what's in scope, what's
+  passthrough ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ AI workspace ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ account auth), what's in scope, what's
   honest about not happening (VS Code Copilot can't be CLI-driven; we're
   not re-implementing an agent loop). Auth is **inherited** from the
   user's existing Claude/Codex CLI sessions -- Synapse stores no new
@@ -2212,9 +2238,9 @@ control plane so curl can already drive it.
   rides `v1.pty.session_started` / `v1.pty.session_exited`. Bounded 64
   KiB scrollback ring; fresh subscribers get the tail on `GET /pty/{id}`.
 - `routes_pty.py` -- token-guarded REST control plane:
-  `POST /pty` (spawn) Ã‚Â· `GET /pty` (list) Ã‚Â· `GET /pty/{id}` (summary +
-  scrollback) Ã‚Â· `POST /pty/{id}/input` (base64 OR text) Ã‚Â·
-  `POST /pty/{id}/resize` Ã‚Â· `DELETE /pty/{id}` (close).
+  `POST /pty` (spawn) Ãƒâ€šÃ‚Â· `GET /pty` (list) Ãƒâ€šÃ‚Â· `GET /pty/{id}` (summary +
+  scrollback) Ãƒâ€šÃ‚Â· `POST /pty/{id}/input` (base64 OR text) Ãƒâ€šÃ‚Â·
+  `POST /pty/{id}/resize` Ãƒâ€šÃ‚Â· `DELETE /pty/{id}` (close).
 - `tools_primitives.py` -- third primitive `pty.spawn`. A declarative
   manifest can now ship an interactive coder as pure JSON; the
   marketplace install/uninstall loop from v0.1.24 already covers it.
@@ -2236,18 +2262,18 @@ control plane so curl can already drive it.
 #### What's next
 v0.1.26 adds xterm.js + a `<SessionTerminal>` component bound to the
 WS stream; v0.1.27 ships `claude` and `codex` manifests in the bundled
-marketplace registry so a user can click *Install Ã¢â€ â€™ Open session* and
+marketplace registry so a user can click *Install ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Open session* and
 have a working AI coder tab.
 
 ## [0.1.24] -- 2026-06-08
 
-### Marketplace install / uninstall (ADR-0001 step 4 Ã¢â‚¬â€ loop closed)
+### Marketplace install / uninstall (ADR-0001 step 4 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â loop closed)
 
 The Browse cards now have **Install** and **Uninstall** buttons. Click
 Install and the daemon writes the manifest into `tools/<id>/manifest.json`;
 the watchdog reload from `v0.1.21` picks it up; the declarative primitives
 from `v0.1.22` make its actions runnable. **No daemon code touches the
-tool. No restart.** End-to-end live install Ã¢â€ â€ uninstall is verified.
+tool. No restart.** End-to-end live install ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Â uninstall is verified.
 
 #### Added -- daemon
 - `routes_marketplace.py` (v0.1.23 file extended):
@@ -2299,7 +2325,7 @@ tool. No restart.** End-to-end live install Ã¢â€ â€ uninstall is veri
     https://github.com/jross32/synapse#readme"` -- the primitive ran.
   - Clicking **Install** on Git status in the Browse UI flipped the card
     to "Already installed", swapped the button to **Uninstall**, and the
-    **Installed** tab counter went from 1 Ã¢â€ â€™ 2 -- all within one paint.
+    **Installed** tab counter went from 1 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 2 -- all within one paint.
   - `DELETE` then returned `reload.removed=["git-status"]`, folder was
     cleaned up, registry dropped the id.
 
@@ -2313,7 +2339,7 @@ domain) is purely about polish + reach.
 
 ## [0.1.23] -- 2026-06-08
 
-### Tools Ã¢â€ â€™ Browse (ADR-0001 step 3)
+### Tools ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Browse (ADR-0001 step 3)
 
 A read-only catalogue of tools available to install, served by the daemon
 and rendered on the Tools page behind a new **Installed / Browse** tab
@@ -2350,7 +2376,7 @@ matches one already in `tools/`.
   served, installed_ids marked, in-memory cache hit + `?refresh` bust,
   validator drops malformed entries, route is token-guarded). Typecheck
   green.
-- E2E live: navigated to **Tools Ã¢â€ â€™ Browse**; the three sample tools
+- E2E live: navigated to **Tools ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Browse**; the three sample tools
   rendered with correct tier colours, Verified pills on the first two,
   Git status without one, and Cloudtap correctly green-checked as
   *Already installed*. Source label read **"bundled sample"** since no
@@ -2425,24 +2451,24 @@ v0.1.23 mostly wraps that loop in a discovery + click-to-install layer.
 
 ## [0.1.21] -- 2026-06-08
 
-### Hot manifest reload for tools (Contract #26 Ã‚Â· ADR-0001 step 1)
+### Hot manifest reload for tools (Contract #26 Ãƒâ€šÃ‚Â· ADR-0001 step 1)
 
 Drop a `tools/<id>/manifest.json` into the running daemon and it appears
 in the UI within ~250 ms. Delete the folder, it disappears. No daemon
 restart, no UI refresh. This is the foundation for the tool marketplace
-laid out in ADR-0001 Ã¢â‚¬â€ install/uninstall flows now have a sub-second
+laid out in ADR-0001 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â install/uninstall flows now have a sub-second
 live-reload story to plug into.
 
 #### Added
 - `synapse_daemon/tools_registry.py`:
-  - `async reload()` Ã¢â‚¬â€ re-scans `tools/` in place. Preserves the live handler
+  - `async reload()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â re-scans `tools/` in place. Preserves the live handler
     instance for any tool whose id is unchanged (so a running Cloudtap tunnel
     doesn't die just because someone wrote a different tool's manifest).
     Shuts down handlers for removed tools, instantiates new ones, swaps the
     manifest dict last so concurrent readers always see a coherent state.
     Returns `{added, removed, kept}` and broadcasts
     `v1.tool.reloaded` on the bus.
-  - `start_watching(loop)` / `stop_watching()` Ã¢â‚¬â€ a `watchdog.Observer`
+  - `start_watching(loop)` / `stop_watching()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a `watchdog.Observer`
     on the tools directory. Coalesces a flurry of FS events into one
     reload via a 250 ms debounce + `asyncio.run_coroutine_threadsafe`
     back to the main loop. Idempotent; a missing `tools/` is a no-op.
@@ -2464,7 +2490,7 @@ live-reload story to plug into.
 
 The renderer's Tools page already auto-refetches on any `v1.tool.*` event
 (wired in v0.1.9.5), so the new `v1.tool.reloaded` ping makes the UI
-update live too Ã¢â‚¬â€ no extra renderer code required. That's the
+update live too ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no extra renderer code required. That's the
 "hot install/uninstall" property ADR-0001 needs for the marketplace.
 
 ## [0.1.20] -- 2026-06-08
@@ -2559,8 +2585,8 @@ projects, so it's not a huge list of stuff").
 
 ### Light / Dark theme (Contract #14)
 
-A real, working light theme. Pick Light, Dark, or System on Settings Ã¢â€ â€™ Theme,
-or hit `Ctrl+K Ã¢â€ â€™ "Toggle light / dark theme"`. The choice persists; "System"
+A real, working light theme. Pick Light, Dark, or System on Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Theme,
+or hit `Ctrl+K ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ "Toggle light / dark theme"`. The choice persists; "System"
 follows your OS preference live.
 
 #### Added
@@ -2585,7 +2611,7 @@ follows your OS preference live.
   light text). The body now leans on the CSS variables in `styles.css`.
 
 #### Verified
-- 235 tests pass; typecheck green. E2E: `Ctrl+K Ã¢â€ â€™ "theme" Ã¢â€ â€™ Enter` flipped
+- 235 tests pass; typecheck green. E2E: `Ctrl+K ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ "theme" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Enter` flipped
   `<html>` to `class="light"`, swapped the body to a light background with
   dark text, and persisted to localStorage. Doing it again flipped back.
 
@@ -2608,14 +2634,14 @@ including which source triggered it (Desktop / Mobile / Tray / CLI / Auto).
 - `lib/generated-types.ts` -- `AuditEntry` + `AuditListResponse`.
 - `components/AuditLogPanel.tsx` -- a Settings card with a refresh button,
   a free-text filter (matches entity / id / action / source / result /
-  error_code), live counts ("3 of 75 shown Ã‚Â· 75 total"), and a scrollable
+  error_code), live counts ("3 of 75 shown Ãƒâ€šÃ‚Â· 75 total"), and a scrollable
   log of entries. Each row shows local time, entity, action, source, and a
   green/red result pill.
 
 #### Fixed
 - A subtle bug found while wiring this in: the panel's old `mounted` ref
   pattern interacted with React 18 Strict Mode's double-effect to leave
-  state-setters short-circuited and the panel permanently "LoadingÃ¢â‚¬Â¦".
+  state-setters short-circuited and the panel permanently "LoadingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦".
   Removed the ref -- React 18 no longer warns about unmounted setState.
 
 #### Verified
@@ -2687,8 +2713,8 @@ project, jump to any page, or trigger an action -- all from one shortcut.
   - Symmetric word-prefix matching, so "paired" still finds **Pair a
     device** and "set" still finds **Go to Settings** -- useful mid-typing.
 - `App.tsx` -- a global `Ctrl+K` / `Cmd+K` keyboard listener toggles the
-  palette. `Ã¢â€ â€˜` / `Ã¢â€ â€œ` to navigate, `Enter` to run, `Esc` to close.
-- `components/Sidebar.tsx` -- a small `Ctrl+K` (or `Ã¢Å’ËœK` on macOS) button at
+  palette. `ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Ëœ` / `ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Å“` to navigate, `Enter` to run, `Esc` to close.
+- `components/Sidebar.tsx` -- a small `Ctrl+K` (or `ÃƒÂ¢Ã…â€™Ã‹Å“K` on macOS) button at
   the bottom of the rail, so the shortcut is discoverable. Click it too.
 
 #### Verified
@@ -2812,7 +2838,7 @@ on any machine. This finishes Milestone F's contract coverage.
 - `snapshot.py` -- `build_snapshot()` reads the live registry (every project,
   the loaded tool ids, an audit-log tail, and the *keys* of secret env vars)
   into a `SnapshotPayload`. `restore_snapshot()` merges a payload back:
-  creates projects that don't exist, updates those that do Ã¢â‚¬â€ by id, never
+  creates projects that don't exist, updates those that do ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â by id, never
   deletes. Restored projects come back `idle` with secret values blanked
   (DPAPI-bound secrets never travel; the report lists the keys to re-enter).
 - `routes_snapshot.py` -- `GET /api/v1/snapshot` (export) and
@@ -2834,7 +2860,7 @@ on any machine. This finishes Milestone F's contract coverage.
 - 216 tests pass (+6 snapshot-route cases: round-trip, idempotent merge,
   incompatible-format rejection, secret blanking, status reset); typecheck
   green. E2E: downloaded a 21-project snapshot from the Settings UI and
-  restored it back Ã¢â‚¬â€ "0 created, 21 updated", no duplicates.
+  restored it back ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â "0 created, 21 updated", no duplicates.
 
 ## [0.1.10] -- 2026-05-19
 
@@ -2866,7 +2892,7 @@ audits flagged.
 
 ### Multi-tunnel Cloudtap + multi-instance tool model
 
-Cloudtap can now hold **any number of tunnels open at once** Ã¢â‚¬â€ open one per
+Cloudtap can now hold **any number of tunnels open at once** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â open one per
 app, close whichever you want individually. The old single global "Close
 tunnel" button (which looked like it closed everything) is gone.
 
@@ -2990,8 +3016,8 @@ handful of polish items. All fixed here.
   `p-8` that crowded small screens.
 - Project / log / discovery paths and launch commands wrap with `break-words`
   instead of `break-all`, so paths no longer shatter mid-segment.
-- Settings shows a human-readable connection label (Connected / ConnectingÃ¢â‚¬Â¦ /
-  ReconnectingÃ¢â‚¬Â¦ / Disconnected) instead of the raw `connState` word.
+- Settings shows a human-readable connection label (Connected / ConnectingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ /
+  ReconnectingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ / Disconnected) instead of the raw `connState` word.
 
 ## [0.1.8.5] -- 2026-05-17
 
@@ -3246,13 +3272,13 @@ This bump makes Synapse runnable without PowerShell and gives the verification p
 
 ### Hotfix -- ASCII-only PowerShell scripts (run-blocker)
 
-`.\scripts\dev.ps1` failed to parse on Windows PowerShell 5.1 with `"The string is missing the terminator: '."` and `Missing closing '}'`. Root cause: the scripts contained multi-byte Unicode glyphs (`Ã¢â€ â€™`, `Ã¢â€¢Â`, `Ã¢â‚¬â€`, `Ã¢â‚¬Â¢`, `Ã‚Â·`); PS 5.1 reads `.ps1` files as Windows-1252 unless they begin with a UTF-8 BOM, and the Write tool used to author them does not emit one. The mangled bytes broke string + brace tokenisation.
+`.\scripts\dev.ps1` failed to parse on Windows PowerShell 5.1 with `"The string is missing the terminator: '."` and `Missing closing '}'`. Root cause: the scripts contained multi-byte Unicode glyphs (`ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢`, `ÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â`, `ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â`, `ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢`, `Ãƒâ€šÃ‚Â·`); PS 5.1 reads `.ps1` files as Windows-1252 unless they begin with a UTF-8 BOM, and the Write tool used to author them does not emit one. The mangled bytes broke string + brace tokenisation.
 
 #### Fixed
-- `scripts/dev.ps1`: rewritten in pure ASCII -- arrows `Ã¢â€ â€™` Ã¢â€ â€™ `->`, box `Ã¢â€¢Â` Ã¢â€ â€™ `=`, em-dashes `Ã¢â‚¬â€` Ã¢â€ â€™ `--`, bullets `Ã¢â‚¬Â¢` Ã¢â€ â€™ `*`. Added a header note explaining the constraint.
+- `scripts/dev.ps1`: rewritten in pure ASCII -- arrows `ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `->`, box `ÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `=`, em-dashes `ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `--`, bullets `ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `*`. Added a header note explaining the constraint.
 - `scripts/version-bump.ps1`: same substitutions; header note updated.
 - `scripts/gen-types.ps1`: same substitutions; header note updated.
-- `daemon/synapse_daemon/__main__.py`: the ready-line log string used `Ã‚Â·` separators that rendered as `Ã¯Â¿Â½` on Windows consoles (cp1252). Replaced with `|`.
+- `daemon/synapse_daemon/__main__.py`: the ready-line log string used `Ãƒâ€šÃ‚Â·` separators that rendered as `ÃƒÂ¯Ã‚Â¿Ã‚Â½` on Windows consoles (cp1252). Replaced with `|`.
 
 #### Added
 - `AGENTS.md` "Forbidden" section gains an explicit rule against non-ASCII characters in `.ps1` files, including the canonical substitution table. Daemon log strings written to console must also stay ASCII (Windows console = cp1252 by default).
@@ -3265,243 +3291,243 @@ This bump makes Synapse runnable without PowerShell and gives the verification p
 #### Notes
 - This is a half-step (`.5`) bump because the change is small and not a feature; Milestone E continues to be earmarked for `0.1.6`.
 
-## [0.1.5] Ã¢â‚¬â€ 2026-05-13
+## [0.1.5] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Milestone D Ã¢â‚¬â€ Project registry + launcher (click Ã¢â€ â€™ launch)
+### Milestone D ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Project registry + launcher (click ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ launch)
 
 You can now click a tile in the Synapse window and the corresponding app actually launches. State updates live over WebSocket; click again to stop. The seeded `wbscrper` project means there's something to click on first run.
 
-#### Added Ã¢â‚¬â€ daemon
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon
 - `daemon/synapse_daemon/projects.py` (Contracts #1, #2, #10): `Project` + `ProjectUpdate` Pydantic models with kebab-case id validation (single-letter ids and full hyphenated ids allowed; underscore + caps rejected). Full CRUD against the `projects` table: `list_projects`, `get`, `get_or_none`, `create`, `update`, `soft_delete`. State writers `set_status` + `set_health` that guarantee strictly monotonic `last_transition_at` / `updated_at` even on coarse Windows microsecond clocks. `model_dump_for_client` redacts secret env values to `"(set)"` (Contract #25).
-- `daemon/synapse_daemon/process_manager.py` (Contracts #2, #3, #6, #11): `ProcessManager` class Ã¢â‚¬â€ `launch(project_id, source)` transitions `idle Ã¢â€ â€™ launching Ã¢â€ â€™ launched`, spawns subprocess detached (Windows: `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`; POSIX: `start_new_session=True`) with stdout+stderr teed to a per-spawn log file under `data/logs/<id>/`, inserts a `managed_processes` row, emits `v1.project.launching` + `v1.project.launched` on the WS bus. `stop(project_id, source)` sends `terminate`, falls back to `kill` after 5 s, marks the row stopped with reason `user`, emits `v1.project.stopping` + `v1.project.stopped`. Spawn failures land in `EntityStatus.ERROR` with a `project.spawn_failed` `ErrorRef` and a `v1.project.errored` event. Audit log entries written for `launch.attempt`, `launch`, `stop.attempt`, `stop` (Contract #11). `shutdown()` closes log handles but does NOT kill children Ã¢â‚¬â€ Contract #6 wants them to survive daemon restart.
+- `daemon/synapse_daemon/process_manager.py` (Contracts #2, #3, #6, #11): `ProcessManager` class ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `launch(project_id, source)` transitions `idle ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ launching ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ launched`, spawns subprocess detached (Windows: `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`; POSIX: `start_new_session=True`) with stdout+stderr teed to a per-spawn log file under `data/logs/<id>/`, inserts a `managed_processes` row, emits `v1.project.launching` + `v1.project.launched` on the WS bus. `stop(project_id, source)` sends `terminate`, falls back to `kill` after 5 s, marks the row stopped with reason `user`, emits `v1.project.stopping` + `v1.project.stopped`. Spawn failures land in `EntityStatus.ERROR` with a `project.spawn_failed` `ErrorRef` and a `v1.project.errored` event. Audit log entries written for `launch.attempt`, `launch`, `stop.attempt`, `stop` (Contract #11). `shutdown()` closes log handles but does NOT kill children ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Contract #6 wants them to survive daemon restart.
 - `daemon/synapse_daemon/seed.py`: idempotent first-run insert of the `wbscrper` project at `C:\Users\justi\wbscrper` with `npm start` + an HTTP health probe on `/api/status`. Skips if the row already exists; preserves user edits across re-seeds.
 - `daemon/synapse_daemon/routes_projects.py` (Contract #7): `build_projects_router(storage, pm)` factory exposing `GET /projects`, `GET /projects/{id}`, `POST /projects` (201), `PATCH /projects/{id}`, `DELETE /projects/{id}` (204), `POST /projects/{id}/launch`, `POST /projects/{id}/stop`. Every write path also writes the audit log (Contract #11).
 - `app.build_app()` gained an optional `process_manager` parameter, mounts the projects router under `/api/v1`, and stashes the PM on `app.state.process_manager` for handlers + lifespan.
 - `__main__.py` lifespan now calls `seed_default_projects(storage)` before the bus starts publishing, instantiates a `ProcessManager`, hands it to `build_app`, and tears it down on shutdown.
 
-#### Added Ã¢â‚¬â€ renderer
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â renderer
 - `renderer/lib/projects-client.ts`: typed wrappers for every project endpoint (`listProjects`, `getProject`, `createProject`, `patchProject`, `deleteProject`, `launchProject`, `stopProject`). All throw `SynapseApiError` carrying the daemon's `ErrorEnvelope`.
 - `renderer/lib/generated-types.ts`: extended with `Project`, `ProjectUpdate`, `ProjectListResponse` types mirroring the Pydantic models.
 - `renderer/components/StatusBadge.tsx`: reusable status pill with token-based colour + an animated pulse during transitions (`launching`, `stopping`). Uses `--synapse-status-*` tokens exclusively (Contract #14); marked `aria-live='polite'` for screen readers (Contract #23).
-- `renderer/components/ProjectTile.tsx`: per-project tile Ã¢â‚¬â€ name, path, live `StatusBadge`, description, `cmd`/`port`/`updated` metadata grid, error banner if the project is in `error` state, **Launch**/**Stop** button that swaps based on current status, **Edit** and **Delete** affordances. Delete is disabled while the project is running (UI mirror of the daemon's 409 guard).
-- `renderer/components/ProjectEditDialog.tsx`: modal edit form for name / path / launch_cmd / description / expected_port Ã¢â‚¬â€ Esc to close, click-outside to dismiss when not busy, focus trapped on first field. POSTs the diff via `patchProject` (Contract #1).
+- `renderer/components/ProjectTile.tsx`: per-project tile ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â name, path, live `StatusBadge`, description, `cmd`/`port`/`updated` metadata grid, error banner if the project is in `error` state, **Launch**/**Stop** button that swaps based on current status, **Edit** and **Delete** affordances. Delete is disabled while the project is running (UI mirror of the daemon's 409 guard).
+- `renderer/components/ProjectEditDialog.tsx`: modal edit form for name / path / launch_cmd / description / expected_port ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Esc to close, click-outside to dismiss when not busy, focus trapped on first field. POSTs the diff via `patchProject` (Contract #1).
 - `renderer/pages/Apps.tsx`: tile grid (`auto-fill, minmax(320px, 1fr)`), subscribes to `v1.project.*` events and refreshes on any change, ships an empty-state (Contract #13) and an inline `ConfirmDialog` for delete (Contract #12).
 - `renderer/styles.css`: shared `@keyframes synapse-pulse` used by `StatusBadge`.
 - `renderer/App.tsx`: keeps the daemon-status header from v0.1.4, now embeds `<AppsPage />` below it. Sidebar layout still arrives in Milestone F.
 
-#### Added Ã¢â‚¬â€ tests (32 new, total 149)
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tests (32 new, total 149)
 - `daemon/tests/test_projects.py` (13): id validation, create/get/list/update/delete, conflict on duplicate, not-found 404, empty-update 422, refuses delete-while-running, strict monotonic transitions even on coarse clocks, error storage + clearing, health writer, secret redaction in client view.
-- `daemon/tests/test_process_manager.py` (7): real subprocess `python -c "time.sleep(60)"` end-to-end Ã¢â‚¬â€ status transitions, log file created, managed_processes row + status_of mapping, audit rows for attempt + success, WS events emitted in order; double-launch guard; missing-project guard; stop terminates + finalises; stop-when-not-running guard; empty cmd raises; spawn failure path emits `v1.project.errored` with `project.spawn_failed`.
+- `daemon/tests/test_process_manager.py` (7): real subprocess `python -c "time.sleep(60)"` end-to-end ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â status transitions, log file created, managed_processes row + status_of mapping, audit rows for attempt + success, WS events emitted in order; double-launch guard; missing-project guard; stop terminates + finalises; stop-when-not-running guard; empty cmd raises; spawn failure path emits `v1.project.errored` with `project.spawn_failed`.
 - `daemon/tests/test_seed.py` (3): seeds wbscrper on first run, idempotent on second run, preserves user renames across re-seeds.
-- `daemon/tests/test_routes_projects.py` (9): list empty, list seeded, get 404, patch rename, patch empty 422, launch Ã¢â€ â€™ stop round-trip with real subprocess, POST 201, POST duplicate 409, DELETE 204.
+- `daemon/tests/test_routes_projects.py` (9): list empty, list seeded, get 404, patch rename, patch empty 422, launch ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ stop round-trip with real subprocess, POST 201, POST duplicate 409, DELETE 204.
 
 #### Changed
-- `daemon/synapse_daemon/projects.set_status` + `update`: now guarantee strictly monotonic `last_transition_at` / `updated_at` (max(now, prev + 1Ã‚Âµs)) so callers can rely on ordering even when Windows hands out the same wall-clock microsecond twice.
-- Three version files: `0.1.4` Ã¢â€ â€™ `0.1.5`.
+- `daemon/synapse_daemon/projects.set_status` + `update`: now guarantee strictly monotonic `last_transition_at` / `updated_at` (max(now, prev + 1Ãƒâ€šÃ‚Âµs)) so callers can rely on ordering even when Windows hands out the same wall-clock microsecond twice.
+- Three version files: `0.1.4` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.5`.
 
 #### Docs (per Rule #4 + #5)
-- `README.md`: status line Ã¢â€ â€™ "Milestone D complete: click Ã¢â€ â€™ launch Ã‚Â· 149 tests"; tests-pass number bumped; roadmap row D Ã¢Å“â€¦, row E Ã°Å¸Å¸Â¡ next.
+- `README.md`: status line ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ "Milestone D complete: click ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ launch Ãƒâ€šÃ‚Â· 149 tests"; tests-pass number bumped; roadmap row D ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦, row E ÃƒÂ°Ã…Â¸Ã…Â¸Ã‚Â¡ next.
 - `docs/api-changes.md`: 11 new endpoint/event rows under a v0.1.5 (Milestone D) heading; pending table trimmed to what actually remains.
-- `PROGRESS.md`: version Ã¢â€ â€™ 0.1.5, phase table marks D done, what's-done lists every new module + test + UI piece, what's-next breaks Milestone E into concrete sub-tasks.
+- `PROGRESS.md`: version ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 0.1.5, phase table marks D done, what's-done lists every new module + test + UI piece, what's-next breaks Milestone E into concrete sub-tasks.
 - `CHANGELOG.md`: full 0.1.5 entry (this one).
 
 #### Notes
-- 149 tests passing Ã‚Â· 1 platform-conditional skip Ã¢Å“â€¦ Ã‚Â· `npm run typecheck` Ã¢Å“â€¦ Ã‚Â· `npm run build:electron` clean.
-- Full smoke-test path: `.\scripts\dev.ps1` Ã¢â€ â€™ daemon boots Ã¢â€ â€™ seeds wbscrper Ã¢â€ â€™ Electron window opens with the wbscrper tile visible Ã¢â€ â€™ click **Launch** Ã¢â€ â€™ tile flashes "launchingÃ¢â‚¬Â¦" then "running" Ã¢â€ â€™ `npm start` is now running in `C:\Users\justi\wbscrper` Ã¢â€ â€™ click **Stop** Ã¢â€ â€™ tile returns to "stopped".
+- 149 tests passing Ãƒâ€šÃ‚Â· 1 platform-conditional skip ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `npm run typecheck` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `npm run build:electron` clean.
+- Full smoke-test path: `.\scripts\dev.ps1` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ daemon boots ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ seeds wbscrper ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Electron window opens with the wbscrper tile visible ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ click **Launch** ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ tile flashes "launchingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" then "running" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `npm start` is now running in `C:\Users\justi\wbscrper` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ click **Stop** ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ tile returns to "stopped".
 - Crash auto-detection (Popen.poll() watcher + auto-restart per Contract #18) lands with Milestone E together with `v1.process.heartbeat`.
 
-## [0.1.4] Ã¢â‚¬â€ 2026-05-13
+## [0.1.4] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Milestone C Ã¢â‚¬â€ Electron skeleton (Synapse opens)
+### Milestone C ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Electron skeleton (Synapse opens)
 
-`.\scripts\dev.ps1` now launches the full stack: daemon Ã¢â€ â€™ Vite Ã¢â€ â€™ Electron window, all wired together. Closing the window hides to a system tray; right-click Ã¢â€ â€™ **Quit Synapse** is the only thing that actually exits.
+`.\scripts\dev.ps1` now launches the full stack: daemon ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Vite ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Electron window, all wired together. Closing the window hides to a system tray; right-click ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ **Quit Synapse** is the only thing that actually exits.
 
 #### Added
-- `scripts/gen-icon.py` Ã¢â‚¬â€ pure-stdlib PNG generator (no Pillow dep) that draws the Synapse mark Ã¢â‚¬â€ nucleus dot + accent ring + six cyan sparks Ã¢â‚¬â€ at 32 Ãƒâ€” 32 (tray) and 256 Ãƒâ€” 256 (installer / About). Run once with `python scripts/gen-icon.py`; both PNGs are checked in so dev machines don't need to regenerate.
-- `electron/icons/synapse.png` (936 B) and `electron/icons/synapse-256.png` (16 KB) Ã¢â‚¬â€ generated placeholder marks. Designer-drawn final lands in Milestone J without touching consumer code.
+- `scripts/gen-icon.py` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â pure-stdlib PNG generator (no Pillow dep) that draws the Synapse mark ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â nucleus dot + accent ring + six cyan sparks ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â at 32 ÃƒÆ’Ã¢â‚¬â€ 32 (tray) and 256 ÃƒÆ’Ã¢â‚¬â€ 256 (installer / About). Run once with `python scripts/gen-icon.py`; both PNGs are checked in so dev machines don't need to regenerate.
+- `electron/icons/synapse.png` (936 B) and `electron/icons/synapse-256.png` (16 KB) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â generated placeholder marks. Designer-drawn final lands in Milestone J without touching consumer code.
 
-#### Changed Ã¢â‚¬â€ Electron main process
+#### Changed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Electron main process
 - `electron/main.ts` rewritten end-to-end (Contract #2 hide-to-tray, Contract #6 daemon child, Contract #16 admin refusal):
-  Ã‚Â· Single-instance lock Ã¢â‚¬â€ second launch focuses the existing window.
-  Ã‚Â· Spawns `python -m synapse_daemon --port 7878 --data-dir data` on `app.whenReady`, polls `/api/v1/health` for up to 15 s before opening the window so the renderer never sees a connect-failure flash.
-  Ã‚Â· Tray icon with **Show Synapse** / **Open daemon health page** / **Quit Synapse**. Single-click + double-click both show the window.
-  Ã‚Â· `mainWindow.on('close', ...)` prevents default and hides to tray unless `isQuitting` is set. Only the tray's Quit item flips that flag.
-  Ã‚Â· External links open in the user's browser via `shell.openExternal`, never inside an Electron BrowserWindow.
-  Ã‚Â· `app.on('will-quit')` kills the daemon child cleanly. Daemon stdout/stderr is prefixed with `[daemon]` in the Electron console.
+  Ãƒâ€šÃ‚Â· Single-instance lock ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â second launch focuses the existing window.
+  Ãƒâ€šÃ‚Â· Spawns `python -m synapse_daemon --port 7878 --data-dir data` on `app.whenReady`, polls `/api/v1/health` for up to 15 s before opening the window so the renderer never sees a connect-failure flash.
+  Ãƒâ€šÃ‚Â· Tray icon with **Show Synapse** / **Open daemon health page** / **Quit Synapse**. Single-click + double-click both show the window.
+  Ãƒâ€šÃ‚Â· `mainWindow.on('close', ...)` prevents default and hides to tray unless `isQuitting` is set. Only the tray's Quit item flips that flag.
+  Ãƒâ€šÃ‚Â· External links open in the user's browser via `shell.openExternal`, never inside an Electron BrowserWindow.
+  Ãƒâ€šÃ‚Â· `app.on('will-quit')` kills the daemon child cleanly. Daemon stdout/stderr is prefixed with `[daemon]` in the Electron console.
 
-#### Changed Ã¢â‚¬â€ preload bridge
+#### Changed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â preload bridge
 - `electron/preload.ts` exposes a typed `window.synapse.*` surface: `version()`, `daemonBase()`, `daemonWsBase()`, `platform()`. Raw Node APIs stay off the renderer's window.
 
-#### Changed Ã¢â‚¬â€ renderer
+#### Changed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â renderer
 - `renderer/App.tsx` rewritten as the Milestone C proof of life:
-  Ã‚Â· Calls `setDaemonBase(window.synapse.daemonBase())` so `api-client.ts` aims at the right host even in packaged mode.
-  Ã‚Â· Fetches `GET /api/v1/health` and renders version / uptime / start time / contracts-honoured count.
-  Ã‚Â· Starts a `SynapseWsClient`, displays the colour-coded conn-state badge (idle / connecting / connected / reconnecting / closed) using `--synapse-status-*` tokens.
-  Ã‚Â· Renders the last 5 received WS events with id + name + local time (Contract #24 Ã¢â‚¬â€ `formatLocal` shared helper).
-  Ã‚Â· All colour, spacing, type, and radius values come from `theme-tokens.css` (Contract #14 Ã¢â‚¬â€ no hardcoded values).
+  Ãƒâ€šÃ‚Â· Calls `setDaemonBase(window.synapse.daemonBase())` so `api-client.ts` aims at the right host even in packaged mode.
+  Ãƒâ€šÃ‚Â· Fetches `GET /api/v1/health` and renders version / uptime / start time / contracts-honoured count.
+  Ãƒâ€šÃ‚Â· Starts a `SynapseWsClient`, displays the colour-coded conn-state badge (idle / connecting / connected / reconnecting / closed) using `--synapse-status-*` tokens.
+  Ãƒâ€šÃ‚Â· Renders the last 5 received WS events with id + name + local time (Contract #24 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `formatLocal` shared helper).
+  Ãƒâ€šÃ‚Â· All colour, spacing, type, and radius values come from `theme-tokens.css` (Contract #14 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no hardcoded values).
 
 #### Notes
-- `npm run typecheck` Ã¢Å“â€¦ Ã‚Â· `npm run build:electron` produces `dist-electron/main.js` + `preload.js` cleanly.
-- `pytest` 117 passing Ã‚Â· 1 platform-conditional skip Ã¢â‚¬â€ daemon code untouched in this commit.
-- Smoke-test path: run `.\scripts\dev.ps1` Ã¢â‚¬â€ you should see daemon boot logs, a Synapse window showing "connected" + the `v1.daemon.started` event, and a tray icon. Close the window Ã¢â€ â€™ hides to tray. Right-click Ã¢â€ â€™ Quit Synapse Ã¢â€ â€™ both Electron and the daemon child exit cleanly.
+- `npm run typecheck` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `npm run build:electron` produces `dist-electron/main.js` + `preload.js` cleanly.
+- `pytest` 117 passing Ãƒâ€šÃ‚Â· 1 platform-conditional skip ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon code untouched in this commit.
+- Smoke-test path: run `.\scripts\dev.ps1` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â you should see daemon boot logs, a Synapse window showing "connected" + the `v1.daemon.started` event, and a tray icon. Close the window ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ hides to tray. Right-click ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Quit Synapse ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ both Electron and the daemon child exit cleanly.
 
 #### Next
 - Milestone D wires real projects (CRUD endpoints + Apps page with tiles + launch button). First tile = `wbscrper`.
 
-## [0.1.3] Ã¢â‚¬â€ 2026-05-13
+## [0.1.3] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Milestone B Ã¢â‚¬â€ Daemon skeleton (the daemon is alive)
+### Milestone B ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Daemon skeleton (the daemon is alive)
 
 `python -m synapse_daemon` now boots a FastAPI server on `localhost:7878`, applies all SQLite migrations, runs orphan reconciliation, and emits a `v1.daemon.started` event onto the WebSocket bus. `GET /api/v1/health` returns the contract shape; `WS /api/v1/ws` honours the full replay + ping protocol.
 
-#### Added Ã¢â‚¬â€ daemon modules
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon modules
 - `synapse_daemon/storage.py` (Contracts #8, #9, #11): `Storage` class wrapping a single SQLite connection in autocommit mode with WAL + foreign keys + 5 s busy timeout; `migrate()`, `applied_migration_numbers()`, `schema_migration()`, `transaction()` ctx manager.
-- `synapse_daemon/migrations/_runner.py` (Contract #9): atomic per-migration application Ã¢â‚¬â€ splits SQL on `;`, runs every statement plus the `schema_migrations` INSERT inside a single `BEGIN IMMEDIATE` / `COMMIT`. Idempotent on re-run.
+- `synapse_daemon/migrations/_runner.py` (Contract #9): atomic per-migration application ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â splits SQL on `;`, runs every statement plus the `schema_migrations` INSERT inside a single `BEGIN IMMEDIATE` / `COMMIT`. Idempotent on re-run.
 - `synapse_daemon/ws.py` (Contract #5): `Event` model, `EventBus` (monotonic IDs, 1 000-event ring buffer, async-locked `publish`/`subscribe`, `replay_since`, `replay_window_exceeded`), `WsHub` (FastAPI WebSocket handler with `resume` + `ping` + `error` envelopes, per-connection `asyncio.Queue` fan-out, cancellation-safe cleanup).
 - `synapse_daemon/orphan_reconciler.py` (Contract #6): `reconcile()` reads `managed_processes` where `stopped_at IS NULL`, classifies each row as `re-attached` / `pid-recycled` / `daemon-restart` via `psutil`, writes the non-re-attached rows to `stopped`; `summarise()` rolls outcomes up into a `ReconciliationReport`.
-- `synapse_daemon/app.py` (Contracts #4, #5, #7, #15): `build_app(storage, bus)` factory mounts CORS for Vite + Electron `null` origin, registers `SynapseError` Ã¢â€ â€™ `ErrorEnvelope` handler + fallback handler that hides internals, exposes `GET /api/v1/health` returning `HealthResponse`, mounts `WS /api/v1/ws` via `WsHub`. Helpers `boot_publish_daemon_started()` and `boot_publish_reconciliation()` for lifespan use.
+- `synapse_daemon/app.py` (Contracts #4, #5, #7, #15): `build_app(storage, bus)` factory mounts CORS for Vite + Electron `null` origin, registers `SynapseError` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `ErrorEnvelope` handler + fallback handler that hides internals, exposes `GET /api/v1/health` returning `HealthResponse`, mounts `WS /api/v1/ws` via `WsHub`. Helpers `boot_publish_daemon_started()` and `boot_publish_reconciliation()` for lifespan use.
 
-#### Changed Ã¢â‚¬â€ daemon entry point
-- `synapse_daemon/__main__.py` rewritten: argparse with `--host`, `--port`, `--bind-lan`, `--data-dir`, `--allow-admin`, `--log-level`. Calls `assert_not_admin()` (Contract #16) Ã¢â€ â€™ opens storage Ã¢â€ â€™ applies migrations Ã¢â€ â€™ builds app Ã¢â€ â€™ wires lifespan that runs `reconcile()` in a thread + publishes the boot events Ã¢â€ â€™ hands off to uvicorn. Daemon prints "ready Ã‚Â· schema=N Ã‚Â· contracts 1-28 Ã‚Â· port=P" on startup.
+#### Changed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon entry point
+- `synapse_daemon/__main__.py` rewritten: argparse with `--host`, `--port`, `--bind-lan`, `--data-dir`, `--allow-admin`, `--log-level`. Calls `assert_not_admin()` (Contract #16) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ opens storage ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ applies migrations ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ builds app ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ wires lifespan that runs `reconcile()` in a thread + publishes the boot events ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ hands off to uvicorn. Daemon prints "ready Ãƒâ€šÃ‚Â· schema=N Ãƒâ€šÃ‚Â· contracts 1-28 Ãƒâ€šÃ‚Â· port=P" on startup.
 - `scripts/dev.ps1` now actually orchestrates: spawns daemon as a background job, polls `/api/v1/health` for up to 10 s before launching Vite + Electron, cleans up jobs on exit. Supports `-DaemonOnly`, `-AppOnly`, `-BindLan`.
 
-#### Added Ã¢â‚¬â€ tests (32 new, 0 regressions)
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tests (32 new, 0 regressions)
 - `daemon/tests/test_storage.py` (10): file creation, WAL + FK pragmas, migration application, idempotency on re-run, schema-migration reporter, transaction commit + rollback, pre-open guard, idempotent close.
 - `daemon/tests/test_ws.py` (9): monotonic IDs, replay slicing, ring-buffer eviction, window-exceeded boundary, subscriber fan-out + unsubscribe, default buffer size, failing-subscriber isolation, concurrent publishers get unique IDs.
-- `daemon/tests/test_orphan_reconciler.py` (5): empty table, dead PID Ã¢â€ â€™ `daemon-restart`, alive matching cmdline Ã¢â€ â€™ `re-attached` without touching row, alive different cmdline Ã¢â€ â€™ `pid-recycled`, `summarise()` bucket totals.
-- `daemon/tests/test_app.py` (8): `/health` shape, versioned-path enforcement (unversioned 404), `SynapseError` Ã¢â€ â€™ 4xx envelope, fallback handler hides internals, CORS preflight, WS resume + replay, WS replay-window-exceeded boundary, ping/pong.
+- `daemon/tests/test_orphan_reconciler.py` (5): empty table, dead PID ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `daemon-restart`, alive matching cmdline ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `re-attached` without touching row, alive different cmdline ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `pid-recycled`, `summarise()` bucket totals.
+- `daemon/tests/test_app.py` (8): `/health` shape, versioned-path enforcement (unversioned 404), `SynapseError` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 4xx envelope, fallback handler hides internals, CORS preflight, WS resume + replay, WS replay-window-exceeded boundary, ping/pong.
 
 #### Smoke-tested end-to-end
 - Launched `python -m synapse_daemon --port 7878 --data-dir data`.
 - `curl http://localhost:7878/api/v1/health` returned `{ok:true, version:"0.1.3", contracts:[1..28], ...}`.
 - `curl http://localhost:7878/health` returned 404 (Contract #7 enforcement).
-- Connected Python `websockets` client: resume handshake delivered the `v1.daemon.started` event; ping Ã¢â€ â€™ pong worked.
+- Connected Python `websockets` client: resume handshake delivered the `v1.daemon.started` event; ping ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ pong worked.
 - Migrations 1 + 2 applied cleanly on a fresh DB; second boot was a no-op.
 
 #### Docs
-- `README.md`: version line Ã¢â€ â€™ `v0.1.3`; status reflects "daemon is alive Ã‚Â· 117 tests"; "Getting started" now shows real boot + curl commands; roadmap table updated with Milestone B done + Milestone C as next.
+- `README.md`: version line ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `v0.1.3`; status reflects "daemon is alive Ãƒâ€šÃ‚Â· 117 tests"; "Getting started" now shows real boot + curl commands; roadmap table updated with Milestone B done + Milestone C as next.
 - `docs/api-changes.md`: `/api/v1/health`, `WS /api/v1/ws`, `v1.daemon.started`, `v1.process.reconciled`, `v1.daemon.reconciliation_complete` documented as shipped in 0.1.3; pending endpoints regrouped by milestone.
 
 #### Notes
-- 117 tests passing Ã‚Â· 1 platform-conditional skip (Fernet fallback on Windows; DPAPI ran natively).
+- 117 tests passing Ãƒâ€šÃ‚Â· 1 platform-conditional skip (Fernet fallback on Windows; DPAPI ran natively).
 - The daemon now satisfies the "always-on backend" half of the architecture. Milestone C wires Electron to it.
 
-## [0.1.2.5] Ã¢â‚¬â€ 2026-05-13
+## [0.1.2.5] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Docs sync Ã¢â‚¬â€ README + commit rule hardening
+### Docs sync ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â README + commit rule hardening
 
 #### Added
 - `AGENTS.md` "Commit rules" section now requires:
-  - **Rule #4** Ã¢â‚¬â€ every commit syncs `README.md` whenever version, milestone, test count, roadmap status, tech stack, advertised features, or getting-started commands change.
-  - **Rule #5** Ã¢â‚¬â€ affected `docs/` files sync alongside the change that touched them (`api-changes.md` for new endpoints/events, `security.md` for security-relevant code, ADRs for contract-touching decisions).
+  - **Rule #4** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â every commit syncs `README.md` whenever version, milestone, test count, roadmap status, tech stack, advertised features, or getting-started commands change.
+  - **Rule #5** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â affected `docs/` files sync alongside the change that touched them (`api-changes.md` for new endpoints/events, `security.md` for security-relevant code, ADRs for contract-touching decisions).
   - New "Docs-sync pre-flight" mental check: re-read the first 30 lines of `README.md` and `PROGRESS.md` before every commit.
 
 #### Changed
 - `README.md` fully rewritten to reflect current state:
   - Version line now `v0.1.2.5` (was stale at `v0.1.0-alpha.1`).
-  - Status reflects "pre-Milestone-B contract pass complete Ã‚Â· 85 tests passing".
+  - Status reflects "pre-Milestone-B contract pass complete Ãƒâ€šÃ‚Â· 85 tests passing".
   - New "Design contracts (28)" section linking to AGENTS.md and listing both rounds inline.
   - "Live status feedback" and "Editable from the UI" added to features bullets.
   - Tech stack table updated (watchdog + cryptography deps added in v0.1.2 are now visible).
   - "Getting started" now mentions running typecheck + pytest as a sanity check.
   - Roadmap table inserts the two contract-pass rows (`v0.1.0.5/0.1.1` + `v0.1.1.5/0.1.2`) between Milestone A and Milestone B with done status.
-- `PROGRESS.md`: current version Ã¢â€ â€™ `0.1.2.5`, current milestone wording updated.
-- All three version files: `0.1.2` Ã¢â€ â€™ `0.1.2.5`.
+- `PROGRESS.md`: current version ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.2.5`, current milestone wording updated.
+- All three version files: `0.1.2` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.2.5`.
 
 #### Notes
-- No code changes; toolchain green unchanged (typecheck Ã¢Å“â€¦, pytest 85/1 Ã¢Å“â€¦).
-- Rule #4 (README sync) and Rule #5 (docs sync) are now load-bearing Ã¢â‚¬â€ any future commit that violates them is a regression.
+- No code changes; toolchain green unchanged (typecheck ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦, pytest 85/1 ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦).
+- Rule #4 (README sync) and Rule #5 (docs sync) are now load-bearing ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â any future commit that violates them is a regression.
 
-## [0.1.2] Ã¢â‚¬â€ 2026-05-13
+## [0.1.2] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Contract scaffolding Ã¢â‚¬â€ Round 2 (code)
+### Contract scaffolding ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Round 2 (code)
 
-Operationalises Round 2 contracts (#17Ã¢â‚¬â€œ#28) locked in `v0.1.1.5`. Every Round 2 contract now has a real Pydantic/Python/TS shape; runtime wiring follows in Milestones BÃ¢â‚¬â€œE.
+Operationalises Round 2 contracts (#17ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“#28) locked in `v0.1.1.5`. Every Round 2 contract now has a real Pydantic/Python/TS shape; runtime wiring follows in Milestones BÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“E.
 
-#### Added Ã¢â‚¬â€ daemon modules
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon modules
 - `synapse_daemon/time_utils.py` (#24): `utc_now`, `to_iso`, `from_iso` with Z-suffix tolerance.
 - `synapse_daemon/health.py` (#17): `HealthProbe`, `HealthState` enum, `HealthSnapshot`, `is_terminal()`.
 - `synapse_daemon/restart_policy.py` (#18): `RestartPolicy` + `should_restart()` + `next_backoff_seconds()` exponential backoff with cap.
 - `synapse_daemon/resources.py` (#19): `ResourceSnapshot`, `ResourceCaps`, `over_budget()`.
 - `synapse_daemon/dependencies.py` (#20): Kahn-based topological sort restricted to the reachable subgraph + cycle detection + `reverse_dependents()`.
-- `synapse_daemon/search.py` (#21): `tokenise()`, `build_search_tokens()`, `Indexable` protocol Ã¢â‚¬â€ identical tokenisation rules client+server.
+- `synapse_daemon/search.py` (#21): `tokenise()`, `build_search_tokens()`, `Indexable` protocol ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â identical tokenisation rules client+server.
 - `synapse_daemon/notifications.py` (#22): `Notification` model + `KNOWN_EVENT_KINDS` frozenset + `assert_known_event_kind()` guard.
 - `synapse_daemon/secrets.py` (#25): `EnvVar`, `SecretStore` protocol, `encrypt`/`decrypt` (Windows DPAPI + Fernet fallback), `redact()`, `SECRET_PLACEHOLDER` ("(set)"), `generate_token()`.
-- `synapse_daemon/manifest_watcher.py` (#26): `ManifestWatcher` class wrapping `watchdog` Observer Ã¢â‚¬â€ picks up `manifest.json` changes, ignores other files.
+- `synapse_daemon/manifest_watcher.py` (#26): `ManifestWatcher` class wrapping `watchdog` Observer ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â picks up `manifest.json` changes, ignores other files.
 - `synapse_daemon/cli.py` (#27): `synapse list | status | start | stop | logs | snapshot | restore | doctor` argparse-based parser; doctor runs without daemon.
 - `synapse_daemon/snapshot.py` (#28): `SnapshotPayload`, `RestoreReport`, `assert_compatible()` with format + schema version guards.
 
-#### Added Ã¢â‚¬â€ daemon migrations
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon migrations
 - `migrations/002_round2_schema.sql`: adds `health_probe_json` / `restart_policy_json` / `max_rss_mb` / `max_cpu_percent` / `current_health` / `last_health_at` columns to `projects`; new tables `project_dependencies`, `search_index`, `notification_preferences`, `project_secrets`.
 
-#### Added Ã¢â‚¬â€ renderer
-- `renderer/lib/format-time.ts` (#24): `formatLocal(ts, kind)` + `formatUptime()` Ã¢â‚¬â€ single conversion point UTC Ã¢â€ â€™ local.
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â renderer
+- `renderer/lib/format-time.ts` (#24): `formatLocal(ts, kind)` + `formatUptime()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â single conversion point UTC ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ local.
 - `renderer/lib/search-client.ts` (#21): `search(query, limit)` wrapper + `tokenise()` matching the daemon.
 - `renderer/lib/generated-types.ts`: extended with all Round 2 types (`HealthProbe`, `HealthSnapshot`, `HealthState`, `RestartPolicy`, `RestartMode`, `ResourceSnapshot`, `ResourceCaps`, `Notification`, `NotificationLevel`, `EnvVar`, `SnapshotPayload`, `RestoreReport`).
 
-#### Added Ã¢â‚¬â€ tests (10 new files, all 85 passing)
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tests (10 new files, all 85 passing)
 - `test_time_utils.py`, `test_health.py`, `test_restart_policy.py`, `test_resources.py`, `test_dependencies.py`, `test_search.py`, `test_notifications.py`, `test_secrets.py`, `test_manifest_watcher.py`, `test_cli.py`, `test_snapshot.py`.
 - Updated `test_migrations.py` to assert migration 002 + required tables.
-- Updated `test_models.py` to assert `HealthResponse.contracts` covers 1Ã¢â‚¬â€œ28 and `model_registry()` exports every new model.
+- Updated `test_models.py` to assert `HealthResponse.contracts` covers 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“28 and `model_registry()` exports every new model.
 
 #### Changed
 - `daemon/synapse_daemon/models.py`: `HealthResponse.contracts` default bumped to `range(1, 29)`; `model_registry()` now includes 11 Round 2 models.
 - `pyproject.toml`: added `watchdog>=4,<7` and `cryptography>=43,<46` deps; registered `synapse` console script alongside `synapsed`.
-- All three version files: `0.1.1.5` Ã¢â€ â€™ `0.1.2`.
+- All three version files: `0.1.1.5` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.2`.
 
 #### Notes
-- `npm run typecheck` Ã¢Å“â€¦ Ã‚Â· `pytest` 85 passed + 1 skipped (Fernet test on Windows; DPAPI test ran on Windows) Ã¢Å“â€¦.
+- `npm run typecheck` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `pytest` 85 passed + 1 skipped (Fernet test on Windows; DPAPI test ran on Windows) ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦.
 - All 28 contracts now have code shapes backing them. Milestone B can begin wiring them into a running daemon.
 
-## [0.1.1.5] Ã¢â‚¬â€ 2026-05-13
+## [0.1.1.5] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Design contracts Ã¢â‚¬â€ Round 2 (docs only)
+### Design contracts ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Round 2 (docs only)
 
 Locked the following 12 contracts into `AGENTS.md`, taking the total to 28. Code scaffolding lands in `v0.1.2`.
 
-#### Added Ã¢â‚¬â€ operational lifecycle
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â operational lifecycle
 - **#17** Health-check protocol per project (`http | tcp | command | none` probe, separate `health` field alongside `status` so we don't lie when a process is hung).
 - **#18** Restart policy per project (`never | on-failure | always`, max-retries, exponential backoff). Default `never`.
 - **#19** Resource observability per process (CPU% + RSS MB on heartbeat, optional soft caps with warning).
 - **#20** Project dependencies (`requires: [id]` in manifest, topological launch with confirm, cycle detection).
 
-#### Added Ã¢â‚¬â€ UX primitives
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â UX primitives
 - **#21** Universal search / `Ctrl+K` command palette. Reserves keybind + `GET /api/v1/search` + `search_tokens` model field.
 - **#22** Native system notifications (Electron toast for crash/health-flip/tunnel-live/scheduled-launch, per-event opt-out table).
 - **#23** Accessibility minimums (WCAG AA contrast, visible focus rings, ARIA labels on icon-only buttons, full keyboard nav, `prefers-reduced-motion` already done).
 - **#24** Timestamps UTC in DB, local in UI (single shared `formatLocal()` helper; no ad-hoc `.toLocaleString()`).
 
-#### Added Ã¢â‚¬â€ data + control
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â data + control
 - **#25** Secrets management (`secret: true` env vars, DPAPI-encrypted at rest, never logged, never round-tripped in plaintext after save).
 - **#26** Hot manifest reload (`watchdog` file watcher on `tools/` + project manifest paths; `v1.manifest.reloaded` / `v1.manifest.error` events).
 - **#27** CLI surface (`synapse list | status | start | stop | logs | snapshot | restore | doctor` mapped 1-to-1 with REST).
 - **#28** Snapshot / restore (single JSON dump containing projects + tools + settings + audit tail; secrets excluded, surfaced as re-enter list on restore).
 
 #### Changed
-- `AGENTS.md` header: 16 Ã¢â€ â€™ 28 contracts, references Round 1 (`v0.1.0.5` Ã¢â€ â€™ `v0.1.1`) and Round 2 (`v0.1.1.5` Ã¢â€ â€™ `v0.1.2`) cycle.
-- All three version files: `0.1.1` Ã¢â€ â€™ `0.1.1.5`.
+- `AGENTS.md` header: 16 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 28 contracts, references Round 1 (`v0.1.0.5` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `v0.1.1`) and Round 2 (`v0.1.1.5` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `v0.1.2`) cycle.
+- All three version files: `0.1.1` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.1.5`.
 
 #### Notes
-- `HealthResponse.contracts` model field still reports 1Ã¢â‚¬â€œ16; bumps to 1Ã¢â‚¬â€œ28 in `v0.1.2` when round-2 models exist.
-- `npm run typecheck` Ã¢Å“â€¦ Ã‚Â· `pytest` 31/31 Ã¢Å“â€¦ (no runtime changes).
+- `HealthResponse.contracts` model field still reports 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“16; bumps to 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“28 in `v0.1.2` when round-2 models exist.
+- `npm run typecheck` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `pytest` 31/31 ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ (no runtime changes).
 - Round 2 implementation (v0.1.2) follows immediately.
 
-## [0.1.1] Ã¢â‚¬â€ 2026-05-13
+## [0.1.1] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Contract scaffolding Ã¢â‚¬â€ Round 1 (code)
+### Contract scaffolding ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Round 1 (code)
 
 Operationalises the 16 design contracts locked in `v0.1.0.5`. Every contract now has a real code shape backing it; runtime wiring follows in Milestone B onwards.
 
-#### Added Ã¢â‚¬â€ daemon
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â daemon
 - `daemon/synapse_daemon/api_versions.py` (Contract #7): `API_VERSION`, `API_PREFIX`, `WS_EVENT_PREFIX`, `event_name()` helper.
 - `daemon/synapse_daemon/errors.py` (Contract #4): `ErrorEnvelope` Pydantic model + `SynapseError` exception + helper constructors (`not_found`, `conflict`, `invalid`).
 - `daemon/synapse_daemon/models.py` (Contracts #2, #8): `BaseEntity` with the universal live-status fields, `EntityStatus`, `AuditSource`, `ErrorRef`, `StateTransition`, `HealthResponse`, plus `model_registry()` so `gen-types.ps1` knows what to export.
 - `daemon/synapse_daemon/migrations/__init__.py` + `001_initial.sql` (Contracts #9, #11): schema_migrations, audit_log, projects, tools, managed_processes, confirm_preferences, settings tables.
 - `daemon/synapse_daemon/audit.py` (Contract #11): `AuditRecord` Pydantic + `audit(db, record)` writer.
-- `daemon/synapse_daemon/process_log.py` (Contract #3): rotation constants (10 MB Ãƒâ€” 5), per-entity log dir layout, `new_log_path`, `latest_log`, `list_logs`.
+- `daemon/synapse_daemon/process_log.py` (Contract #3): rotation constants (10 MB ÃƒÆ’Ã¢â‚¬â€ 5), per-entity log dir layout, `new_log_path`, `latest_log`, `list_logs`.
 - `daemon/synapse_daemon/security.py` (Contract #16): `is_admin`, `assert_not_admin(allow_admin=False)`.
 
-#### Added Ã¢â‚¬â€ renderer
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â renderer
 - `renderer/lib/error-types.ts` (Contract #4): `ErrorEnvelope` TS interface + `isErrorEnvelope` guard + `formatError`.
 - `renderer/lib/api-client.ts` (Contract #7): `apiFetch<T>()` wrapper that prepends `/api/v1`, throws `SynapseApiError` carrying an `ErrorEnvelope`.
 - `renderer/lib/ws-client.ts` (Contract #5): `SynapseWsClient` class with backoff (1, 2, 4, 8, 16, 30 s cap), event-id cursor, `{type: "resume", since}` handshake, conn-state events.
@@ -3509,14 +3535,14 @@ Operationalises the 16 design contracts locked in `v0.1.0.5`. Every contract now
 - `renderer/lib/generated-types.ts` (Contract #8): hand-written TS mirroring the Pydantic models; CI will compare to generator output once active.
 - `renderer/styles.css` now imports theme tokens; body uses `var(--synapse-bg-nucleus)` etc.
 
-#### Added Ã¢â‚¬â€ scripts + docs
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â scripts + docs
 - `scripts/gen-types.ps1` (Contract #8): placeholder generator entry point; activates in Milestone B.
 - `scripts/version-bump.ps1`: now supports `-Kind design` (appends `.5`) and updates `daemon/synapse_daemon/__init__.py` too.
 - `docs/api-changes.md` (Contract #7): versioning rules + pending v1 endpoint table.
 - `docs/security.md` (Contracts #15, #16): threat model, no-telemetry posture, LAN exposure caveats, secrets stance.
 - `docs/adr/README.md`: ADR folder + template for any future contract amendments.
 
-#### Added Ã¢â‚¬â€ tests
+#### Added ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tests
 - `daemon/tests/test_errors.py` (Contract #4): envelope validation, helper constructors, status codes.
 - `daemon/tests/test_models.py` (Contracts #2, #7, #10): status enum coverage, audit source values, kebab-case pattern, API version constants, registry completeness, validate-on-assignment.
 - `daemon/tests/test_migrations.py` (Contract #9): file naming, monotonic ordering, required tables present.
@@ -3525,16 +3551,16 @@ Operationalises the 16 design contracts locked in `v0.1.0.5`. Every contract now
 - `daemon/tests/test_security.py` (Contract #16): refuses on elevation, allows with flag.
 
 #### Changed
-- All three version files: `0.1.0.5` Ã¢â€ â€™ `0.1.1`.
+- All three version files: `0.1.0.5` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.1`.
 - `daemon/synapse_daemon/__init__.py`: bumped `__version__` to `0.1.1`.
 
 #### Notes
-- `npm run typecheck` Ã¢Å“â€¦ Ã‚Â· `pytest` (full suite) Ã¢Å“â€¦.
+- `npm run typecheck` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `pytest` (full suite) ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦.
 - Next step in the user's review cycle: pause to draft Round 2 design contracts.
 
-## [0.1.0.5] Ã¢â‚¬â€ 2026-05-13
+## [0.1.0.5] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Design contracts Ã¢â‚¬â€ Round 1 (docs only)
+### Design contracts ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Round 1 (docs only)
 
 Locked the following 14 design contracts into `AGENTS.md` so they apply to every future milestone. No runtime changes; scaffolding implementation lands in `v0.1.1`.
 
@@ -3545,7 +3571,7 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
   - **#5** WebSocket reconnect protocol with monotonic event IDs + ring buffer replay.
   - **#6** Daemon orphan reconciliation on startup (re-attach / mark-stopped based on `psutil`).
   - **#7** Versioned API surface (`/api/v1/...`, `v1.entity.event`).
-  - **#8** Single schema source of truth (Pydantic Ã¢â€ â€™ TS via `scripts/gen-types.ps1`).
+  - **#8** Single schema source of truth (Pydantic ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ TS via `scripts/gen-types.ps1`).
   - **#9** DB migrations from day 1 (numbered SQL files, `schema_migrations` table).
   - **#10** Naming conventions (IDs kebab-case, Python snake_case, TS camelCase, events `noun.verb`).
   - **#11** Audit log table for every state-changing action.
@@ -3556,19 +3582,19 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
   - **#16** Refuse Administrator unless `--allow-admin`.
 
 #### Changed
-- `package.json` version: `0.1.0-alpha.1` Ã¢â€ â€™ `0.1.0.5` (4-component scheme honoured by both PEP 440 and npm-as-non-publisher).
-- `pyproject.toml` version: `0.1.0a1` Ã¢â€ â€™ `0.1.0.5`.
+- `package.json` version: `0.1.0-alpha.1` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.0.5` (4-component scheme honoured by both PEP 440 and npm-as-non-publisher).
+- `pyproject.toml` version: `0.1.0a1` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `0.1.0.5`.
 - `daemon/synapse_daemon/__init__.py` `__version__`: same bump.
 - `daemon/tests/test_smoke.py`: regex relaxed to allow 4+ component versions.
 - `PROGRESS.md`: now lists all 16 contracts as standing requirements.
 
 #### Notes
-- `npm run typecheck` Ã¢Å“â€¦ Ã‚Â· `pytest` Ã¢Å“â€¦.
+- `npm run typecheck` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Ãƒâ€šÃ‚Â· `pytest` ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦.
 - `scripts/version-bump.ps1` only handles 3-component + alpha-tag bumps today; will be updated to support the `.5` design-bump pattern in `v0.1.1`.
 
-## [0.1.0-alpha.1] Ã¢â‚¬â€ 2026-05-13
+## [0.1.0-alpha.1] ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2026-05-13
 
-### Milestone A Ã¢â‚¬â€ Repo scaffolding
+### Milestone A ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Repo scaffolding
 
 #### Added
 - Initial folder structure for the three layers: `electron/`, `renderer/`, `daemon/`, `mobile/`, plus `tools/`, `installer/`, `scripts/`.
@@ -3582,7 +3608,8 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 
 #### Notes
 - Repo pushed to GitHub at this commit.
-- No runtime functionality yet Ã¢â‚¬â€ full daemon and UI come in Milestones B and C.
+- No runtime functionality yet ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â full daemon and UI come in Milestones B and C.
+
 
 
 
