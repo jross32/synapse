@@ -25,7 +25,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .api_versions import event_name
 from .errors import not_found
@@ -87,6 +87,59 @@ class ActivityAuthority(str, Enum):
     EXECUTE = "execute"
 
 
+class ActivityGoalStatus(str, Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    BLOCKED = "blocked"
+
+
+class ActivityGoal(BaseModel):
+    id: str
+    session_id: str
+    title: str
+    detail_md: str = ""
+    status: ActivityGoalStatus = ActivityGoalStatus.PENDING
+    position: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ActivityGoalCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    detail_md: str = Field(default="", max_length=2000)
+    status: ActivityGoalStatus = ActivityGoalStatus.PENDING
+
+    @field_validator("title", "detail_md", mode="before")
+    @classmethod
+    def sanitize_goal_text(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        return "".join(
+            character
+            for character in value
+            if character in "\n\r\t" or ord(character) >= 32
+        )
+
+
+class ActivityGoalUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    detail_md: str | None = Field(default=None, max_length=2000)
+    status: ActivityGoalStatus | None = None
+    position: int | None = Field(default=None, ge=0)
+
+    @field_validator("title", "detail_md", mode="before")
+    @classmethod
+    def sanitize_goal_text(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        return "".join(
+            character
+            for character in value
+            if character in "\n\r\t" or ord(character) >= 32
+        )
+
+
 class ActivityJournalCreate(BaseModel):
     category: ActivityJournalCategory
     status: ActivityJournalStatus = ActivityJournalStatus.INFO
@@ -99,6 +152,17 @@ class ActivityJournalCreate(BaseModel):
     mcp_server_id: str | None = Field(default=None, max_length=100)
     tool_name: str | None = Field(default=None, max_length=160)
     authority: ActivityAuthority = ActivityAuthority.NONE
+
+    @field_validator("title", "summary_md", mode="before")
+    @classmethod
+    def sanitize_operator_text(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        return "".join(
+            character
+            for character in value
+            if character in "\n\r\t" or ord(character) >= 32
+        )
 
 
 class ActivityJournalEvent(ActivityJournalCreate):
@@ -280,6 +344,104 @@ def create_journal_event(
     return _journal_row(row)
 
 
+def _session_metadata(conn: sqlite3.Connection, session_id: str) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT metadata_json FROM agent_sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    if row is None:
+        raise not_found("agent_session", session_id)
+    try:
+        value = json.loads(row["metadata_json"] or "{}")
+    except json.JSONDecodeError:
+        value = {}
+    return value if isinstance(value, dict) else {}
+
+
+def _write_session_goals(
+    conn: sqlite3.Connection, session_id: str, goals: list[ActivityGoal]
+) -> None:
+    metadata = _session_metadata(conn, session_id)
+    metadata["activity_goals"] = [goal.model_dump(mode="json") for goal in goals]
+    conn.execute(
+        "UPDATE agent_sessions SET metadata_json = ? WHERE id = ?",
+        (json.dumps(metadata), session_id),
+    )
+
+
+def list_session_goals(conn: sqlite3.Connection, session_id: str) -> list[ActivityGoal]:
+    metadata = _session_metadata(conn, session_id)
+    raw_goals = metadata.get("activity_goals")
+    if not isinstance(raw_goals, list):
+        return []
+    goals: list[ActivityGoal] = []
+    for raw in raw_goals:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            goals.append(ActivityGoal.model_validate(raw))
+        except Exception:  # noqa: BLE001 -- skip one malformed legacy metadata entry
+            continue
+    return sorted(goals, key=lambda goal: (goal.position, goal.created_at, goal.id))
+
+
+def create_session_goal(
+    conn: sqlite3.Connection, session_id: str, payload: ActivityGoalCreate
+) -> ActivityGoal:
+    goals = list_session_goals(conn, session_id)
+    now = utc_now()
+    goal = ActivityGoal(
+        id=_new_id(),
+        session_id=session_id,
+        title=payload.title.strip(),
+        detail_md=payload.detail_md.strip(),
+        status=payload.status,
+        position=len(goals),
+        created_at=now,
+        updated_at=now,
+    )
+    goals.append(goal)
+    _write_session_goals(conn, session_id, goals)
+    return goal
+
+
+def update_session_goal(
+    conn: sqlite3.Connection,
+    session_id: str,
+    goal_id: str,
+    payload: ActivityGoalUpdate,
+) -> ActivityGoal:
+    goals = list_session_goals(conn, session_id)
+    for index, existing in enumerate(goals):
+        if existing.id != goal_id:
+            continue
+        changes = payload.model_dump(exclude_none=True)
+        if "title" in changes:
+            changes["title"] = str(changes["title"]).strip()
+        if "detail_md" in changes:
+            changes["detail_md"] = str(changes["detail_md"]).strip()
+        changes["updated_at"] = utc_now()
+        updated = existing.model_copy(update=changes)
+        goals[index] = updated
+        _write_session_goals(conn, session_id, goals)
+        return updated
+    raise not_found("activity_goal", goal_id)
+
+
+def delete_session_goal(
+    conn: sqlite3.Connection, session_id: str, goal_id: str
+) -> ActivityGoal:
+    goals = list_session_goals(conn, session_id)
+    deleted = next((goal for goal in goals if goal.id == goal_id), None)
+    if deleted is None:
+        raise not_found("activity_goal", goal_id)
+    remaining = [
+        goal.model_copy(update={"position": index, "updated_at": utc_now()})
+        for index, goal in enumerate(goal for goal in goals if goal.id != goal_id)
+    ]
+    _write_session_goals(conn, session_id, remaining)
+    return deleted
+
+
 def list_journal_events(
     conn: sqlite3.Connection,
     *,
@@ -311,6 +473,28 @@ def list_journal_events(
 _REVIEW_LINK = NotificationLink(label="Open Review inbox", intent={"page": "ai-coding", "section": "review"})
 _SQUADS_LINK = NotificationLink(label="Open Squads", intent={"page": "ai-coding", "section": "squads"})
 _APPS_LINK = NotificationLink(label="Open Apps", intent={"page": "apps"})
+
+
+def _owner_session_id_for_squad(
+    conn: sqlite3.Connection, squad_id: str | None
+) -> str | None:
+    """Return the coordination session that first attached this squad to Live.
+
+    The squad-created receipt is written with the caller's X-Synapse-Session.
+    Reusing that durable link lets later worker starts, MCP attachments, and
+    reviewer handoffs roll up into the parent session even when the child call
+    itself has no coordination header.
+    """
+
+    if not squad_id:
+        return None
+    row = conn.execute(
+        "SELECT session_id FROM activity_journal "
+        "WHERE squad_id = ? AND session_id IS NOT NULL "
+        "ORDER BY created_at ASC, id ASC LIMIT 1",
+        (squad_id,),
+    ).fetchone()
+    return str(row["session_id"]) if row and row["session_id"] else None
 
 
 def project_event(conn: sqlite3.Connection, name: str, payload: dict[str, Any]) -> ActivityNotification | None:
@@ -464,6 +648,9 @@ def project_journal_events(
             "failed": ActivityJournalStatus.FAILED,
         }.get(status_raw, ActivityJournalStatus.INFO)
         summary = str(item.get("summary_md") or item.get("instructions_md") or "")[:2000]
+        owner_session_id = (
+            str(payload.get("session_id") or "") or _owner_session_id_for_squad(conn, squad_id)
+        )
         created.append(
             create_journal_event(
                 conn,
@@ -476,11 +663,19 @@ def project_journal_events(
                     work_item_id=item_id,
                     authority=ActivityAuthority.EXECUTE,
                 ),
-                session_id=str(payload.get("session_id") or "") or None,
+                session_id=owner_session_id,
                 source="synapse",
             )
         )
     elif name == event_name("agent_run", "started"):
+        runtime = str(payload.get("runtime") or "unknown")
+        execution_mode = str(payload.get("execution_mode") or "interactive")
+        authority = str(payload.get("authority") or "workspace")
+        timeout_seconds = payload.get("timeout_seconds")
+        summary = f"Runtime: {runtime} · Mode: {execution_mode} · Authority: {authority}"
+        if execution_mode == "automatic" and timeout_seconds:
+            summary += f" · Timeout: {timeout_seconds}s"
+        squad_id = str(payload.get("squad_id") or "") or None
         created.append(
             create_journal_event(
                 conn,
@@ -488,18 +683,23 @@ def project_journal_events(
                     category=ActivityJournalCategory.ACTION,
                     status=ActivityJournalStatus.ACTIVE,
                     title=f"Worker started: {str(payload.get('role_id') or 'agent')}",
-                    summary_md=f"Runtime: {str(payload.get('runtime') or 'unknown')}",
-                    squad_id=str(payload.get("squad_id") or "") or None,
+                    summary_md=summary,
+                    squad_id=squad_id,
                     work_item_id=str(payload.get("work_item_id") or "") or None,
-                    authority=ActivityAuthority.EXECUTE,
+                    authority=(
+                        ActivityAuthority.OBSERVE
+                        if authority == "observe"
+                        else ActivityAuthority.EXECUTE
+                    ),
                 ),
-                session_id=None,
+                session_id=_owner_session_id_for_squad(conn, squad_id),
                 source="synapse",
             )
         )
     elif name == event_name("agent_mcp", "attached"):
         server_ids = [str(item) for item in payload.get("mcp_server_ids") or [] if item]
         if server_ids:
+            squad_id = str(payload.get("squad_id") or "") or None
             created.append(
                 create_journal_event(
                     conn,
@@ -508,11 +708,11 @@ def project_journal_events(
                         status=ActivityJournalStatus.SUCCESS,
                         title=f"{len(server_ids)} MCP server{'s' if len(server_ids) != 1 else ''} attached",
                         summary_md=", ".join(server_ids),
-                        squad_id=str(payload.get("squad_id") or "") or None,
+                        squad_id=squad_id,
                         work_item_id=str(payload.get("work_item_id") or "") or None,
                         authority=ActivityAuthority.OBSERVE,
                     ),
-                    session_id=None,
+                    session_id=_owner_session_id_for_squad(conn, squad_id),
                     source="synapse",
                 )
             )

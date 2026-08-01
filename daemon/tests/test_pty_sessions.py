@@ -6,12 +6,15 @@ import asyncio
 import base64
 import os
 import sys
+import threading
+import time
 import types
 from pathlib import Path
 
 import pytest
 
 from synapse_daemon.pty_sessions import (
+    PtySession,
     PtySessionManager,
     _WindowsBackend,
     _normalize_windows_input,
@@ -120,6 +123,278 @@ async def test_scrollback_is_capped_and_replayable() -> None:
     assert b"A" * 100 in captured
     # Cap is 64 KiB.
     assert len(captured) <= 64 * 1024 + 16
+
+
+async def test_sensitive_env_values_are_redacted_across_output_chunks() -> None:
+    bus = EventBus()
+    seen: list[Event] = []
+
+    async def sub(event: Event) -> None:
+        seen.append(event)
+
+    await bus.subscribe(sub)
+    secret = "worker-token-value-123456"
+    session = PtySession(
+        session_id="redaction-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"SYNAPSE_TOKEN": secret, "NORMAL_SETTING": "visible-value"},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    session._handle_chunk(b"before worker-token-\x1b[0K")  # noqa: SLF001
+    session._handle_chunk(b"value-123456 after visible-value")  # noqa: SLF001
+    await asyncio.sleep(0)
+
+    scrollback = session.scrollback_bytes()
+    output = b"".join(
+        base64.b64decode(event.payload["data"])
+        for event in seen
+        if event.name.endswith("session_output")
+    )
+    assert secret.encode() not in scrollback
+    assert secret.encode() not in output
+    assert b"[REDACTED]" in scrollback
+    assert b"visible-value" in scrollback
+
+
+async def test_partial_sensitive_value_is_redacted_when_output_finishes() -> None:
+    bus = EventBus()
+    session = PtySession(
+        session_id="partial-redaction-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"API_KEY": "credential-value-987654"},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    session._handle_chunk(b"credential-value-")  # noqa: SLF001
+    session._flush_redaction_pending()  # noqa: SLF001
+
+    assert session.scrollback_bytes() == b"[REDACTED]"
+
+
+async def test_sensitive_value_inside_terminal_escape_payload_is_redacted() -> None:
+    bus = EventBus()
+    secret = b"terminal-secret-123456"
+    session = PtySession(
+        session_id="escape-redaction-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"TEST_TOKEN": secret.decode(), "CSI_TOKEN": "123456789"},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    session._handle_chunk(b"\x1b]0;" + secret + b"\x07")  # noqa: SLF001
+    session._handle_chunk(b"\x1b[123456789m")  # noqa: SLF001
+
+    assert secret not in session.scrollback_bytes()
+    assert b"123456789" not in session.scrollback_bytes()
+    assert session.scrollback_bytes().count(b"[REDACTED]") == 2
+
+
+def test_public_argv_redacts_sensitive_environment_values() -> None:
+    bus = EventBus()
+    secret = "argv-secret-value-123456"
+    session = PtySession(
+        session_id="argv-redaction-test",
+        argv=["demo", "--token", secret],
+        spawn_argv=["demo", "--token", secret],
+        cwd=None,
+        env={"SERVICE_TOKEN": secret},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.new_event_loop(),
+    )
+    try:
+        assert secret not in " ".join(session.summary().argv)
+        assert session.summary().argv[-1] == "[REDACTED]"
+    finally:
+        session._loop.close()  # noqa: SLF001
+
+
+async def test_incomplete_terminal_escape_does_not_drop_visible_prefix() -> None:
+    bus = EventBus()
+    session = PtySession(
+        session_id="incomplete-escape-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"TEST_TOKEN": "another-secret-value-123456"},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    session._handle_chunk(b"ordinary output\x1b[31")  # noqa: SLF001
+    session._flush_redaction_pending()  # noqa: SLF001
+
+    assert session.scrollback_bytes() == b"ordinary output"
+
+
+async def test_duplicate_eof_callbacks_publish_one_ordered_finalization() -> None:
+    bus = EventBus()
+    seen: list[Event] = []
+
+    async def sub(event: Event) -> None:
+        seen.append(event)
+
+    await bus.subscribe(sub)
+    session = PtySession(
+        session_id="duplicate-eof-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+
+    def slow_reap() -> int:
+        time.sleep(0.05)
+        return 0
+
+    session._backend.reap = slow_reap  # type: ignore[method-assign]  # noqa: SLF001
+    await asyncio.gather(session._on_eof(), session._on_eof())  # noqa: SLF001
+
+    assert len(_drain_events(seen, name_endswith="session_exited")) == 1
+    assert len(_drain_events(seen, name_endswith="session_finalized")) == 1
+
+
+async def test_eof_flushes_final_redaction_before_exit_and_finalize_events() -> None:
+    bus = EventBus()
+    seen: list[Event] = []
+
+    async def sub(event: Event) -> None:
+        seen.append(event)
+
+    await bus.subscribe(sub)
+    session = PtySession(
+        session_id="ordered-eof-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={"TEST_TOKEN": "credential-value-123456"},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+    session._backend.reap = lambda: 0  # type: ignore[method-assign]  # noqa: SLF001
+    session._handle_chunk(b"credential-value-")  # noqa: SLF001
+
+    await session._on_eof()  # noqa: SLF001
+
+    names = [event.name for event in seen]
+    output_index = next(index for index, name in enumerate(names) if name.endswith("session_output"))
+    exited_index = next(index for index, name in enumerate(names) if name.endswith("session_exited"))
+    finalized_index = next(index for index, name in enumerate(names) if name.endswith("session_finalized"))
+    assert output_index < exited_index < finalized_index
+    output = base64.b64decode(seen[output_index].payload["data"])
+    assert output == b"[REDACTED]"
+
+
+async def test_shutdown_wins_over_concurrent_eof_without_duplicate_events() -> None:
+    bus = EventBus()
+    seen: list[Event] = []
+
+    async def sub(event: Event) -> None:
+        seen.append(event)
+
+    await bus.subscribe(sub)
+    session = PtySession(
+        session_id="shutdown-eof-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+    backend = types.SimpleNamespace(
+        fileno=lambda: -1,
+        terminate=lambda: None,
+        close=lambda: None,
+        reap=lambda: None,
+    )
+    session._backend = backend  # type: ignore[assignment]  # noqa: SLF001
+
+    shutdown_task = asyncio.create_task(session.shutdown())
+    await asyncio.sleep(0)
+    await asyncio.gather(session._on_eof(), shutdown_task)  # noqa: SLF001
+
+    exited = _drain_events(seen, name_endswith="session_exited")
+    finalized = _drain_events(seen, name_endswith="session_finalized")
+    assert len(exited) == 1
+    assert len(finalized) == 1
+    assert exited[0].payload["exit_code"] == -1
+
+
+async def test_shutdown_wins_when_eof_reap_started_first() -> None:
+    bus = EventBus()
+    seen: list[Event] = []
+
+    async def sub(event: Event) -> None:
+        seen.append(event)
+
+    await bus.subscribe(sub)
+    session = PtySession(
+        session_id="eof-first-shutdown-test",
+        argv=["demo"],
+        spawn_argv=["demo"],
+        cwd=None,
+        env={},
+        rows=24,
+        cols=80,
+        bus=bus,
+        loop=asyncio.get_running_loop(),
+    )
+    reap_started = threading.Event()
+    release_reap = threading.Event()
+
+    def blocked_reap() -> None:
+        reap_started.set()
+        assert release_reap.wait(timeout=2.0)
+        return None
+
+    backend = types.SimpleNamespace(
+        fileno=lambda: -1,
+        terminate=lambda: None,
+        close=lambda: None,
+        reap=blocked_reap,
+    )
+    session._backend = backend  # type: ignore[assignment]  # noqa: SLF001
+
+    eof_task = asyncio.create_task(session._on_eof())  # noqa: SLF001
+    assert await asyncio.to_thread(reap_started.wait, 1.0)
+    shutdown_task = asyncio.create_task(session.shutdown())
+    assert await _wait_for(lambda: session._closing)  # noqa: SLF001
+    release_reap.set()
+    await asyncio.gather(eof_task, shutdown_task)
+
+    exited = _drain_events(seen, name_endswith="session_exited")
+    finalized = _drain_events(seen, name_endswith="session_finalized")
+    assert len(exited) == 1
+    assert len(finalized) == 1
+    assert exited[0].payload["exit_code"] == -1
 
 
 @posix_only

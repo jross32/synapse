@@ -46,6 +46,9 @@ export interface LaunchAgentWorkItemInput {
   rows?: number;
   cols?: number;
   open_in_tab?: boolean;
+  execution_mode?: 'interactive' | 'automatic';
+  authority?: 'observe' | 'workspace' | 'full';
+  timeout_seconds?: number;
 }
 
 export interface DelegateAgentWorkItemInput {
@@ -75,6 +78,9 @@ export interface AgentWorkItemLaunchResponse extends PtySessionSummary {
   role_prompt_file: string;
   project_id: string;
   project_name: string;
+  execution_mode: 'interactive' | 'automatic';
+  authority: 'observe' | 'workspace' | 'full';
+  timeout_seconds: number;
 }
 
 export async function listAgentRoleTemplates(): Promise<AgentRoleTemplate[]> {
@@ -113,6 +119,7 @@ export async function patchAgentSquad(
 
 export interface StopAgentSquadResponse {
   squad_id: string;
+  status: AgentSquadStatus;
   stopped_sessions: number;
   work_item_ids: string[];
 }

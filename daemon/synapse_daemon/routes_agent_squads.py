@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import APIRouter, Request
 
 from . import agent_squads as squads
+from . import coordination
 from . import mcp_servers as mcp_servers_module
 from . import personalities as personalities_module
 from . import projects as projects_module
@@ -32,12 +35,15 @@ from .ai_context_memory import (
     write_role_prompt,
 )
 from .api_versions import event_name
+from .auth import AuthManager
 from .audit import AuditRecord, audit
 from . import token_ledger
 from .errors import SynapseError, conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
 from .ws import Event, EventBus
+
+log = logging.getLogger(__name__)
 
 
 def _write_mcp_config(storage: Storage, role=None) -> Path | None:
@@ -53,7 +59,7 @@ def _write_mcp_config(storage: Storage, role=None) -> Path | None:
     if not config.get("mcpServers"):
         return None
     slug = role.id if role is not None else "all"
-    path = storage.data_dir / "mcp" / f"claude-mcp-{slug}.json"
+    path = (storage.data_dir / "mcp" / f"claude-mcp-{slug}.json").resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     return path
@@ -67,18 +73,287 @@ def _write_copilot_mcp_config(storage: Storage, role=None) -> tuple[Path | None,
     if not config.get("mcpServers"):
         return None, worker_env
     slug = role.id if role is not None else "all"
-    path = storage.data_dir / "mcp" / f"copilot-mcp-{slug}.json"
+    path = (storage.data_dir / "mcp" / f"copilot-mcp-{slug}.json").resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     return path, worker_env
+
+
+def _automatic_worker_argv(
+    argv: list[str],
+    *,
+    runtime: str,
+    authority: squads.AgentExecutionAuthority,
+    prompt_file: Path,
+) -> list[str]:
+    """Translate one task-scoped automatic launch into each supported CLI.
+
+    Interactive remains the default. Callers must opt into this path and name
+    the authority boundary; the resulting process immediately executes the
+    daemon-authored role prompt instead of opening an idle TUI.
+    """
+
+    prompt = (
+        f"Read the complete instructions in {prompt_file}, perform that work now, "
+        "and finish by POSTing an explicit handoff to the Synapse work-item handoff endpoint. "
+        "Do not wait for more user input."
+    )
+    executable, *runtime_args = argv
+    if runtime == "claude":
+        permission_args = {
+            squads.AgentExecutionAuthority.OBSERVE: ["--permission-mode", "plan"],
+            # Claude's `auto` mode is the non-interactive, policy-aware path:
+            # it can use an attached MCP when Claude judges the call allowed,
+            # while `acceptEdits` still opens an interactive MCP prompt and can
+            # strand a headless worker indefinitely.
+            squads.AgentExecutionAuthority.WORKSPACE: ["--permission-mode", "auto"],
+            squads.AgentExecutionAuthority.FULL: ["--dangerously-skip-permissions"],
+        }[authority]
+        return [
+            executable,
+            *runtime_args,
+            "--strict-mcp-config",
+            *permission_args,
+            "--print",
+            prompt,
+        ]
+    if runtime == "codex":
+        permission_args = {
+            squads.AgentExecutionAuthority.OBSERVE: ["--sandbox", "read-only"],
+            squads.AgentExecutionAuthority.WORKSPACE: ["--sandbox", "workspace-write"],
+            squads.AgentExecutionAuthority.FULL: [
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--ignore-rules",
+            ],
+        }[authority]
+        return [
+            executable,
+            "exec",
+            "--ignore-user-config",
+            "--skip-git-repo-check",
+            "--color",
+            "never",
+            *permission_args,
+            *runtime_args,
+            prompt,
+        ]
+    if runtime == "copilot":
+        permission_args = {
+            squads.AgentExecutionAuthority.OBSERVE: ["--deny-tool=write", "--deny-tool=shell"],
+            squads.AgentExecutionAuthority.WORKSPACE: ["--allow-all-tools"],
+            squads.AgentExecutionAuthority.FULL: ["--allow-all"],
+        }[authority]
+        return [
+            executable,
+            *runtime_args,
+            "--disable-builtin-mcps",
+            "--no-ask-user",
+            *permission_args,
+            "--prompt",
+            prompt,
+        ]
+    raise invalid(
+        "agent_work_item",
+        "Automatic execution is supported only for Claude, Codex, and GitHub Copilot workers.",
+    )
+
+
+class WorkerTimeoutRegistry:
+    """Own automatic-worker deadline tasks until exit, stop, or shutdown."""
+
+    def __init__(self) -> None:
+        self._tasks: dict[str, asyncio.Task[None]] = {}
+
+    def track(self, work_item_id: str, task: asyncio.Task[None]) -> None:
+        self.cancel(work_item_id)
+        self._tasks[work_item_id] = task
+
+        def _discard(completed: asyncio.Task[None]) -> None:
+            if self._tasks.get(work_item_id) is completed:
+                self._tasks.pop(work_item_id, None)
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error is not None:
+                log.error(
+                    "Automatic worker timeout task failed for %s: %s",
+                    work_item_id,
+                    error,
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+
+        task.add_done_callback(_discard)
+
+    def cancel(self, work_item_id: str) -> None:
+        task = self._tasks.pop(work_item_id, None)
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
+
+    def cancel_all(self) -> None:
+        for work_item_id in list(self._tasks):
+            self.cancel(work_item_id)
+
+    @property
+    def active_count(self) -> int:
+        return len(self._tasks)
+
+
+class WorkerPresenceRegistry:
+    """Own daemon heartbeats for every automatically launched worker PTY."""
+
+    def __init__(self) -> None:
+        self._tasks: dict[str, asyncio.Task[None]] = {}
+
+    def track(self, work_item_id: str, task: asyncio.Task[None]) -> None:
+        self.cancel(work_item_id)
+        self._tasks[work_item_id] = task
+
+        def _discard(completed: asyncio.Task[None]) -> None:
+            if self._tasks.get(work_item_id) is completed:
+                self._tasks.pop(work_item_id, None)
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error is not None:
+                log.error(
+                    "Automatic worker presence task failed for %s: %s",
+                    work_item_id,
+                    error,
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+
+        task.add_done_callback(_discard)
+
+    def cancel(self, work_item_id: str) -> None:
+        task = self._tasks.pop(work_item_id, None)
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
+
+    def cancel_all(self) -> None:
+        for work_item_id in list(self._tasks):
+            self.cancel(work_item_id)
+
+    @property
+    def active_count(self) -> int:
+        return len(self._tasks)
+
+
+async def _maintain_worker_presence(
+    storage: Storage,
+    manager: PtySessionManager,
+    bus: EventBus,
+    *,
+    coordination_session_id: str,
+    pty_session_id: str,
+    interval_seconds: float = 30.0,
+) -> None:
+    """Keep a worker green while its daemon-owned PTY is still running.
+
+    Worker CLIs can spend minutes inside one tool call and cannot be trusted to
+    call the coordination heartbeat endpoint on Synapse's schedule. Because
+    the daemon owns the process, it also owns this liveness signal. A finalized
+    or missing PTY ends the loop; the normal finalizer then marks the presence
+    row gone and revokes its scoped credential.
+    """
+
+    while True:
+        session = manager.get(pty_session_id)
+        if session is None or session.exit_code is not None:
+            return
+        with storage.transaction() as conn:
+            updated = coordination.heartbeat_session(
+                conn,
+                coordination_session_id,
+                coordination.AgentSessionHeartbeat(),
+            )
+        await bus.publish(
+            event_name("coordination", "session_heartbeat"),
+            {"session": updated.model_dump(mode="json")},
+        )
+        await asyncio.sleep(interval_seconds)
+
+
+async def _close_worker_at_timeout(
+    storage: Storage,
+    manager: PtySessionManager,
+    bus: EventBus,
+    *,
+    work_item_id: str,
+    session_id: str,
+    timeout_seconds: int,
+) -> squads.AgentWorkItem | None:
+    """Close a still-live worker at its deadline, preserving truthful work state."""
+
+    session = manager.get(session_id)
+    if session is None or session.exit_code is not None:
+        return None
+    status_changed = False
+    with storage.transaction() as conn:
+        current = squads.get_work_item(conn, work_item_id)
+        if current.status == squads.AgentWorkItemStatus.RUNNING:
+            updated = squads.block_running_work_item(
+                conn,
+                work_item_id,
+                f"Automatic worker timed out after {timeout_seconds} seconds and was stopped.",
+            )
+            status_changed = True
+        else:
+            # A handoff describes work state, not process state. A worker that
+            # handed off but failed to exit still loses its process at the same
+            # deadline; its evidence-backed status remains intact.
+            updated = current
+        audit(
+            conn,
+            AuditRecord(
+                entity_type="agent_work_item",
+                entity_id=work_item_id,
+                action="timeout",
+                source=squads.AuditSource.AUTO,
+                result="error",
+                error_code="agent_work_item.timeout",
+                details={
+                    "session_id": session_id,
+                    "timeout_seconds": timeout_seconds,
+                    "work_status_preserved": not status_changed,
+                    "work_status": updated.status.value,
+                },
+            ),
+        )
+    if status_changed:
+        await bus.publish(
+            event_name("agent_work_item", "updated"),
+            {"work_item": updated.model_dump(mode="json")},
+        )
+    await manager.close(session_id)
+    return updated
 
 
 def build_agent_squads_router(
     storage: Storage,
     manager: PtySessionManager,
     bus: EventBus,
+    auth: AuthManager,
+    api_base: Callable[[], str],
+    timeout_registry: WorkerTimeoutRegistry,
+    presence_registry: WorkerPresenceRegistry,
 ) -> APIRouter:
     router = APIRouter(tags=["agent-squads"])
+
+    async def _enforce_worker_timeout(
+        *,
+        work_item_id: str,
+        session_id: str,
+        timeout_seconds: int,
+    ) -> None:
+        await asyncio.sleep(timeout_seconds)
+        await _close_worker_at_timeout(
+            storage,
+            manager,
+            bus,
+            work_item_id=work_item_id,
+            session_id=session_id,
+            timeout_seconds=timeout_seconds,
+        )
 
     @router.get("/agent-role-templates", response_model=None)
     async def list_role_templates() -> dict[str, Any]:
@@ -247,10 +522,26 @@ def build_agent_squads_router(
         # idempotent (it only transitions items still in RUNNING).
         squad = squads.get_squad(storage.conn, squad_id)
         items = squads.list_work_items(storage.conn, squad_id)
+        live_items = [
+            item
+            for item in items
+            if item.pty_session_id and manager.get(item.pty_session_id) is not None
+        ]
+        # Block before termination. PTY finalization is asynchronous and may
+        # otherwise win the race and convert a killed process into "completed".
+        with storage.transaction() as conn:
+            for item in live_items:
+                squads.block_running_work_item(
+                    conn,
+                    item.id,
+                    "Stopped by the operator through the squad kill switch.",
+                )
         closed: list[tuple[str, str]] = []  # (work_item_id, session_id)
         for item in items:
             if not item.pty_session_id:
                 continue
+            timeout_registry.cancel(item.id)
+            presence_registry.cancel(item.id)
             if await manager.close(item.pty_session_id):
                 closed.append((item.id, item.pty_session_id))
         with storage.transaction() as conn:
@@ -258,6 +549,14 @@ def build_agent_squads_router(
                 squads.complete_work_item_from_session_exit(
                     conn, session_id=session_id, exit_code=-1
                 )
+            squad = squads.update_squad(
+                conn,
+                squad_id,
+                squads.AgentSquadUpdate(
+                    status=squads.AgentSquadStatus.PAUSED,
+                    source=squads.AuditSource.AUTO,
+                ),
+            )
             audit(
                 conn,
                 AuditRecord(
@@ -281,8 +580,22 @@ def build_agent_squads_router(
         )
         return {
             "squad_id": squad_id,
+            "status": squad.status.value,
             "stopped_sessions": len(closed),
             "work_item_ids": [wid for wid, _ in closed],
+        }
+
+    @router.get("/agent-squads/{squad_id}/work-items", response_model=None)
+    async def list_squad_work_items(squad_id: str) -> dict[str, Any]:
+        # Keep this focused list route alongside the richer squad-detail route.
+        # Workers commonly know their squad id and need a small, discoverable way
+        # to inspect siblings without fetching role-template metadata too.
+        squads.get_squad(storage.conn, squad_id)
+        return {
+            "work_items": [
+                item.model_dump(mode="json")
+                for item in squads.list_work_items(storage.conn, squad_id)
+            ]
         }
 
     @router.post("/agent-squads/{squad_id}/work-items", response_model=None, status_code=201)
@@ -399,20 +712,59 @@ def build_agent_squads_router(
                 handoff_summary_md=work_item.summary_md,
                 handoff_blockers_md=work_item.blockers_md,
                 files_touched=work_item.files_touched,
-            )
+            ).resolve()
             lead_session_id = squads.lead_session_id_for_squad(conn, squad.id)
-            env = {
+            coordination_session = coordination.register_session(
+                conn,
+                coordination.AgentSessionRegister(
+                    project_id=project.id,
+                    runtime_id=chosen_runtime,
+                    agent_label=f"{chosen_runtime.title()} · {role.name}",
+                    coder_thread_id=session_id,
+                    task=work_item.title,
+                    last_intent=f"Starting {work_item.title}",
+                ),
+            )
+            worker_credential = coordination.issue_session_credential(
+                conn,
+                coordination_session.id,
+                authority=body.authority.value,
+                ttl_seconds=(
+                    body.timeout_seconds + 300
+                    if body.execution_mode == squads.AgentExecutionMode.AUTOMATIC
+                    else 86_400
+                ),
+                work_item_id=work_item.id,
+                squad_id=squad.id,
+            )
+            env = {str(key): str(value) for key, value in (body.env or {}).items()}
+            env.update(runtime_mcp_env)
+            # Daemon-owned coordination and identity values are a trust
+            # boundary. Caller and MCP env are accepted for task-specific
+            # settings but cannot redirect the prompt, project, API, or auth.
+            env.update({
+                "SYNAPSE_API": api_base(),
+                "SYNAPSE_TOKEN": worker_credential,
+                "SYNAPSE_PROJECT_ID": project.id,
                 "SYNAPSE_SQUAD_ID": squad.id,
                 "SYNAPSE_WORK_ITEM_ID": work_item.id,
                 "SYNAPSE_ROLE_ID": role.id,
-                "SYNAPSE_LEAD_SESSION_ID": lead_session_id or session_id,
+                "SYNAPSE_RUNTIME_ID": chosen_runtime,
+                "SYNAPSE_PTY_SESSION_ID": session_id,
+                "SYNAPSE_SESSION_ID": coordination_session.id,
+                "SYNAPSE_SESSION_KEY": worker_credential,
+                "SYNAPSE_LEAD_SESSION_ID": lead_session_id or coordination_session.id,
                 "SYNAPSE_ROLE_PROMPT_FILE": str(prompt_file),
-                "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id)),
+                "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id).resolve()),
                 "SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT": AI_CONTEXT_DIRECTION_PROMPT,
-            }
-            if body.env:
-                env.update({str(key): str(value) for key, value in body.env.items()})
-            env.update(runtime_mcp_env)
+            })
+            if body.execution_mode == squads.AgentExecutionMode.AUTOMATIC:
+                argv = _automatic_worker_argv(
+                    argv,
+                    runtime=chosen_runtime,
+                    authority=body.authority,
+                    prompt_file=prompt_file,
+                )
             try:
                 session = await manager.spawn(
                     argv=argv,
@@ -458,6 +810,20 @@ def build_agent_squads_router(
                     },
                 ),
             )
+        await bus.publish(
+            event_name("coordination", "session_registered"),
+            {
+                "session_id": coordination_session.id,
+                "project_id": coordination_session.project_id,
+                "seq": coordination_session.seq,
+                "runtime_id": coordination_session.runtime_id,
+                "agent_label": coordination_session.agent_label,
+                "coder_thread_id": coordination_session.coder_thread_id,
+                "task": coordination_session.task,
+                "connection_level": coordination_session.connection_level,
+                "connection_code": coordination_session.connection_code,
+            },
+        )
         await bus.publish(event_name("agent_work_item", "updated"), {"work_item": work_item.model_dump(mode="json")})
         await bus.publish(
             event_name("agent_run", "started"),
@@ -467,6 +833,9 @@ def build_agent_squads_router(
                 "role_id": role.id,
                 "session_id": work_item.pty_session_id,
                 "runtime": chosen_runtime,
+                "execution_mode": body.execution_mode.value,
+                "authority": body.authority.value,
+                "timeout_seconds": body.timeout_seconds,
                 "mcp_server_ids": attached_mcp_server_ids,
             },
         )
@@ -482,6 +851,25 @@ def build_agent_squads_router(
                     "mcp_server_ids": attached_mcp_server_ids,
                 },
             )
+        if body.execution_mode == squads.AgentExecutionMode.AUTOMATIC:
+            presence_task = asyncio.create_task(
+                _maintain_worker_presence(
+                    storage,
+                    manager,
+                    bus,
+                    coordination_session_id=coordination_session.id,
+                    pty_session_id=session.session_id,
+                )
+            )
+            presence_registry.track(work_item.id, presence_task)
+            timeout_task = asyncio.create_task(
+                _enforce_worker_timeout(
+                    work_item_id=work_item.id,
+                    session_id=session.session_id,
+                    timeout_seconds=body.timeout_seconds,
+                )
+            )
+            timeout_registry.track(work_item.id, timeout_task)
         return {
             **session.summary().__dict__,
             "squad_id": squad.id,
@@ -491,6 +879,10 @@ def build_agent_squads_router(
             "role_prompt_file": str(prompt_file),
             "project_id": project.id,
             "project_name": project.name,
+            "execution_mode": body.execution_mode.value,
+            "authority": body.authority.value,
+            "timeout_seconds": body.timeout_seconds,
+            "coordination_session_id": coordination_session.id,
         }
 
     @router.post("/agent-work-items/{work_item_id}/launch", response_model=None)
@@ -688,7 +1080,13 @@ def build_agent_squads_router(
     return router
 
 
-async def subscribe_agent_squad_events(storage: Storage, bus: EventBus) -> None:
+async def subscribe_agent_squad_events(
+    storage: Storage,
+    bus: EventBus,
+    manager: PtySessionManager,
+    timeout_registry: WorkerTimeoutRegistry,
+    presence_registry: WorkerPresenceRegistry,
+) -> None:
     async def _on_event(event: Event) -> None:
         if event.name != event_name("pty", "session_finalized"):
             return
@@ -696,14 +1094,31 @@ async def subscribe_agent_squad_events(storage: Storage, bus: EventBus) -> None:
         if not session_id:
             return
         exit_code = event.payload.get("exit_code")
+        session = manager.get(session_id)
+        failure_reason = (
+            squads.classify_worker_failure(session.scrollback_bytes())
+            if session is not None and exit_code not in (0, None)
+            else None
+        )
         with storage.transaction() as conn:
             updated = squads.complete_work_item_from_session_exit(
                 conn,
                 session_id=session_id,
                 exit_code=exit_code if isinstance(exit_code, int) or exit_code is None else None,
+                failure_reason=failure_reason,
             )
+            coordination_session = coordination.get_session_by_coder_thread_id(
+                conn, session_id
+            )
+            if (
+                coordination_session is not None
+                and coordination_session.status != coordination.AgentSessionStatus.GONE
+            ):
+                coordination.end_session(conn, coordination_session.id)
         if updated is None:
             return
+        timeout_registry.cancel(updated.id)
+        presence_registry.cancel(updated.id)
         await bus.publish(event_name("agent_work_item", "updated"), {"work_item": updated.model_dump(mode="json")})
         await bus.publish(
             event_name("agent_run", "ended"),
@@ -715,6 +1130,11 @@ async def subscribe_agent_squad_events(storage: Storage, bus: EventBus) -> None:
                 "transcript_file_id": updated.transcript_file_id,
             },
         )
+        if coordination_session is not None:
+            await bus.publish(
+                event_name("coordination", "session_ended"),
+                {"session_id": coordination_session.id},
+            )
 
     await bus.subscribe(_on_event)
 

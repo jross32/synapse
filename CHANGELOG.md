@@ -10,6 +10,85 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.94] -- 2026-08-01
+
+### Added
+- **Trustworthy automatic runtime delegation (ADR-0034).** Work-item launch now supports explicit
+  interactive or automatic execution, named observe/workspace/full authority, and a 30-second to
+  24-hour timeout while preserving interactive mode as the safe compatible default.
+- Runtime-native automatic commands for Claude, Codex, and GitHub Copilot deliver the daemon-authored
+  role prompt immediately, keep role-scoped MCP injection per worker, and require an explicit handoff.
+- Workers receive protected daemon-owned API/auth/project identity in their process environment so a
+  sandboxed worker can report its handoff without reading the token file; caller env cannot override it.
+- Squad workers receive their exact runtime and PTY session identity, can repair an early/incomplete
+  registration through an audited endpoint, and can list sibling work without downloading role metadata.
+- Automatic workers are pre-registered and receive a short-lived session/work-item/authority-bound API
+  credential whose hash is stored, instead of inheriting the desktop's trusted-local root token.
+- Deep Live View now pairs its compact current focus with the latest structured **Why this step** summary.
+- Live sessions now have a collapsed editable **Goals** inspector with `[completed/total]` progress; the
+  same milestones are AI-discoverable and writable through the daemon API.
+
+### Changed
+- Claude workspace automation uses its policy-aware non-interactive `auto` permission mode; Codex keeps
+  project rules in workspace mode and receives `--ignore-rules` only with explicit full authority.
+- Squad Stop All blocks live work before closing PTYs, returns the paused squad state, and automatic workers
+  are stopped with an audited blocker when their task timeout expires.
+- Automatic deadline tasks are owned and cancelled on finalization, stop, or daemon shutdown. A handoff
+  preserves its work status but cannot bypass the deadline of a still-running PTY.
+- Synapse now owns a 30-second coordination heartbeat for each automatic worker while its PTY is alive;
+  long MCP/browser calls no longer make a healthy worker look gone or revoke its scoped credential mid-task.
+- AI Council quick-action guidance now describes the real interactive/automatic launch contract instead of
+  claiming Windows squad launches are unavailable.
+- New AI connections select themselves in Live immediately. Authenticated Synapse actions reactivate their
+  declaring session after an app restart, and squad worker/reviewer receipts roll up to the parent session.
+- Live keeps the active root operator selected when child workers connect; degraded connection history is
+  informational and no longer masquerades as a blocked work result.
+- On initial load, Live prefers a project-bound root operator over legacy unbound worker sessions, preventing
+  an old reviewer from replacing the current parent after restart.
+- Live's session listing now performs the coordination stale sweep, so an exited legacy worker becomes
+  `gone` instead of remaining misleadingly `active · stale` forever.
+- New external AI registrations return a one-time session key for bound Live attribution; observe/workspace
+  worker credentials enforce self-report/cross-session/global-lifecycle boundaries at the API guard.
+
+### Fixed
+- A clean worker process exit without an explicit handoff no longer becomes false completion; it remains a
+  transcript-backed handoff requiring inspection, while nonzero exits become blocked.
+- Known Claude OAuth expiry is reported as an actionable sign-in blocker without copying raw terminal output;
+  operator-authored journal and worker handoff text strip terminal control characters before persistence.
+- Automatic role-prompt, AI-context, and generated MCP configuration paths are absolute across all runtimes.
+- Stop/timeout now wins the PTY-finalization race, so a killed worker cannot reappear as successfully completed.
+- Unknown PTY exit state is blocked rather than treated like exit zero, and overlong Live View intent updates
+  are rejected cleanly instead of failing a heartbeat transaction.
+- Development restarts no longer leave the main window hidden until `SYN-BOOT-202`: a successful document
+  load is an idempotent readiness fallback, the cold-development readiness window allows Vite to warm without
+  flashing a false error, and the all-green progress window returns focus to Synapse.
+- Restart errors are terminal for one operation, so a delayed health/readiness callback cannot erase a shown
+  diagnostic or repaint a failed restart as all-green.
+- PTY capture now redacts recognized credential environment values before WebSocket output, scrollback, or
+  transcript persistence, including secrets split across read chunks or truncated by process exit.
+- PTY EOF/shutdown finalization is single-flight and drains queued output before exit/finalized receipts, so
+  duplicate callbacks cannot duplicate lifecycle events or deliver the last redaction marker too late. An
+  EOF-first blocked reap now rechecks operator shutdown before choosing its fallback exit code.
+- Live announces appended activity to assistive technology, includes squad-worker plans in “Why this step,”
+  labels the goals list, and lets Escape cancel an inline goal rename.
+- Live goal create and update calls now pass structured bodies to the shared API client instead of
+  double-encoding JSON, so the visually complete Goals inspector also saves successfully end to end.
+- The global Capture button now moves clear of desktop Live inspectors and drops behind mobile overlays,
+  preventing it from intercepting Goals/Squads/Preview controls near the lower-right corner.
+- Automatic worker presence no longer depends on the child CLI interrupting its own work to heartbeat;
+  stop, finalization, timeout, and daemon shutdown cancel the owned presence loop with the PTY.
+
+### Notes
+- Release verification: renderer + Electron typecheck, **783 passed / 14 skipped**, a three-runtime automatic
+  launch + isolated Reflex + handoff acceptance run, and a Synapse-hosted post-work council whose final Codex
+  re-review returned **RELEASE UNBLOCKED** after protected caller/MCP environment and timeout-task fixes.
+- Live View passed real 1280x800 + 375x812 browser click-through with no body or horizontal overflow. The only
+  pytest warnings are the two previously documented Windows closed-pipe cleanup warnings.
+- A real pre-fix restart reproduced `SYN-BOOT-202`; the same API restart after the fix completed all five
+  audited stages green. A second post-fix restart loaded the daemon-owned worker heartbeat and again completed
+  all five stages green; a live Copilot PTY advanced its presence timestamp on Synapse's 30-second cadence.
+
+
 ## [0.1.93] -- 2026-08-01
 
 ### Added

@@ -369,9 +369,16 @@ def build_ai_router(
             ],
             "hint": (
                 "Register yourself with POST /api/v1/coordination/sessions to get your own "
-                "session number + connection grade; update last_intent on heartbeats; report deliberate "
-                "operator summaries to POST /api/v1/activity/sessions/{id}/events. Never report secrets "
-                "or hidden chain-of-thought."
+                "session number, connection grade, and one-time session_key (squad workers are already "
+                "registered in SYNAPSE_SESSION_ID); update last_intent on heartbeats; report deliberate "
+                "operator summaries to POST /api/v1/activity/sessions/{id}/events; keep the shared "
+                "milestone list current through /activity/sessions/{id}/goals. Include "
+                "X-Synapse-Session plus X-Synapse-Session-Key on later API calls so activity revives "
+                "the session after a restart and rolls squad/reviewer receipts into the parent. If a "
+                "legacy worker registered before reading its injected identity, correct it through "
+                "PATCH /coordination/sessions/{id}. "
+                "Never report secrets or hidden "
+                "chain-of-thought."
             ),
         }
 
@@ -489,8 +496,8 @@ def build_ai_router(
                     "path": "/api/v1/installed-pages/web-scraper | /harvest-capabilities | /actions/{action} | /save-artifacts",
                 },
                 {
-                    "purpose": "create, launch, hand off, or update agent work items",
-                    "method": "POST",
+                    "purpose": "list, create, launch, hand off, or update agent work items",
+                    "method": "GET | POST",
                     "path": "/api/v1/agent-squads/{id}/work-items | /api/v1/agent-work-items/{id}/launch | /handoff | /status",
                 },
                 {
@@ -540,13 +547,13 @@ def build_ai_router(
                 },
                 {
                     "purpose": "coordinate with other AI sessions on this repo (ADR-0024): register presence, claim advisory file lanes, check path overlaps, detect git collisions, and get the true next-free migration/ADR number from disk",
-                    "method": "GET | POST | DELETE",
-                    "path": "/api/v1/coordination/sessions | /coordination/lanes | /coordination/overlap | /coordination/snapshot | /coordination/detect-collisions | /coordination/next-numbers",
+                    "method": "GET | POST | PATCH | DELETE",
+                    "path": "/api/v1/coordination/sessions | /coordination/sessions/{id} | /coordination/lanes | /coordination/overlap | /coordination/snapshot | /coordination/detect-collisions | /coordination/next-numbers",
                 },
                 {
-                    "purpose": "keep the operator-facing Live View current with structured plans, deliberate reasoning summaries, decisions, actions, evidence, blockers, squad state, and MCP/tool receipts; never send secrets or private hidden chain-of-thought",
-                    "method": "GET | POST",
-                    "path": "/api/v1/activity/sessions | /api/v1/activity/sessions/{id} | /api/v1/activity/sessions/{id}/events",
+                    "purpose": "keep the operator-facing Live View current with structured plans, deliberate reasoning summaries, decisions, actions, evidence, blockers, squad/reviewer state, MCP/tool receipts, and an editable milestone list; never send secrets or private hidden chain-of-thought",
+                    "method": "GET | POST | PATCH | DELETE",
+                    "path": "/api/v1/activity/sessions | /api/v1/activity/sessions/{id} | /api/v1/activity/sessions/{id}/events | /api/v1/activity/sessions/{id}/goals | /goals/{goal_id}",
                 },
                 {
                     "purpose": "self-report token usage per work item and read the squad-level token roll-up so Synapse can prove efficiency (ADR-0025)",

@@ -181,6 +181,20 @@ def test_restart_operation_tracks_stages_and_error_catalog(tmp_path: Path) -> No
         daemon_stage = failed.json()["operation"]["stages"][3]
         assert daemon_stage["error_code"] == "SYN-BOOT-102"
 
+        late_success = c.post(
+            f"/api/v1/system/restart/{operation_id}/stage",
+            json={
+                "stage": "daemon",
+                "state": "success",
+                "detail": "A delayed callback observed health after the deadline.",
+            },
+        )
+        assert late_success.status_code == 200, late_success.text
+        assert late_success.json()["operation"]["status"] == "error"
+        sticky_stage = late_success.json()["operation"]["stages"][3]
+        assert sticky_stage["state"] == "error"
+        assert sticky_stage["error_code"] == "SYN-BOOT-102"
+
 
 def test_restart_request_refuses_a_second_live_operation(tmp_path: Path) -> None:
     client, _storage = _harness(tmp_path)

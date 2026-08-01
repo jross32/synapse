@@ -15,6 +15,26 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.94 (trustworthy automatic runtime delegation)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-08-01 | `POST /api/v1/agent-work-items/{id}/launch` (extended) | additive | Body accepts optional `execution_mode` (`interactive` default or `automatic`), `authority` (`observe`, `workspace`, `full`), and `timeout_seconds` (30–86,400; default 1,800). Response and `v1.agent_run.started` include the resolved values. Automatic launches use runtime-native non-interactive commands and require an explicit handoff. Daemon-owned `SYNAPSE_API`, token, project, prompt, and worker identity env values cannot be overridden by caller env. |
+| 2026-08-01 | `POST /api/v1/agent-squads/{id}/stop` (extended) | additive | Response adds the resulting paused squad `status`. Running work items are blocked before their PTYs close so asynchronous finalization cannot report false completion. |
+| 2026-08-01 | worker finalization semantics | corrective | Exit zero without an explicit handoff now becomes `handoff` with transcript-inspection guidance, not `completed`; nonzero exit becomes `blocked`, with safe classified guidance for known authentication/runtime failures. |
+| 2026-08-01 | `GET/POST /api/v1/activity/sessions/{id}/goals`; `PATCH/DELETE .../goals/{goal_id}` | additive | Adds an audited, ordered session milestone list with `pending`, `active`, `completed`, and `blocked` states. `GET /activity/sessions/{id}` now includes `goals[]`. |
+| 2026-08-01 | `v1.activity.goals_updated` | additive | Streams `{session_id, goals}` after a goal is created, renamed, completed, blocked, reordered, or removed. |
+| 2026-08-01 | `X-Synapse-Session` request header (extended) | corrective | A declared authenticated Synapse action refreshes/reactivates its coordination session after daemon/app restart while preserving the safe receipt behavior. Squad worker/MCP/handoff journal receipts inherit the squad owner's session id for parent roll-up. |
+| 2026-08-01 | `PATCH /api/v1/coordination/sessions/{id}` | additive | Audited correction for a worker that registered before reading its injected project/runtime/PTY identity. Recalculates the connection grade and emits `v1.coordination.session_heartbeat`; no direct database edit is required. |
+| 2026-08-01 | `GET /api/v1/agent-squads/{id}/work-items` | additive | Returns `{work_items:[...]}` for focused, AI-discoverable sibling inspection. The richer squad-detail endpoint remains available. |
+| 2026-08-01 | `POST /api/v1/coordination/sessions` (extended) | additive | Response adds a one-time `session_key`. New attributed calls pair `X-Synapse-Session` with `X-Synapse-Session-Key`; only the hash is stored. Existing fields remain unchanged. |
+| 2026-08-01 | worker authentication + `POST /api/v1/agent-work-items/{id}/launch` (extended) | corrective | Workers are pre-registered and receive a short-lived identity/authority-bound token rather than the desktop local token. Launch response adds `coordination_session_id`; env adds `SYNAPSE_SESSION_ID`/`SYNAPSE_SESSION_KEY`. Cross-session/work-item writes and out-of-authority global mutations return `403 auth.worker_scope_denied`. |
+| 2026-08-01 | restart-stage aggregation | corrective | The first error is terminal for an operation; later delayed success rows remain audited but cannot replace the error or produce `status: complete`. |
+| 2026-08-01 | `v1.coordination.session_heartbeat` for automatic workers | corrective | Synapse refreshes the pre-registered worker session every 30 seconds while its PTY is alive. Long tool calls no longer cause false stale/gone state or mid-task credential revocation; finalization, timeout, stop, and shutdown cancel the owned loop. |
+
+Migration: existing v1 clients need no changes because omitted launch fields preserve interactive behavior. Clients
+requesting automatic execution should always show the resolved authority and timeout and retain an operator stop path.
+
 ### Shipped in v0.1.93 (deep AI operator journal)
 
 | Date | Endpoint or event | Kind | Notes |
@@ -94,6 +114,7 @@ coordination session id as `X-Synapse-Session`; Deep View reporting is otherwise
 | 2026-06-20 | `GET /api/v1/agent-squads` | additive | Returns the durable squad list ordered by `last_activity_at DESC`. |
 | 2026-06-20 | `POST /api/v1/agent-squads` | additive | Creates a new squad for a real project. Body: `{project_id, name, goal_md?, status?, lead_role_id?}`. |
 | 2026-06-20 | `GET /api/v1/agent-squads/{id}` | additive | Returns `AgentSquadDetail` (`squad`, `role_templates`, `work_items`) for the Sessions cockpit. |
+| 2026-08-01 | `GET /api/v1/agent-squads/{id}/work-items` | additive | Returns only the squad's ordered work-item collection for lightweight worker/sibling inspection. |
 | 2026-06-20 | `PATCH /api/v1/agent-squads/{id}` / `DELETE /api/v1/agent-squads/{id}` | additive | Updates squad metadata/status or deletes the squad tree. |
 | 2026-06-20 | `POST /api/v1/agent-squads/{id}/work-items` | additive | Creates a queued work item. Body: `{title, instructions_md?, assigned_role_id?, preferred_runtime?, parent_id?}`. |
 | 2026-06-20 | `POST /api/v1/agent-work-items/{id}/launch` | additive | Launches a work item as a normal PTY session in the project cwd. Response includes PTY summary fields plus `squad_id`, `work_item_id`, `role_id`, `runtime`, `role_prompt_file`, `project_id`, and `project_name`. Injects `SYNAPSE_SQUAD_ID`, `SYNAPSE_WORK_ITEM_ID`, `SYNAPSE_ROLE_ID`, `SYNAPSE_LEAD_SESSION_ID`, `SYNAPSE_ROLE_PROMPT_FILE`, `SYNAPSE_AI_CONTEXT`, and `SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT` into the PTY env. |

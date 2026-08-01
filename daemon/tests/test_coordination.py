@@ -81,6 +81,47 @@ def test_heartbeat_reactivates_a_gone_session(tmp_path: Path) -> None:
     assert held.ended_at is None
 
 
+def test_session_credential_is_hashed_scoped_and_revoked_when_worker_ends(
+    tmp_path: Path,
+) -> None:
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        session = _register(
+            conn,
+            runtime_id="codex",
+            project_id=None,
+            coder_thread_id="pty-worker-1",
+        )
+        token = coord.issue_session_credential(
+            conn,
+            session.id,
+            authority="workspace",
+            ttl_seconds=600,
+            work_item_id="work-1",
+            squad_id="squad-1",
+        )
+    metadata_raw = storage.conn.execute(
+        "SELECT metadata_json FROM agent_sessions WHERE id = ?", (session.id,)
+    ).fetchone()["metadata_json"]
+    assert token not in metadata_raw
+    subject = coord.session_credential_subject(storage.conn, token)
+    assert subject == {
+        "session_id": session.id,
+        "project_id": None,
+        "authority": "workspace",
+        "work_item_id": "work-1",
+        "squad_id": "squad-1",
+    }
+    assert coord.session_credential_subject(storage.conn, "wrong") is None
+
+    with storage.transaction() as conn:
+        coord.end_session(conn, session.id)
+    assert coord.session_credential_subject(storage.conn, token) is None
+    # The local operator can still prove ownership briefly to reactivate an
+    # intentionally ended external session; the worker token itself is revoked.
+    assert coord.verify_session_credential(storage.conn, session.id, token) is True
+
+
 def test_stale_session_is_flagged_then_expired(tmp_path: Path) -> None:
     storage = _storage(tmp_path)
     with storage.transaction() as conn:
@@ -340,6 +381,22 @@ def test_router_register_claim_and_conflict(tmp_path: Path) -> None:
     assert len(snap["lanes"]) == 2
 
 
+def test_router_rejects_last_intent_too_large_for_live_journal(tmp_path: Path) -> None:
+    client = _client(_storage(tmp_path))
+    registered = client.post(
+        "/api/v1/coordination/sessions",
+        json={"runtime_id": "codex", "last_intent": "ready"},
+    )
+    session_id = registered.json()["id"]
+
+    response = client.post(
+        f"/api/v1/coordination/sessions/{session_id}/heartbeat",
+        json={"last_intent": "x" * 8001},
+    )
+
+    assert response.status_code == 422
+
+
 def test_router_next_numbers_and_overlap_and_invalid(tmp_path: Path) -> None:
     client = _client(_storage(tmp_path))
 
@@ -413,6 +470,44 @@ def test_router_register_returns_seq_and_connection(tmp_path: Path) -> None:
     # Bare test app has no mcp_manager -> mcp defaults available; no project -> yellow.
     assert body["connection_level"] == "yellow"
     assert body["connection_code"] == "degraded.no_project"
+    assert body["session_key"]
     # A second registration gets the next number.
     r2 = client.post("/api/v1/coordination/sessions", json={"runtime_id": "codex"})
     assert r2.json()["seq"] == 2
+
+
+def test_router_can_correct_worker_identity_and_connection_grade(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        create_project(
+            conn,
+            Project(id="synapse-self", name="Synapse", path=str(tmp_path), launch_cmd="echo"),
+        )
+    client = _client(storage)
+    registered = client.post(
+        "/api/v1/coordination/sessions",
+        json={"runtime_id": "", "agent_label": ""},
+    )
+    assert registered.status_code == 200, registered.text
+    assert registered.json()["connection_code"] == "degraded.no_project"
+
+    corrected = client.patch(
+        f"/api/v1/coordination/sessions/{registered.json()['id']}",
+        json={
+            "project_id": "synapse-self",
+            "runtime_id": "claude",
+            "agent_label": "Claude · Live Goals UX Reviewer",
+            "coder_thread_id": "pty-claude-review",
+            "task": "Review Live Goals",
+            "last_intent": "Checking responsive behavior and truthful worker status.",
+        },
+    )
+
+    assert corrected.status_code == 200, corrected.text
+    body = corrected.json()
+    assert body["project_id"] == "synapse-self"
+    assert body["runtime_id"] == "claude"
+    assert body["agent_label"] == "Claude · Live Goals UX Reviewer"
+    assert body["coder_thread_id"] == "pty-claude-review"
+    assert body["connection_level"] == "green"
+    assert body["connection_code"] == "ok"

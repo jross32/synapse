@@ -96,7 +96,7 @@
       "status": "shipped",
       "phase": "Reliability",
       "adr": "ADR-0031",
-      "summary": "Restart Synapse from the tray, desktop, or API and watch request, shutdown, desktop, daemon-health, and interface checks turn green. A cross-process handoff keeps the splash visible, while stable SYN-RST/SYN-BOOT codes and copyable diagnostics explain failures."
+      "summary": "Restart Synapse from the tray, desktop, or API and watch request, shutdown, desktop, daemon-health, and interface checks turn green. A cross-process handoff keeps the splash visible, stable SYN-RST/SYN-BOOT codes and copyable diagnostics explain failures, and document-load fallback prevents a healthy development restart from leaving the main window hidden."
     },
     {
       "id": "launch-art",
@@ -165,10 +165,10 @@
     {
       "id": "runtime-launch-trust",
       "title": "Trustworthy delegated runtime launches",
-      "status": "coming",
+      "status": "shipped",
       "phase": "AI operator experience",
-      "adr": null,
-      "summary": "Delegated Codex, Claude, and Copilot launches that are explicitly non-interactive, timeout-aware, and honest about idle versus actually finished work."
+      "adr": "ADR-0034",
+      "summary": "SHIPPED (v0.1.94): delegated Codex, Claude, and Copilot launches are explicitly interactive or bounded automatic, translate named authority per runtime, preserve isolated role-scoped MCPs, and require an evidence-backed handoff instead of trusting process exit. Workers receive scoped credentials instead of the desktop root token, and Synapse owns their green presence while each PTY is alive. Live rolls reviewer evidence into the parent and adds a compact editable Goals inspector."
     },
     {
       "id": "session-hygiene",

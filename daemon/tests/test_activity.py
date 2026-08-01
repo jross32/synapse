@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create as create_project
 from synapse_daemon.proposals import ProposalCreate, create_proposal
 from synapse_daemon.storage import Storage
+from synapse_daemon.time_utils import to_iso, utc_now
 from synapse_daemon.ws import EventBus
 
 
@@ -176,6 +178,60 @@ def test_sessions_history_and_detail_routes(tmp_path: Path) -> None:
         assert detail["squads"] == []  # no project bound
         assert any(n["kind"] == "session.connected" for n in detail["notifications"])
         assert detail["journal"] == []
+        assert detail["goals"] == []
+
+
+def test_live_sessions_listing_expires_stale_workers(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        registered = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "copilot", "coder_thread_id": "ended-worker"},
+        ).json()
+        storage = c.app.state.storage
+        storage.conn.execute(
+            "UPDATE agent_sessions SET last_heartbeat_at = ? WHERE id = ?",
+            (
+                to_iso(utc_now() - timedelta(seconds=coord.SESSION_STALE_SECONDS + 10)),
+                registered["id"],
+            ),
+        )
+        storage.conn.commit()
+
+        listing = c.get("/api/v1/activity/sessions").json()["sessions"]
+
+    worker = next(session for session in listing if session["id"] == registered["id"])
+    assert worker["status"] == "gone"
+
+
+def test_session_goals_are_editable_and_audited(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        session_id = c.post(
+            "/api/v1/coordination/sessions", json={"runtime_id": "codex"}
+        ).json()["id"]
+        created = c.post(
+            f"/api/v1/activity/sessions/{session_id}/goals",
+            json={"title": "Ship the trust release", "status": "active"},
+        )
+        assert created.status_code == 201, created.text
+        goal_id = created.json()["id"]
+
+        renamed = c.patch(
+            f"/api/v1/activity/sessions/{session_id}/goals/{goal_id}",
+            json={"title": "Ship the verified trust release", "status": "completed"},
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["status"] == "completed"
+
+        detail = c.get(f"/api/v1/activity/sessions/{session_id}").json()
+        assert [(goal["title"], goal["status"]) for goal in detail["goals"]] == [
+            ("Ship the verified trust release", "completed")
+        ]
+        assert c.delete(
+            f"/api/v1/activity/sessions/{session_id}/goals/{goal_id}"
+        ).json() == {"ok": True}
+        assert c.get(
+            f"/api/v1/activity/sessions/{session_id}/goals"
+        ).json() == {"goals": []}
 
 
 def test_session_can_report_deep_view_receipts_and_heartbeat_focus(tmp_path: Path) -> None:
@@ -234,12 +290,16 @@ def test_session_event_rejects_unknown_mcp_server(tmp_path: Path) -> None:
 
 def test_ai_session_header_creates_safe_synapse_api_receipt(tmp_path: Path) -> None:
     with _client(tmp_path) as c:
-        session_id = c.post(
+        registered = c.post(
             "/api/v1/coordination/sessions", json={"runtime_id": "codex"}
-        ).json()["id"]
+        ).json()
+        session_id = registered["id"]
         response = c.get(
             "/api/v1/projects",
-            headers={"X-Synapse-Session": session_id},
+            headers={
+                "X-Synapse-Session": session_id,
+                "X-Synapse-Session-Key": registered["session_key"],
+            },
         )
         assert response.status_code == 200
         detail = c.get(f"/api/v1/activity/sessions/{session_id}").json()
@@ -250,6 +310,49 @@ def test_ai_session_header_creates_safe_synapse_api_receipt(tmp_path: Path) -> N
         assert receipt["tool_name"] == "Synapse · projects"
         assert "GET /projects" in receipt["summary_md"]
         assert "bodies were not copied" in receipt["summary_md"]
+
+
+def test_ai_session_header_rejects_missing_or_wrong_session_key(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        registered = c.post(
+            "/api/v1/coordination/sessions", json={"runtime_id": "codex"}
+        ).json()
+        missing = c.get(
+            "/api/v1/projects",
+            headers={"X-Synapse-Session": registered["id"]},
+        )
+        wrong = c.get(
+            "/api/v1/projects",
+            headers={
+                "X-Synapse-Session": registered["id"],
+                "X-Synapse-Session-Key": "not-the-issued-session-key",
+            },
+        )
+
+    assert missing.status_code == 403
+    assert wrong.status_code == 403
+    assert wrong.json()["code"] == "auth.session_binding_required"
+
+
+def test_ai_session_header_reactivates_a_gone_session(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        registered = c.post(
+            "/api/v1/coordination/sessions", json={"runtime_id": "codex"}
+        ).json()
+        session_id = registered["id"]
+        assert c.delete(f"/api/v1/coordination/sessions/{session_id}").status_code == 200
+
+        response = c.get(
+            "/api/v1/projects",
+            headers={
+                "X-Synapse-Session": session_id,
+                "X-Synapse-Session-Key": registered["session_key"],
+            },
+        )
+        assert response.status_code == 200
+        detail = c.get(f"/api/v1/activity/sessions/{session_id}").json()
+        assert detail["session"]["status"] == "active"
+        assert detail["session"]["ended_at"] is None
 
 
 def test_squad_created_with_session_header_stays_with_that_session(tmp_path: Path) -> None:
@@ -276,7 +379,10 @@ def test_squad_created_with_session_header_stays_with_that_session(tmp_path: Pat
 
         created = c.post(
             "/api/v1/agent-squads",
-            headers={"X-Synapse-Session": first["id"]},
+            headers={
+                "X-Synapse-Session": first["id"],
+                "X-Synapse-Session-Key": first["session_key"],
+            },
             json={"project_id": "live-demo", "name": "Codex squad"},
         )
         assert created.status_code == 201, created.text
@@ -289,3 +395,25 @@ def test_squad_created_with_session_header_stays_with_that_session(tmp_path: Pat
             event for event in first_detail["journal"] if event["title"] == "Squad created: Codex squad"
         )
         assert projected["session_id"] == first["id"]
+
+        work_item = c.post(
+            f"/api/v1/agent-squads/{created.json()['id']}/work-items",
+            json={"title": "Review the terminal race", "assigned_role_id": "reviewer"},
+        )
+        assert work_item.status_code == 201, work_item.text
+        handoff = c.post(
+            f"/api/v1/agent-work-items/{work_item.json()['id']}/handoff",
+            json={
+                "summary_md": "Found and explained one shutdown ordering blocker.",
+                "status": "handoff",
+            },
+        )
+        assert handoff.status_code == 200, handoff.text
+        rolled_up = c.get(f"/api/v1/activity/sessions/{first['id']}").json()
+        review_event = next(
+            event
+            for event in rolled_up["journal"]
+            if event["title"] == "Work item handoff: Review the terminal race"
+        )
+        assert review_event["session_id"] == first["id"]
+        assert "shutdown ordering blocker" in review_event["summary_md"]

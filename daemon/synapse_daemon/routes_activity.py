@@ -6,6 +6,7 @@
   GET  /api/v1/activity/sessions                       -> sessions (seq + grade), newest first
   GET  /api/v1/activity/sessions/{id}                  -> session + squads + journal + tokens
   POST /api/v1/activity/sessions/{id}/events           -> structured operator-facing receipt
+  GET/POST/PATCH/DELETE /api/v1/activity/sessions/{id}/goals -> editable milestones
 
 Read side of activity.py; the Notification Center + Live View consume these.
 """
@@ -42,6 +43,18 @@ def build_activity_router(storage: Storage, bus: EventBus | None = None) -> APIR
             },
         }
 
+    async def _publish_goals(session_id: str) -> None:
+        if bus is None:
+            return
+        goals = activity.list_session_goals(storage.conn, session_id)
+        await bus.publish(
+            event_name("activity", "goals_updated"),
+            {
+                "session_id": session_id,
+                "goals": [goal.model_dump(mode="json") for goal in goals],
+            },
+        )
+
     @router.get("/notifications", response_model=None)
     async def list_notifications(
         unread: bool = Query(default=False),
@@ -67,6 +80,11 @@ def build_activity_router(storage: Storage, bus: EventBus | None = None) -> APIR
 
     @router.get("/sessions", response_model=None)
     async def list_sessions() -> dict[str, Any]:
+        # Live View is the primary presence surface, so it must perform the
+        # same stale sweep as the coordination snapshot. Otherwise an exited
+        # legacy worker can remain labelled "active · stale" indefinitely.
+        with storage.transaction() as conn:
+            coord.expire_stale_sessions(conn)
         sessions = coord.list_all_sessions(storage.conn)
         return {"sessions": [_session_view(s) for s in sessions]}
 
@@ -165,7 +183,80 @@ def build_activity_router(storage: Storage, bus: EventBus | None = None) -> APIR
             "squads": squad_views,
             "notifications": notifications,
             "journal": [event.model_dump(mode="json") for event in journal],
+            "goals": [
+                goal.model_dump(mode="json")
+                for goal in activity.list_session_goals(storage.conn, session.id)
+            ],
         }
+
+    @router.get("/sessions/{session_id}/goals", response_model=None)
+    async def list_session_goals(session_id: str) -> dict[str, Any]:
+        goals = activity.list_session_goals(storage.conn, session_id)
+        return {"goals": [goal.model_dump(mode="json") for goal in goals]}
+
+    @router.post(
+        "/sessions/{session_id}/goals",
+        response_model=activity.ActivityGoal,
+        status_code=201,
+    )
+    async def create_session_goal(
+        session_id: str, payload: activity.ActivityGoalCreate
+    ) -> activity.ActivityGoal:
+        with storage.transaction() as conn:
+            goal = activity.create_session_goal(conn, session_id, payload)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="activity_goal",
+                    entity_id=goal.id,
+                    action="activity_goal.create",
+                    source="desktop",
+                    details={"session_id": session_id, "status": goal.status.value},
+                ),
+            )
+        await _publish_goals(session_id)
+        return goal
+
+    @router.patch(
+        "/sessions/{session_id}/goals/{goal_id}",
+        response_model=activity.ActivityGoal,
+    )
+    async def update_session_goal(
+        session_id: str,
+        goal_id: str,
+        payload: activity.ActivityGoalUpdate,
+    ) -> activity.ActivityGoal:
+        with storage.transaction() as conn:
+            goal = activity.update_session_goal(conn, session_id, goal_id, payload)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="activity_goal",
+                    entity_id=goal.id,
+                    action="activity_goal.update",
+                    source="desktop",
+                    details={"session_id": session_id, "status": goal.status.value},
+                ),
+            )
+        await _publish_goals(session_id)
+        return goal
+
+    @router.delete("/sessions/{session_id}/goals/{goal_id}", response_model=None)
+    async def delete_session_goal(session_id: str, goal_id: str) -> dict[str, bool]:
+        with storage.transaction() as conn:
+            goal = activity.delete_session_goal(conn, session_id, goal_id)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="activity_goal",
+                    entity_id=goal.id,
+                    action="activity_goal.delete",
+                    source="desktop",
+                    details={"session_id": session_id},
+                ),
+            )
+        await _publish_goals(session_id)
+        return {"ok": True}
 
     @router.post(
         "/sessions/{session_id}/events",

@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .errors import invalid, not_found
 from .models import AuditSource
@@ -50,6 +50,21 @@ class AgentWorkItemStatus(str, Enum):
     HANDOFF = "handoff"
     BLOCKED = "blocked"
     COMPLETED = "completed"
+
+
+class AgentExecutionMode(str, Enum):
+    """How a delegated runtime receives its work-item prompt."""
+
+    INTERACTIVE = "interactive"
+    AUTOMATIC = "automatic"
+
+
+class AgentExecutionAuthority(str, Enum):
+    """Task-scoped authority for an automatically launched worker."""
+
+    OBSERVE = "observe"
+    WORKSPACE = "workspace"
+    FULL = "full"
 
 
 class AgentRoleTemplate(BaseModel):
@@ -188,6 +203,9 @@ class AgentWorkItemLaunchRequest(BaseModel):
     rows: int = Field(default=24, ge=1, le=300)
     cols: int = Field(default=80, ge=1, le=500)
     open_in_tab: bool = True
+    execution_mode: AgentExecutionMode = AgentExecutionMode.INTERACTIVE
+    authority: AgentExecutionAuthority = AgentExecutionAuthority.WORKSPACE
+    timeout_seconds: int = Field(default=1800, ge=30, le=86400)
     source: AuditSource = AuditSource.DESKTOP
 
 
@@ -204,6 +222,17 @@ class AgentWorkItemHandoffRequest(BaseModel):
     output_tokens: int | None = None
     total_tokens: int | None = None
     source: AuditSource = AuditSource.DESKTOP
+
+    @field_validator("summary_md", "blockers_md", mode="before")
+    @classmethod
+    def sanitize_operator_text(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        return "".join(
+            character
+            for character in value
+            if character in "\n\r\t" or ord(character) >= 32
+        )
 
 
 class AgentWorkItemStatusRequest(BaseModel):
@@ -919,6 +948,39 @@ def update_work_item_status(
     return get_work_item(conn, work_item_id)
 
 
+def block_running_work_item(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    reason: str,
+) -> AgentWorkItem:
+    """Atomically block a live worker before its PTY is terminated.
+
+    Marking the item first prevents the asynchronous PTY-finalized subscriber
+    from racing a stop/timeout into a false successful completion.
+    """
+
+    current = get_work_item(conn, work_item_id)
+    if current.status != AgentWorkItemStatus.RUNNING:
+        return current
+    now = utc_now()
+    conn.execute(
+        """
+        UPDATE agent_work_items
+        SET status = ?, blockers_md = ?, updated_at = ?
+        WHERE id = ? AND status = ?
+        """,
+        (
+            AgentWorkItemStatus.BLOCKED.value,
+            reason,
+            to_iso(now),
+            work_item_id,
+            AgentWorkItemStatus.RUNNING.value,
+        ),
+    )
+    touch_squad_activity(conn, current.squad_id, when=now)
+    return get_work_item(conn, work_item_id)
+
+
 def touch_squad_activity(
     conn: sqlite3.Connection, squad_id: str, *, when: datetime | None = None
 ) -> None:
@@ -1003,6 +1065,7 @@ def complete_work_item_from_session_exit(
     *,
     session_id: str,
     exit_code: int | None,
+    failure_reason: str | None = None,
 ) -> AgentWorkItem | None:
     item = work_item_by_session(conn, session_id)
     if item is None:
@@ -1019,17 +1082,32 @@ def complete_work_item_from_session_exit(
     transcript_file_id = row["id"] if row else None
     now = utc_now()
     next_status = item.status
+    blockers_md = item.blockers_md
     if item.status == AgentWorkItemStatus.RUNNING:
-        next_status = AgentWorkItemStatus.COMPLETED if exit_code in (0, None) else AgentWorkItemStatus.BLOCKED
+        if exit_code == 0:
+            # A zero exit code proves only that the process ended. Completion is
+            # reserved for an explicit worker handoff with evidence.
+            next_status = AgentWorkItemStatus.HANDOFF
+            blockers_md = blockers_md or (
+                "Worker exited without an explicit handoff; inspect the linked transcript before completing it."
+            )
+        else:
+            next_status = AgentWorkItemStatus.BLOCKED
+            blockers_md = blockers_md or failure_reason or (
+                "Worker process exit status was unavailable; inspect the linked transcript before retrying."
+                if exit_code is None
+                else f"Worker process exited with code {exit_code}."
+            )
     conn.execute(
         """
         UPDATE agent_work_items
-        SET status = ?, transcript_file_id = COALESCE(?, transcript_file_id),
+        SET status = ?, blockers_md = ?, transcript_file_id = COALESCE(?, transcript_file_id),
             updated_at = ?, completed_at = COALESCE(completed_at, ?)
         WHERE id = ?
         """,
         (
             next_status.value,
+            blockers_md,
             transcript_file_id,
             to_iso(now),
             to_iso(now) if next_status == AgentWorkItemStatus.COMPLETED else None,
@@ -1038,6 +1116,22 @@ def complete_work_item_from_session_exit(
     )
     touch_squad_activity(conn, item.squad_id, when=now)
     return get_work_item(conn, item.id)
+
+
+def classify_worker_failure(scrollback: bytes) -> str | None:
+    """Return a safe, actionable blocker for known runtime failures.
+
+    Only stable error signatures are classified. Raw terminal output is never
+    copied into the blocker because it may contain prompts, paths, or secrets.
+    """
+
+    text = scrollback.decode("utf-8", errors="replace").lower()
+    if "oauth access token has expired" in text and "re-authenticate" in text:
+        return (
+            "Claude sign-in expired. Run `claude auth logout`, then "
+            "`claude auth login --claudeai`, complete the browser sign-in, and relaunch this worker."
+        )
+    return None
 
 
 def validate_role_can_delegate(conn: sqlite3.Connection, role_id: str | None) -> None:

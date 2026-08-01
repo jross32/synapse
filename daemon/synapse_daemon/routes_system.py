@@ -156,10 +156,16 @@ def _restart_operation(storage: Storage, operation_id: str | None = None) -> dic
         "AND action = 'restart.stage' ORDER BY id",
         (operation_id,),
     ).fetchall()
+    terminal_error_seen = False
     for row in rows:
         details = _loads_restart_details(row["details_json"])
         stage = details.get("stage")
         if stage not in stages:
+            continue
+        # Restart errors are terminal for one operation. Electron readiness
+        # callbacks may arrive after a timeout; retain the first truthful
+        # failure instead of allowing a later success row to paint it green.
+        if terminal_error_seen:
             continue
         stages[stage] = {
             "stage": stage,
@@ -169,6 +175,7 @@ def _restart_operation(storage: Storage, operation_id: str | None = None) -> dic
             "error_code": row["error_code"],
             "error_message": details.get("error_message"),
         }
+        terminal_error_seen = details.get("state") == "error"
 
     ordered = [stages[key] for key in RESTART_STAGE_KEYS]
     states = {stage["state"] for stage in ordered}

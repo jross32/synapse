@@ -131,6 +131,10 @@ export function AgentSquadsView({
     preferred_runtime: '',
   });
   const [launchRuntime, setLaunchRuntime] = useState('');
+  const [launchExecutionMode, setLaunchExecutionMode] = useState<'interactive' | 'automatic'>(
+    'interactive'
+  );
+  const [launchTimeoutSeconds, setLaunchTimeoutSeconds] = useState(1800);
   const [handoffForm, setHandoffForm] = useState({
     status: 'handoff' as AgentWorkItemStatus,
     summary_md: '',
@@ -359,6 +363,9 @@ export function AgentSquadsView({
       const launched = await launchAgentWorkItem(item.id, {
         preferred_runtime: launchRuntime.trim() || undefined,
         open_in_tab: opts.openInTab,
+        execution_mode: launchExecutionMode,
+        authority: 'workspace',
+        timeout_seconds: launchTimeoutSeconds,
       });
       await reloadDetail();
       if (opts.openInTab) await onOpenTab(launched.session_id, launched.argv);
@@ -646,8 +653,9 @@ export function AgentSquadsView({
                     )
                   }
                   disabled={busy === `squad-${selectedSquad.status === 'paused' ? 'active' : 'paused'}`}
+                  title='Updates the squad planning status only. Use Stop all to terminate running workers.'
                 >
-                  {selectedSquad.status === 'paused' ? 'Resume squad' : 'Pause squad'}
+                  {selectedSquad.status === 'paused' ? 'Mark active' : 'Mark paused'}
                 </Button>
                 <Button
                   variant='outline'
@@ -994,6 +1002,59 @@ export function AgentSquadsView({
                   onChange={(e) => setLaunchRuntime(e.target.value)}
                   placeholder='Optional runtime override before launch'
                 />
+                <fieldset className='grid gap-2 rounded-xl border border-border bg-secondary/20 p-3'>
+                  <legend className='px-1 text-xs font-semibold text-foreground'>
+                    How should this worker start?
+                  </legend>
+                  <label className='flex cursor-pointer items-start gap-2 rounded-lg p-2 hover:bg-secondary/50'>
+                    <input
+                      type='radio'
+                      name='worker-execution-mode'
+                      value='interactive'
+                      checked={launchExecutionMode === 'interactive'}
+                      onChange={() => setLaunchExecutionMode('interactive')}
+                      className='mt-1 accent-[var(--synapse-accent)]'
+                    />
+                    <span>
+                      <span className='block text-sm font-medium'>Open interactively</span>
+                      <span className='block text-xs text-muted-foreground'>
+                        Safest default. The AI waits in its terminal until you give it a prompt.
+                      </span>
+                    </span>
+                  </label>
+                  <label className='flex cursor-pointer items-start gap-2 rounded-lg p-2 hover:bg-secondary/50'>
+                    <input
+                      type='radio'
+                      name='worker-execution-mode'
+                      value='automatic'
+                      checked={launchExecutionMode === 'automatic'}
+                      onChange={() => setLaunchExecutionMode('automatic')}
+                      className='mt-1 accent-[var(--synapse-accent)]'
+                    />
+                    <span>
+                      <span className='block text-sm font-medium'>Run this task automatically</span>
+                      <span className='block text-xs text-muted-foreground'>
+                        Gives this worker project-scoped edit and command authority for this task only.
+                        Stop all remains available; marking a squad paused does not freeze a running worker.
+                      </span>
+                    </span>
+                  </label>
+                  {launchExecutionMode === 'automatic' && (
+                    <label className='grid gap-1 border-t border-border pt-3 text-xs text-muted-foreground'>
+                      Stop automatically after
+                      <select
+                        value={launchTimeoutSeconds}
+                        onChange={(event) => setLaunchTimeoutSeconds(Number(event.target.value))}
+                        className='h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground'
+                      >
+                        <option value={300}>5 minutes</option>
+                        <option value={900}>15 minutes</option>
+                        <option value={1800}>30 minutes</option>
+                        <option value={3600}>1 hour</option>
+                      </select>
+                    </label>
+                  )}
+                </fieldset>
                 <div className='flex flex-wrap gap-2'>
                   <Button
                     onClick={() =>
@@ -1010,7 +1071,7 @@ export function AgentSquadsView({
                     ) : (
                       <Rocket className='h-4 w-4' />
                     )}
-                    Launch worker
+                    {launchExecutionMode === 'automatic' ? 'Run worker' : 'Launch worker'}
                   </Button>
                   {selectedWorkItem.pty_session_id && (
                     <Button

@@ -73,13 +73,19 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
         except Exception:  # noqa: BLE001 -- a probe failure must never fail registration
             return True
 
-    @router.post("/sessions", response_model=coord.AgentSession)
+    @router.post("/sessions", response_model=None)
     async def register_session(
         payload: coord.AgentSessionRegister, request: Request
-    ) -> coord.AgentSession:
+    ) -> dict[str, Any]:
         mcp_ok = await _mcp_all_connected(request)
         with storage.transaction() as conn:
             session = coord.register_session(conn, payload, mcp_all_connected=mcp_ok)
+            session_key = coord.issue_session_credential(
+                conn,
+                session.id,
+                authority="full",
+                ttl_seconds=86_400,
+            )
             audit(
                 conn,
                 AuditRecord(
@@ -105,12 +111,18 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
                 "seq": session.seq,
                 "runtime_id": session.runtime_id,
                 "agent_label": session.agent_label,
+                "coder_thread_id": session.coder_thread_id,
                 "task": session.task,
                 "connection_level": session.connection_level,
                 "connection_code": session.connection_code,
             },
         )
-        return session
+        return {
+            **session.model_dump(mode="json"),
+            # Shown once. Only its hash is stored; later list/detail responses
+            # never expose the credential.
+            "session_key": session_key,
+        }
 
     @router.post("/sessions/{session_id}/heartbeat", response_model=coord.AgentSession)
     async def heartbeat_session(
@@ -146,6 +158,42 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
                 event_name("activity", "journaled"),
                 {"event": journal_event.model_dump(mode="json")},
             )
+        return session
+
+    @router.patch("/sessions/{session_id}", response_model=coord.AgentSession)
+    async def patch_session_identity(
+        session_id: str,
+        payload: coord.AgentSessionIdentityPatch,
+        request: Request,
+    ) -> coord.AgentSession:
+        if "project_id" in payload.model_fields_set and payload.project_id is not None:
+            from . import projects
+
+            projects.get(storage.conn, payload.project_id)
+        mcp_ok = await _mcp_all_connected(request)
+        with storage.transaction() as conn:
+            session = coord.patch_session_identity(
+                conn,
+                session_id,
+                payload,
+                mcp_all_connected=mcp_ok,
+            )
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="agent_session",
+                    entity_id=session.id,
+                    action="coordination.patch_identity",
+                    details={
+                        "runtime_id": session.runtime_id,
+                        "project_id": session.project_id,
+                        "coder_thread_id": session.coder_thread_id,
+                        "connection_level": session.connection_level,
+                        "connection_code": session.connection_code,
+                    },
+                ),
+            )
+        await _emit("session_heartbeat", session.model_dump(mode="json"))
         return session
 
     @router.delete("/sessions/{session_id}", response_model=None)

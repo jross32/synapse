@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -96,9 +97,14 @@ class _PendingCode:
 
 @dataclass
 class TokenSubject:
-    kind: Literal["local", "device"]
+    kind: Literal["local", "device", "worker"]
     device_id: str | None = None
     device_name: str | None = None
+    session_id: str | None = None
+    project_id: str | None = None
+    authority: str | None = None
+    work_item_id: str | None = None
+    squad_id: str | None = None
 
 
 class AuthManager:
@@ -133,6 +139,13 @@ class AuthManager:
         token_hash = _sha256(token)
         if secrets.compare_digest(token_hash, self._local_hash):
             return TokenSubject(kind="local")
+        # Automatically launched AIs receive a short-lived, session-bound
+        # credential instead of the desktop's all-powerful local token.
+        from . import coordination
+
+        worker = coordination.session_credential_subject(self._storage.conn, token)
+        if worker is not None:
+            return TokenSubject(kind="worker", **worker)
         row = self._storage.conn.execute(
             "SELECT t.id AS token_id, d.id AS device_id, d.name AS device_name "
             "FROM paired_device_tokens t "
@@ -414,11 +427,89 @@ def require_token(auth: AuthManager):
         token = request.headers.get("x-synapse-token") or request.cookies.get(
             auth.device_cookie_name
         )
-        if not auth.verify(token):
+        subject = auth.subject_for_token(token)
+        if subject is None:
             raise SynapseError(
                 code="auth.unauthorized",
                 message="A valid X-Synapse-Token is required.",
                 status=401,
             )
+        request.state.auth_subject = subject
+        if subject.kind == "worker":
+            _enforce_worker_scope(request, subject)
 
     return _dependency
+
+
+def _enforce_worker_scope(request: Request, subject: TokenSubject) -> None:
+    """Keep worker credentials inside their declared task/session boundary."""
+
+    def deny(message: str) -> None:
+        raise SynapseError(
+            code="auth.worker_scope_denied",
+            message=message,
+            status=403,
+            details={"authority": subject.authority or "observe"},
+        )
+
+    session_header = request.headers.get("x-synapse-session", "").strip()
+    if not session_header or session_header != subject.session_id:
+        deny("This worker credential must identify its own Synapse session.")
+
+    method = request.method.upper()
+    path = request.url.path.removeprefix("/api/v1/")
+    mutating = method not in {"GET", "HEAD", "OPTIONS"}
+    if not mutating:
+        return
+
+    session_match = re.match(r"(?:coordination|activity)/sessions/([^/]+)", path)
+    if session_match and session_match.group(1) != subject.session_id:
+        deny("A worker cannot mutate another AI session or its operator goals.")
+    if path == "coordination/sessions":
+        deny("This worker was registered by Synapse already; it cannot create a second identity.")
+
+    item_match = re.match(r"agent-work-items/([^/]+)", path)
+    if item_match and subject.work_item_id and item_match.group(1) != subject.work_item_id:
+        deny("A worker cannot change another work item's status, handoff, or token record.")
+    squad_match = re.match(r"agent-squads/([^/]+)", path)
+    if squad_match and subject.squad_id and squad_match.group(1) != subject.squad_id:
+        deny("A worker cannot mutate a different AI squad.")
+    project_match = re.match(r"projects/([^/]+)", path)
+    if project_match and subject.project_id and project_match.group(1) != subject.project_id:
+        deny("A worker cannot mutate a project outside its assigned workspace.")
+
+    authority = subject.authority or "observe"
+    if authority == "observe":
+        safe_reporting = (
+            re.fullmatch(rf"coordination/sessions/{re.escape(subject.session_id or '')}/heartbeat", path)
+            or re.fullmatch(rf"activity/sessions/{re.escape(subject.session_id or '')}/events", path)
+            or (
+                subject.work_item_id
+                and re.fullmatch(
+                    rf"agent-work-items/{re.escape(subject.work_item_id)}/(?:handoff|tokens)",
+                    path,
+                )
+            )
+            or path == "review/proposals"
+        )
+        if not safe_reporting:
+            deny("Observe authority permits reads and self-reporting, not state-changing actions.")
+        return
+
+    if authority == "workspace":
+        sensitive_prefixes = (
+            "system/",
+            "auth/",
+            "pair",
+            "devices",
+            "settings",
+            "network",
+            "remote-access",
+            "snapshot",
+            "restore",
+            "profile",
+            "mcp-servers/install",
+            "marketplace/install",
+        )
+        if path.startswith(sensitive_prefixes):
+            deny("Workspace authority cannot change Synapse-wide security or lifecycle settings.")

@@ -65,6 +65,102 @@ SCROLLBACK_BYTES = 64 * 1024
 #: How big a chunk we try to read per pump.
 READ_CHUNK = 4096
 
+# Environment variables with these names are credentials, not ordinary task
+# configuration. Their values may be needed by a child process, but must never
+# survive if that child echoes its environment into PTY output, WebSocket
+# events, scrollback, or a persisted transcript.
+_SENSITIVE_ENV_KEY_PARTS = (
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+    "API_KEY",
+    "PRIVATE_KEY",
+    "CREDENTIAL",
+)
+_MIN_REDACTED_VALUE_BYTES = 8
+_OUTPUT_REDACTION_MARKER = b"[REDACTED]"
+
+
+def _sensitive_output_values(env: dict[str, str]) -> tuple[bytes, ...]:
+    """Return unique, non-trivial credential values that PTY output must hide."""
+
+    values: set[bytes] = set()
+    for key, value in env.items():
+        normalized_key = key.upper()
+        if not any(part in normalized_key for part in _SENSITIVE_ENV_KEY_PARTS):
+            continue
+        encoded = value.encode("utf-8", "surrogatepass")
+        if len(encoded) >= _MIN_REDACTED_VALUE_BYTES:
+            values.add(encoded)
+    return tuple(sorted(values, key=len, reverse=True))
+
+
+def _visible_output(raw: bytes) -> tuple[bytes, list[int], int | None]:
+    """Return terminal-visible bytes, their raw offsets, and an incomplete escape.
+
+    WinPTY may insert CSI cursor/erase sequences between two reads, including in
+    the middle of a value the child wrote contiguously. Credential matching must
+    ignore complete terminal escapes while preserving their raw span for
+    replacement. An escape cut off at the end is retained for the next read.
+    """
+
+    visible = bytearray()
+    raw_offsets: list[int] = []
+    index = 0
+    while index < len(raw):
+        if raw[index] != 0x1B:
+            visible.append(raw[index])
+            raw_offsets.append(index)
+            index += 1
+            continue
+        escape_start = index
+        if index + 1 >= len(raw):
+            return bytes(visible), raw_offsets, escape_start
+        kind = raw[index + 1]
+        if kind == ord("["):  # CSI: params, intermediates, final byte.
+            index += 2
+            while index < len(raw) and 0x30 <= raw[index] <= 0x3F:
+                index += 1
+            while index < len(raw) and 0x20 <= raw[index] <= 0x2F:
+                index += 1
+            if index >= len(raw):
+                return bytes(visible), raw_offsets, escape_start
+            if 0x40 <= raw[index] <= 0x7E:
+                index += 1
+                continue
+            index = escape_start + 1
+            continue
+        if kind == ord("]"):  # OSC: terminated by BEL or ST (ESC backslash).
+            index += 2
+            while index < len(raw):
+                if raw[index] == 0x07:
+                    index += 1
+                    break
+                if raw[index] == 0x1B and index + 1 < len(raw) and raw[index + 1] == ord("\\"):
+                    index += 2
+                    break
+                index += 1
+            else:
+                return bytes(visible), raw_offsets, escape_start
+            continue
+        if 0x40 <= kind <= 0x5F:  # Two-byte Fe escape.
+            index += 2
+            continue
+        index += 1  # Unknown escape: hide ESC, preserve following bytes.
+    return bytes(visible), raw_offsets, None
+
+
+def _redact_display_argv(argv: list[str], values: tuple[bytes, ...]) -> list[str]:
+    """Hide known environment credentials from public session argv."""
+
+    text_values = [value.decode("utf-8", "surrogatepass") for value in values]
+    safe: list[str] = []
+    for argument in argv:
+        for value in text_values:
+            argument = argument.replace(value, _OUTPUT_REDACTION_MARKER.decode("ascii"))
+        safe.append(argument)
+    return safe
+
 
 # ── data classes ───────────────────────────────────────────────────────────
 
@@ -292,7 +388,6 @@ class PtySession:
         on_exit_persist: "_PersistCallback | None" = None,
     ) -> None:
         self.session_id = session_id
-        self.argv = list(argv)
         self.cwd = cwd
         self.rows = rows
         self.cols = cols
@@ -311,8 +406,14 @@ class PtySession:
         self._reader_task: asyncio.Task[Any] | None = None
         self._reader_thread: threading.Thread | None = None
         self._closing = False
+        self._finalized = False
+        self._finalize_lock = asyncio.Lock()
+        self._output_publish_tasks: set[asyncio.Task[None]] = set()
         self._env = env
         self._spawn_argv = list(spawn_argv)
+        self._sensitive_output_values = _sensitive_output_values(env)
+        self.argv = _redact_display_argv(list(argv), self._sensitive_output_values)
+        self._redaction_pending = b""
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -362,17 +463,7 @@ class PtySession:
             await asyncio.sleep(0.05)
             await asyncio.to_thread(self._backend.close)
         finally:
-            if self.exit_code is None:
-                self.exit_code = await asyncio.to_thread(self._backend.reap) or -1
-            await self._bus.publish(
-                event_name("pty", "session_exited"),
-                {"session_id": self.session_id, "exit_code": self.exit_code},
-            )
-            await self._maybe_persist_transcript()
-            await self._bus.publish(
-                event_name("pty", "session_finalized"),
-                {"session_id": self.session_id, "exit_code": self.exit_code},
-            )
+            await self._finalize(default_exit_code=-1)
 
     # ── I/O ─────────────────────────────────────────────────────────────
 
@@ -422,6 +513,70 @@ class PtySession:
     def _handle_chunk(self, chunk: bytes) -> None:
         if not chunk:
             return
+        safe_chunk = self._redact_output_chunk(chunk)
+        if not safe_chunk:
+            return
+        self._record_output(safe_chunk)
+
+    def _redact_output_chunk(self, chunk: bytes) -> bytes:
+        """Redact credentials while retaining any split-secret suffix.
+
+        PTY reads are arbitrarily chunked. A token may end one read halfway
+        through and continue in the next, so replacement on each read alone is
+        unsafe. Hold only a suffix that is a prefix of a protected value; the
+        next read either completes and redacts it or proves it was ordinary
+        output.
+        """
+
+        if not self._sensitive_output_values:
+            return chunk
+        combined = self._redaction_pending + chunk
+        self._redaction_pending = b""
+        # Exact raw replacement catches values inside terminal escape payloads
+        # (OSC titles, CSI parameters) before visible-text parsing skips them.
+        for value in self._sensitive_output_values:
+            combined = combined.replace(value, _OUTPUT_REDACTION_MARKER)
+        for value in self._sensitive_output_values:
+            visible, raw_offsets, _incomplete = _visible_output(combined)
+            matches: list[tuple[int, int]] = []
+            start = 0
+            while True:
+                found = visible.find(value, start)
+                if found < 0:
+                    break
+                matches.append((raw_offsets[found], raw_offsets[found + len(value) - 1] + 1))
+                start = found + len(value)
+            for raw_start, raw_end in reversed(matches):
+                combined = combined[:raw_start] + _OUTPUT_REDACTION_MARKER + combined[raw_end:]
+
+        keep = 0
+        keep_start: int | None = None
+        visible, raw_offsets, incomplete_escape = _visible_output(combined)
+        for value in self._sensitive_output_values:
+            for size in range(min(len(value) - 1, len(visible)), 0, -1):
+                if visible.endswith(value[:size]):
+                    keep = max(keep, size)
+                    break
+        if keep:
+            keep_start = raw_offsets[len(visible) - keep]
+        if incomplete_escape is not None:
+            keep_start = incomplete_escape if keep_start is None else min(keep_start, incomplete_escape)
+        if keep_start is not None:
+            self._redaction_pending = combined[keep_start:]
+            return combined[:keep_start]
+        return combined
+
+    def _flush_redaction_pending(self) -> None:
+        if not self._redaction_pending:
+            return
+        pending = self._redaction_pending
+        self._redaction_pending = b""
+        visible, _raw_offsets, _incomplete_escape = _visible_output(pending)
+        if visible and any(value.startswith(visible) for value in self._sensitive_output_values):
+            # Do not leak even a credential prefix when a child exits mid-write.
+            self._record_output(_OUTPUT_REDACTION_MARKER)
+
+    def _record_output(self, chunk: bytes) -> None:
         self._scrollback.append(chunk)
         self._scrollback_size += len(chunk)
         while self._scrollback_size > SCROLLBACK_BYTES and self._scrollback:
@@ -429,7 +584,7 @@ class PtySession:
             self._scrollback_size -= len(dropped)
         # Fan out as base64 so any byte (incl. control chars / non-UTF8) rides
         # cleanly through JSON / the WebSocket layer.
-        asyncio.ensure_future(
+        publish_task = asyncio.create_task(
             self._bus.publish(
                 event_name("pty", "session_output"),
                 {
@@ -438,22 +593,59 @@ class PtySession:
                 },
             )
         )
+        self._output_publish_tasks.add(publish_task)
+
+        def _observe_publish(completed: asyncio.Task[None]) -> None:
+            self._output_publish_tasks.discard(completed)
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error is not None:
+                log.error(
+                    "PTY output publish failed for %s: %s",
+                    self.session_id,
+                    error,
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+
+        publish_task.add_done_callback(_observe_publish)
+
+    async def _drain_output_publications(self) -> None:
+        while self._output_publish_tasks:
+            pending = tuple(self._output_publish_tasks)
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def _finalize(self, *, default_exit_code: int) -> None:
+        """Publish one ordered terminal lifecycle across EOF/shutdown races."""
+
+        async with self._finalize_lock:
+            if self._finalized:
+                return
+            if self.exit_code is None:
+                observed = await asyncio.to_thread(self._backend.reap)
+                # Shutdown may begin while an EOF-owned reap is running in a
+                # worker thread. Re-check the operator-stop flag only after
+                # reap returns, while this lock still owns finalization, so a
+                # missing child exit code cannot be misreported as success.
+                fallback_exit_code = -1 if self._closing else default_exit_code
+                self.exit_code = observed if observed is not None else fallback_exit_code
+            self._flush_redaction_pending()
+            await self._drain_output_publications()
+            self._finalized = True
+            await self._bus.publish(
+                event_name("pty", "session_exited"),
+                {"session_id": self.session_id, "exit_code": self.exit_code},
+            )
+            await self._maybe_persist_transcript()
+            await self._bus.publish(
+                event_name("pty", "session_finalized"),
+                {"session_id": self.session_id, "exit_code": self.exit_code},
+            )
 
     async def _on_eof(self) -> None:
-        if self.exit_code is not None:
+        if self._closing or self._finalized:
             return
-        self.exit_code = await asyncio.to_thread(self._backend.reap)
-        if self.exit_code is None:
-            self.exit_code = 0
-        await self._bus.publish(
-            event_name("pty", "session_exited"),
-            {"session_id": self.session_id, "exit_code": self.exit_code},
-        )
-        await self._maybe_persist_transcript()
-        await self._bus.publish(
-            event_name("pty", "session_finalized"),
-            {"session_id": self.session_id, "exit_code": self.exit_code},
-        )
+        await self._finalize(default_exit_code=0)
 
     async def _maybe_persist_transcript(self) -> None:
         """ADR-0003 Phase D -- write scrollback to a transcript file row.

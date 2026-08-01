@@ -18,21 +18,30 @@ import {
   Gauge,
   Globe2,
   Lightbulb,
+  ListChecks,
   Loader2,
   MonitorPlay,
   Network,
+  Pencil,
+  Plus,
   Radio,
   RefreshCw,
+  Save,
   Sparkles,
   Terminal,
+  Trash2,
   Users,
   Wrench,
   X,
 } from 'lucide-react';
 
 import {
+  createActivityGoal,
+  deleteActivityGoal,
   getActivitySessionDetail,
   getActivitySessions,
+  updateActivityGoal,
+  type ActivityGoal,
   type ActivityAuthority,
   type ActivityJournalCategory,
   type ActivityJournalEvent,
@@ -91,6 +100,8 @@ interface TimelineEntry {
   authority?: ActivityAuthority;
   mcpServerId?: string | null;
   toolName?: string | null;
+  sessionId?: string | null;
+  squadId?: string | null;
   live?: boolean;
 }
 
@@ -239,7 +250,9 @@ function notificationToEntry(notification: ActivityNotification): TimelineEntry 
     id: `n:${notification.id}`,
     at: notification.created_at,
     category: 'notification',
-    status: notification.level === 'red' ? 'failed' : notification.level === 'yellow' ? 'blocked' : 'info',
+    // Connection health and work status are separate axes. Yellow means a
+    // degraded connection (for example no project binding), not blocked work.
+    status: notification.level === 'red' ? 'failed' : 'info',
     level: notification.level,
     text: notification.title,
     detail: notification.body_md || undefined,
@@ -258,6 +271,8 @@ function journalToEntry(event: ActivityJournalEvent, live = false): TimelineEntr
     authority: event.authority,
     mcpServerId: event.mcp_server_id,
     toolName: event.tool_name,
+    sessionId: event.session_id,
+    squadId: event.squad_id,
     live,
   };
 }
@@ -296,6 +311,13 @@ export function LiveViewPage(): JSX.Element {
   const [viewMode, setViewMode] = useState<ViewMode>(initialMode);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [squadsOpen, setSquadsOpen] = useState(false);
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const [goalDraft, setGoalDraft] = useState('');
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [editingGoalTitle, setEditingGoalTitle] = useState('');
+  const [goalBusyId, setGoalBusyId] = useState<string | null>(null);
+  const [goalToDelete, setGoalToDelete] = useState<ActivityGoal | null>(null);
+  const [goalError, setGoalError] = useState<string | null>(null);
   const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
@@ -316,7 +338,17 @@ export function LiveViewPage(): JSX.Element {
       const { sessions: list } = await getActivitySessions();
       setSessions(list);
       setSessionsError(null);
-      setSelectedId((current) => current ?? list[0]?.id ?? null);
+      setSelectedId((current) => (
+        current
+        ?? list.find((session) => (
+          !session.coder_thread_id
+          && Boolean(session.project_id)
+          && session.status !== 'gone'
+        ))?.id
+        ?? list.find((session) => !session.coder_thread_id && session.status !== 'gone')?.id
+        ?? list[0]?.id
+        ?? null
+      ));
     } catch (error) {
       setSessionsError((error as Error).message || 'Could not load sessions.');
       setSessions((previous) => previous ?? []);
@@ -348,6 +380,10 @@ export function LiveViewPage(): JSX.Element {
     setLiveEntries([]);
     setDetail(null);
     setSquadsOpen(false);
+    setGoalsOpen(false);
+    setGoalDraft('');
+    setEditingGoalId(null);
+    setGoalError(null);
     lastSquadCountRef.current = 0;
     setSelectedSquadId(null);
     setSelectedWorkerId(null);
@@ -390,6 +426,17 @@ export function LiveViewPage(): JSX.Element {
         if (name.startsWith('v1.coordination.session_')) {
           void refreshSessions();
           const eventSessionId = String(payload.id ?? payload.session_id ?? '');
+          if (
+            name === 'v1.coordination.session_registered'
+            && eventSessionId
+            && !String(payload.coder_thread_id ?? '').trim()
+          ) {
+            // A new connection is the most relevant thing happening now. Bring
+            // external/root sessions into view immediately. Spawned workers
+            // stay visible in the squad roll-up without yanking the operator
+            // away from the parent every time a reviewer registers.
+            setSelectedId(eventSessionId);
+          }
           if (selectedId && (!eventSessionId || eventSessionId === selectedId)) {
             void refreshDetail(selectedId);
           }
@@ -413,6 +460,13 @@ export function LiveViewPage(): JSX.Element {
           if (!matchesSession && !matchesSquad) return;
           setLiveEntries((previous) => [...previous, journalToEntry(event, true)].slice(-MAX_LIVE_ENTRIES));
           if (selectedId) void refreshDetail(selectedId);
+          return;
+        }
+
+        if (name === 'v1.activity.goals_updated') {
+          if (String(payload.session_id ?? '') === selectedId && selectedId) {
+            void refreshDetail(selectedId);
+          }
           return;
         }
 
@@ -470,10 +524,30 @@ export function LiveViewPage(): JSX.Element {
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   }, [detail, liveEntries, viewMode]);
 
+  const currentExplanation = useMemo(() => {
+    if (viewMode !== 'deep') return null;
+    return [...timeline].reverse().find((entry) =>
+      (entry.category === 'reasoning' || entry.category === 'decision' || entry.category === 'plan')
+      && (entry.sessionId === selectedId || Boolean(entry.squadId && relevantSquadIds.has(entry.squadId)))
+      && Boolean(entry.detail)
+    ) ?? null;
+  }, [relevantSquadIds, selectedId, timeline, viewMode]);
+
   useEffect(() => {
     const element = timelineRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [timeline.length]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('synapse:live-inspector', {
+      detail: { open: goalsOpen || squadsOpen || previewOpen },
+    }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('synapse:live-inspector', {
+        detail: { open: false },
+      }));
+    };
+  }, [goalsOpen, previewOpen, squadsOpen]);
 
   const tokenTotal = useMemo(() => {
     let total = 0;
@@ -482,6 +556,9 @@ export function LiveViewPage(): JSX.Element {
     }
     return total;
   }, [detail]);
+
+  const goals = detail?.goals ?? [];
+  const completedGoalCount = goals.filter((goal) => goal.status === 'completed').length;
 
   const activeTools = useMemo(() => {
     const values = new Set<string>();
@@ -495,9 +572,9 @@ export function LiveViewPage(): JSX.Element {
   useEffect(() => {
     const count = detail?.squads.length ?? 0;
     if (count === 0) setSquadsOpen(false);
-    else if (count > lastSquadCountRef.current) setSquadsOpen(true);
+    else if (count > lastSquadCountRef.current && !goalsOpen && !previewOpen) setSquadsOpen(true);
     lastSquadCountRef.current = count;
-  }, [detail?.squads.length]);
+  }, [detail?.squads.length, goalsOpen, previewOpen]);
 
   const selectedSquadView = useMemo(
     () => detail?.squads.find((view) => String(view.squad.id) === selectedSquadId) ?? null,
@@ -523,6 +600,67 @@ export function LiveViewPage(): JSX.Element {
       window.localStorage.setItem('synapse.live-view-mode', next);
     } catch {
       // The preference remains valid for this window when storage is unavailable.
+    }
+  };
+
+  const addGoal = async () => {
+    if (!selectedId || !goalDraft.trim()) return;
+    setGoalBusyId('new');
+    setGoalError(null);
+    try {
+      await createActivityGoal(selectedId, { title: goalDraft.trim() });
+      setGoalDraft('');
+      await refreshDetail(selectedId);
+    } catch (error) {
+      setGoalError((error as Error).message || 'Could not add that goal.');
+    } finally {
+      setGoalBusyId(null);
+    }
+  };
+
+  const setGoalStatus = async (goal: ActivityGoal) => {
+    if (!selectedId) return;
+    setGoalBusyId(goal.id);
+    setGoalError(null);
+    try {
+      await updateActivityGoal(selectedId, goal.id, {
+        status: goal.status === 'completed' ? 'pending' : 'completed',
+      });
+      await refreshDetail(selectedId);
+    } catch (error) {
+      setGoalError((error as Error).message || 'Could not update that goal.');
+    } finally {
+      setGoalBusyId(null);
+    }
+  };
+
+  const saveGoalTitle = async (goal: ActivityGoal) => {
+    if (!selectedId || !editingGoalTitle.trim()) return;
+    setGoalBusyId(goal.id);
+    setGoalError(null);
+    try {
+      await updateActivityGoal(selectedId, goal.id, { title: editingGoalTitle.trim() });
+      setEditingGoalId(null);
+      await refreshDetail(selectedId);
+    } catch (error) {
+      setGoalError((error as Error).message || 'Could not rename that goal.');
+    } finally {
+      setGoalBusyId(null);
+    }
+  };
+
+  const confirmDeleteGoal = async () => {
+    if (!selectedId || !goalToDelete) return;
+    setGoalBusyId(goalToDelete.id);
+    setGoalError(null);
+    try {
+      await deleteActivityGoal(selectedId, goalToDelete.id);
+      setGoalToDelete(null);
+      await refreshDetail(selectedId);
+    } catch (error) {
+      setGoalError((error as Error).message || 'Could not remove that goal.');
+    } finally {
+      setGoalBusyId(null);
     }
   };
 
@@ -651,6 +789,7 @@ export function LiveViewPage(): JSX.Element {
                       type='button'
                       onClick={() => setStatusHelp(connectionHelp(detail?.session ?? selected))}
                       title={connectionHelp(detail?.session ?? selected).meaning}
+                      aria-live='polite'
                       className={cn(
                         'rounded-full border px-1.5 py-0.5 uppercase tracking-wide',
                         selected.connection_level === 'green' && 'border-status-launched/40 bg-status-launched/10 text-status-launched',
@@ -664,6 +803,7 @@ export function LiveViewPage(): JSX.Element {
                       type='button'
                       onClick={() => setStatusHelp(workStatusHelp(detail?.session ?? selected, detail))}
                       title={workStatusHelp(detail?.session ?? selected, detail).meaning}
+                      aria-live='polite'
                       className={cn(
                         'rounded-full border px-1.5 py-0.5 uppercase tracking-wide',
                         selected.status === 'active' && 'border-primary/40 bg-primary/10 text-primary',
@@ -678,10 +818,36 @@ export function LiveViewPage(): JSX.Element {
                 </div>
                 <div className='flex items-center gap-2 text-[11px] text-muted-foreground'>
                   {tokenTotal > 0 && <span className='font-mono'>{tokenTotal.toLocaleString()} tokens</span>}
+                  <button
+                    type='button'
+                    onClick={() => {
+                      const next = !goalsOpen;
+                      setGoalsOpen(next);
+                      if (next) {
+                        setSquadsOpen(false);
+                        setPreviewOpen(false);
+                      }
+                    }}
+                    aria-pressed={goalsOpen}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary',
+                      goalsOpen && 'border-primary text-foreground'
+                    )}
+                  >
+                    <ListChecks className='h-3.5 w-3.5' aria-hidden='true' />
+                    Goals {goals.length > 0 ? `[${completedGoalCount}/${goals.length}]` : ''}
+                  </button>
                   {(detail?.squads.length ?? 0) > 0 && (
                     <button
                       type='button'
-                      onClick={() => setSquadsOpen((value) => !value)}
+                      onClick={() => {
+                        const next = !squadsOpen;
+                        setSquadsOpen(next);
+                        if (next) {
+                          setGoalsOpen(false);
+                          setPreviewOpen(false);
+                        }
+                      }}
                       aria-pressed={squadsOpen}
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary',
@@ -694,7 +860,14 @@ export function LiveViewPage(): JSX.Element {
                   {canPreview && (
                     <button
                       type='button'
-                      onClick={() => setPreviewOpen((value) => !value)}
+                      onClick={() => {
+                        const next = !previewOpen;
+                        setPreviewOpen(next);
+                        if (next) {
+                          setGoalsOpen(false);
+                          setSquadsOpen(false);
+                        }
+                      }}
                       aria-pressed={previewOpen}
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary',
@@ -706,13 +879,28 @@ export function LiveViewPage(): JSX.Element {
                   )}
                 </div>
               </div>
-              <div className='border-t border-border/60 bg-muted/20 px-4 py-2'>
-                <div className='flex items-start gap-2'>
-                  <Gauge className='mt-0.5 h-3.5 w-3.5 shrink-0 text-primary' aria-hidden='true' />
-                  <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Now</p>
-                    <p className='truncate text-xs'>{detail?.session.last_intent || selected.last_intent || selected.task || 'Waiting for the next status update.'}</p>
+              <div className='border-t border-border/60 bg-muted/20 px-4 py-2' aria-live='polite'>
+                <div className={cn('grid gap-2', currentExplanation && 'md:grid-cols-2')}>
+                  <div className='flex min-w-0 items-start gap-2'>
+                    <Gauge className='mt-0.5 h-3.5 w-3.5 shrink-0 text-primary' aria-hidden='true' />
+                    <div className='min-w-0'>
+                      <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Now</p>
+                      <p className='line-clamp-2 text-xs leading-relaxed'>
+                        {detail?.session.last_intent || selected.last_intent || selected.task || 'Waiting for the next status update.'}
+                      </p>
+                    </div>
                   </div>
+                  {currentExplanation && (
+                    <div className='flex min-w-0 items-start gap-2 border-border/60 md:border-l md:pl-3'>
+                      <BrainCircuit className='mt-0.5 h-3.5 w-3.5 shrink-0 text-primary' aria-hidden='true' />
+                      <div className='min-w-0'>
+                        <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Why this step</p>
+                        <p className='line-clamp-2 text-xs leading-relaxed text-muted-foreground' title={currentExplanation.detail}>
+                          {currentExplanation.detail}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {activeTools.length > 0 && (
                   <div className='mt-2 flex flex-wrap gap-1.5'>
@@ -746,7 +934,7 @@ export function LiveViewPage(): JSX.Element {
                 <p className='mt-1 text-xs text-muted-foreground'>Structured milestones from this AI will stream in here.</p>
               </div>
             ) : (
-              <ol className='flex flex-col gap-2.5'>
+              <ol className='flex flex-col gap-2.5' aria-label='Live AI activity' aria-live='polite' aria-relevant='additions text'>
                 {timeline.map((entry) => (
                   <li key={entry.id} className='flex flex-wrap gap-2.5 sm:flex-nowrap'>
                     <span className='mt-1 shrink-0 font-mono text-[10px] text-muted-foreground'>{shortTime(entry.at)}</span>
@@ -802,6 +990,187 @@ export function LiveViewPage(): JSX.Element {
             )}
           </div>
         </Card>
+
+        {goalsOpen && selected && (
+          <Card className='fixed inset-4 z-40 flex min-h-0 flex-col overflow-hidden p-0 shadow-xl lg:static lg:z-auto lg:w-80 lg:shadow-none'>
+            <div className='shrink-0 border-b border-border px-3 py-2.5'>
+              <div className='flex items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                  <p className='flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    <ListChecks className='h-3.5 w-3.5 text-primary' aria-hidden='true' /> Goals
+                  </p>
+                  <p className='mt-1 text-xs font-medium' aria-live='polite'>
+                    [{completedGoalCount}/{goals.length}] complete
+                  </p>
+                </div>
+                <button
+                  type='button'
+                  onClick={() => setGoalsOpen(false)}
+                  aria-label='Collapse goals panel'
+                  className='rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground'
+                >
+                  <X className='h-3.5 w-3.5' aria-hidden='true' />
+                </button>
+              </div>
+              <div className='mt-2 h-1.5 overflow-hidden rounded-full bg-muted' aria-hidden='true'>
+                <div
+                  className='h-full rounded-full bg-primary transition-all'
+                  style={{ width: `${goals.length ? Math.round((completedGoalCount / goals.length) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
+
+            <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3'>
+              {goals.length === 0 ? (
+                <div className='rounded-md border border-dashed border-border px-3 py-6 text-center'>
+                  <ListChecks className='mx-auto h-5 w-5 text-muted-foreground' aria-hidden='true' />
+                  <p className='mt-2 text-xs font-medium'>No goals captured yet</p>
+                  <p className='mt-1 text-[11px] leading-relaxed text-muted-foreground'>
+                    Add the milestones that matter. The AI can update the same list through Synapse.
+                  </p>
+                </div>
+              ) : (
+                <ol className='space-y-2' aria-label='Session goals'>
+                  {goals.map((goal, index) => (
+                    <li key={goal.id} className='rounded-md border border-border bg-muted/10 p-2.5'>
+                      <div className='flex items-start gap-2'>
+                        <button
+                          type='button'
+                          onClick={() => void setGoalStatus(goal)}
+                          disabled={goalBusyId === goal.id}
+                          aria-label={goal.status === 'completed' ? `Mark ${goal.title} incomplete` : `Complete ${goal.title}`}
+                          className={cn(
+                            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition',
+                            goal.status === 'completed'
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border text-transparent hover:border-primary'
+                          )}
+                        >
+                          {goalBusyId === goal.id
+                            ? <Loader2 className='h-3 w-3 animate-spin text-primary' aria-hidden='true' />
+                            : <CheckCircle2 className='h-3 w-3' aria-hidden='true' />}
+                        </button>
+
+                        <div className='min-w-0 flex-1'>
+                          {editingGoalId === goal.id ? (
+                            <form
+                              className='flex items-center gap-1.5'
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                void saveGoalTitle(goal);
+                              }}
+                            >
+                              <input
+                                autoFocus
+                                value={editingGoalTitle}
+                                onChange={(event) => setEditingGoalTitle(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    setEditingGoalId(null);
+                                    setEditingGoalTitle('');
+                                  }
+                                }}
+                                maxLength={160}
+                                aria-label={`Rename goal ${index + 1}`}
+                                className='min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-xs outline-none transition focus:border-primary focus:ring-1 focus:ring-primary'
+                              />
+                              <button
+                                type='submit'
+                                disabled={!editingGoalTitle.trim() || goalBusyId === goal.id}
+                                aria-label='Save goal name'
+                                className='rounded p-1 text-primary transition hover:bg-accent disabled:opacity-50'
+                              >
+                                <Save className='h-3.5 w-3.5' aria-hidden='true' />
+                              </button>
+                            </form>
+                          ) : (
+                            <p className={cn(
+                              'break-words text-xs font-medium leading-relaxed',
+                              goal.status === 'completed' && 'text-muted-foreground line-through'
+                            )}>
+                              {goal.title}
+                            </p>
+                          )}
+                          <div className='mt-1 flex items-center gap-1.5'>
+                            <span className={cn(
+                              'rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide',
+                              goal.status === 'completed' && STATUS_STYLE.success,
+                              goal.status === 'active' && STATUS_STYLE.active,
+                              goal.status === 'blocked' && STATUS_STYLE.blocked,
+                              goal.status === 'pending' && STATUS_STYLE.planned
+                            )}>
+                              {goal.status}
+                            </span>
+                            <span className='text-[9px] text-muted-foreground'>Goal {index + 1}</span>
+                          </div>
+                        </div>
+
+                        {editingGoalId !== goal.id && (
+                          <div className='flex shrink-0 items-center'>
+                            <button
+                              type='button'
+                              onClick={() => {
+                                setEditingGoalId(goal.id);
+                                setEditingGoalTitle(goal.title);
+                              }}
+                              aria-label={`Rename ${goal.title}`}
+                              className='rounded p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground'
+                            >
+                              <Pencil className='h-3 w-3' aria-hidden='true' />
+                            </button>
+                            <button
+                              type='button'
+                              onClick={() => setGoalToDelete(goal)}
+                              aria-label={`Remove ${goal.title}`}
+                              className='rounded p-1 text-muted-foreground transition hover:bg-accent hover:text-destructive'
+                            >
+                              <Trash2 className='h-3 w-3' aria-hidden='true' />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {goalError && <p role='alert' className='mt-2 text-[11px] text-destructive'>{goalError}</p>}
+            </div>
+
+            <form
+              className='shrink-0 border-t border-border p-3'
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addGoal();
+              }}
+            >
+              <label htmlFor='new-live-goal' className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
+                Add a milestone
+              </label>
+              <div className='mt-1.5 flex items-center gap-2'>
+                <input
+                  id='new-live-goal'
+                  value={goalDraft}
+                  onChange={(event) => setGoalDraft(event.target.value)}
+                  placeholder='What needs to be true?'
+                  maxLength={160}
+                  className='min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary'
+                />
+                <button
+                  type='submit'
+                  disabled={!goalDraft.trim() || goalBusyId === 'new'}
+                  aria-label='Add goal'
+                  className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition hover:opacity-90 disabled:opacity-50'
+                >
+                  {goalBusyId === 'new'
+                    ? <Loader2 className='h-3.5 w-3.5 animate-spin' aria-hidden='true' />
+                    : <Plus className='h-3.5 w-3.5' aria-hidden='true' />}
+                </button>
+              </div>
+            </form>
+          </Card>
+        )}
 
         {squadsOpen && selected && (detail?.squads.length ?? 0) > 0 && (
           <Card className='fixed inset-4 z-40 flex min-h-0 flex-col overflow-hidden p-0 shadow-xl lg:static lg:z-auto lg:w-80 lg:shadow-none'>
@@ -1034,6 +1403,37 @@ export function LiveViewPage(): JSX.Element {
           </Card>
         )}
       </div>
+
+      <Modal
+        open={goalToDelete !== null}
+        onClose={() => setGoalToDelete(null)}
+        labelledBy='delete-live-goal-title'
+        className='max-w-sm'
+      >
+        {goalToDelete && (
+          <>
+            <div>
+              <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Remove milestone</p>
+              <h2 id='delete-live-goal-title' className='mt-1 text-lg font-semibold'>Remove this goal?</h2>
+            </div>
+            <p className='rounded-md border border-border bg-muted/10 p-3 text-sm'>{goalToDelete.title}</p>
+            <p className='text-xs leading-relaxed text-muted-foreground'>
+              This removes the goal from this session’s progress list. It does not delete the session or its activity history.
+            </p>
+            <div className='flex justify-end gap-2'>
+              <Button type='button' variant='secondary' onClick={() => setGoalToDelete(null)}>Keep goal</Button>
+              <Button
+                type='button'
+                variant='destructive'
+                disabled={goalBusyId === goalToDelete.id}
+                onClick={() => void confirmDeleteGoal()}
+              >
+                {goalBusyId === goalToDelete.id ? 'Removing…' : 'Remove goal'}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
 
       <Modal
         open={statusHelp !== null}

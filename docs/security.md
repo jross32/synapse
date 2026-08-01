@@ -132,6 +132,67 @@ Copilot workers. Role bindings still determine the allowed server subset.
 - Changing the enabled MCP list affects newly launched workers. Synapse does
   not mutate an already-running AI process or grant it a new server silently.
 
+## Delegated runtime authority (ADR-0034)
+
+Interactive launch remains the default. Automatic work-item launches carry an
+explicit `observe`, `workspace`, or `full` authority plus a bounded timeout.
+Synapse translates that boundary to each runtime instead of pretending their
+permission flags are identical:
+
+- Claude observe uses plan mode, workspace uses policy-aware non-interactive
+  `auto`, and full uses the explicit dangerous permission bypass.
+- Codex workspace retains project execution rules and the workspace sandbox.
+  Only explicit full authority adds both approval/sandbox bypass and
+  `--ignore-rules`.
+- Copilot observe denies write/shell, workspace allows task tools, and full uses
+  its explicit all-tools boundary.
+
+Stop and timeout first mark a live item blocked, then close its PTY. Process exit
+alone is never accepted as proof of completion. Known terminal errors are matched
+only by stable signatures and converted to fixed guidance; raw scrollback is not
+copied into status text. Handoff/journal fields strip terminal control characters.
+
+Workers never receive the desktop trusted-local token. Synapse pre-registers each
+worker and issues a random, short-lived credential bound to its coordination
+session, project, squad, work item, and declared authority. Only the SHA-256 hash
+is stored in session metadata. The raw value is injected as `SYNAPSE_TOKEN` and
+`SYNAPSE_SESSION_KEY`, never placed in argv, Live View, or an audit record, and is
+invalid as soon as the worker session ends or its deadline expires.
+
+The API guard enforces the binding: a worker must declare its own
+`X-Synapse-Session`, cannot mutate another session's identity/goals or another
+work item's handoff/status, and cannot create a second coordination identity.
+Observe authority is read + self-report only. Workspace authority additionally
+cannot mutate Synapse-wide restart, authentication, pairing, settings,
+snapshot/restore, profile, or MCP/marketplace-install surfaces. Full authority is
+explicit, time-bounded, and still does not grant session impersonation.
+
+External local AIs register with the desktop token once. The response includes a
+one-time `session_key`; subsequent attributed calls pair `X-Synapse-Session` with
+`X-Synapse-Session-Key`, whose stored hash prevents one AI from claiming another's
+Live receipts. The desktop's local token remains root user authority by design.
+Pre-v0.1.94 session rows have no binding key and remain compatible only until they
+end; all new registrations use the bound contract.
+
+PTY capture is a second boundary. If a child echoes a non-trivial value from an
+environment field whose name identifies a token, secret, password, API key, private
+key, or credential, the daemon replaces the exact value with `[REDACTED]` before
+WebSocket publication, scrollback storage, or transcript persistence. The streaming
+redactor also catches values split across PTY reads and suppresses a credential prefix
+left when a child exits mid-write. This is defense in depth; worker prompts still
+forbid printing credentials in the first place.
+
+PTY finalization is single-flight across duplicate EOF callbacks and operator
+shutdown. The daemon drains every queued output publication before it emits exit
+or finalized events and before it persists the transcript. This ordering ensures
+the last `[REDACTED]` marker is part of both the live stream and durable history,
+never a late event delivered after consumers have closed the session.
+
+A future boss agent may approve a worker escalation without waiting for the human
+only when the user already delegated that authority to the boss. The approval must
+remain task-scoped, reasoned, time-bounded, audited, and visibly pausable/stoppable;
+a boss cannot create authority broader than its own grant.
+
 ## Live View journal (ADR-0033)
 
 Deep View is a durable operator log, not an encrypted secret store. AI-authored

@@ -26,6 +26,7 @@ export function CaptureButton(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveInspectorOpen, setLiveInspectorOpen] = useState(false);
   const dictation = useSpeechDictation(
     useCallback((t: string) => setContent((c) => (c ? `${c} ${t}` : t)), [])
   );
@@ -39,6 +40,14 @@ export function CaptureButton(): JSX.Element {
       })
       .catch((e) => setError((e as Error).message));
   }, [open]);
+
+  useEffect(() => {
+    const onInspector = (event: Event): void => {
+      setLiveInspectorOpen(Boolean((event as CustomEvent<{ open?: boolean }>).detail?.open));
+    };
+    window.addEventListener('synapse:live-inspector', onInspector);
+    return () => window.removeEventListener('synapse:live-inspector', onInspector);
+  }, []);
 
   function close(): void {
     setOpen(false);
@@ -71,7 +80,8 @@ export function CaptureButton(): JSX.Element {
         aria-label='Capture a note'
         title='Capture a note'
         className={cn(
-          'fixed right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90 md:right-6',
+          'fixed right-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90 md:right-6',
+          liveInspectorOpen ? 'z-30 lg:right-[21rem]' : 'z-40',
           mobile ? 'bottom-[calc(7rem+env(safe-area-inset-bottom))]' : 'bottom-6'
         )}
       >

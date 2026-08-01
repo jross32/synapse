@@ -71,6 +71,12 @@ export function updateRestartStage(
   errorCode?: string,
   errorMessage?: string
 ): RestartProgress {
+  // A restart error is terminal for this operation. Late readiness callbacks
+  // can still arrive after a timeout, but they must not erase the diagnostic
+  // the operator already saw or repaint the operation as all-green.
+  if (progress.stages.some((stage) => stage.state === 'error') && state !== 'error') {
+    return progress;
+  }
   return {
     ...progress,
     updatedAt: new Date().toISOString(),

@@ -250,6 +250,11 @@ function finishRestartWindow(): void {
       completedWindow.close();
       if (!completedWindow.isDestroyed()) completedWindow.destroy();
     }
+    const completedMainWindow = mainWindow;
+    if (completedMainWindow && !completedMainWindow.isDestroyed()) {
+      completedMainWindow.show();
+      completedMainWindow.focus();
+    }
     currentRestartProgress = null;
   // Leave the all-green result visible long enough for a person to actually
   // read it before handing focus back to the main Synapse window.
@@ -696,15 +701,19 @@ async function applyBootstrapAiBundles(): Promise<void> {
 // ── window + tray ─────────────────────────────────────────────────────────
 function createWindow(): void {
   let interfaceReady = false;
+  // A cold development restart may need to rebuild the renderer before the
+  // first document can load. Keep the packaged-app diagnostic tight, but do
+  // not flash a false SYN-BOOT-202 while Vite is still legitimately warming.
+  const interfaceReadyTimeoutMs = isDev ? 45_000 : 20_000;
   const interfaceReadyTimer = setTimeout(() => {
     if (interfaceReady || !currentRestartProgress) return;
     setRestartStage(
       'interface',
       'error',
-      'The interface did not become ready within 20 seconds.',
+      `The interface did not become ready within ${interfaceReadyTimeoutMs / 1000} seconds.`,
       'SYN-BOOT-202'
     );
-  }, 20_000);
+  }, interfaceReadyTimeoutMs);
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -752,6 +761,21 @@ function createWindow(): void {
     );
   });
 
+  const markInterfaceReady = (): void => {
+    if (interfaceReady) return;
+    interfaceReady = true;
+    clearTimeout(interfaceReadyTimer);
+    mainWindow?.show();
+    setRestartStage('interface', 'success', 'The Synapse interface is loaded and visible.');
+    finishRestartWindow();
+  };
+  // `ready-to-show` is the preferred first-paint signal. Development restarts
+  // can occasionally finish navigation without emitting it while the window is
+  // initially hidden, so a successful document load is an idempotent fallback.
+  // Register both before navigation begins so neither event can be missed.
+  mainWindow.once('ready-to-show', markInterfaceReady);
+  mainWindow.webContents.once('did-finish-load', markInterfaceReady);
+
   const loadPromise = isDev
     ? mainWindow.loadURL('http://localhost:5173')
     : mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
@@ -764,14 +788,6 @@ function createWindow(): void {
       'SYN-BOOT-201',
       error instanceof Error ? error.message : String(error)
     );
-  });
-
-  mainWindow.once('ready-to-show', () => {
-    interfaceReady = true;
-    clearTimeout(interfaceReadyTimer);
-    mainWindow?.show();
-    setRestartStage('interface', 'success', 'The Synapse interface is loaded and visible.');
-    finishRestartWindow();
   });
 }
 

@@ -39,6 +39,8 @@ from .routes_ai import build_ai_router
 from .routes_ai_bundles import build_ai_bundles_router
 from .routes_ai_factory import build_ai_factory_router
 from .routes_agent_squads import (
+    WorkerPresenceRegistry,
+    WorkerTimeoutRegistry,
     build_agent_squads_router,
     subscribe_agent_squad_events,
 )
@@ -160,7 +162,13 @@ def build_app(
         allow_origins=_ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Accept", "X-Synapse-Token", "X-Synapse-Session"],
+        allow_headers=[
+            "Content-Type",
+            "Accept",
+            "X-Synapse-Token",
+            "X-Synapse-Session",
+            "X-Synapse-Session-Key",
+        ],
     )
 
     @app.middleware("http")
@@ -172,8 +180,37 @@ def build_app(
         secret values, or raw responses.
         """
 
-        response = await call_next(request)
         session_id = request.headers.get("X-Synapse-Session", "").strip()
+        if session_id:
+            token = request.headers.get("X-Synapse-Token") or request.cookies.get(
+                auth.device_cookie_name
+            )
+            subject = auth.subject_for_token(token)
+            if subject is not None and subject.kind != "worker":
+                from . import coordination as _coordination
+
+                # Existing pre-v0.1.94 rows remain compatible until they end.
+                # Every new registration has a one-time session key, which
+                # prevents a different local AI from claiming its receipts.
+                if _coordination.session_has_credential(storage.conn, session_id):
+                    session_key = request.headers.get("X-Synapse-Session-Key", "").strip()
+                    if not _coordination.verify_session_credential(
+                        storage.conn, session_id, session_key
+                    ):
+                        envelope = ErrorEnvelope(
+                            code="auth.session_binding_required",
+                            message=(
+                                "X-Synapse-Session must be paired with the session key "
+                                "returned when that AI session registered."
+                            ),
+                            retryable=False,
+                        )
+                        return JSONResponse(
+                            status_code=403,
+                            content=envelope.model_dump(),
+                        )
+
+        response = await call_next(request)
         path = request.url.path
         excluded = (
             not session_id
@@ -235,8 +272,17 @@ def build_app(
                 parts = relative_path.split("/")
                 if len(parts) > 1 and parts[1] not in {"registry", "warden"}:
                     mcp_server_id = parts[1]
+            refreshed_session = None
             with storage.transaction() as conn:
-                _coordination.get_session(conn, session_id)
+                # Any authenticated Synapse action proves the declaring AI is
+                # still present. Refresh its lease here so an external Codex,
+                # Claude, or Copilot task reappears after a Synapse restart on
+                # its very next API call instead of remaining falsely "gone".
+                refreshed_session = _coordination.heartbeat_session(
+                    conn,
+                    session_id,
+                    _coordination.AgentSessionHeartbeat(),
+                )
                 created = _activity.create_journal_event(
                     conn,
                     _activity.ActivityJournalCreate(
@@ -253,6 +299,11 @@ def build_app(
                     ),
                     session_id=session_id,
                     source="synapse-api",
+                )
+            if refreshed_session is not None:
+                await bus.publish(
+                    event_name("coordination", "session_heartbeat"),
+                    refreshed_session.model_dump(mode="json"),
                 )
             await bus.publish(
                 event_name("activity", "journaled"),
@@ -338,6 +389,10 @@ def build_app(
     pty_manager = PtySessionManager(bus, storage=storage)
     bus._pty_manager = pty_manager  # type: ignore[attr-defined]
     app.state.pty_manager = pty_manager
+    worker_timeout_registry = WorkerTimeoutRegistry()
+    app.state.worker_timeout_registry = worker_timeout_registry
+    worker_presence_registry = WorkerPresenceRegistry()
+    app.state.worker_presence_registry = worker_presence_registry
     app.include_router(
         build_pty_router(pty_manager),
         prefix=API_PREFIX,
@@ -397,7 +452,15 @@ def build_app(
         dependencies=[token_guard],
     )
     app.include_router(
-        build_agent_squads_router(storage, pty_manager, bus),
+        build_agent_squads_router(
+            storage,
+            pty_manager,
+            bus,
+            auth,
+            lambda: f"http://127.0.0.1:{getattr(app.state, 'bound_port', 7878)}/api/v1",
+            worker_timeout_registry,
+            worker_presence_registry,
+        ),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -638,7 +701,13 @@ def build_app(
     )
 
     async def _subscribe_agent_events() -> None:
-        await subscribe_agent_squad_events(storage, bus)
+        await subscribe_agent_squad_events(
+            storage,
+            bus,
+            pty_manager,
+            worker_timeout_registry,
+            worker_presence_registry,
+        )
         await subscribe_ai_case_events(storage, bus)
         # Event -> notification projector (ADR-0028): milestones an AI hits while
         # driving Synapse become rows the Notification Center renders.
@@ -646,6 +715,12 @@ def build_app(
 
         await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
+
+    async def _cancel_worker_timeouts() -> None:
+        worker_timeout_registry.cancel_all()
+        worker_presence_registry.cancel_all()
+
+    app.router.on_shutdown.append(_cancel_worker_timeouts)
 
     # Serve the phone-facing Web UI. Prefer the built React renderer (the
     # full app shell, now mobile-aware); fall back to the legacy standalone

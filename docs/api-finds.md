@@ -192,9 +192,16 @@ API and your project context.**
 | Variable | Value | Use |
 |----------|-------|-----|
 | `SYNAPSE_SQUAD_ID` | squad id | Know which squad you belong to |
+| `SYNAPSE_PROJECT_ID` | project id | Know which project owns the squad |
+| `SYNAPSE_API` | loopback `/api/v1` base URL | Call Synapse without guessing the configured daemon port |
+| `SYNAPSE_TOKEN` | short-lived session credential | Authenticate within this worker's authority and ownership boundary |
 | `SYNAPSE_WORK_ITEM_ID` | work item id | Report your own status / handoff |
 | `SYNAPSE_ROLE_ID` | role id (planner/coder/reviewer/boss) | Know your role |
-| `SYNAPSE_LEAD_SESSION_ID` | lead PTY session id | Communicate with lead |
+| `SYNAPSE_RUNTIME_ID` | `claude`, `codex`, or `copilot` | Use the exact runtime identity Synapse launched |
+| `SYNAPSE_PTY_SESSION_ID` | worker PTY id | Link terminal evidence without guessing |
+| `SYNAPSE_SESSION_ID` | pre-registered coordination session id | Send as `X-Synapse-Session`; do not register again |
+| `SYNAPSE_SESSION_KEY` | same one-time scoped credential | Bind attributed calls to this session |
+| `SYNAPSE_LEAD_SESSION_ID` | parent Live session id | Link work to the visible lead without impersonating it |
 | `SYNAPSE_ROLE_PROMPT_FILE` | path to role prompt `.md` | Read your instructions |
 | `SYNAPSE_AI_CONTEXT` | path to `.synapse-ai-context.md` | **Shared project memory** |
 | `SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT` | reminder text | Read context before starting |
@@ -204,6 +211,35 @@ Enabled MCP servers are also injected at this launch boundary, scoped by the rol
 `mcp_servers.*` overrides, and GitHub Copilot CLI gets `--additional-mcp-config`.
 MCP secret values stay in the worker environment; Codex receives only variable
 names and Copilot's generated file contains only `${NAME}` references.
+
+The launch body may also name the delegated execution contract:
+
+| Field | Values / default | Meaning |
+|---|---|---|
+| `execution_mode` | `interactive` (default), `automatic` | Interactive opens the runtime normally. Automatic immediately executes the role prompt and must POST a handoff. |
+| `authority` | `observe`, `workspace` (default), `full` | Runtime-specific permission boundary. Full is explicit and may bypass runtime rules/sandbox prompts. |
+| `timeout_seconds` | 30–86,400; default 1,800 | Automatic worker is truthfully blocked and stopped at this deadline. |
+
+The response and `v1.agent_run.started` receipt repeat the resolved mode, authority,
+and timeout. A process exit is not completion evidence: exit zero without an explicit
+handoff remains `handoff` for transcript inspection; stop/timeout/nonzero exit are
+blocked. Claude workspace automation uses its policy-aware `auto` mode, while Codex
+adds `--ignore-rules` only for explicit full authority.
+
+Daemon-owned `SYNAPSE_*` identity, prompt, API, and auth values override any
+same-named caller `env` entry. The scoped token is process-environment only: it is
+not placed in runtime arguments, journal receipts, or handoff text. Synapse stores
+only its hash, rejects cross-session/work-item mutations, and revokes it when the
+worker ends; observe and workspace credentials also enforce their API boundaries.
+If a worker nevertheless echoes a recognized credential environment value, PTY
+capture replaces it with `[REDACTED]` before `v1.pty.session_output`, REST scrollback,
+or transcript persistence, including across arbitrary PTY chunk boundaries.
+`v1.pty.session_output` is drained before the single `v1.pty.session_exited` and
+single `v1.pty.session_finalized` receipts, even when EOF races operator shutdown.
+For an automatic launch, Synapse owns a 30-second `v1.coordination.session_heartbeat`
+loop for as long as the worker PTY is alive. The child CLI does not have to pause a
+long MCP/browser call to retain its green Live presence or scoped credential. PTY
+finalization, timeout, Stop All, and daemon shutdown cancel the loop.
 
 ### AI Case Sessions (`POST /api/v1/ai-cases/{id}/run`)
 | Variable | Value | Use |
@@ -346,6 +382,7 @@ one PTY session with a role-specific prompt.
 | POST | `/agent-squads` | Create squad for a project |
 | GET | `/agent-squads/{id}` | Get squad + all work items |
 | GET | `/agent-squads/{id}/capacity` | Headroom vs the launch gates: `running`/`max_concurrent`, `tokens_spent`/`token_budget`, `can_launch` — check before delegating a new worker |
+| GET | `/agent-squads/{id}/work-items` | List only this squad's work items, without role-template metadata |
 | PATCH | `/agent-squads/{id}` | Update squad (goal, status, concurrency cap, token budget) |
 | DELETE | `/agent-squads/{id}` | Delete squad |
 | POST | `/agent-squads/{id}/stop` | Kill all running workers immediately |
@@ -537,6 +574,7 @@ Designed for multiple AI agents running concurrently to avoid file conflicts.
 |--------|------|---------|
 | POST | `/coordination/sessions` | Register your presence |
 | POST | `/coordination/sessions/{id}/heartbeat` | Keep registration alive |
+| PATCH | `/coordination/sessions/{id}` | Correct project/runtime/label/PTY identity and recalculate the connection grade |
 | DELETE | `/coordination/sessions/{id}` | Deregister when done |
 | GET | `/coordination/sessions` | See all active AI sessions on a project |
 | POST | `/coordination/lanes` | Claim exclusive file editing lane |
@@ -548,15 +586,24 @@ Designed for multiple AI agents running concurrently to avoid file conflicts.
 
 ### 5K.1 Live View operator journal
 
-After registration, send `X-Synapse-Session: <session id>` on every other Synapse API call. Synapse will
-record the method, route, HTTP result, provider label, and `observe`/`execute` authority automatically.
-It deliberately does **not** copy request/response bodies, auth headers, credentials, or secret values.
+Registration returns a one-time `session_key`. After registration, send both
+`X-Synapse-Session: <session id>` and `X-Synapse-Session-Key: <session_key>` on every other Synapse API
+call. Synapse will record the method, route, HTTP result, provider label, and `observe`/`execute` authority automatically.
+It deliberately does **not** copy request/response bodies, auth headers, credentials, or secret values. That
+header also refreshes the session lease on the next call after a Synapse restart. A squad created with the
+header becomes owned by that parent Live session, so worker starts, MCP attachments, and reviewer handoffs
+roll up into the parent feed instead of becoming disconnected historical cards.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/activity/sessions` | Recent and historical numbered AI sessions with connection explanations |
-| GET | `/activity/sessions/{id}` | One session's journal, notifications, squads, worker profiles, and tokens |
+| GET | `/activity/sessions/{id}` | One session's journal, notifications, squads, worker profiles, tokens, and editable goals |
 | POST | `/activity/sessions/{id}/events` | Report a structured plan, reasoning summary, idea, decision, search, action, evidence, blocker, squad, MCP, tool, or result receipt |
+| GET / POST | `/activity/sessions/{id}/goals` | List or add concise operator milestones for this session |
+| PATCH / DELETE | `/activity/sessions/{id}/goals/{goal_id}` | Rename, restate, complete/block, reorder, or remove one milestone |
+
+Goal statuses are `pending`, `active`, `completed`, or `blocked`. Live renders them in a collapsed side
+inspector with `[completed/total]` progress. Goals are an operator-editable plan, not private model reasoning.
 
 Example Deep View receipt:
 

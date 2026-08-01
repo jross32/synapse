@@ -6,7 +6,31 @@
 
 ## Current version
 
-`0.1.93`
+`0.1.94`
+
+> **Runtime launch trust note (2026-08-01):** ADR-0034 keeps interactive worker launch as the default and
+> adds explicit bounded automatic execution for Claude, Codex, and GitHub Copilot. Observe/workspace/full
+> authority is translated per runtime; Codex ignores project execution rules only under explicit full
+> authority, while Claude workspace automation uses its policy-aware non-interactive mode. Stop and timeout
+> block before PTY closure, process exit alone cannot become false completion, known Claude auth expiry gets
+> an actionable secret-safe blocker, and operator text strips terminal controls. Deep Live View now shows
+> session-scoped **Now / Why this step** context plus a collapsed editable Goals inspector. Real Synapse
+> acceptance has passed automatic prompt delivery plus live isolated Reflex v2.6.0/101-tool calls across
+> Claude, Codex, and Copilot; renderer/Electron typechecks, **783 passed / 14 skipped**, and 1280×800 +
+> 375×812 no-body-scroll browser proof are green. The Synapse-hosted post-work council closed its
+> security/lifecycle findings, and the final
+> Codex re-review returned **RELEASE UNBLOCKED** after independently checking protected caller/MCP environment
+> precedence and timeout-task exception ownership. A real release restart first reproduced `SYN-BOOT-202`,
+> then completed all five audited stages green after Electron gained a document-load readiness fallback and
+> main-window focus handoff; Reflex confirmed the restarted 1280x800 window was visible. Only the two known
+> Windows closed-pipe warnings remain. A real Copilot review then deliberately echoed its injected token;
+> the test transcript was permanently removed, and PTY capture now redacts recognized credential values
+> before live output, scrollback, or transcript persistence even across split chunks, OSC/CSI escapes, or
+> mid-write exit. PTY finalization is now single-flight across duplicate EOF and shutdown races and drains
+> final output before exit/finalized receipts; deterministic ordering/race coverage is green. Workers are
+> pre-registered with short-lived authority-bound credentials instead of the desktop root token, and Synapse
+> now owns their 30-second presence heartbeat while each PTY is alive. A real Copilot worker proved the daemon
+> advanced that heartbeat during a long tool call, then stopped the presence loop at its bounded deadline.
 
 > **Deep Live View note (2026-08-01):** ADR-0033 adds migration 029's structured operator journal and
 > makes Deep View the default while preserving a calmer Summary View. Connected AIs can report bounded

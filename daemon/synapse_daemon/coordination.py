@@ -27,6 +27,7 @@ Synapse repo itself share.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import json
 import re
 import secrets
@@ -101,13 +102,22 @@ class AgentSessionRegister(BaseModel):
     agent_label: str = ""
     coder_thread_id: str | None = None
     task: str = ""
-    last_intent: str = ""
+    last_intent: str = Field(default="", max_length=8000)
 
 
 class AgentSessionHeartbeat(BaseModel):
     status: AgentSessionStatus | None = None
     task: str | None = None
-    last_intent: str | None = None
+    last_intent: str | None = Field(default=None, max_length=8000)
+
+
+class AgentSessionIdentityPatch(BaseModel):
+    project_id: str | None = None
+    runtime_id: str | None = Field(default=None, max_length=100)
+    agent_label: str | None = Field(default=None, max_length=160)
+    coder_thread_id: str | None = Field(default=None, max_length=160)
+    task: str | None = Field(default=None, max_length=2000)
+    last_intent: str | None = Field(default=None, max_length=8000)
 
 
 class FileLane(BaseModel):
@@ -182,6 +192,16 @@ def _loads_list(payload: str | None) -> list[str]:
     except json.JSONDecodeError:
         return []
     return [str(item) for item in raw] if isinstance(raw, list) else []
+
+
+def _loads_object(payload: str | None) -> dict[str, object]:
+    if not payload:
+        return {}
+    try:
+        raw = json.loads(payload)
+    except json.JSONDecodeError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
 
 def _norm(path: str) -> str:
@@ -308,6 +328,125 @@ def get_session(conn: sqlite3.Connection, session_id: str) -> AgentSession:
     return _row_to_session(row)
 
 
+def get_session_by_coder_thread_id(
+    conn: sqlite3.Connection, coder_thread_id: str
+) -> AgentSession | None:
+    row = conn.execute(
+        "SELECT * FROM agent_sessions WHERE coder_thread_id = ? "
+        "ORDER BY registered_at DESC LIMIT 1",
+        (coder_thread_id,),
+    ).fetchone()
+    return _row_to_session(row) if row is not None else None
+
+
+def issue_session_credential(
+    conn: sqlite3.Connection,
+    session_id: str,
+    *,
+    authority: str,
+    ttl_seconds: int,
+    work_item_id: str | None = None,
+    squad_id: str | None = None,
+) -> str:
+    """Issue one session-bound credential and persist only its SHA-256 hash."""
+
+    get_session(conn, session_id)
+    row = conn.execute(
+        "SELECT metadata_json FROM agent_sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    metadata = _loads_object(row["metadata_json"] if row is not None else None)
+    token = secrets.token_urlsafe(32)
+    metadata["session_credential"] = {
+        "token_sha256": hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        "authority": authority,
+        "work_item_id": work_item_id,
+        "squad_id": squad_id,
+        "expires_at": to_iso(utc_now() + timedelta(seconds=max(60, ttl_seconds))),
+    }
+    conn.execute(
+        "UPDATE agent_sessions SET metadata_json = ? WHERE id = ?",
+        (json.dumps(metadata), session_id),
+    )
+    return token
+
+
+def session_credential_subject(
+    conn: sqlite3.Connection, token: str
+) -> dict[str, str | None] | None:
+    """Resolve a raw session credential without exposing stored hashes."""
+
+    if not token:
+        return None
+    candidate_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    rows = conn.execute(
+        "SELECT id, project_id, status, metadata_json FROM agent_sessions "
+        "WHERE status != 'gone'"
+    ).fetchall()
+    for row in rows:
+        metadata = _loads_object(row["metadata_json"])
+        credential = metadata.get("session_credential")
+        if not isinstance(credential, dict):
+            continue
+        stored_hash = str(credential.get("token_sha256") or "")
+        if not stored_hash or not secrets.compare_digest(candidate_hash, stored_hash):
+            continue
+        expires_at = str(credential.get("expires_at") or "")
+        try:
+            if not expires_at or from_iso(expires_at) <= utc_now():
+                return None
+        except (TypeError, ValueError):
+            return None
+        return {
+            "session_id": str(row["id"]),
+            "project_id": str(row["project_id"]) if row["project_id"] else None,
+            "authority": str(credential.get("authority") or "observe"),
+            "work_item_id": (
+                str(credential.get("work_item_id"))
+                if credential.get("work_item_id")
+                else None
+            ),
+            "squad_id": (
+                str(credential.get("squad_id")) if credential.get("squad_id") else None
+            ),
+        }
+    return None
+
+
+def session_has_credential(conn: sqlite3.Connection, session_id: str) -> bool:
+    row = conn.execute(
+        "SELECT metadata_json FROM agent_sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    if row is None:
+        return False
+    metadata = _loads_object(row["metadata_json"])
+    credential = metadata.get("session_credential")
+    return isinstance(credential, dict) and bool(credential.get("token_sha256"))
+
+
+def verify_session_credential(
+    conn: sqlite3.Connection, session_id: str, token: str
+) -> bool:
+    if not token:
+        return False
+    row = conn.execute(
+        "SELECT metadata_json FROM agent_sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    if row is None:
+        return False
+    metadata = _loads_object(row["metadata_json"])
+    credential = metadata.get("session_credential")
+    if not isinstance(credential, dict):
+        return False
+    stored_hash = str(credential.get("token_sha256") or "")
+    candidate_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    if not stored_hash or not secrets.compare_digest(candidate_hash, stored_hash):
+        return False
+    try:
+        return from_iso(str(credential.get("expires_at") or "")) > utc_now()
+    except (TypeError, ValueError):
+        return False
+
+
 def heartbeat_session(
     conn: sqlite3.Connection, session_id: str, payload: AgentSessionHeartbeat
 ) -> AgentSession:
@@ -324,6 +463,56 @@ def heartbeat_session(
         "UPDATE agent_sessions SET status = ?, task = ?, last_intent = ?, "
         "last_heartbeat_at = ?, ended_at = NULL WHERE id = ?",
         (status, task, last_intent, now, session_id),
+    )
+    return get_session(conn, session_id)
+
+
+def patch_session_identity(
+    conn: sqlite3.Connection,
+    session_id: str,
+    payload: AgentSessionIdentityPatch,
+    *,
+    mcp_all_connected: bool = True,
+) -> AgentSession:
+    """Correct a session's declared identity through the daemon API.
+
+    A worker may register before it has read every injected identity value.
+    This audited correction path avoids direct DB edits and recalculates the
+    connection grade from the corrected project/MCP context.
+    """
+
+    existing = get_session(conn, session_id)
+    fields = payload.model_fields_set
+    project_id = payload.project_id if "project_id" in fields else existing.project_id
+    runtime_id = payload.runtime_id if payload.runtime_id is not None else existing.runtime_id
+    agent_label = payload.agent_label if payload.agent_label is not None else existing.agent_label
+    coder_thread_id = (
+        payload.coder_thread_id
+        if "coder_thread_id" in fields
+        else existing.coder_thread_id
+    )
+    task = payload.task if payload.task is not None else existing.task
+    last_intent = payload.last_intent if payload.last_intent is not None else existing.last_intent
+    grade = connection_codes.classify(
+        mcp_all_connected=mcp_all_connected,
+        has_project=bool((project_id or "").strip()),
+    )
+    conn.execute(
+        "UPDATE agent_sessions SET project_id = ?, runtime_id = ?, agent_label = ?, "
+        "coder_thread_id = ?, task = ?, last_intent = ?, connection_level = ?, "
+        "connection_code = ?, last_heartbeat_at = ?, ended_at = NULL WHERE id = ?",
+        (
+            project_id,
+            runtime_id.strip(),
+            agent_label.strip(),
+            coder_thread_id.strip() if coder_thread_id else None,
+            task.strip(),
+            last_intent.strip(),
+            grade.level.value,
+            grade.code,
+            to_iso(utc_now()),
+            session_id,
+        ),
     )
     return get_session(conn, session_id)
 

@@ -118,11 +118,25 @@ export interface ActivitySquadView {
   token_usage: Record<string, unknown>;
 }
 
+export type ActivityGoalStatus = 'pending' | 'active' | 'completed' | 'blocked';
+
+export interface ActivityGoal {
+  id: string;
+  session_id: string;
+  title: string;
+  detail_md: string;
+  status: ActivityGoalStatus;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ActivitySessionDetail {
   session: ActivitySession;
   squads: ActivitySquadView[];
   notifications: ActivityNotification[];
   journal: ActivityJournalEvent[];
+  goals: ActivityGoal[];
 }
 
 export function getActivityNotifications(unread = false, limit = 50): Promise<ActivityFeed> {
@@ -150,4 +164,32 @@ export function getActivitySessionDetail(id: string): Promise<ActivitySessionDet
   return apiFetch<ActivitySessionDetail>(`/activity/sessions/${encodeURIComponent(id)}`, {
     method: 'GET',
   });
+}
+
+export function createActivityGoal(
+  sessionId: string,
+  payload: { title: string; detail_md?: string; status?: ActivityGoalStatus }
+): Promise<ActivityGoal> {
+  return apiFetch<ActivityGoal>(`/activity/sessions/${encodeURIComponent(sessionId)}/goals`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function updateActivityGoal(
+  sessionId: string,
+  goalId: string,
+  payload: { title?: string; detail_md?: string; status?: ActivityGoalStatus; position?: number }
+): Promise<ActivityGoal> {
+  return apiFetch<ActivityGoal>(
+    `/activity/sessions/${encodeURIComponent(sessionId)}/goals/${encodeURIComponent(goalId)}`,
+    { method: 'PATCH', body: payload }
+  );
+}
+
+export function deleteActivityGoal(sessionId: string, goalId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/activity/sessions/${encodeURIComponent(sessionId)}/goals/${encodeURIComponent(goalId)}`,
+    { method: 'DELETE' }
+  );
 }

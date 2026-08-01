@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from synapse_daemon import agent_squads
+from synapse_daemon import agent_squads, routes_agent_squads
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -73,6 +74,21 @@ def _create_work_item(
     return res.json()
 
 
+def test_list_squad_work_items_returns_focused_collection(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    squad = _create_squad(client)
+    first = _create_work_item(client, squad["id"], title="Review Live View")
+    second = _create_work_item(client, squad["id"], title="Verify restart")
+
+    response = client.get(f"/api/v1/agent-squads/{squad['id']}/work-items")
+
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()["work_items"]] == [
+        first["id"],
+        second["id"],
+    ]
+
+
 def test_pick_runtime_prefers_first_installed_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     role = agent_squads.AgentRoleTemplate(
         id="implementer",
@@ -129,6 +145,7 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
                 "transport": "stdio",
                 "command": "node",
                 "args": ["C:/reflex/mcp-server.js"],
+                "env": {"SYNAPSE_TOKEN": "mcp-must-not-win"},
             },
         )
         assert reflex.status_code == 201, reflex.text
@@ -151,6 +168,31 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
         )
         assert launched.status_code == 200, launched.text
 
+        worker_env = captured["env"]
+        assert isinstance(worker_env, dict)
+        worker_headers = {
+            "X-Synapse-Token": worker_env["SYNAPSE_TOKEN"],
+            "X-Synapse-Session": worker_env["SYNAPSE_SESSION_ID"],
+        }
+        assert c.get("/api/v1/projects", headers=worker_headers).status_code == 200
+        denied_restart = c.post(
+            "/api/v1/system/restart",
+            headers=worker_headers,
+            json={"operation_id": "worker-must-not-restart"},
+        )
+        assert denied_restart.status_code == 403
+        assert denied_restart.json()["code"] == "auth.worker_scope_denied"
+        other = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "claude", "project_id": "demo-project"},
+        ).json()
+        denied_impersonation = c.patch(
+            f"/api/v1/coordination/sessions/{other['id']}",
+            headers=worker_headers,
+            json={"agent_label": "Impersonated"},
+        )
+        assert denied_impersonation.status_code == 403
+
     argv = captured["argv"]
     env = captured["env"]
     assert isinstance(argv, list)
@@ -159,6 +201,12 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
     assert "mcp_servers.github.env_vars=[\"GITHUB_TOKEN\"]" in argv
     assert "supersecret" not in " ".join(argv)
     assert env["GITHUB_TOKEN"] == "supersecret"
+    assert env["SYNAPSE_TOKEN"] != app.state.auth.local_token
+    assert env["SYNAPSE_TOKEN"] == env["SYNAPSE_SESSION_KEY"]
+    assert env["SYNAPSE_SESSION_ID"]
+    subject = app.state.auth.subject_for_token(env["SYNAPSE_TOKEN"])
+    assert subject is not None and subject.kind == "worker"
+    assert subject.work_item_id == item["id"]
 
 
 def test_copilot_work_item_launch_injects_session_only_mcp_config(
@@ -219,6 +267,311 @@ def test_copilot_work_item_launch_injects_session_only_mcp_config(
     assert "${REFLEX_AGENT_NAME}" in config_text
     assert "Copilot Worker" not in config_text
     assert env["REFLEX_AGENT_NAME"] == "Copilot Worker"
+
+
+@pytest.mark.parametrize(
+    ("runtime", "authority", "expected"),
+    [
+        ("claude", agent_squads.AgentExecutionAuthority.WORKSPACE, ["--print", "--strict-mcp-config"]),
+        ("codex", agent_squads.AgentExecutionAuthority.WORKSPACE, ["exec", "--ignore-user-config"]),
+        ("copilot", agent_squads.AgentExecutionAuthority.WORKSPACE, ["--prompt", "--no-ask-user"]),
+    ],
+)
+def test_automatic_worker_argv_executes_prompt_with_explicit_authority(
+    tmp_path: Path,
+    runtime: str,
+    authority: agent_squads.AgentExecutionAuthority,
+    expected: list[str],
+) -> None:
+    prompt_file = (tmp_path / "role prompt.md").resolve()
+    argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        [runtime, "--runtime-config"],
+        runtime=runtime,
+        authority=authority,
+        prompt_file=prompt_file,
+    )
+
+    assert all(value in argv for value in expected)
+    assert str(prompt_file) in argv[-1]
+    assert "explicit handoff" in argv[-1]
+
+
+def test_full_authority_codex_automatic_launch_explicitly_ignores_exec_rules(tmp_path: Path) -> None:
+    argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        ["codex"],
+        runtime="codex",
+        authority=agent_squads.AgentExecutionAuthority.FULL,
+        prompt_file=(tmp_path / "prompt.md").resolve(),
+    )
+
+    assert "--dangerously-bypass-approvals-and-sandbox" in argv
+    assert "--ignore-rules" in argv
+
+
+def test_workspace_claude_automatic_launch_uses_noninteractive_auto_permissions(tmp_path: Path) -> None:
+    argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        ["claude"],
+        runtime="claude",
+        authority=agent_squads.AgentExecutionAuthority.WORKSPACE,
+        prompt_file=(tmp_path / "prompt.md").resolve(),
+    )
+
+    permission_index = argv.index("--permission-mode")
+    assert argv[permission_index + 1] == "auto"
+
+
+def test_handoff_request_strips_terminal_control_characters() -> None:
+    payload = agent_squads.AgentWorkItemHandoffRequest(
+        summary_md="Reflex\x07 attached\nVerified",
+        blockers_md="No\x1b blocker",
+    )
+
+    assert payload.summary_md == "Reflex attached\nVerified"
+    assert payload.blockers_md == "No blocker"
+
+
+def test_classify_worker_failure_turns_expired_claude_token_into_actionable_blocker() -> None:
+    raw = b"Failed to authenticate. API Error: 401 OAuth access token has expired. Re-authenticate to continue."
+
+    reason = agent_squads.classify_worker_failure(raw)
+
+    assert reason is not None
+    assert "Claude sign-in expired" in reason
+    assert "claude auth login --claudeai" in reason
+    assert "401" not in reason
+
+
+def test_automatic_launch_uses_absolute_prompt_and_mcp_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    captured: dict[str, object] = {}
+
+    async def _fake_spawn(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            session_id=kwargs["session_id"],
+            exit_code=None,
+            summary=lambda: SimpleNamespace(
+                session_id=kwargs["session_id"],
+                argv=kwargs["argv"],
+                cwd=kwargs["cwd"],
+                rows=kwargs["rows"],
+                cols=kwargs["cols"],
+                started_at="now",
+                exit_code=None,
+                alive=True,
+                project_id=kwargs["project_id"],
+            ),
+        )
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        installed = c.post(
+            "/api/v1/mcp-servers/install",
+            json={
+                "id": "reflex",
+                "name": "Reflex",
+                "transport": "stdio",
+                "command": "node",
+                "args": ["C:/reflex/mcp-server.js"],
+            },
+        )
+        assert installed.status_code == 201, installed.text
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={
+                "preferred_runtime": "codex",
+                "open_in_tab": False,
+                "execution_mode": "automatic",
+                "authority": "workspace",
+                "timeout_seconds": 600,
+                "env": {
+                    "SYNAPSE_TOKEN": "caller-must-not-win",
+                    "SYNAPSE_ROLE_PROMPT_FILE": "C:/caller/prompt.md",
+                },
+            },
+        )
+        assert launched.status_code == 200, launched.text
+        body = launched.json()
+
+    argv = captured["argv"]
+    env = captured["env"]
+    assert isinstance(argv, list)
+    assert isinstance(env, dict)
+    assert argv[1] == "exec"
+    assert body["execution_mode"] == "automatic"
+    assert body["authority"] == "workspace"
+    assert Path(env["SYNAPSE_ROLE_PROMPT_FILE"]).is_absolute()
+    assert Path(env["SYNAPSE_AI_CONTEXT"]).is_absolute()
+    assert env["SYNAPSE_API"] == "http://127.0.0.1:7878/api/v1"
+    assert env["SYNAPSE_TOKEN"] != app.state.auth.local_token
+    assert env["SYNAPSE_TOKEN"] == env["SYNAPSE_SESSION_KEY"]
+    assert env["SYNAPSE_PROJECT_ID"] == "demo-project"
+    assert env["SYNAPSE_RUNTIME_ID"] == "codex"
+    assert env["SYNAPSE_PTY_SESSION_ID"]
+    assert env["SYNAPSE_SESSION_ID"] == body["coordination_session_id"]
+    assert env["SYNAPSE_ROLE_PROMPT_FILE"] != "C:/caller/prompt.md"
+    assert str(Path(env["SYNAPSE_ROLE_PROMPT_FILE"])) in argv[-1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("starting_status", "expected_status", "expects_update"),
+    [
+        (agent_squads.AgentWorkItemStatus.RUNNING, "blocked", True),
+        (agent_squads.AgentWorkItemStatus.HANDOFF, "handoff", False),
+    ],
+)
+async def test_timeout_closes_live_worker_and_preserves_existing_handoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    starting_status: agent_squads.AgentWorkItemStatus,
+    expected_status: str,
+    expects_update: bool,
+) -> None:
+    app, client = _harness(tmp_path)
+    closed: list[str] = []
+    published: list[str] = []
+
+    class StubBus:
+        async def publish(self, name: str, payload: dict) -> None:
+            published.append(name)
+
+    async def _fake_close(session_id: str) -> bool:
+        closed.append(session_id)
+        return True
+
+    monkeypatch.setattr(app.state.pty_manager, "get", lambda session_id: SimpleNamespace(exit_code=None))
+    monkeypatch.setattr(app.state.pty_manager, "close", _fake_close)
+
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        with app.state.storage.transaction() as conn:
+            agent_squads.set_work_item_session(
+                conn,
+                item["id"],
+                status=agent_squads.AgentWorkItemStatus.RUNNING,
+                pty_session_id="deadline-session",
+                chosen_runtime="codex",
+                opened_in_tab=False,
+            )
+            if starting_status != agent_squads.AgentWorkItemStatus.RUNNING:
+                agent_squads.update_work_item_status(conn, item["id"], starting_status)
+
+        updated = await routes_agent_squads._close_worker_at_timeout(  # noqa: SLF001
+            app.state.storage,
+            app.state.pty_manager,
+            StubBus(),  # type: ignore[arg-type]
+            work_item_id=item["id"],
+            session_id="deadline-session",
+            timeout_seconds=30,
+        )
+
+    assert updated is not None
+    assert updated.status.value == expected_status
+    assert closed == ["deadline-session"]
+    assert bool(published) is expects_update
+
+
+@pytest.mark.asyncio
+async def test_worker_timeout_registry_retains_and_cancels_owned_tasks() -> None:
+    registry = routes_agent_squads.WorkerTimeoutRegistry()
+    never = asyncio.Event()
+    task = asyncio.create_task(never.wait())
+
+    registry.track("work-item", task)
+    assert registry.active_count == 1
+    registry.cancel("work-item")
+    await asyncio.sleep(0)
+
+    assert task.cancelled()
+    assert registry.active_count == 0
+
+
+@pytest.mark.asyncio
+async def test_worker_timeout_registry_observes_task_failures(caplog: pytest.LogCaptureFixture) -> None:
+    registry = routes_agent_squads.WorkerTimeoutRegistry()
+
+    async def _fail() -> None:
+        raise RuntimeError("deadline boom")
+
+    with caplog.at_level("ERROR"):
+        registry.track("broken-work-item", asyncio.create_task(_fail()))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    assert registry.active_count == 0
+    assert "timeout task failed for broken-work-item" in caplog.text
+    assert "deadline boom" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_worker_presence_registry_retains_and_cancels_owned_tasks() -> None:
+    registry = routes_agent_squads.WorkerPresenceRegistry()
+    never = asyncio.Event()
+    task = asyncio.create_task(never.wait())
+
+    registry.track("work-item", task)
+    assert registry.active_count == 1
+    registry.cancel("work-item")
+    await asyncio.sleep(0)
+
+    assert task.cancelled()
+    assert registry.active_count == 0
+
+
+@pytest.mark.asyncio
+async def test_daemon_heartbeats_worker_while_pty_is_alive(tmp_path: Path) -> None:
+    app, client = _harness(tmp_path)
+    pty = SimpleNamespace(exit_code=None)
+    published: list[tuple[str, dict]] = []
+
+    class StubBus:
+        async def publish(self, name: str, payload: dict) -> None:
+            published.append((name, payload))
+
+    with client as c:
+        with app.state.storage.transaction() as conn:
+            session = routes_agent_squads.coordination.register_session(
+                conn,
+                routes_agent_squads.coordination.AgentSessionRegister(
+                    runtime_id="copilot",
+                    agent_label="Copilot reviewer",
+                    project_id="demo-project",
+                    coder_thread_id="presence-pty",
+                    task="Review the UI",
+                ),
+            )
+            routes_agent_squads.coordination.end_session(conn, session.id)
+
+        task = asyncio.create_task(
+            routes_agent_squads._maintain_worker_presence(  # noqa: SLF001
+                app.state.storage,
+                SimpleNamespace(get=lambda session_id: pty),  # type: ignore[arg-type]
+                StubBus(),  # type: ignore[arg-type]
+                coordination_session_id=session.id,
+                pty_session_id="presence-pty",
+                interval_seconds=0.01,
+            )
+        )
+        await asyncio.sleep(0.03)
+        pty.exit_code = 0
+        await asyncio.wait_for(task, timeout=0.1)
+
+        updated = routes_agent_squads.coordination.get_session(
+            app.state.storage.conn, session.id
+        )
+
+    assert updated.status.value == "active"
+    assert len(published) >= 2
+    assert all(name == "v1.coordination.session_heartbeat" for name, _ in published)
 
 
 def test_delegate_creates_child_work_item_linked_by_parent_id(tmp_path: Path) -> None:
@@ -476,6 +829,8 @@ def test_launch_stores_session_and_injects_squad_env_vars(tmp_path: Path) -> Non
         assert session._env["SYNAPSE_SQUAD_ID"] == squad["id"]  # noqa: SLF001
         assert session._env["SYNAPSE_WORK_ITEM_ID"] == item["id"]  # noqa: SLF001
         assert session._env["SYNAPSE_ROLE_ID"] == "implementer"  # noqa: SLF001
+        assert session._env["SYNAPSE_RUNTIME_ID"] == str(script)  # noqa: SLF001
+        assert session._env["SYNAPSE_PTY_SESSION_ID"] == body["session_id"]  # noqa: SLF001
         assert session._env["SYNAPSE_LEAD_SESSION_ID"]  # noqa: SLF001
         assert session._env["SYNAPSE_ROLE_PROMPT_FILE"]  # noqa: SLF001
 
@@ -513,7 +868,8 @@ def test_completed_work_item_links_transcript_after_session_exit(tmp_path: Path)
         else:
             pytest.fail("expected transcript_file_id to be linked after session exit")
 
-        assert updated["status"] == "completed"
+        assert updated["status"] == "handoff"
+        assert "without an explicit handoff" in updated["blockers_md"]
         assert updated["transcript_file_id"]
         files = c.get("/api/v1/projects/demo-project/files").json()["files"]
         transcript = next(file for file in files if file["id"] == updated["transcript_file_id"])
@@ -532,9 +888,79 @@ def test_stop_squad_is_safe_when_idle(tmp_path: Path) -> None:
         body = res.json()
         assert body["squad_id"] == squad["id"]
         assert body["stopped_sessions"] == 0
+        assert body["status"] == "paused"
 
         missing = c.post("/api/v1/agent-squads/does-not-exist/stop")
         assert missing.status_code >= 400
+
+
+def test_unknown_worker_exit_status_blocks_instead_of_implying_clean_exit(tmp_path: Path) -> None:
+    app, client = _harness(tmp_path)
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        with app.state.storage.transaction() as conn:
+            agent_squads.set_work_item_session(
+                conn,
+                item["id"],
+                status=agent_squads.AgentWorkItemStatus.RUNNING,
+                pty_session_id="unknown-exit",
+                chosen_runtime="codex",
+                opened_in_tab=False,
+            )
+            updated = agent_squads.complete_work_item_from_session_exit(
+                conn,
+                session_id="unknown-exit",
+                exit_code=None,
+            )
+
+    assert updated is not None
+    assert updated.status == agent_squads.AgentWorkItemStatus.BLOCKED
+    assert "exit status was unavailable" in (updated.blockers_md or "")
+
+
+def test_stop_squad_blocks_worker_before_pty_finalization_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    closed: list[str] = []
+
+    async def _fake_close(session_id: str) -> bool:
+        closed.append(session_id)
+        # Simulate the finalizer racing with the stop endpoint after a clean
+        # process exit. The pre-block must survive this zero exit code.
+        with app.state.storage.transaction() as conn:
+            agent_squads.complete_work_item_from_session_exit(
+                conn,
+                session_id=session_id,
+                exit_code=0,
+            )
+        return True
+
+    monkeypatch.setattr(app.state.pty_manager, "get", lambda session_id: SimpleNamespace(exit_code=None))
+    monkeypatch.setattr(app.state.pty_manager, "close", _fake_close)
+
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        with app.state.storage.transaction() as conn:
+            agent_squads.set_work_item_session(
+                conn,
+                item["id"],
+                status=agent_squads.AgentWorkItemStatus.RUNNING,
+                pty_session_id="race-session",
+                chosen_runtime="codex",
+                opened_in_tab=False,
+            )
+        stopped = c.post(f"/api/v1/agent-squads/{squad['id']}/stop")
+        assert stopped.status_code == 200, stopped.text
+        detail = c.get(f"/api/v1/agent-squads/{squad['id']}").json()
+        updated = next(entry for entry in detail["work_items"] if entry["id"] == item["id"])
+
+    assert closed == ["race-session"]
+    assert updated["status"] == "blocked"
+    assert "kill switch" in updated["blockers_md"]
 
 
 def test_launch_with_missing_cwd_returns_clean_error(tmp_path: Path) -> None:
