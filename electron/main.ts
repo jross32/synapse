@@ -750,16 +750,25 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  mainWindow.webContents.on('did-fail-load', (_event, code, description) => {
-    if (code === -3) return; // navigation superseded/aborted
-    setRestartStage(
-      'interface',
-      'error',
-      `Interface load failed (${code}).`,
-      'SYN-BOOT-201',
-      description
-    );
-  });
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (_event, code, description, validatedURL, isMainFrame) => {
+      if (code === -3) return; // navigation superseded/aborted
+      // `did-fail-load` fires for subframes too. Live View's app preview iframes a
+      // Synapse-launched project on localhost, so a project that simply isn't running
+      // would otherwise mark the whole interface stage failed with SYN-BOOT-201 -- a
+      // false red on a perfectly healthy restart. Only the top-level document decides
+      // whether the interface loaded.
+      if (!isMainFrame) return;
+      setRestartStage(
+        'interface',
+        'error',
+        `Interface load failed (${code}).`,
+        'SYN-BOOT-201',
+        validatedURL ? `${description} (${validatedURL})` : description
+      );
+    }
+  );
 
   const markInterfaceReady = (): void => {
     if (interfaceReady) return;

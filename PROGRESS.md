@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.100`
+`0.1.101`
+
+> **No more false-red restarts from a sub-frame (2026-08-01):** `did-fail-load` fires for sub-frames too,
+> and the handler ignored `isMainFrame`, so Live View's app-preview iframe pointing at a project that
+> isn't running could mark the interface stage failed with SYN-BOOT-201 on a healthy restart. Guarded.
+> Positions proven against electron.d.ts plus a reverted compile probe. NOT live-restart verified --
+> Codex is live in session #063. Closes inbox proposal `dfe8b44a7a2c`.
 
 > **Idle terminals self-heal (2026-08-01):** the output redactor holds back trailing bytes that match a
 > prefix of a credential so a split secret can still be caught -- but nothing released them if no further
