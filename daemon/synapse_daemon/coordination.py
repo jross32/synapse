@@ -590,7 +590,24 @@ def expire_stale_sessions(conn: sqlite3.Connection) -> int:
 # -- Lane CRUD + overlap ------------------------------------------------------
 
 
+def _norm_project_id(project_id: str | None) -> str | None:
+    """Treat a blank project_id as "no project" rather than as its own partition.
+
+    Lanes are partitioned strictly: None selects `project_id IS NULL`, a string selects
+    `project_id = ?`. A blank string belongs to neither, so it used to match zero lanes and
+    let `detect_overlap` report "no conflicts" with total confidence -- a conflict gate
+    failing open, silently. `scripts/coordination-preflight.ps1` hit exactly this (its
+    -ProjectId defaults to ""), so ADR-0024's "one enforceable coordination gate" never
+    caught a single real conflict until 0.1.97. Normalizing here closes the hole for every
+    caller instead of one script.
+    """
+    if project_id is None or not project_id.strip():
+        return None
+    return project_id
+
+
 def list_active_lanes(conn: sqlite3.Connection, project_id: str | None = None) -> list[FileLane]:
+    project_id = _norm_project_id(project_id)
     if project_id is None:
         rows = conn.execute(
             "SELECT * FROM file_lanes WHERE status = 'active' AND project_id IS NULL "
@@ -644,6 +661,9 @@ def claim_lane(
     conn: sqlite3.Connection, project_id: str | None, payload: LaneClaim
 ) -> LaneClaimResult:
     session = get_session(conn, payload.session_id)  # 404 if missing
+    # Normalize before both the overlap check and the INSERT: storing "" would create a lane
+    # sitting in a partition no reader ever selects, i.e. an invisible claim.
+    project_id = _norm_project_id(project_id)
     globs = [_norm(g) for g in payload.path_globs if str(g).strip()]
     if not globs:
         raise invalid("file_lane", "A lane claim needs at least one path or glob.")

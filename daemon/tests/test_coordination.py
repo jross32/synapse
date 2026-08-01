@@ -333,6 +333,53 @@ def test_detect_overlap_empty_paths_is_empty(tmp_path: Path) -> None:
     assert coord.detect_overlap(storage.conn, None, []) == []
 
 
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_blank_project_id_still_sees_projectless_lanes(tmp_path: Path, blank: str) -> None:
+    """A blank project_id must not silently address an empty partition.
+
+    Lanes are partitioned strictly: None -> `project_id IS NULL`, "x" -> `project_id = 'x'`.
+    A blank string belongs to no partition, so it used to match zero lanes and report
+    "no conflicts" with total confidence -- a conflict gate failing open, silently.
+    Regression for scripts/coordination-preflight.ps1, which sent "" whenever -ProjectId
+    was omitted (fixed in 0.1.97) and therefore never once caught a real conflict.
+    """
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        codex = _register(conn, runtime_id="codex", agent_label="Codex")
+        coord.claim_lane(
+            conn,
+            None,  # claimed WITHOUT a project -> lives in the NULL partition
+            coord.LaneClaim(
+                session_id=codex.id,
+                path_globs=["daemon/synapse_daemon/coordination.py"],
+                task_ref="lane work",
+            ),
+        )
+
+    # Sanity: the None caller sees it, so the lane really is active.
+    assert len(coord.detect_overlap(storage.conn, None, ["daemon/synapse_daemon/coordination.py"])) == 1
+
+    # The actual regression: a blank project_id must behave like None, not like a
+    # nonexistent project that matches nothing.
+    conflicts = coord.detect_overlap(storage.conn, blank, ["daemon/synapse_daemon/coordination.py"])
+    assert len(conflicts) == 1, f"blank project_id {blank!r} silently matched no lanes"
+    assert conflicts[0].session_id == codex.id
+
+
+def test_real_project_id_still_partitions_away_from_projectless_lanes(tmp_path: Path) -> None:
+    """The blank-string fix must not collapse genuine per-project isolation."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        codex = _register(conn, runtime_id="codex", agent_label="Codex")
+        coord.claim_lane(
+            conn,
+            None,
+            coord.LaneClaim(session_id=codex.id, path_globs=["shared.py"], task_ref="lane work"),
+        )
+    # A lane with no project must stay invisible to a check scoped to a real project.
+    assert coord.detect_overlap(storage.conn, "some-project", ["shared.py"]) == []
+
+
 # -- router E2E (bare app, no app.py needed) ----------------------------------
 
 

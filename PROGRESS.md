@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.97`
+`0.1.98`
+
+> **Lane gate hardened at the source (2026-08-01):** a blank `project_id` used to address a lane
+> partition that can never match, so `detect_overlap` reported "no conflicts" while looking at nothing.
+> `claim_lane` had the mirror bug (storing `""` = an invisible lane). Both normalize blank to `None` now.
+> 0.1.97 fixed the caller; this fixes the API so no future client can reintroduce it. Four regression
+> tests written failing-first. Closes inbox proposal `f9f78d7a5b4c`.
 
 > **Coordination gate repaired (2026-08-01):** `scripts/coordination-preflight.ps1 -Staged` -- ADR-0024's
 > "one enforceable coordination gate" -- was broken twice over: it threw on a `$staged`/`[switch]$Staged`

@@ -1,8 +1,8 @@
 {
     "name":  "synapse",
     "productName":  "Synapse",
-    "version":  "0.1.97",
-    "description":  "Synapse ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a modular developer command center. By The WhatIf Company.",
+    "version":  "0.1.98",
+    "description":  "Synapse ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â a modular developer command center. By The WhatIf Company.",
     "author":  {
                    "name":  "The WhatIf Company",
                    "email":  "justinwross32@gmail.com"
@@ -11,13 +11,13 @@
     "private":  true,
     "main":  "dist-electron/main.js",
     "scripts":  {
-                    "dev":  "echo \"Use scripts/dev.ps1 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â orchestrates daemon + electron together\"",
+                    "dev":  "echo \"Use scripts/dev.ps1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â orchestrates daemon + electron together\"",
                     "build:renderer":  "vite build",
                     "build:electron":  "tsc -p electron/tsconfig.json",
                     "build:daemon":  "powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-daemon.ps1",
                     "build":  "npm run build:renderer \u0026\u0026 npm run build:electron",
                     "typecheck":  "tsc --noEmit -p tsconfig.json \u0026\u0026 tsc --noEmit -p electron/tsconfig.json",
-                    "lint":  "echo \"Lint placeholder ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â wire ESLint in Milestone C\"",
+                    "lint":  "echo \"Lint placeholder ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â wire ESLint in Milestone C\"",
                     "start":  "electron .",
                     "pack":  "npm run build \u0026\u0026 npm run build:daemon \u0026\u0026 electron-builder --dir",
                     "dist":  "npm run build \u0026\u0026 npm run build:daemon \u0026\u0026 electron-builder"
