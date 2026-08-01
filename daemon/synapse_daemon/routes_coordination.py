@@ -117,15 +117,54 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
         session_id: str, payload: coord.AgentSessionHeartbeat | None = None
     ) -> coord.AgentSession:
         body = payload or coord.AgentSessionHeartbeat()
+        journal_event = None
         with storage.transaction() as conn:
+            previous = coord.get_session(conn, session_id)
             session = coord.heartbeat_session(conn, session_id, body)
-        await _emit("session_heartbeat", {"session_id": session.id, "status": session.status.value})
+            if session.last_intent.strip() and session.last_intent != previous.last_intent:
+                from . import activity
+
+                journal_status = {
+                    coord.AgentSessionStatus.ACTIVE: activity.ActivityJournalStatus.ACTIVE,
+                    coord.AgentSessionStatus.BLOCKED: activity.ActivityJournalStatus.BLOCKED,
+                    coord.AgentSessionStatus.GONE: activity.ActivityJournalStatus.SUCCESS,
+                }.get(session.status, activity.ActivityJournalStatus.INFO)
+                journal_event = activity.create_journal_event(
+                    conn,
+                    activity.ActivityJournalCreate(
+                        category=activity.ActivityJournalCategory.STATUS,
+                        status=journal_status,
+                        title="Current focus updated",
+                        summary_md=session.last_intent,
+                    ),
+                    session_id=session.id,
+                    source="synapse",
+                )
+        await _emit("session_heartbeat", session.model_dump(mode="json"))
+        if journal_event is not None and bus is not None:
+            await bus.publish(
+                event_name("activity", "journaled"),
+                {"event": journal_event.model_dump(mode="json")},
+            )
         return session
 
     @router.delete("/sessions/{session_id}", response_model=None)
     async def end_session(session_id: str) -> dict[str, Any]:
         with storage.transaction() as conn:
             coord.end_session(conn, session_id)
+            from . import activity
+
+            journal_event = activity.create_journal_event(
+                conn,
+                activity.ActivityJournalCreate(
+                    category=activity.ActivityJournalCategory.RESULT,
+                    status=activity.ActivityJournalStatus.SUCCESS,
+                    title="Session released",
+                    summary_md="The AI session ended and its active file lanes were released.",
+                ),
+                session_id=session_id,
+                source="synapse",
+            )
             audit(
                 conn,
                 AuditRecord(
@@ -135,6 +174,11 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
                 ),
             )
         await _emit("session_ended", {"session_id": session_id})
+        if bus is not None:
+            await bus.publish(
+                event_name("activity", "journaled"),
+                {"event": journal_event.model_dump(mode="json")},
+            )
         return {"ok": True}
 
     @router.get("/sessions", response_model=list[coord.AgentSession])

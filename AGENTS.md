@@ -116,8 +116,22 @@ POST /api/v1/review/proposals
 
 They land in the **Review inbox** next to work handoffs, grouped by category and clickable for detail;
 Justin approves / rejects / **promotes** each (a `synapse-self`-scoped idea promotes straight to a
-backlog item). Both habits are advertised to in-app AIs via `GET /api/v1/ai/context` and injected into
+backlog item). These habits are advertised to in-app AIs via `GET /api/v1/ai/context` and injected into
 every squad worker's prompt, so they hold no matter how the AI was launched.
+
+### 3. Keep the operator's Live View current (activity journal — ADR-0033)
+
+After registering, include `X-Synapse-Session: <your session id>` on other Synapse API calls. The daemon
+then records a clean method/result/authority receipt without copying request bodies, response bodies, or
+secrets. When your focus changes, include `last_intent` on your heartbeat. At meaningful boundaries, POST
+to `/api/v1/activity/sessions/{id}/events` with a category (`plan`, `reasoning`, `idea`, `decision`,
+`search`, `action`, `evidence`, `blocker`, `squad`, `mcp`, `tool`, `result`), status, title, detailed
+operator-facing summary, and honest `authority` (`none|observe|control|execute`). Link the real squad,
+work item, MCP server, and tool ids where applicable.
+
+Deep View is deliberately detailed, but it is not a secret sink or a private chain-of-thought recorder.
+Report explicit alternatives, assumptions, rationale, evidence, findings, and next steps. Never copy
+credentials, auth tokens, secret values, private hidden model reasoning, or raw sensitive tool output.
 
 ---
 

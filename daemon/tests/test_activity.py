@@ -92,6 +92,28 @@ def test_projector_ignores_non_milestones(tmp_path: Path) -> None:
         assert activity.project_event(conn, "v1.activity.notification", {}) is None
 
 
+def test_projector_records_mcp_attachment_as_structured_journal(tmp_path: Path) -> None:
+    s = _storage(tmp_path)
+    with s.transaction() as conn:
+        events = activity.project_journal_events(
+            conn,
+            "v1.agent_mcp.attached",
+            {
+                "squad_id": "sq1",
+                "work_item_id": "wi1",
+                "runtime": "codex",
+                "mcp_server_ids": ["reflex", "web-scraper"],
+            },
+        )
+    assert len(events) == 1
+    event = events[0]
+    assert event.category == activity.ActivityJournalCategory.MCP
+    assert event.status == activity.ActivityJournalStatus.SUCCESS
+    assert event.squad_id == "sq1"
+    assert "reflex" in event.summary_md
+    assert event.source == "synapse"
+
+
 # -- CRUD ---------------------------------------------------------------------
 
 
@@ -150,5 +172,120 @@ def test_sessions_history_and_detail_routes(tmp_path: Path) -> None:
         assert [s["seq"] for s in listing] == [2, 1]  # newest first
         detail = c.get(f"/api/v1/activity/sessions/{listing[0]['id']}").json()
         assert detail["session"]["seq"] == 2
+        assert detail["session"]["connection_help"]["title"] == "Connected — no project"
         assert detail["squads"] == []  # no project bound
         assert any(n["kind"] == "session.connected" for n in detail["notifications"])
+        assert detail["journal"] == []
+
+
+def test_session_can_report_deep_view_receipts_and_heartbeat_focus(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        registered = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "codex", "agent_label": "Codex"},
+        ).json()
+        session_id = registered["id"]
+        reported = c.post(
+            f"/api/v1/activity/sessions/{session_id}/events",
+            json={
+                "category": "reasoning",
+                "status": "active",
+                "title": "Compared two safe attachment designs",
+                "summary_md": "Per-worker stdio isolation avoids stale shared ownership while preserving automatic availability.",
+                "mcp_server_id": None,
+                "authority": "observe",
+            },
+        )
+        assert reported.status_code == 201, reported.text
+        assert reported.json()["category"] == "reasoning"
+
+        heartbeat = c.post(
+            f"/api/v1/coordination/sessions/{session_id}/heartbeat",
+            json={"status": "active", "last_intent": "Verifying Reflex attachment"},
+        )
+        assert heartbeat.status_code == 200, heartbeat.text
+        assert heartbeat.json()["last_intent"] == "Verifying Reflex attachment"
+
+        detail = c.get(f"/api/v1/activity/sessions/{session_id}").json()
+        titles = [entry["title"] for entry in detail["journal"]]
+        assert "Compared two safe attachment designs" in titles
+        assert "Current focus updated" in titles
+        focus = next(entry for entry in detail["journal"] if entry["title"] == "Current focus updated")
+        assert focus["summary_md"] == "Verifying Reflex attachment"
+
+
+def test_session_event_rejects_unknown_mcp_server(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        session_id = c.post(
+            "/api/v1/coordination/sessions", json={"runtime_id": "codex"}
+        ).json()["id"]
+        response = c.post(
+            f"/api/v1/activity/sessions/{session_id}/events",
+            json={
+                "category": "mcp",
+                "status": "active",
+                "title": "Using an unknown MCP",
+                "mcp_server_id": "does-not-exist",
+                "authority": "control",
+            },
+        )
+        assert response.status_code == 404
+
+
+def test_ai_session_header_creates_safe_synapse_api_receipt(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        session_id = c.post(
+            "/api/v1/coordination/sessions", json={"runtime_id": "codex"}
+        ).json()["id"]
+        response = c.get(
+            "/api/v1/projects",
+            headers={"X-Synapse-Session": session_id},
+        )
+        assert response.status_code == 200
+        detail = c.get(f"/api/v1/activity/sessions/{session_id}").json()
+        receipt = next(event for event in detail["journal"] if event["title"] == "Synapse · projects")
+        assert receipt["category"] == "tool"
+        assert receipt["status"] == "success"
+        assert receipt["authority"] == "observe"
+        assert receipt["tool_name"] == "Synapse · projects"
+        assert "GET /projects" in receipt["summary_md"]
+        assert "bodies were not copied" in receipt["summary_md"]
+
+
+def test_squad_created_with_session_header_stays_with_that_session(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        project = c.post(
+            "/api/v1/projects",
+            json={
+                "id": "live-demo",
+                "name": "Live Demo",
+                "path": str(tmp_path),
+                "kind": "other",
+                "launch_cmd": "echo ready",
+            },
+        )
+        assert project.status_code == 201, project.text
+        first = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "codex", "project_id": "live-demo"},
+        ).json()
+        second = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "claude", "project_id": "live-demo"},
+        ).json()
+
+        created = c.post(
+            "/api/v1/agent-squads",
+            headers={"X-Synapse-Session": first["id"]},
+            json={"project_id": "live-demo", "name": "Codex squad"},
+        )
+        assert created.status_code == 201, created.text
+
+        first_detail = c.get(f"/api/v1/activity/sessions/{first['id']}").json()
+        second_detail = c.get(f"/api/v1/activity/sessions/{second['id']}").json()
+        assert [view["squad"]["name"] for view in first_detail["squads"]] == ["Codex squad"]
+        assert second_detail["squads"] == []
+        projected = next(
+            event for event in first_detail["journal"] if event["title"] == "Squad created: Codex squad"
+        )
+        assert projected["session_id"] == first["id"]

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from . import agent_squads as squads
 from . import mcp_servers as mcp_servers_module
@@ -152,7 +152,7 @@ def build_agent_squads_router(
         }
 
     @router.post("/agent-squads", response_model=None, status_code=201)
-    async def create_squad(payload: AgentSquadCreate) -> dict[str, Any]:
+    async def create_squad(payload: AgentSquadCreate, request: Request) -> dict[str, Any]:
         projects_module.get(storage.conn, payload.project_id)
         if payload.lead_role_id is not None:
             squads.get_role_template(storage.conn, payload.lead_role_id)
@@ -170,7 +170,13 @@ def build_agent_squads_router(
                     details={"project_id": squad.project_id, "name": squad.name},
                 ),
             )
-        await bus.publish(event_name("agent_squad", "created"), {"squad": squad.model_dump(mode="json")})
+        await bus.publish(
+            event_name("agent_squad", "created"),
+            {
+                "squad": squad.model_dump(mode="json"),
+                "session_id": request.headers.get("X-Synapse-Session"),
+            },
+        )
         return squad.model_dump(mode="json")
 
     @router.get("/agent-squads/{squad_id}", response_model=None)
@@ -281,7 +287,7 @@ def build_agent_squads_router(
 
     @router.post("/agent-squads/{squad_id}/work-items", response_model=None, status_code=201)
     async def create_work_item(
-        squad_id: str, payload: AgentWorkItemCreate
+        squad_id: str, payload: AgentWorkItemCreate, request: Request
     ) -> dict[str, Any]:
         if payload.assigned_role_id:
             squads.get_role_template(storage.conn, payload.assigned_role_id)
@@ -300,7 +306,13 @@ def build_agent_squads_router(
                     details={"squad_id": squad_id, "assigned_role_id": item.assigned_role_id},
                 ),
             )
-        await bus.publish(event_name("agent_work_item", "created"), {"work_item": item.model_dump(mode="json")})
+        await bus.publish(
+            event_name("agent_work_item", "created"),
+            {
+                "work_item": item.model_dump(mode="json"),
+                "session_id": request.headers.get("X-Synapse-Session"),
+            },
+        )
         return item.model_dump(mode="json")
 
     async def _do_launch(work_item_id: str, body: AgentWorkItemLaunchRequest) -> dict[str, Any]:
@@ -345,6 +357,13 @@ def build_agent_squads_router(
             chosen_runtime = squads.pick_runtime(role, body.preferred_runtime or work_item.preferred_runtime)
             argv = squads.argv_for_runtime(chosen_runtime)
             runtime_mcp_env: dict[str, str] = {}
+            installed_mcp_servers = mcp_servers_module.list_servers(storage.conn)
+            allowed_mcp_ids = None if role.mcp_server_ids is None else set(role.mcp_server_ids)
+            attached_mcp_server_ids = [
+                server.id
+                for server in installed_mcp_servers
+                if server.enabled and (allowed_mcp_ids is None or server.id in allowed_mcp_ids)
+            ]
             # Wire the role's enabled MCP servers into either supported runtime.
             # Claude receives an additive file; Codex receives one-launch config
             # overrides plus inherited env names, so secrets never enter argv.
@@ -354,7 +373,7 @@ def build_agent_squads_router(
                     argv = [*argv, "--mcp-config", str(mcp_config_path)]
             elif chosen_runtime == "codex":
                 mcp_argv, runtime_mcp_env = mcp_servers_module.build_codex_mcp_overrides(
-                    mcp_servers_module.list_servers(storage.conn),
+                    installed_mcp_servers,
                     role.mcp_server_ids,
                 )
                 argv = [*argv, *mcp_argv]
@@ -448,8 +467,21 @@ def build_agent_squads_router(
                 "role_id": role.id,
                 "session_id": work_item.pty_session_id,
                 "runtime": chosen_runtime,
+                "mcp_server_ids": attached_mcp_server_ids,
             },
         )
+        if attached_mcp_server_ids:
+            await bus.publish(
+                event_name("agent_mcp", "attached"),
+                {
+                    "squad_id": squad.id,
+                    "work_item_id": work_item.id,
+                    "role_id": role.id,
+                    "session_id": work_item.pty_session_id,
+                    "runtime": chosen_runtime,
+                    "mcp_server_ids": attached_mcp_server_ids,
+                },
+            )
         return {
             **session.summary().__dict__,
             "squad_id": squad.id,

@@ -132,6 +132,22 @@ Copilot workers. Role bindings still determine the allowed server subset.
 - Changing the enabled MCP list affects newly launched workers. Synapse does
   not mutate an already-running AI process or grant it a new server silently.
 
+## Live View journal (ADR-0033)
+
+Deep View is a durable operator log, not an encrypted secret store. AI-authored
+entries are bounded and identity-validated. Automatic `X-Synapse-Session`
+receipts record only the HTTP method, route, result, provider label, and
+observe/execute authority; middleware never reads or copies the request body,
+response body, auth header, credential value, or secret environment value.
+
+Generated worker prompts explicitly forbid private hidden chain-of-thought,
+credentials, auth tokens, secret values, and raw sensitive tool output. A worker
+may report that it used a named secret or authenticated service, which MCP/tool
+was involved, the action/result, alternatives, assumptions, evidence, and next
+step. The value itself remains in the original protected channel. This matters
+even on a single-user computer because Live View rows persist in SQLite, appear
+in screenshots, and are readable by other locally authorized AI sessions.
+
 ## Secrets
 
 No secrets are stored in plaintext by Synapse. Project env vars marked as `secret: true` are stored encrypted at rest (Windows DPAPI on the daemon's user account). The UI never round-trips secret values back to the client after the initial save — only a `(set)` placeholder is shown.

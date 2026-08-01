@@ -335,6 +335,7 @@ def build_ai_router(
                     "runtime_id": s.runtime_id,
                     "agent_label": s.agent_label,
                     "task": s.task,
+                    "last_intent": s.last_intent,
                     "status": s.status.value,
                     "stale": s.stale,
                     "connection_level": s.connection_level,
@@ -353,9 +354,24 @@ def build_ai_router(
                 }
                 for n in _activity.list_notifications(storage.conn, limit=10)
             ],
+            "recent_journal": [
+                {
+                    "session_id": event.session_id,
+                    "category": event.category.value,
+                    "status": event.status.value,
+                    "title": event.title,
+                    "squad_id": event.squad_id,
+                    "mcp_server_id": event.mcp_server_id,
+                    "authority": event.authority.value,
+                    "created_at": event.created_at.isoformat(),
+                }
+                for event in _activity.list_journal_events(storage.conn, limit=10)
+            ],
             "hint": (
                 "Register yourself with POST /api/v1/coordination/sessions to get your own "
-                "session number + connection grade; read GET /api/v1/activity/notifications for the feed."
+                "session number + connection grade; update last_intent on heartbeats; report deliberate "
+                "operator summaries to POST /api/v1/activity/sessions/{id}/events. Never report secrets "
+                "or hidden chain-of-thought."
             ),
         }
 
@@ -526,6 +542,11 @@ def build_ai_router(
                     "purpose": "coordinate with other AI sessions on this repo (ADR-0024): register presence, claim advisory file lanes, check path overlaps, detect git collisions, and get the true next-free migration/ADR number from disk",
                     "method": "GET | POST | DELETE",
                     "path": "/api/v1/coordination/sessions | /coordination/lanes | /coordination/overlap | /coordination/snapshot | /coordination/detect-collisions | /coordination/next-numbers",
+                },
+                {
+                    "purpose": "keep the operator-facing Live View current with structured plans, deliberate reasoning summaries, decisions, actions, evidence, blockers, squad state, and MCP/tool receipts; never send secrets or private hidden chain-of-thought",
+                    "method": "GET | POST",
+                    "path": "/api/v1/activity/sessions | /api/v1/activity/sessions/{id} | /api/v1/activity/sessions/{id}/events",
                 },
                 {
                     "purpose": "self-report token usage per work item and read the squad-level token roll-up so Synapse can prove efficiency (ADR-0025)",

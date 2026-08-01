@@ -61,6 +61,7 @@ from .routes_assistant import build_assistant_router
 from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
+from .routes_search import build_search_router
 from .routes_activity import build_activity_router
 from .routes_capture import build_capture_router
 from .routes_coordination import build_coordination_router
@@ -159,8 +160,107 @@ def build_app(
         allow_origins=_ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Accept", "X-Synapse-Token"],
+        allow_headers=["Content-Type", "Accept", "X-Synapse-Token", "X-Synapse-Session"],
     )
+
+    @app.middleware("http")
+    async def journal_ai_synapse_calls(request: Request, call_next):
+        """Create a clean receipt for authenticated AI calls that opt into a session.
+
+        The caller adds ``X-Synapse-Session`` after registering. We record method,
+        route, result, and authority only -- never request bodies, auth headers,
+        secret values, or raw responses.
+        """
+
+        response = await call_next(request)
+        session_id = request.headers.get("X-Synapse-Session", "").strip()
+        path = request.url.path
+        excluded = (
+            not session_id
+            or not path.startswith(f"{API_PREFIX}/")
+            or path.startswith(f"{API_PREFIX}/activity/")
+            or path.startswith(f"{API_PREFIX}/coordination/")
+            or path in {
+                f"{API_PREFIX}/health",
+                f"{API_PREFIX}/openapi.json",
+                f"{API_PREFIX}/docs",
+                f"{API_PREFIX}/redoc",
+            }
+        )
+        if excluded:
+            return response
+        try:
+            from . import activity as _activity
+            from . import coordination as _coordination
+
+            relative_path = path.removeprefix(f"{API_PREFIX}/")
+            root = relative_path.split("/", 1)[0]
+            labels = {
+                "agent-squads": "AI squads",
+                "agent-work-items": "AI squad work",
+                "quick-actions": "workflow",
+                "ai-cases": "AI case workflow",
+                "mcp-servers": "MCP servers",
+                "tools": "Synapse tools",
+                "search": "Synapse search",
+                "projects": "projects",
+                "review": "review inbox",
+                "benchmarks": "benchmarks",
+                "ai-bundles": "AI bundles",
+                "capture": "project memory capture",
+            }
+            label = labels.get(root, root.replace("-", " "))
+            succeeded = response.status_code < 400
+            category = (
+                _activity.ActivityJournalCategory.MCP
+                if root == "mcp-servers"
+                else _activity.ActivityJournalCategory.SEARCH
+                if root == "search"
+                else _activity.ActivityJournalCategory.SQUAD
+                if root in {"agent-squads", "agent-work-items"}
+                else _activity.ActivityJournalCategory.TOOL
+            )
+            status = (
+                _activity.ActivityJournalStatus.SUCCESS
+                if succeeded
+                else _activity.ActivityJournalStatus.FAILED
+            )
+            authority = (
+                _activity.ActivityAuthority.OBSERVE
+                if request.method.upper() == "GET"
+                else _activity.ActivityAuthority.EXECUTE
+            )
+            mcp_server_id = None
+            if root == "mcp-servers":
+                parts = relative_path.split("/")
+                if len(parts) > 1 and parts[1] not in {"registry", "warden"}:
+                    mcp_server_id = parts[1]
+            with storage.transaction() as conn:
+                _coordination.get_session(conn, session_id)
+                created = _activity.create_journal_event(
+                    conn,
+                    _activity.ActivityJournalCreate(
+                        category=category,
+                        status=status,
+                        title=f"Synapse · {label}",
+                        summary_md=(
+                            f"{request.method.upper()} /{relative_path} completed with HTTP "
+                            f"{response.status_code}. Request and response bodies were not copied into Live View."
+                        ),
+                        mcp_server_id=mcp_server_id,
+                        tool_name=f"Synapse · {label}",
+                        authority=authority,
+                    ),
+                    session_id=session_id,
+                    source="synapse-api",
+                )
+            await bus.publish(
+                event_name("activity", "journaled"),
+                {"event": created.model_dump(mode="json")},
+            )
+        except Exception:  # noqa: BLE001 -- telemetry must never change the API result
+            pass
+        return response
 
     # ── exception handler ───────────────────────────────────────────────
 
@@ -201,6 +301,9 @@ def build_app(
     )
     app.include_router(
         build_discovery_router(storage), prefix=API_PREFIX, dependencies=[token_guard]
+    )
+    app.include_router(
+        build_search_router(storage, tool_registry), prefix=API_PREFIX, dependencies=[token_guard]
     )
     app.include_router(
         build_tools_router(storage, tool_registry, profile_manager),
@@ -372,7 +475,7 @@ def build_app(
     # AI-activity notifications + session history -- the Notification Center /
     # Live View read surface (ADR-0028).
     app.include_router(
-        build_activity_router(storage),
+        build_activity_router(storage, bus),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

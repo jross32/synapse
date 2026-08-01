@@ -1,22 +1,42 @@
-// Live View (ADR-0028 Phase 4) — watch your AIs work in real time.
-//
-// The reference implementation of the one-window standard (AGENTS.md "Frontend UI
-// standard"): a fixed-height shell whose panes scroll independently. The page body
-// never scrolls — the session rail and the timeline each own their overflow, with
-// the shared .scrollbar-thin treatment.
-//
-// Left rail  = every AI session ever registered (#001…), with its live connection
-//              grade + status.
-// Main pane  = the selected session's story: what it did (from the persisted
-//              activity feed) plus live events as they arrive over the WebSocket,
-//              including the AI's own terminal output.
+// Live View (ADR-0033) — a truthful operator journal for every connected AI.
+// Deep View is the default and shows deliberate reasoning summaries, decisions,
+// evidence, tools, MCP receipts, squads, and correlated terminal output. It never
+// claims to expose private model chain-of-thought or secrets.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Loader2, MonitorPlay, Radio, RefreshCw, Terminal } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeft,
+  Bot,
+  BrainCircuit,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  Clock3,
+  Cpu,
+  Eye,
+  Gauge,
+  Globe2,
+  Lightbulb,
+  Loader2,
+  MonitorPlay,
+  Network,
+  Radio,
+  RefreshCw,
+  Sparkles,
+  Terminal,
+  Users,
+  Wrench,
+  X,
+} from 'lucide-react';
 
 import {
   getActivitySessionDetail,
   getActivitySessions,
+  type ActivityAuthority,
+  type ActivityJournalCategory,
+  type ActivityJournalEvent,
+  type ActivityJournalStatus,
   type ActivityLevel,
   type ActivityNotification,
   type ActivitySession,
@@ -27,8 +47,10 @@ import { formatLocal } from '@shared/format-time';
 import { cn } from '@shared/utils';
 import { AppPreview, previewUrl } from '../components/AppPreview';
 import { renderInlineBold } from '../components/InlineBold';
-import { Card } from '../components/ui/card';
 import { PageHeader } from '../components/PageHeader';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
+import { Modal } from '../components/ui/modal';
 
 const LEVEL_DOT: Record<ActivityLevel, string> = {
   green: 'bg-status-launched',
@@ -37,18 +59,58 @@ const LEVEL_DOT: Record<ActivityLevel, string> = {
   info: 'bg-primary',
 };
 
-/** A line in the live timeline — either a persisted notification or a live event. */
+const STATUS_STYLE: Record<ActivityJournalStatus, string> = {
+  planned: 'border-border bg-muted/40 text-muted-foreground',
+  active: 'border-primary/40 bg-primary/10 text-primary',
+  success: 'border-status-launched/40 bg-status-launched/10 text-status-launched',
+  blocked: 'border-status-launching/40 bg-status-launching/10 text-status-launching',
+  failed: 'border-status-error/40 bg-status-error/10 text-status-error',
+  info: 'border-border bg-muted/40 text-muted-foreground',
+};
+
+const SUMMARY_CATEGORIES = new Set<ActivityJournalCategory>([
+  'status',
+  'decision',
+  'action',
+  'blocker',
+  'squad',
+  'mcp',
+  'result',
+]);
+
+type ViewMode = 'deep' | 'summary';
+
 interface TimelineEntry {
   id: string;
   at: string;
-  kind: string;
+  category: ActivityJournalCategory | 'notification' | 'terminal';
+  status: ActivityJournalStatus;
   level: ActivityLevel;
   text: string;
   detail?: string;
+  authority?: ActivityAuthority;
+  mcpServerId?: string | null;
+  toolName?: string | null;
   live?: boolean;
 }
 
+interface StatusHelp {
+  title: string;
+  meaning: string;
+  reason: string;
+  remedy?: string;
+  code: string;
+}
+
 const MAX_LIVE_ENTRIES = 300;
+
+function initialMode(): ViewMode {
+  try {
+    return window.localStorage.getItem('synapse.live-view-mode') === 'summary' ? 'summary' : 'deep';
+  } catch {
+    return 'deep';
+  }
+}
 
 function shortTime(iso: string): string {
   const d = new Date(iso);
@@ -65,20 +127,181 @@ function relative(iso: string): string {
   return formatLocal(iso, 'short');
 }
 
-function notificationToEntry(n: ActivityNotification): TimelineEntry {
-  return {
-    id: `n:${n.id}`,
-    at: n.created_at,
-    kind: n.kind,
-    level: n.level,
-    text: n.title,
-    detail: n.body_md || undefined,
+function elapsedSince(iso: string, now: number): string {
+  const started = new Date(iso).getTime();
+  if (Number.isNaN(started)) return 'unknown';
+  const seconds = Math.max(0, Math.floor((now - started) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const rest = seconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${rest}s`;
+  if (minutes > 0) return `${minutes}m ${rest}s`;
+  return `${rest}s`;
+}
+
+function statusLevel(status: ActivityJournalStatus): ActivityLevel {
+  if (status === 'failed') return 'red';
+  if (status === 'blocked') return 'yellow';
+  if (status === 'success') return 'green';
+  return 'info';
+}
+
+function connectionHelp(session: ActivitySession): StatusHelp {
+  if (session.connection_help) {
+    return {
+      title: `${session.connection_level[0].toUpperCase()}${session.connection_level.slice(1)} · ${session.connection_help.title}`,
+      meaning: session.connection_help.explanation,
+      reason: session.connection_code === 'ok'
+        ? 'Synapse confirmed the session registration, project binding, and expected MCP availability.'
+        : session.connection_help.explanation,
+      remedy: session.connection_help.remedy || undefined,
+      code: session.connection_code,
+    };
+  }
+  const catalog: Record<string, Omit<StatusHelp, 'code'>> = {
+    ok: {
+      title: 'Green · fully connected',
+      meaning: 'The AI registered successfully and had access to its expected Synapse connection.',
+      reason: 'Project binding and enabled MCP availability checks passed when this session connected.',
+    },
+    'degraded.mcp_unavailable': {
+      title: 'Yellow · some tools offline',
+      meaning: 'The AI is connected, but at least one enabled MCP server was unavailable at registration time.',
+      reason: 'Synapse could not confirm every enabled MCP server as connected or ready.',
+      remedy: 'Open MCP Servers to identify and restart the unavailable server, then reconnect the AI.',
+    },
+    'degraded.no_project': {
+      title: 'Yellow · no project selected',
+      meaning: 'The AI is connected, but project-scoped files, records, and launches are unavailable.',
+      reason: 'This session registered without a project_id.',
+      remedy: 'Reconnect or register the session with the intended project.',
+    },
+    'failed.internal': {
+      title: 'Red · connection failed',
+      meaning: 'Synapse could not finish registering the AI session.',
+      reason: 'An internal error occurred during registration.',
+      remedy: 'Open daemon logs, resolve the reported error, and retry.',
+    },
   };
+  const selected = catalog[session.connection_code] ?? catalog['failed.internal'];
+  return { ...selected, code: session.connection_code };
+}
+
+function workStatusHelp(session: ActivitySession, detail: ActivitySessionDetail | null): StatusHelp {
+  const blocker = detail?.journal.find((event) =>
+    event.session_id === session.id && (event.category === 'blocker' || event.status === 'blocked')
+  );
+  if (session.status === 'blocked') {
+    return {
+      title: 'Blocked · needs something before continuing',
+      meaning: 'The AI has explicitly marked its work as unable to progress.',
+      reason: blocker?.summary_md || blocker?.title || session.last_intent || 'The AI did not report a blocker reason yet.',
+      remedy: blocker ? 'Review the reported blocker and provide the missing decision, access, resource, or fix.' : 'Ask the AI to report a blocker receipt with the specific cause and next requirement.',
+      code: 'session.blocked',
+    };
+  }
+  if (session.status === 'holding') {
+    return {
+      title: 'Holding · intentionally paused',
+      meaning: 'The session is preserved but is not actively progressing.',
+      reason: session.last_intent || 'No pause reason was reported.',
+      remedy: 'Resume the session when the operator or another dependency is ready.',
+      code: 'session.holding',
+    };
+  }
+  if (session.status === 'idle') {
+    return {
+      title: 'Idle · connected and waiting',
+      meaning: 'The AI remains connected but is not currently executing work.',
+      reason: session.last_intent || session.task || 'No current focus was reported.',
+      code: 'session.idle',
+    };
+  }
+  if (session.status === 'gone') {
+    return {
+      title: 'Gone · session ended',
+      meaning: 'The AI session ended or its heartbeat expired; this does not by itself prove the task completed.',
+      reason: session.ended_at ? `The session ended at ${formatLocal(session.ended_at, 'long')}.` : 'The session is no longer active.',
+      remedy: 'Check the final result or blocker receipt to learn whether the goal completed, then reconnect if more work is needed.',
+      code: 'session.gone',
+    };
+  }
+  return {
+    title: 'Active · working now',
+    meaning: 'The AI is connected and currently marked active.',
+    reason: session.last_intent || session.task || 'The AI has not reported its current focus yet.',
+    code: 'session.active',
+  };
+}
+
+function notificationToEntry(notification: ActivityNotification): TimelineEntry {
+  return {
+    id: `n:${notification.id}`,
+    at: notification.created_at,
+    category: 'notification',
+    status: notification.level === 'red' ? 'failed' : notification.level === 'yellow' ? 'blocked' : 'info',
+    level: notification.level,
+    text: notification.title,
+    detail: notification.body_md || undefined,
+  };
+}
+
+function journalToEntry(event: ActivityJournalEvent, live = false): TimelineEntry {
+  return {
+    id: `j:${event.id}`,
+    at: event.created_at,
+    category: event.category,
+    status: event.status,
+    level: statusLevel(event.status),
+    text: event.title,
+    detail: event.summary_md || undefined,
+    authority: event.authority,
+    mcpServerId: event.mcp_server_id,
+    toolName: event.tool_name,
+    live,
+  };
+}
+
+function decodePty(data: unknown): string {
+  if (typeof data !== 'string' || !data) return '';
+  try {
+    const bytes = Uint8Array.from(window.atob(data), (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes).trim();
+  } catch {
+    return '';
+  }
+}
+
+function CategoryIcon({ category, toolName }: { category: TimelineEntry['category']; toolName?: string | null }): JSX.Element {
+  const cls = 'h-3.5 w-3.5';
+  if (toolName?.startsWith('Synapse')) return <img src='/icon.svg' alt='' className={cls} />;
+  if (category === 'reasoning' || category === 'plan' || category === 'decision') {
+    return <BrainCircuit className={cls} aria-hidden='true' />;
+  }
+  if (category === 'idea') return <Lightbulb className={cls} aria-hidden='true' />;
+  if (category === 'mcp') return <Network className={cls} aria-hidden='true' />;
+  if (category === 'search') return <Globe2 className={cls} aria-hidden='true' />;
+  if (category === 'tool') return <Wrench className={cls} aria-hidden='true' />;
+  if (category === 'squad') return <Users className={cls} aria-hidden='true' />;
+  if (category === 'terminal') return <Terminal className={cls} aria-hidden='true' />;
+  if (category === 'blocker') return <CircleAlert className={cls} aria-hidden='true' />;
+  if (category === 'result' || category === 'evidence') {
+    return <CheckCircle2 className={cls} aria-hidden='true' />;
+  }
+  return <Activity className={cls} aria-hidden='true' />;
 }
 
 export function LiveViewPage(): JSX.Element {
   const { subscribeRaw, connState, projects } = useDaemon();
+  const [viewMode, setViewMode] = useState<ViewMode>(initialMode);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [squadsOpen, setSquadsOpen] = useState(false);
+  const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [statusHelp, setStatusHelp] = useState<StatusHelp | null>(null);
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
   const [sessions, setSessions] = useState<ActivitySession[] | null>(null);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -86,6 +309,7 @@ export function LiveViewPage(): JSX.Element {
   const [detailLoading, setDetailLoading] = useState(false);
   const [liveEntries, setLiveEntries] = useState<TimelineEntry[]>([]);
   const timelineRef = useRef<HTMLDivElement | null>(null);
+  const lastSquadCountRef = useRef(0);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -93,9 +317,21 @@ export function LiveViewPage(): JSX.Element {
       setSessions(list);
       setSessionsError(null);
       setSelectedId((current) => current ?? list[0]?.id ?? null);
-    } catch (e) {
-      setSessionsError((e as Error).message || 'Could not load sessions.');
-      setSessions((prev) => prev ?? []);
+    } catch (error) {
+      setSessionsError((error as Error).message || 'Could not load sessions.');
+      setSessions((previous) => previous ?? []);
+    }
+  }, []);
+
+  const refreshDetail = useCallback(async (sessionId: string, showLoader = false) => {
+    if (showLoader) setDetailLoading(true);
+    try {
+      const next = await getActivitySessionDetail(sessionId);
+      setDetail(next);
+    } catch {
+      setDetail(null);
+    } finally {
+      if (showLoader) setDetailLoading(false);
     }
   }, []);
 
@@ -104,132 +340,238 @@ export function LiveViewPage(): JSX.Element {
     void refreshSessions();
   }, [connState, refreshSessions]);
 
-  // Load the selected session's persisted story.
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
       return;
     }
-    let cancelled = false;
-    setDetailLoading(true);
     setLiveEntries([]);
-    getActivitySessionDetail(selectedId)
-      .then((d) => {
-        if (!cancelled) setDetail(d);
-      })
-      .catch(() => {
-        if (!cancelled) setDetail(null);
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
-
-  // Live stream: append events as they happen (the "watch it work" part).
-  useEffect(
-    () =>
-      subscribeRaw((event) => {
-        const name = event.name;
-        const payload = (event.payload ?? {}) as Record<string, unknown>;
-        let entry: TimelineEntry | null = null;
-        const now = new Date().toISOString();
-
-        if (name === 'v1.activity.notification') {
-          const n = payload.notification as ActivityNotification | undefined;
-          if (n) entry = { ...notificationToEntry(n), live: true };
-          void refreshSessions();
-        } else if (name === 'v1.pty.session_output') {
-          const chunk = String(payload.chunk ?? payload.data ?? '').trim();
-          if (chunk) {
-            entry = {
-              id: `o:${event.id}`,
-              at: now,
-              kind: 'pty.output',
-              level: 'info',
-              text: chunk.length > 400 ? `${chunk.slice(0, 400)}…` : chunk,
-              live: true,
-            };
-          }
-        } else if (name.startsWith('v1.agent_work_item.') || name.startsWith('v1.agent_run.')) {
-          const item = (payload.work_item ?? {}) as Record<string, unknown>;
-          const label = String(item.title ?? payload.work_item_id ?? '');
-          entry = {
-            id: `e:${event.id}`,
-            at: now,
-            kind: name.replace('v1.', ''),
-            level: 'info',
-            text: label ? `${name.split('.').pop()}: ${label}` : name.replace('v1.', ''),
-            live: true,
-          };
-        }
-
-        if (entry) {
-          setLiveEntries((prev) => [...prev, entry as TimelineEntry].slice(-MAX_LIVE_ENTRIES));
-        }
-      }),
-    [subscribeRaw, refreshSessions]
-  );
+    setDetail(null);
+    setSquadsOpen(false);
+    lastSquadCountRef.current = 0;
+    setSelectedSquadId(null);
+    setSelectedWorkerId(null);
+    void refreshDetail(selectedId, true);
+  }, [refreshDetail, selectedId]);
 
   const selected = useMemo(
-    () => sessions?.find((s) => s.id === selectedId) ?? null,
-    [sessions, selectedId]
+    () => sessions?.find((session) => session.id === selectedId) ?? detail?.session ?? null,
+    [detail, selectedId, sessions]
   );
 
-  // The app this session is working on -- previewable only while it's actually running.
+  const displayedSessions = useMemo(
+    () => showAllSessions ? (sessions ?? []) : (sessions ?? []).slice(0, 5),
+    [sessions, showAllSessions]
+  );
+
+  const relevantSquadIds = useMemo(
+    () => new Set((detail?.squads ?? []).map((view) => String(view.squad.id ?? ''))),
+    [detail]
+  );
+
+  const relevantPtyIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (selected?.coder_thread_id) ids.add(selected.coder_thread_id);
+    for (const view of detail?.squads ?? []) {
+      for (const item of view.work_items) {
+        const id = String(item.pty_session_id ?? '');
+        if (id) ids.add(id);
+      }
+    }
+    return ids;
+  }, [detail, selected]);
+
+  useEffect(
+    () =>
+      subscribeRaw((rawEvent) => {
+        const name = rawEvent.name;
+        const payload = (rawEvent.payload ?? {}) as Record<string, unknown>;
+
+        if (name.startsWith('v1.coordination.session_')) {
+          void refreshSessions();
+          const eventSessionId = String(payload.id ?? payload.session_id ?? '');
+          if (selectedId && (!eventSessionId || eventSessionId === selectedId)) {
+            void refreshDetail(selectedId);
+          }
+          return;
+        }
+
+        if (name === 'v1.activity.notification') {
+          const notification = payload.notification as ActivityNotification | undefined;
+          if (!notification || notification.session_id !== selectedId) return;
+          setLiveEntries((previous) =>
+            [...previous, { ...notificationToEntry(notification), live: true }].slice(-MAX_LIVE_ENTRIES)
+          );
+          return;
+        }
+
+        if (name === 'v1.activity.journaled') {
+          const event = payload.event as ActivityJournalEvent | undefined;
+          if (!event) return;
+          const matchesSession = event.session_id === selectedId;
+          const matchesSquad = Boolean(event.squad_id && relevantSquadIds.has(event.squad_id));
+          if (!matchesSession && !matchesSquad) return;
+          setLiveEntries((previous) => [...previous, journalToEntry(event, true)].slice(-MAX_LIVE_ENTRIES));
+          if (selectedId) void refreshDetail(selectedId);
+          return;
+        }
+
+        if (name === 'v1.pty.session_output') {
+          const ptyId = String(payload.session_id ?? '');
+          if (!relevantPtyIds.has(ptyId)) return;
+          const text = decodePty(payload.data);
+          if (!text) return;
+          const entry: TimelineEntry = {
+            id: `o:${rawEvent.id}`,
+            at: new Date().toISOString(),
+            category: 'terminal',
+            status: 'info',
+            level: 'info',
+            text: text.length > 600 ? `${text.slice(0, 600)}…` : text,
+            live: true,
+          };
+          setLiveEntries((previous) => [...previous, entry].slice(-MAX_LIVE_ENTRIES));
+          return;
+        }
+
+        if (
+          name.startsWith('v1.agent_work_item.') ||
+          name.startsWith('v1.agent_run.') ||
+          name.startsWith('v1.agent_mcp.') ||
+          name.startsWith('v1.agent_squad.')
+        ) {
+          const item = (payload.work_item ?? payload.squad ?? {}) as Record<string, unknown>;
+          const squadId = String(item.squad_id ?? item.id ?? payload.squad_id ?? '');
+          if (selectedId && (relevantSquadIds.has(squadId) || selected?.project_id === item.project_id)) {
+            void refreshDetail(selectedId);
+          }
+        }
+      }),
+    [refreshDetail, refreshSessions, relevantPtyIds, relevantSquadIds, selected, selectedId, subscribeRaw]
+  );
+
   const sessionProject = useMemo(
-    () => (selected?.project_id ? projects.find((p) => p.id === selected.project_id) ?? null : null),
+    () => (selected?.project_id ? projects.find((project) => project.id === selected.project_id) ?? null : null),
     [projects, selected]
   );
   const canPreview = previewUrl(sessionProject) !== null;
 
   const timeline = useMemo<TimelineEntry[]>(() => {
-    const persisted = (detail?.notifications ?? []).map(notificationToEntry);
-    // Persisted rows arrive newest-first; show the story oldest -> newest, then live.
-    return [...persisted.reverse(), ...liveEntries];
-  }, [detail, liveEntries]);
+    const persisted = [
+      ...(detail?.notifications ?? []).map(notificationToEntry),
+      ...(detail?.journal ?? []).map((event) => journalToEntry(event)),
+    ];
+    const byId = new Map<string, TimelineEntry>();
+    for (const entry of [...persisted, ...liveEntries]) byId.set(entry.id, entry);
+    return [...byId.values()]
+      .filter((entry) => viewMode === 'deep' || (entry.category !== 'terminal' && (
+        entry.category === 'notification' || SUMMARY_CATEGORIES.has(entry.category)
+      )))
+      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  }, [detail, liveEntries, viewMode]);
 
-  // Follow the stream as new entries land.
   useEffect(() => {
-    const el = timelineRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    const element = timelineRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
   }, [timeline.length]);
 
   const tokenTotal = useMemo(() => {
     let total = 0;
-    for (const s of detail?.squads ?? []) {
-      const usage = s.token_usage as { total_tokens?: number } | undefined;
-      total += usage?.total_tokens ?? 0;
+    for (const view of detail?.squads ?? []) {
+      total += Number((view.token_usage as { total_tokens?: number }).total_tokens ?? 0);
     }
     return total;
   }, [detail]);
 
+  const activeTools = useMemo(() => {
+    const values = new Set<string>();
+    for (const event of detail?.journal ?? []) {
+      if (event.mcp_server_id) values.add(`MCP · ${event.mcp_server_id}`);
+      else if (event.tool_name) values.add(event.tool_name);
+    }
+    return [...values].slice(0, 5);
+  }, [detail]);
+
+  useEffect(() => {
+    const count = detail?.squads.length ?? 0;
+    if (count === 0) setSquadsOpen(false);
+    else if (count > lastSquadCountRef.current) setSquadsOpen(true);
+    lastSquadCountRef.current = count;
+  }, [detail?.squads.length]);
+
+  const selectedSquadView = useMemo(
+    () => detail?.squads.find((view) => String(view.squad.id) === selectedSquadId) ?? null,
+    [detail, selectedSquadId]
+  );
+
+  const selectedWorker = useMemo(() => {
+    if (!selectedSquadView || !selectedWorkerId) return null;
+    const item = selectedSquadView.work_items.find((candidate) => String(candidate.id) === selectedWorkerId) ?? null;
+    const profile = selectedSquadView.worker_profiles.find((candidate) => candidate.work_item_id === selectedWorkerId) ?? null;
+    return item && profile ? { item, profile } : null;
+  }, [selectedSquadView, selectedWorkerId]);
+
+  useEffect(() => {
+    if (!selectedWorker || String(selectedWorker.item.status) !== 'running') return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [selectedWorker]);
+
+  const changeMode = (next: ViewMode) => {
+    setViewMode(next);
+    try {
+      window.localStorage.setItem('synapse.live-view-mode', next);
+    } catch {
+      // The preference remains valid for this window when storage is unavailable.
+    }
+  };
+
   return (
-    // One-window shell: fixed height, no page scroll — the panes below scroll.
-    <div className='flex h-full min-h-0 flex-col gap-4'>
+    <div className='flex h-full min-h-0 flex-col gap-4 overflow-hidden'>
       <PageHeader
         title='Live'
-        subtitle='Every AI that connected to Synapse, and what it is doing right now.'
+        subtitle='Plans, reasoning summaries, actions, squads, and MCP use from every connected AI.'
         action={
-          <button
-            type='button'
-            onClick={() => void refreshSessions()}
-            className='inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:border-primary'
-          >
-            <RefreshCw className='h-3.5 w-3.5' aria-hidden='true' /> Refresh
-          </button>
+          <div className='flex items-center gap-2'>
+            <div className='inline-flex rounded-md border border-border p-0.5' aria-label='Live View detail mode'>
+              <button
+                type='button'
+                onClick={() => changeMode('deep')}
+                aria-pressed={viewMode === 'deep'}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition',
+                  viewMode === 'deep' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <BrainCircuit className='h-3.5 w-3.5' aria-hidden='true' /> Deep
+              </button>
+              <button
+                type='button'
+                onClick={() => changeMode('summary')}
+                aria-pressed={viewMode === 'summary'}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition',
+                  viewMode === 'summary' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Eye className='h-3.5 w-3.5' aria-hidden='true' /> Summary
+              </button>
+            </div>
+            <button
+              type='button'
+              onClick={() => void refreshSessions()}
+              className='inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:border-primary'
+            >
+              <RefreshCw className='h-3.5 w-3.5' aria-hidden='true' /> Refresh
+            </button>
+          </div>
         }
       />
 
-      <div className='flex min-h-0 flex-1 flex-col gap-4 lg:flex-row'>
-        {/* Session rail — its own scroll container. */}
-        <Card className='flex min-h-0 shrink-0 flex-col overflow-hidden p-0 lg:w-72'>
+      <div className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row'>
+        <Card className='flex max-h-48 min-h-0 shrink-0 flex-col overflow-hidden p-0 lg:max-h-none lg:w-64'>
           <div className='shrink-0 border-b border-border px-3 py-2'>
-            <p className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-              Sessions
-            </p>
+            <p className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Sessions</p>
           </div>
           <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto'>
             {sessions === null ? (
@@ -237,51 +579,47 @@ export function LiveViewPage(): JSX.Element {
                 <Loader2 className='h-3.5 w-3.5 animate-spin' aria-hidden='true' /> Loading sessions…
               </p>
             ) : sessionsError && sessions.length === 0 ? (
-              <p role='alert' className='px-3 py-4 text-xs text-destructive'>
-                {sessionsError}
-              </p>
+              <p role='alert' className='px-3 py-4 text-xs text-destructive'>{sessionsError}</p>
             ) : sessions.length === 0 ? (
               <div className='px-3 py-6 text-center'>
                 <Radio className='mx-auto h-5 w-5 text-muted-foreground' aria-hidden='true' />
                 <p className='mt-2 text-xs font-medium'>No AI sessions yet</p>
-                <p className='mt-1 text-[11px] text-muted-foreground'>
-                  When an AI connects to Synapse it appears here with its own number.
-                </p>
+                <p className='mt-1 text-[11px] text-muted-foreground'>AIs appear here when they connect to Synapse.</p>
               </div>
             ) : (
               <ul className='divide-y divide-border'>
-                {sessions.map((s) => (
-                  <li key={s.id}>
+                {displayedSessions.map((session) => (
+                  <li key={session.id}>
                     <button
                       type='button'
-                      onClick={() => setSelectedId(s.id)}
+                      onClick={() => setSelectedId(session.id)}
                       className={cn(
                         'w-full px-3 py-2.5 text-left transition hover:bg-accent/40',
-                        s.id === selectedId && 'bg-accent/60'
+                        session.id === selectedId && 'bg-accent/60'
                       )}
                     >
                       <div className='flex items-center gap-2'>
                         <span
                           className={cn(
                             'h-2 w-2 shrink-0 rounded-full',
-                            LEVEL_DOT[s.connection_level] ?? LEVEL_DOT.info,
-                            s.status === 'active' && !s.stale && 'animate-pulse'
+                            LEVEL_DOT[session.connection_level] ?? LEVEL_DOT.info,
+                            session.status === 'active' && !session.stale && 'animate-pulse'
                           )}
+                          title={connectionHelp(session).title}
                           aria-hidden='true'
                         />
                         <span className='font-mono text-xs text-muted-foreground'>
-                          #{String(s.seq).padStart(3, '0')}
+                          #{String(session.seq).padStart(3, '0')}
                         </span>
-                        <span className='truncate text-sm font-medium'>
-                          {s.agent_label || s.runtime_id || 'AI'}
-                        </span>
+                        <span className='truncate text-sm font-medium'>{session.agent_label || session.runtime_id || 'AI'}</span>
                       </div>
                       <p className='mt-0.5 truncate text-[11px] text-muted-foreground'>
-                        {s.status}
-                        {s.stale ? ' · stale' : ''} · {relative(s.last_heartbeat_at)}
+                        {session.status}{session.stale ? ' · stale' : ''} · {relative(session.last_heartbeat_at)}
                       </p>
-                      {s.task && (
-                        <p className='mt-0.5 truncate text-[11px] text-muted-foreground'>{s.task}</p>
+                      {(session.last_intent || session.task) && (
+                        <p className='mt-1 line-clamp-2 text-[11px] text-foreground/75'>
+                          {session.last_intent || session.task}
+                        </p>
                       )}
                     </button>
                   </li>
@@ -289,97 +627,175 @@ export function LiveViewPage(): JSX.Element {
               </ul>
             )}
           </div>
+          {(sessions?.length ?? 0) > 5 && (
+            <button
+              type='button'
+              onClick={() => setShowAllSessions((value) => !value)}
+              className='shrink-0 border-t border-border px-3 py-2 text-left text-xs text-primary transition hover:bg-accent/40'
+            >
+              {showAllSessions ? 'Show recent sessions' : `Show more sessions (${(sessions?.length ?? 0) - 5})`}
+            </button>
+          )}
         </Card>
 
-        {/* Timeline — the other independent scroll container. */}
         <Card className='flex min-h-0 flex-1 flex-col overflow-hidden p-0'>
           {selected && (
-            <div className='flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5'>
-              <div className='min-w-0'>
-                <p className='truncate text-sm font-semibold'>
-                  Session #{String(selected.seq).padStart(3, '0')} ·{' '}
-                  {selected.agent_label || selected.runtime_id}
-                </p>
-                <p className='truncate text-[11px] text-muted-foreground'>
-                  {selected.connection_code} · registered {relative(selected.registered_at)}
-                  {selected.project_id ? ` · ${selected.project_id}` : ''}
-                </p>
+            <div className='shrink-0 border-b border-border'>
+              <div className='flex flex-wrap items-center justify-between gap-2 px-4 py-2.5'>
+                <div className='min-w-0'>
+                  <p className='truncate text-sm font-semibold'>
+                    Session #{String(selected.seq).padStart(3, '0')} · {selected.agent_label || selected.runtime_id}
+                  </p>
+                  <div className='mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground'>
+                    <button
+                      type='button'
+                      onClick={() => setStatusHelp(connectionHelp(detail?.session ?? selected))}
+                      title={connectionHelp(detail?.session ?? selected).meaning}
+                      className={cn(
+                        'rounded-full border px-1.5 py-0.5 uppercase tracking-wide',
+                        selected.connection_level === 'green' && 'border-status-launched/40 bg-status-launched/10 text-status-launched',
+                        selected.connection_level === 'yellow' && 'border-status-launching/40 bg-status-launching/10 text-status-launching',
+                        selected.connection_level === 'red' && 'border-status-error/40 bg-status-error/10 text-status-error'
+                      )}
+                    >
+                      {selected.connection_level} connection
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => setStatusHelp(workStatusHelp(detail?.session ?? selected, detail))}
+                      title={workStatusHelp(detail?.session ?? selected, detail).meaning}
+                      className={cn(
+                        'rounded-full border px-1.5 py-0.5 uppercase tracking-wide',
+                        selected.status === 'active' && 'border-primary/40 bg-primary/10 text-primary',
+                        selected.status === 'blocked' && 'border-status-launching/40 bg-status-launching/10 text-status-launching',
+                        !['active', 'blocked'].includes(selected.status) && 'border-border bg-muted/40 text-muted-foreground'
+                      )}
+                    >
+                      {selected.status}
+                    </button>
+                    <span>registered {relative(selected.registered_at)}{selected.project_id ? ` · ${selected.project_id}` : ''}</span>
+                  </div>
+                </div>
+                <div className='flex items-center gap-2 text-[11px] text-muted-foreground'>
+                  {tokenTotal > 0 && <span className='font-mono'>{tokenTotal.toLocaleString()} tokens</span>}
+                  {(detail?.squads.length ?? 0) > 0 && (
+                    <button
+                      type='button'
+                      onClick={() => setSquadsOpen((value) => !value)}
+                      aria-pressed={squadsOpen}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary',
+                        squadsOpen && 'border-primary text-foreground'
+                      )}
+                    >
+                      <Users className='h-3.5 w-3.5' aria-hidden='true' /> Squads ({detail?.squads.length ?? 0})
+                    </button>
+                  )}
+                  {canPreview && (
+                    <button
+                      type='button'
+                      onClick={() => setPreviewOpen((value) => !value)}
+                      aria-pressed={previewOpen}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary',
+                        previewOpen && 'border-primary text-foreground'
+                      )}
+                    >
+                      <MonitorPlay className='h-3.5 w-3.5' aria-hidden='true' /> Preview
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className='flex items-center gap-3 text-[11px] text-muted-foreground'>
-                {tokenTotal > 0 && (
-                  <span className='font-mono' title='Tokens recorded for this session’s squads'>
-                    {tokenTotal.toLocaleString()} tokens
-                  </span>
+              <div className='border-t border-border/60 bg-muted/20 px-4 py-2'>
+                <div className='flex items-start gap-2'>
+                  <Gauge className='mt-0.5 h-3.5 w-3.5 shrink-0 text-primary' aria-hidden='true' />
+                  <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Now</p>
+                    <p className='truncate text-xs'>{detail?.session.last_intent || selected.last_intent || selected.task || 'Waiting for the next status update.'}</p>
+                  </div>
+                </div>
+                {activeTools.length > 0 && (
+                  <div className='mt-2 flex flex-wrap gap-1.5'>
+                    {activeTools.map((tool) => (
+                      <span key={tool} className='rounded-full border border-border bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground'>
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
                 )}
-                {liveEntries.length > 0 && (
-                  <span className='inline-flex items-center gap-1 text-primary'>
-                    <Activity className='h-3.5 w-3.5 animate-pulse' aria-hidden='true' /> live
-                  </span>
-                )}
-                {canPreview && (
-                  <button
-                    type='button'
-                    onClick={() => setPreviewOpen((v) => !v)}
-                    aria-pressed={previewOpen}
-                    title={`Preview ${sessionProject?.name ?? 'the app'} while the AI builds it`}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 transition hover:border-primary hover:text-foreground',
-                      previewOpen && 'border-primary text-foreground'
-                    )}
-                  >
-                    <MonitorPlay className='h-3.5 w-3.5' aria-hidden='true' />
-                    Preview
-                  </button>
-                )}
+              </div>
+              <div className='border-t border-border/60 px-4 py-1.5 text-[10px] text-muted-foreground'>
+                {viewMode === 'deep'
+                  ? 'Deep View is on by default: rich deliberate summaries and receipts are shown. Private chain-of-thought and secrets are never recorded.'
+                  : 'Summary View hides detailed plans, reasoning summaries, ideas, evidence, tools, and terminal output.'}
               </div>
             </div>
           )}
 
           <div ref={timelineRef} className='scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-3'>
             {!selected ? (
-              <p className='py-10 text-center text-sm text-muted-foreground'>
-                Select a session to watch what it is doing.
-              </p>
+              <p className='py-10 text-center text-sm text-muted-foreground'>Select a session to watch what it is doing.</p>
             ) : detailLoading && timeline.length === 0 ? (
               <p className='flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground'>
                 <Loader2 className='h-4 w-4 animate-spin' aria-hidden='true' /> Loading this session…
               </p>
             ) : timeline.length === 0 ? (
               <div className='py-10 text-center'>
-                <p className='text-sm font-medium'>Nothing recorded yet</p>
-                <p className='mt-1 text-xs text-muted-foreground'>
-                  Milestones and live output from this AI will stream in here.
-                </p>
+                <Bot className='mx-auto h-5 w-5 text-muted-foreground' aria-hidden='true' />
+                <p className='mt-2 text-sm font-medium'>Nothing recorded yet</p>
+                <p className='mt-1 text-xs text-muted-foreground'>Structured milestones from this AI will stream in here.</p>
               </div>
             ) : (
-              <ol className='flex flex-col gap-2'>
+              <ol className='flex flex-col gap-2.5'>
                 {timeline.map((entry) => (
-                  <li key={entry.id} className='flex gap-2'>
-                    <span className='mt-1 shrink-0 font-mono text-[10px] text-muted-foreground'>
-                      {shortTime(entry.at)}
-                    </span>
-                    <span
-                      className={cn('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', LEVEL_DOT[entry.level] ?? LEVEL_DOT.info)}
-                      aria-hidden='true'
-                    />
-                    <div className='min-w-0 flex-1'>
-                      <p
-                        className={cn(
-                          'text-sm',
-                          entry.kind === 'pty.output' && 'whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground'
+                  <li key={entry.id} className='flex flex-wrap gap-2.5 sm:flex-nowrap'>
+                    <span className='mt-1 shrink-0 font-mono text-[10px] text-muted-foreground'>{shortTime(entry.at)}</span>
+                    <div className={cn('mt-0.5 shrink-0 text-muted-foreground', entry.live && 'text-primary')}>
+                      <CategoryIcon category={entry.category} toolName={entry.toolName} />
+                    </div>
+                    <button
+                      type='button'
+                      onClick={() => setExpandedEntryId((current) => current === entry.id ? null : entry.id)}
+                      aria-expanded={expandedEntryId === entry.id}
+                      className='min-w-0 basis-full rounded-md border border-border/70 bg-muted/10 px-3 py-2 text-left transition hover:border-primary/50 hover:bg-muted/20 sm:flex-1 sm:basis-auto'
+                    >
+                      <div className='flex flex-wrap items-center gap-1.5'>
+                        <span className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>{entry.category}</span>
+                        <span
+                          title={`This receipt is ${entry.status}. Click the receipt for its recorded reason and evidence.`}
+                          className={cn('rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide', STATUS_STYLE[entry.status])}
+                        >
+                          {entry.status}
+                        </span>
+                        {entry.authority && entry.authority !== 'none' && (
+                          <span className='rounded-full border border-border px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground'>
+                            authority: {entry.authority}
+                          </span>
                         )}
-                      >
-                        {entry.kind === 'pty.output' && (
-                          <Terminal className='mr-1 inline h-3 w-3' aria-hidden='true' />
-                        )}
+                        {entry.live && <span className='text-[9px] uppercase tracking-wide text-primary'>live</span>}
+                      </div>
+                      <p className={cn('mt-1 break-words text-sm', entry.category === 'terminal' && 'whitespace-pre-wrap font-mono text-xs text-muted-foreground')}>
                         {entry.text}
                       </p>
                       {entry.detail && (
-                        <p className='mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground'>
+                        <p className='mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground'>
                           {renderInlineBold(entry.detail)}
                         </p>
                       )}
-                    </div>
+                      {(entry.mcpServerId || entry.toolName) && (
+                        <p className='mt-1.5 text-[10px] text-muted-foreground'>
+                          {entry.mcpServerId ? `MCP server: ${entry.mcpServerId}` : `Tool: ${entry.toolName}`}
+                        </p>
+                      )}
+                      {expandedEntryId === entry.id && (
+                        <div className='mt-2 grid gap-1 border-t border-border/70 pt-2 text-[10px] text-muted-foreground sm:grid-cols-2'>
+                          <span>Recorded: {formatLocal(entry.at, 'long')}</span>
+                          <span>Source: {entry.category === 'notification' ? 'Synapse notification' : 'operator journal'}</span>
+                          <span>Status: {entry.status}</span>
+                          <span>Authority: {entry.authority ?? 'none'}</span>
+                        </div>
+                      )}
+                    </button>
                   </li>
                 ))}
               </ol>
@@ -387,13 +803,271 @@ export function LiveViewPage(): JSX.Element {
           </div>
         </Card>
 
-        {/* Preview pane -- opens beside the timeline, closes away entirely (one-window). */}
+        {squadsOpen && selected && (detail?.squads.length ?? 0) > 0 && (
+          <Card className='fixed inset-4 z-40 flex min-h-0 flex-col overflow-hidden p-0 shadow-xl lg:static lg:z-auto lg:w-80 lg:shadow-none'>
+            <div className='shrink-0 border-b border-border px-3 py-2'>
+              <div className='flex items-center justify-between'>
+                <div className='flex items-center gap-1.5'>
+                  {(selectedSquadView || selectedWorker) && (
+                    <button
+                      type='button'
+                      aria-label={selectedWorker ? 'Back to squad' : 'Back to all squads'}
+                      onClick={() => {
+                        if (selectedWorker) setSelectedWorkerId(null);
+                        else setSelectedSquadId(null);
+                      }}
+                      className='rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground'
+                    >
+                      <ArrowLeft className='h-3.5 w-3.5' aria-hidden='true' />
+                    </button>
+                  )}
+                  <p className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    {selectedWorker ? 'Worker profile' : selectedSquadView ? 'Squad detail' : 'AI squads'}
+                  </p>
+                </div>
+                {!selectedSquadView && !selectedWorker && (
+                  <span className='text-[10px] text-muted-foreground'>{detail?.squads.length ?? 0} total</span>
+                )}
+                <button
+                  type='button'
+                  onClick={() => setSquadsOpen(false)}
+                  aria-label='Collapse squad inspector'
+                  className='rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground'
+                >
+                  <X className='h-3.5 w-3.5' aria-hidden='true' />
+                </button>
+              </div>
+            </div>
+            <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3'>
+              {selectedWorker ? (
+                <div className='space-y-3'>
+                  <div className='rounded-md border border-primary/30 bg-primary/5 p-3 text-center'>
+                    <div className='mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary'>
+                      <Bot className='h-5 w-5' aria-hidden='true' />
+                    </div>
+                    <p className='mt-2 text-sm font-semibold'>
+                      {String(selectedWorker.profile.role?.name ?? selectedWorker.item.assigned_role_id ?? 'Unassigned worker')}
+                    </p>
+                    <p className='mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground'>
+                      {String(selectedWorker.profile.role?.role_tier ?? 'worker')} · {String(selectedWorker.item.status ?? 'queued')}
+                    </p>
+                  </div>
+
+                  <div className='grid grid-cols-2 gap-2'>
+                    <div className='rounded-md border border-border bg-muted/10 p-2'>
+                      <p className='flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground'>
+                        <Cpu className='h-3 w-3' aria-hidden='true' /> Runtime
+                      </p>
+                      <p className='mt-1 text-xs font-medium'>{selectedWorker.profile.runtime || 'Not launched'}</p>
+                    </div>
+                    <div className='rounded-md border border-border bg-muted/10 p-2'>
+                      <p className='flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground'>
+                        <Clock3 className='h-3 w-3' aria-hidden='true' /> In status
+                      </p>
+                      <p className='mt-1 font-mono text-xs'>
+                        {elapsedSince(selectedWorker.profile.status_changed_at, clock)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <section className='rounded-md border border-border bg-muted/10 p-2.5'>
+                    <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Job</p>
+                    <p className='mt-1 text-xs font-medium'>{String(selectedWorker.item.title ?? 'Work item')}</p>
+                    {Boolean(selectedWorker.item.instructions_md) && (
+                      <p className='mt-1.5 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground'>
+                        {String(selectedWorker.item.instructions_md)}
+                      </p>
+                    )}
+                  </section>
+
+                  <section className='rounded-md border border-border bg-muted/10 p-2.5'>
+                    <p className='flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
+                      <Sparkles className='h-3 w-3' aria-hidden='true' /> Personality
+                    </p>
+                    <p className='mt-1 text-xs font-medium'>
+                      {String(selectedWorker.profile.personality?.name ?? selectedWorker.item.personality_id ?? 'Balanced default')}
+                    </p>
+                    {Boolean(selectedWorker.profile.personality?.blurb) && (
+                      <p className='mt-1 text-[11px] text-muted-foreground'>{String(selectedWorker.profile.personality?.blurb)}</p>
+                    )}
+                    {Array.isArray(selectedWorker.profile.personality?.traits) && (
+                      <div className='mt-2 flex flex-wrap gap-1'>
+                        {(selectedWorker.profile.personality.traits as unknown[]).map((trait) => (
+                          <span key={String(trait)} className='rounded-full border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground'>
+                            {String(trait)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className='rounded-md border border-border bg-muted/10 p-2.5'>
+                    <div className='flex items-center justify-between gap-2'>
+                      <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Tokens</p>
+                      <span className='font-mono text-xs'>{selectedWorker.profile.token_usage.total_tokens.toLocaleString()}</span>
+                    </div>
+                    <div className='mt-1 grid grid-cols-2 gap-2 text-[10px] text-muted-foreground'>
+                      <span>Input {selectedWorker.profile.token_usage.input_tokens.toLocaleString()}</span>
+                      <span>Output {selectedWorker.profile.token_usage.output_tokens.toLocaleString()}</span>
+                    </div>
+                  </section>
+
+                  <section className='rounded-md border border-border bg-muted/10 p-2.5 text-[10px] text-muted-foreground'>
+                    <p>PTY session: <span className='font-mono text-foreground'>{selectedWorker.profile.pty_session_id ?? 'not started'}</span></p>
+                    <p className='mt-1'>Live session: <span className='font-mono text-foreground'>
+                      {selectedWorker.profile.coordination_session
+                        ? `#${String(selectedWorker.profile.coordination_session.seq).padStart(3, '0')}`
+                        : 'not registered'}
+                    </span></p>
+                    <p className='mt-1'>MCP scope: <span className='text-foreground'>
+                      {Array.isArray(selectedWorker.profile.role?.mcp_server_ids)
+                        ? `${(selectedWorker.profile.role?.mcp_server_ids as unknown[]).length} selected`
+                        : 'all enabled servers'}
+                    </span></p>
+                  </section>
+                </div>
+              ) : selectedSquadView ? (
+                <div className='space-y-3'>
+                  <section className='rounded-md border border-primary/30 bg-primary/5 p-3'>
+                    <div className='flex items-start justify-between gap-2'>
+                      <div className='min-w-0'>
+                        <p className='text-sm font-semibold'>{String(selectedSquadView.squad.name ?? 'Unnamed squad')}</p>
+                        <p className='mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground'>
+                          {String(selectedSquadView.squad.status ?? 'active')} · {selectedSquadView.work_items.length} workers
+                        </p>
+                      </div>
+                      <div className='flex h-8 w-8 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary'>
+                        <Users className='h-4 w-4' aria-hidden='true' />
+                      </div>
+                    </div>
+                    {Boolean(selectedSquadView.squad.goal_md) && (
+                      <p className='mt-2 text-[11px] leading-relaxed text-muted-foreground'>{String(selectedSquadView.squad.goal_md)}</p>
+                    )}
+                  </section>
+
+                  <div className='flex items-center justify-center gap-1 py-1' aria-label='Squad worker topology'>
+                    {selectedSquadView.worker_profiles.slice(0, 8).map((profile, index) => (
+                      <div key={profile.work_item_id} className='flex items-center gap-1'>
+                        {index > 0 && <span className='h-px w-2 bg-border' aria-hidden='true' />}
+                        <span className='flex h-7 w-7 items-center justify-center rounded-full border border-border bg-muted/30' title={String(profile.role?.name ?? 'Worker')}>
+                          {profile.role?.role_tier === 'boss' ? <Sparkles className='h-3.5 w-3.5 text-primary' /> : <Bot className='h-3.5 w-3.5 text-muted-foreground' />}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className='space-y-2'>
+                    {selectedSquadView.work_items.map((item) => {
+                      const profile = selectedSquadView.worker_profiles.find((candidate) => candidate.work_item_id === String(item.id));
+                      return (
+                        <button
+                          key={String(item.id)}
+                          type='button'
+                          onClick={() => setSelectedWorkerId(String(item.id))}
+                          className='flex w-full items-start gap-2 rounded-md border border-border bg-muted/10 p-2.5 text-left transition hover:border-primary/50 hover:bg-muted/20'
+                        >
+                          <span className={cn(
+                            'mt-1 h-2 w-2 shrink-0 rounded-full',
+                            item.status === 'running' ? 'animate-pulse bg-primary' :
+                              item.status === 'blocked' ? 'bg-status-launching' :
+                                item.status === 'completed' ? 'bg-status-launched' : 'bg-status-idle'
+                          )} aria-hidden='true' />
+                          <div className='min-w-0 flex-1'>
+                            <p className='truncate text-xs font-medium'>{String(item.title ?? 'Work item')}</p>
+                            <p className='mt-0.5 truncate text-[10px] text-muted-foreground'>
+                              {String(profile?.role?.name ?? item.assigned_role_id ?? 'Unassigned')} · {String(item.status ?? 'queued')}
+                            </p>
+                            <p className='mt-0.5 truncate text-[10px] text-muted-foreground'>
+                              {profile?.runtime ?? 'not launched'} · {String(profile?.personality?.name ?? item.personality_id ?? 'balanced')}
+                            </p>
+                          </div>
+                          <ChevronRight className='mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground' aria-hidden='true' />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (detail?.squads.length ?? 0) === 0 ? (
+                <div className='py-8 text-center'>
+                  <Users className='mx-auto h-5 w-5 text-muted-foreground' aria-hidden='true' />
+                  <p className='mt-2 text-xs font-medium'>No squad on this project yet</p>
+                  <p className='mt-1 text-[11px] text-muted-foreground'>When this AI creates or launches one, its roles and work appear here live.</p>
+                </div>
+              ) : (
+                <div className='space-y-3'>
+                  {detail?.squads.map((view) => {
+                    const name = String(view.squad.name ?? 'Unnamed squad');
+                    const goal = String(view.squad.goal_md ?? '');
+                    const status = String(view.squad.status ?? 'active');
+                    const tokens = Number((view.token_usage as { total_tokens?: number }).total_tokens ?? 0);
+                    return (
+                      <button
+                        key={String(view.squad.id)}
+                        type='button'
+                        onClick={() => setSelectedSquadId(String(view.squad.id))}
+                        className='w-full rounded-md border border-border bg-muted/10 p-2.5 text-left transition hover:border-primary/50 hover:bg-muted/20'
+                      >
+                        <div className='flex items-start justify-between gap-2'>
+                          <div className='min-w-0'>
+                            <p className='truncate text-xs font-semibold'>{name}</p>
+                            <p className='text-[10px] text-muted-foreground'>{status}{tokens ? ` · ${tokens.toLocaleString()} tokens` : ''}</p>
+                          </div>
+                          <Users className='h-4 w-4 shrink-0 text-primary' aria-hidden='true' />
+                        </div>
+                        {goal && <p className='mt-2 line-clamp-3 text-[11px] text-muted-foreground'>{goal}</p>}
+                        <div className='mt-2 flex items-center justify-between text-[10px] text-muted-foreground'>
+                          <span>{view.work_items.length} worker{view.work_items.length === 1 ? '' : 's'}</span>
+                          <span className='inline-flex items-center gap-0.5 text-primary'>Explore <ChevronRight className='h-3 w-3' aria-hidden='true' /></span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
         {previewOpen && canPreview && sessionProject && (
-          <Card className='flex min-h-0 flex-col overflow-hidden p-0 lg:w-[28rem] xl:w-[34rem]'>
+          <Card className='fixed inset-4 z-40 flex min-h-0 flex-col overflow-hidden p-0 shadow-xl lg:static lg:z-auto lg:w-[28rem] lg:shadow-none xl:w-[34rem]'>
             <AppPreview project={sessionProject} onClose={() => setPreviewOpen(false)} />
           </Card>
         )}
       </div>
+
+      <Modal
+        open={statusHelp !== null}
+        onClose={() => setStatusHelp(null)}
+        labelledBy='live-status-help-title'
+        className='max-w-md'
+      >
+        {statusHelp && (
+          <>
+            <div>
+              <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Status explained</p>
+              <h2 id='live-status-help-title' className='mt-1 text-lg font-semibold'>{statusHelp.title}</h2>
+              <p className='mt-1 font-mono text-[10px] text-muted-foreground'>{statusHelp.code}</p>
+            </div>
+            <section className='rounded-md border border-border bg-muted/10 p-3'>
+              <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>What it means</p>
+              <p className='mt-1 text-sm'>{statusHelp.meaning}</p>
+            </section>
+            <section className='rounded-md border border-border bg-muted/10 p-3'>
+              <p className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>Why this session has it</p>
+              <p className='mt-1 whitespace-pre-wrap text-sm'>{statusHelp.reason}</p>
+            </section>
+            {statusHelp.remedy && (
+              <section className='rounded-md border border-primary/30 bg-primary/5 p-3'>
+                <p className='text-[10px] font-semibold uppercase tracking-wide text-primary'>What you can do</p>
+                <p className='mt-1 text-sm'>{statusHelp.remedy}</p>
+              </section>
+            )}
+            <div className='flex justify-end'>
+              <Button type='button' onClick={() => setStatusHelp(null)}>Got it</Button>
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

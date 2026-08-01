@@ -238,6 +238,14 @@ export function McpServerBrowser(): JSX.Element {
                         <Zap className='h-3.5 w-3.5' /> Autorun
                       </button>
                     )}
+                    {!isHttp && s?.enabled && (
+                      <span
+                        className='inline-flex items-center gap-1 rounded-md border border-status-launched/40 bg-status-launched/10 px-2 py-1 text-xs text-status-launched'
+                        title='Synapse attaches an isolated copy to each eligible AI worker; no shared background process is required.'
+                      >
+                        <Zap className='h-3.5 w-3.5' /> Auto-attached · starts per AI
+                      </span>
+                    )}
                     {isWarden && s && (
                       <>
                         <Button

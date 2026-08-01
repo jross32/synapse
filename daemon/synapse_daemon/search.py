@@ -1,15 +1,10 @@
-"""Universal search index (Contract #21).
+"""Universal-search token helpers (Contract #21).
 
-Every searchable entity contributes a list of lowercase tokens to ``search_index``.
-The UI palette (Ctrl+K) queries ``GET /api/v1/search?q=<query>``, which:
-
-1. Lower-cases the query and splits on whitespace.
-2. Looks up each query token in ``search_index`` (prefix match).
-3. Aggregates hits per entity with token weights.
-4. Returns the top N by score.
-
-This module provides the tokeniser + a base class for indexable entities.
-Actual SQLite query helpers land in :mod:`synapse_daemon.storage` (Milestone B).
+Every searchable entity contributes lowercase tokens. ``GET /api/v1/search``
+currently scores projects, tools, MCP servers, actions, and settings directly
+from their live sources of truth so newly discovered MCPs appear immediately.
+The token helpers stay shared with future persisted-index optimisations; the
+HTTP route and result schema live in :mod:`synapse_daemon.routes_search`.
 """
 
 from __future__ import annotations

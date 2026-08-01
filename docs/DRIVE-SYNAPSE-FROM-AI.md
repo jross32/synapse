@@ -52,9 +52,24 @@ When you register (`POST /api/v1/coordination/sessions`) Synapse gives you a **s
 `connection_level`, and `connection_code` — read them back to know how you look to the operator.
 
 The human sees this immediately: a **notification** ("Session #007 — Claude connected"), a bell badge, and
-a **Live** tab where they watch your milestones and terminal output stream in — plus a **Preview** of the
-running app you're building. So: use meaningful `agent_label` + `task` values on register, and file real
-progress (handoffs, proposals) — that's what shows up.
+a **Live** tab. Deep View (the default) shows current focus, detailed deliberate reasoning summaries,
+decisions, searches/findings, action/evidence receipts, MCP/tool use, squads, workers, token evidence, and
+correlated terminal output; Summary View keeps only the major story. So use meaningful `agent_label`, `task`,
+and heartbeat `last_intent` values.
+
+After registration, add `X-Synapse-Session: <session id>` to other Synapse API calls. The daemon will record
+safe method/result receipts automatically. Report richer boundaries explicitly:
+
+```bash
+curl -s "$SYN/activity/sessions/$SESSION_ID/events" -X POST \
+  -H "X-Synapse-Token: $TOK" -H 'Content-Type: application/json' \
+  -d '{"category":"decision","status":"success","title":"Kept Reflex per-worker",\
+"summary_md":"A shared fixed-port controller could create stale ownership; isolated stdio children preserve automatic availability without cross-AI contention.",\
+"authority":"none"}'
+```
+
+Deep View is intentionally rich, but it is a deliberate operator summary—not private hidden model
+chain-of-thought. Never place credentials, auth tokens, secret values, or raw sensitive tool output in it.
 
 Read the same picture yourself:
 

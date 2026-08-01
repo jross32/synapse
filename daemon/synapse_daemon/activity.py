@@ -22,6 +22,7 @@ import json
 import secrets
 import sqlite3
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -54,6 +55,59 @@ class ActivityNotification(BaseModel):
     read_at: datetime | None = None
 
 
+class ActivityJournalCategory(str, Enum):
+    STATUS = "status"
+    PLAN = "plan"
+    REASONING = "reasoning"
+    IDEA = "idea"
+    DECISION = "decision"
+    ACTION = "action"
+    EVIDENCE = "evidence"
+    SEARCH = "search"
+    BLOCKER = "blocker"
+    SQUAD = "squad"
+    MCP = "mcp"
+    TOOL = "tool"
+    RESULT = "result"
+
+
+class ActivityJournalStatus(str, Enum):
+    PLANNED = "planned"
+    ACTIVE = "active"
+    SUCCESS = "success"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+    INFO = "info"
+
+
+class ActivityAuthority(str, Enum):
+    NONE = "none"
+    OBSERVE = "observe"
+    CONTROL = "control"
+    EXECUTE = "execute"
+
+
+class ActivityJournalCreate(BaseModel):
+    category: ActivityJournalCategory
+    status: ActivityJournalStatus = ActivityJournalStatus.INFO
+    title: str = Field(min_length=1, max_length=160)
+    # Deep View can carry a substantial deliberate reasoning summary, while
+    # remaining bounded and explicitly unsuitable for secrets/raw hidden CoT.
+    summary_md: str = Field(default="", max_length=8000)
+    squad_id: str | None = Field(default=None, max_length=64)
+    work_item_id: str | None = Field(default=None, max_length=64)
+    mcp_server_id: str | None = Field(default=None, max_length=100)
+    tool_name: str | None = Field(default=None, max_length=160)
+    authority: ActivityAuthority = ActivityAuthority.NONE
+
+
+class ActivityJournalEvent(ActivityJournalCreate):
+    id: str
+    session_id: str | None = None
+    source: str = "agent"
+    created_at: datetime
+
+
 def _new_id() -> str:
     return secrets.token_hex(6)
 
@@ -82,6 +136,24 @@ def _row(row: sqlite3.Row) -> ActivityNotification:
         token_usage=token_usage,
         created_at=from_iso(row["created_at"]),
         read_at=from_iso(row["read_at"]) if row["read_at"] else None,
+    )
+
+
+def _journal_row(row: sqlite3.Row) -> ActivityJournalEvent:
+    return ActivityJournalEvent(
+        id=row["id"],
+        session_id=row["session_id"],
+        category=row["category"],
+        status=row["status"],
+        title=row["title"],
+        summary_md=row["summary_md"] or "",
+        squad_id=row["squad_id"],
+        work_item_id=row["work_item_id"],
+        mcp_server_id=row["mcp_server_id"],
+        tool_name=row["tool_name"],
+        authority=row["authority"] or "none",
+        source=row["source"] or "agent",
+        created_at=from_iso(row["created_at"]),
     )
 
 
@@ -167,6 +239,71 @@ def mark_all_read(conn: sqlite3.Connection) -> int:
         (to_iso(utc_now()),),
     )
     return cur.rowcount
+
+
+def create_journal_event(
+    conn: sqlite3.Connection,
+    payload: ActivityJournalCreate,
+    *,
+    session_id: str | None,
+    source: str = "agent",
+) -> ActivityJournalEvent:
+    """Persist one concise, operator-facing receipt.
+
+    Callers must not put secrets or hidden chain-of-thought here.  The strict
+    fields intentionally make the journal less tempting than an arbitrary log.
+    """
+
+    event_id = _new_id()
+    conn.execute(
+        "INSERT INTO activity_journal "
+        "(id, session_id, category, status, title, summary_md, squad_id, work_item_id, "
+        "mcp_server_id, tool_name, authority, source, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            event_id,
+            session_id,
+            payload.category.value,
+            payload.status.value,
+            payload.title.strip(),
+            payload.summary_md.strip(),
+            payload.squad_id,
+            payload.work_item_id,
+            payload.mcp_server_id,
+            payload.tool_name,
+            payload.authority.value,
+            source,
+            to_iso(utc_now()),
+        ),
+    )
+    row = conn.execute("SELECT * FROM activity_journal WHERE id = ?", (event_id,)).fetchone()
+    return _journal_row(row)
+
+
+def list_journal_events(
+    conn: sqlite3.Connection,
+    *,
+    session_id: str | None = None,
+    squad_ids: list[str] | None = None,
+    limit: int = 300,
+) -> list[ActivityJournalEvent]:
+    clauses: list[str] = []
+    args: list[Any] = []
+    if session_id is not None:
+        clauses.append("session_id = ?")
+        args.append(session_id)
+    clean_squad_ids = [item for item in (squad_ids or []) if item]
+    if clean_squad_ids:
+        placeholders = ",".join("?" for _ in clean_squad_ids)
+        clauses.append(f"squad_id IN ({placeholders})")  # noqa: S608 -- placeholders only
+        args.extend(clean_squad_ids)
+    where = f"WHERE {' OR '.join(clauses)}" if clauses else ""
+    args.append(max(1, min(int(limit), 500)))
+    rows = conn.execute(
+        f"SELECT * FROM activity_journal {where} ORDER BY created_at DESC, id DESC LIMIT ?",  # noqa: S608
+        args,
+    ).fetchall()
+    return [_journal_row(row) for row in rows]
 
 
 # ── the projector ───────────────────────────────────────────────────────────
@@ -286,6 +423,102 @@ def project_event(conn: sqlite3.Connection, name: str, payload: dict[str, Any]) 
     return None
 
 
+def project_journal_events(
+    conn: sqlite3.Connection, name: str, payload: dict[str, Any]
+) -> list[ActivityJournalEvent]:
+    """Project durable squad/MCP receipts from daemon-owned lifecycle events."""
+
+    created: list[ActivityJournalEvent] = []
+    if name == event_name("agent_squad", "created"):
+        squad = payload.get("squad") or {}
+        squad_id = str(squad.get("id") or "") or None
+        created.append(
+            create_journal_event(
+                conn,
+                ActivityJournalCreate(
+                    category=ActivityJournalCategory.SQUAD,
+                    status=ActivityJournalStatus.SUCCESS,
+                    title=f"Squad created: {str(squad.get('name') or 'Unnamed squad')}",
+                    summary_md=str(squad.get("goal_md") or "")[:2000],
+                    squad_id=squad_id,
+                    authority=ActivityAuthority.EXECUTE,
+                ),
+                session_id=str(payload.get("session_id") or "") or None,
+                source="synapse",
+            )
+        )
+    elif name in (
+        event_name("agent_work_item", "created"),
+        event_name("agent_work_item", "handoff"),
+        event_name("agent_work_item", "updated"),
+    ):
+        item = payload.get("work_item") or {}
+        item_id = str(item.get("id") or "") or None
+        squad_id = str(item.get("squad_id") or "") or None
+        verb = name.rsplit(".", 1)[-1]
+        status_raw = str(item.get("status") or "info")
+        mapped_status = {
+            "running": ActivityJournalStatus.ACTIVE,
+            "completed": ActivityJournalStatus.SUCCESS,
+            "blocked": ActivityJournalStatus.BLOCKED,
+            "failed": ActivityJournalStatus.FAILED,
+        }.get(status_raw, ActivityJournalStatus.INFO)
+        summary = str(item.get("summary_md") or item.get("instructions_md") or "")[:2000]
+        created.append(
+            create_journal_event(
+                conn,
+                ActivityJournalCreate(
+                    category=ActivityJournalCategory.SQUAD,
+                    status=mapped_status,
+                    title=f"Work item {verb}: {str(item.get('title') or 'Untitled work item')}",
+                    summary_md=summary,
+                    squad_id=squad_id,
+                    work_item_id=item_id,
+                    authority=ActivityAuthority.EXECUTE,
+                ),
+                session_id=str(payload.get("session_id") or "") or None,
+                source="synapse",
+            )
+        )
+    elif name == event_name("agent_run", "started"):
+        created.append(
+            create_journal_event(
+                conn,
+                ActivityJournalCreate(
+                    category=ActivityJournalCategory.ACTION,
+                    status=ActivityJournalStatus.ACTIVE,
+                    title=f"Worker started: {str(payload.get('role_id') or 'agent')}",
+                    summary_md=f"Runtime: {str(payload.get('runtime') or 'unknown')}",
+                    squad_id=str(payload.get("squad_id") or "") or None,
+                    work_item_id=str(payload.get("work_item_id") or "") or None,
+                    authority=ActivityAuthority.EXECUTE,
+                ),
+                session_id=None,
+                source="synapse",
+            )
+        )
+    elif name == event_name("agent_mcp", "attached"):
+        server_ids = [str(item) for item in payload.get("mcp_server_ids") or [] if item]
+        if server_ids:
+            created.append(
+                create_journal_event(
+                    conn,
+                    ActivityJournalCreate(
+                        category=ActivityJournalCategory.MCP,
+                        status=ActivityJournalStatus.SUCCESS,
+                        title=f"{len(server_ids)} MCP server{'s' if len(server_ids) != 1 else ''} attached",
+                        summary_md=", ".join(server_ids),
+                        squad_id=str(payload.get("squad_id") or "") or None,
+                        work_item_id=str(payload.get("work_item_id") or "") or None,
+                        authority=ActivityAuthority.OBSERVE,
+                    ),
+                    session_id=None,
+                    source="synapse",
+                )
+            )
+    return created
+
+
 def _squad_tokens(conn: sqlite3.Connection, squad_id: Any) -> dict[str, Any] | None:
     if not squad_id:
         return None
@@ -307,6 +540,7 @@ async def subscribe_activity_projector(storage: Storage, bus: EventBus) -> None:
         try:
             with storage.transaction() as conn:
                 created = project_event(conn, event.name, event.payload or {})
+                journal_events = project_journal_events(conn, event.name, event.payload or {})
         except Exception:  # noqa: BLE001 -- a projector failure must never break the bus
             return
         if created is not None:
@@ -314,6 +548,11 @@ async def subscribe_activity_projector(storage: Storage, bus: EventBus) -> None:
             await bus.publish(
                 event_name("activity", "notification"),
                 {"notification": created.model_dump(mode="json")},
+            )
+        for journal_event in journal_events:
+            await bus.publish(
+                event_name("activity", "journaled"),
+                {"event": journal_event.model_dump(mode="json")},
             )
 
     await bus.subscribe(_on_event)

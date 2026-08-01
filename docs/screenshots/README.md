@@ -2,7 +2,7 @@
 
 Real screenshots of the running app, captured from the live renderer (Vite `:5173` + daemon `:7878`) via Playwright. **These evolve as Synapse is built** — when a change alters a user-visible surface, the affected image here is refreshed in the same commit (see the screenshot rule in `AGENTS.md`).
 
-_The original gallery was captured 2026-07-06 against daemon `v0.1.37`. The Warden marketplace proof was captured 2026-07-31 against daemon `v0.1.90` after a real pinned download and verification. The restart proof was captured from the same native progress HTML exercised by a real `v0.1.91` Windows relaunch after every recorded stage passed. The portable-skill Marketplace proof was captured against the live `v0.1.92` renderer after a real Super Internet Digger bundle install. The ChatGPT companion captures honestly show the browser-preview fallback message; the signed-in embedded bridge runs in the desktop Electron app._
+_The original gallery was captured 2026-07-06 against daemon `v0.1.37`. The Warden marketplace proof was captured 2026-07-31 against daemon `v0.1.90` after a real pinned download and verification. The restart proof was captured from the same native progress HTML exercised by a real `v0.1.91` Windows relaunch after every recorded stage passed. The portable-skill Marketplace proof was captured against the live `v0.1.92` renderer after a real Super Internet Digger bundle install. The Live View proof was captured against `v0.1.93` after a real Codex session used Synapse, created a five-role verification squad, and exercised Reflex's named takeover controls. The ChatGPT companion captures honestly show the browser-preview fallback message; the signed-in embedded bridge runs in the desktop Electron app._
 
 ## Home — mission control (desktop, 1280×800)
 
@@ -13,6 +13,21 @@ Featured-app slideshow, running/not-running/errored counts, live recent-activity
 ## Home — mobile (375×812)
 
 ![Home mobile](./home-mobile.png)
+
+## Deep Live View — desktop (1280×800)
+
+![Deep Live View desktop](./live-view-desktop.png)
+
+The real Codex session is active and current. Its feed shows Reflex control receipts while the same-page
+worker profile exposes the selected squad member's role, job, personality, runtime, time in state, tokens,
+PTY/session links, and MCP scope. The sessions rail and feed scroll independently; the page itself does not.
+
+## Deep Live View — mobile (375×812)
+
+![Deep Live View mobile](./live-view-mobile.png)
+
+The same live session at phone width after the automatically opened squad sheet was collapsed. Sessions and
+the detailed feed remain independently scrollable with no page-level or horizontal overflow.
 
 ## AI Coding — the coder cockpit (desktop, 1280×800)
 

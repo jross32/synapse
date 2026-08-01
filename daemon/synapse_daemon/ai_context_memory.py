@@ -28,7 +28,7 @@ AI_CONTEXT_DIRECTION_PROMPT = (
 # PTY already gets ($SYNAPSE_API, $SYNAPSE_TOKEN, $SYNAPSE_PROJECT_ID).
 AI_WORKING_AGREEMENT_PROMPT = (
     "## Working agreement\n"
-    "You are one of possibly several AI agents working this repo. Two habits, both via the daemon at "
+    "You are one of possibly several AI agents working this repo. Three habits, all via the daemon at "
     "$SYNAPSE_API (auth header `X-Synapse-Token: $SYNAPSE_TOKEN`):\n"
     "1. **Coordinate** -- check `GET $SYNAPSE_API/coordination/snapshot` to see who else is working and "
     "which files are claimed, and avoid editing a file another session already claimed.\n"
@@ -39,7 +39,16 @@ AI_WORKING_AGREEMENT_PROMPT = (
     '"<your runtime>","metadata":{"kind":"bug|idea|feature|ux|perf","impact":"<one plain-language line '
     'for a non-developer>"}}`. If your work RESOLVES an existing open idea, close it so it does not go '
     "stale: `POST $SYNAPSE_API/review/proposals/{id}/approve` with a note. Then keep doing your assigned "
-    "work item -- don't rabbit-hole into the idea."
+    "work item -- don't rabbit-hole into the idea.\n"
+    "3. **Keep Live View legible** -- use the session id returned when you register, then POST concise "
+    "operator-facing receipts to `$SYNAPSE_API/activity/sessions/{session_id}/events`. Report meaningful "
+    "boundaries: plan, deliberate reasoning summary, decision, idea, search/findings, action, evidence, blocker, MCP/tool "
+    "use, and result. Include linked `squad_id`, `work_item_id`, or `mcp_server_id` when relevant and an "
+    "honest authority (`none|observe|control|execute`). Deep View may show a detailed summary (up to 8,000 "
+    "characters), but NEVER send private hidden chain-of-thought, credentials, tokens, secret values, or "
+    "raw sensitive tool output. Update `last_intent` on your heartbeat whenever your current focus changes. "
+    "After registration, include `X-Synapse-Session: <your session id>` on every other Synapse API call; "
+    "the daemon will create accurate method/result receipts automatically without copying bodies or secrets."
 )
 
 AI_SKILL_PACKS_PROMPT = (

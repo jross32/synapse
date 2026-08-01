@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-07-31",
+  "generated_at": "2026-08-01",
   "items": [
     {
       "id": "ai-council-review",
@@ -327,8 +327,8 @@
       "title": "AI Activity: connection status, session #s, Notification Center + Live View",
       "status": "shipped",
       "phase": "PLAN 5",
-      "adr": "ADR-0028",
-      "summary": "SHIPPED (v0.1.82-0.1.88): connection grading (green/yellow/red + codes), session numbers #001..., a persisted activity feed + /activity API, the global Notification Center, the Live View tab (one-window reference impl), a live app preview, and AI-facing access (ai/context ai_activity block + read-only MCP tools)."
+      "adr": "ADR-0028, ADR-0033",
+      "summary": "SHIPPED (v0.1.82-0.1.93): numbered and graded AI sessions, notifications, and a one-window Live View. Deep View now defaults to detailed deliberate reasoning summaries, decisions, searches, evidence, clean Synapse/MCP/tool receipts, accurate event correlation, status explanations, and collapsible clickable squad -> worker profiles; Summary View keeps the major story."
     },
     {
       "id": "one-window-ui-standard",

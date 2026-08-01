@@ -448,10 +448,18 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
           </header>
         )}
 
-        <main className='flex-1 overflow-y-auto'>
+        <main
+          className={cn(
+            'flex-1',
+            route.kind === 'core' && route.page === 'live'
+              ? 'min-h-0 overflow-hidden'
+              : 'overflow-y-auto'
+          )}
+        >
           <div
             className={cn(
               'mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8',
+              route.kind === 'core' && route.page === 'live' && 'h-full min-h-0',
               mobileRoute && 'pb-44'
             )}
           >

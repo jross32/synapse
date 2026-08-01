@@ -15,6 +15,22 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.93 (deep AI operator journal)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-08-01 | `POST /api/v1/activity/sessions/{session_id}/events` | additive | Persists a bounded plan/reasoning-summary/decision/search/action/evidence/blocker/squad/MCP/tool/result receipt with real identity links and authority. Rejects unknown sessions and mismatched squad/work-item/MCP references. |
+| 2026-08-01 | `GET /api/v1/activity/sessions/{session_id}` | additive | Adds `journal[]`, enriched squad `worker_profiles[]`, and daemon-authored `connection_help`; journal rows include related project-squad lifecycle events. |
+| 2026-08-01 | `v1.activity.journaled` | additive | Streams one structured journal event. Payload `{event}`. |
+| 2026-08-01 | `v1.coordination.session_heartbeat` | additive | Payload now carries the complete session view, including task and `last_intent`, rather than only id/status. Existing fields remain. |
+| 2026-08-01 | `v1.agent_run.started` | additive | Adds the exact role-scoped `mcp_server_ids` attached to the worker. |
+| 2026-08-01 | `v1.agent_mcp.attached` | additive | Emits the worker/squad/runtime and enabled MCP ids after launch; the activity projector persists a receipt. |
+| 2026-08-01 | `X-Synapse-Session` request header | additive | Opts an authenticated AI call into automatic Synapse method/result/authority receipts. Bodies, auth headers, responses, and secret values are never copied. |
+| 2026-08-01 | `GET /api/v1/search?q={query}&limit={n}` | additive | Mounts the advertised universal search route over live projects, Synapse tools, MCP servers, actions, and settings. Returns scored typed hits and timing; newly enabled MCPs appear without a stale secondary index. |
+
+Migration: existing v1 clients need no changes. Clients that want automatic receipts add the returned
+coordination session id as `X-Synapse-Session`; Deep View reporting is otherwise opt-in through the new POST.
+
 ### Shipped in v0.1.92 (portable benchmarked skill packs)
 
 | Date | Endpoint or event | Kind | Notes |
@@ -66,7 +82,6 @@ Every entry below must include: the date, the new version added, what changed, a
 
 | Endpoint or event | Milestone | Notes |
 |---|---|---|
-| `GET /api/v1/search?q=...` | F | Universal search (Contract #21) |
 | `POST /api/v1/snapshot` / `POST /api/v1/restore` | later | Disaster recovery (Contract #28) |
 
 ### Shipped in v0.1.36-dev (Sessions-centric AI squads)

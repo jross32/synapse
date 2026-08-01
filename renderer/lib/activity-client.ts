@@ -39,24 +39,90 @@ export interface ActivitySession {
   project_id: string | null;
   runtime_id: string;
   agent_label: string;
+  coder_thread_id: string | null;
   task: string;
   status: string;
+  last_intent: string;
   connection_level: ActivityLevel;
   connection_code: string;
+  connection_help?: {
+    title: string;
+    explanation: string;
+    remedy: string;
+  };
   registered_at: string;
   last_heartbeat_at: string;
   ended_at: string | null;
   stale: boolean;
 }
 
+export type ActivityJournalCategory =
+  | 'status'
+  | 'plan'
+  | 'reasoning'
+  | 'idea'
+  | 'decision'
+  | 'action'
+  | 'evidence'
+  | 'search'
+  | 'blocker'
+  | 'squad'
+  | 'mcp'
+  | 'tool'
+  | 'result';
+
+export type ActivityJournalStatus =
+  | 'planned'
+  | 'active'
+  | 'success'
+  | 'blocked'
+  | 'failed'
+  | 'info';
+
+export type ActivityAuthority = 'none' | 'observe' | 'control' | 'execute';
+
+export interface ActivityJournalEvent {
+  id: string;
+  session_id: string | null;
+  category: ActivityJournalCategory;
+  status: ActivityJournalStatus;
+  title: string;
+  summary_md: string;
+  squad_id: string | null;
+  work_item_id: string | null;
+  mcp_server_id: string | null;
+  tool_name: string | null;
+  authority: ActivityAuthority;
+  source: string;
+  created_at: string;
+}
+
+export interface ActivitySquadView {
+  squad: Record<string, unknown>;
+  work_items: Array<Record<string, unknown>>;
+  worker_profiles: Array<{
+    work_item_id: string;
+    role: Record<string, unknown> | null;
+    personality: Record<string, unknown> | null;
+    runtime: string | null;
+    pty_session_id: string | null;
+    coordination_session: ActivitySession | null;
+    token_usage: {
+      entries: number;
+      input_tokens: number;
+      output_tokens: number;
+      total_tokens: number;
+    };
+    status_changed_at: string;
+  }>;
+  token_usage: Record<string, unknown>;
+}
+
 export interface ActivitySessionDetail {
   session: ActivitySession;
-  squads: Array<{
-    squad: Record<string, unknown>;
-    work_items: Array<Record<string, unknown>>;
-    token_usage: Record<string, unknown>;
-  }>;
+  squads: ActivitySquadView[];
   notifications: ActivityNotification[];
+  journal: ActivityJournalEvent[];
 }
 
 export function getActivityNotifications(unread = false, limit = 50): Promise<ActivityFeed> {

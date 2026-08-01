@@ -6,7 +6,24 @@
 
 ## Current version
 
-`0.1.92`
+`0.1.93`
+
+> **Deep Live View note (2026-08-01):** ADR-0033 adds migration 029's structured operator journal and
+> makes Deep View the default while preserving a calmer Summary View. Connected AIs can report bounded
+> plans, deliberate reasoning summaries, decisions, searches/findings, evidence, blockers, actions, MCP/tool
+> use, squads, and results; `X-Synapse-Session` adds safe automatic Synapse method/result receipts without
+> copying bodies or secrets. The renderer now correlates every notification/PTY/squad receipt to the selected
+> session, refreshes heartbeats/releases live, explains yellow connection health separately from blocked work,
+> keeps only five recent sessions in the rail, and collapses empty inspectors. A real squad opens an in-page
+> topology whose worker profiles show role, personality, runtime, status duration, task, PTY/live session,
+> MCP scope, and token evidence. Enabled stdio MCPs now read **Auto-attached · starts per AI** and worker
+> launch events carry their exact MCP ids; Reflex remains isolated per worker. Final proof is green: **750
+> passed / 14 skipped**, renderer + Electron typecheck, real Deep/Summary/status/squad/worker click-through,
+> no document/main/horizontal overflow at 375/1024/1280/2560, and refreshed 1280×800 + 375×812 screenshots.
+> Dogfood session #025 used Synapse search, a real five-worker linked squad, and Reflex v2.6.0's named
+> takeover, Pause/Resume, Release, visible cursor/overlay, and physical-only Escape safety. A real whole-app
+> restart finished all five measured stages green; the replacement daemon exposed v0.1.93/28 contracts and
+> replayed `v1.daemon.started` as event 1.
 
 > **Benchmarked portable skill-pack note (2026-07-31):** ADR-0032 ships immutable, AI-discoverable
 > instruction/resource packages through the existing AI Bundle Marketplace. Super Internet Digger v2 is

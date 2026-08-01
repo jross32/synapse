@@ -10,6 +10,46 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.93] -- 2026-08-01
+
+### Added
+- **Deep AI operator journal (ADR-0033).** `POST /api/v1/activity/sessions/{id}/events` now persists
+  deliberate plans, reasoning summaries, decisions, searches, actions, evidence, blockers, squad activity,
+  MCP/tool receipts, and results with real identity links, state, authority, and UTC timestamps.
+- Live View defaults to **Deep View**, with a calmer persisted Summary View toggle, current-focus banner,
+  clean Synapse/MCP/tool visuals, click-for-detail receipts, token evidence, and status explanation dialogs.
+- Collapsible same-page squad drill-down: click a real squad for its worker topology, then a worker for role,
+  personality, runtime, status duration, task, PTY/live session, MCP scope, and token profile.
+- Authenticated AI calls carrying `X-Synapse-Session` create safe automatic Synapse method/result receipts;
+  request/response bodies, auth headers, credentials, and secret values are never copied.
+
+### Changed
+- Enabled stdio MCP servers are now labeled **Auto-attached · starts per AI**. Worker launch events carry the
+  exact role-scoped MCP ids and emit `v1.agent_mcp.attached`; Reflex remains an isolated per-worker process.
+- The session rail shows five recent sessions by default, with explicit history expansion. Empty squad/tool
+  inspectors take no space and squad detail opens only when a real squad exists.
+- Generated worker prompts and `/ai/context` now teach every runtime to update `last_intent`, report detailed
+  operator summaries, add the session receipt header, and keep secrets/private hidden reasoning out of the feed.
+
+### Fixed
+- Live View now correlates notifications, PTY output, squad events, and MCP receipts to the selected session
+  or its real project squads instead of accepting unrelated global WebSocket events.
+- Heartbeats and session release refresh Live View immediately, carry complete session state, and persist focus
+  or release receipts; yellow connection health and blocked work status are now clearly separated and explained.
+- The advertised universal-search endpoint is now actually mounted and returns live MCP-server results; the real
+  `reflex` dogfood query exposed and then verified this previously hidden 404.
+- Live View now owns a true fixed-height route shell at 375/1024/1280/2560, with styled inner scrolling and no
+  page-level or horizontal overflow; narrow receipts stack their metadata above a full-width card.
+
+### Notes
+- Release verification: renderer + Electron typecheck, **750 passed / 14 skipped**, real Deep/Summary and
+  squad → worker Playwright click-through, and containment proof at 375/1024/1280/2560. The refreshed
+  1280×800 + 375×812 gallery captures have zero console errors or page/horizontal overflow.
+- Dogfood proof used real Synapse session #025, a five-worker linked squad, Reflex v2.6.0 observation plus
+  named takeover/pause/resume/release, a scored `mcp:reflex` search result, and a real all-green whole-app
+  restart. WS replay retained `v1.daemon.started` as event 1 for v0.1.93.
+
+
 ## [0.1.92] -- 2026-07-31
 
 ### Added

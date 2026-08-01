@@ -145,8 +145,10 @@ Daemon replies `{"type": "pong"}`.
 | `v1.agent_work_item.created` | work_item |
 | `v1.agent_work_item.updated` | work_item |
 | `v1.agent_work_item.handoff` | work_item |
-| `v1.agent_run.started` | squad_id, work_item_id, role_id, session_id, runtime |
+| `v1.agent_run.started` | squad_id, work_item_id, role_id, session_id, runtime, mcp_server_ids |
 | `v1.agent_run.ended` | squad_id, work_item_id, role_id, session_id, exit_code |
+| `v1.agent_mcp.attached` | squad_id, work_item_id, role_id, session_id, runtime, mcp_server_ids |
+| `v1.activity.journaled` | structured operator journal event |
 | `v1.ai_case.created` | case_id (+ parent_case_id if child) |
 | `v1.ai_case.updated` | case_id, status |
 | `v1.tool.reloaded` | tool_id |
@@ -160,7 +162,7 @@ Daemon replies `{"type": "pong"}`.
 | `v1.device.revoked` | device_id |
 | `v1.remote_access.updated` | enabled |
 | `v1.coordination.session_registered` | session_id, project_id |
-| `v1.coordination.session_heartbeat` | session_id, status |
+| `v1.coordination.session_heartbeat` | complete session: id, task, last_intent, status, connection, timestamps |
 | `v1.coordination.session_ended` | session_id |
 | `v1.coordination.lane_*` | lane details |
 | `v1.profile.updated` | fields |
@@ -544,6 +546,36 @@ Designed for multiple AI agents running concurrently to avoid file conflicts.
 | GET | `/coordination/snapshot` | Full picture: all sessions + lanes |
 | POST | `/coordination/detect-collisions` | Detect git working-tree collisions |
 
+### 5K.1 Live View operator journal
+
+After registration, send `X-Synapse-Session: <session id>` on every other Synapse API call. Synapse will
+record the method, route, HTTP result, provider label, and `observe`/`execute` authority automatically.
+It deliberately does **not** copy request/response bodies, auth headers, credentials, or secret values.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/activity/sessions` | Recent and historical numbered AI sessions with connection explanations |
+| GET | `/activity/sessions/{id}` | One session's journal, notifications, squads, worker profiles, and tokens |
+| POST | `/activity/sessions/{id}/events` | Report a structured plan, reasoning summary, idea, decision, search, action, evidence, blocker, squad, MCP, tool, or result receipt |
+
+Example Deep View receipt:
+
+```json
+{
+  "category": "mcp",
+  "status": "success",
+  "title": "Reflex inspected the active window",
+  "summary_md": "Called list_windows through the isolated Reflex worker; Synapse was visible and no control input was sent.",
+  "mcp_server_id": "reflex",
+  "tool_name": "list_windows",
+  "authority": "observe"
+}
+```
+
+Detailed summaries may be up to 8,000 characters and should include explicit alternatives, assumptions,
+evidence, findings, and next steps. Never claim this is private hidden chain-of-thought, and never copy
+credentials, tokens, secret values, or raw sensitive tool output into the persisted journal.
+
 **Register body:**
 ```json
 {
@@ -891,7 +923,7 @@ Creates `imported-chatgpt` project (kind=other) with deterministic Markdown file
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/search?q={query}` | Global search (projects, tools, actions, settings) |
+| GET | `/search?q={query}&limit={n}` | Global scored search across live projects, Synapse tools, MCP servers, actions, and settings; returns typed hits, links, badges, and `took_ms` |
 
 ---
 
