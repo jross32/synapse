@@ -338,6 +338,11 @@ def build_agent_squads_router(
     presence_registry: WorkerPresenceRegistry,
 ) -> APIRouter:
     router = APIRouter(tags=["agent-squads"])
+    # Storage currently owns one SQLite connection. Serializing the short
+    # launch reservation/spawn/finalization flow preserves the squad cap while
+    # still releasing the DB transaction before the awaited PTY spawn. Other
+    # endpoints (including heartbeats) remain free to transact during spawn.
+    launch_lock = asyncio.Lock()
 
     async def _enforce_worker_timeout(
         *,
@@ -628,7 +633,9 @@ def build_agent_squads_router(
         )
         return item.model_dump(mode="json")
 
-    async def _do_launch(work_item_id: str, body: AgentWorkItemLaunchRequest) -> dict[str, Any]:
+    async def _do_launch_serialized(
+        work_item_id: str, body: AgentWorkItemLaunchRequest
+    ) -> dict[str, Any]:
         with storage.transaction() as conn:
             work_item = squads.get_work_item(conn, work_item_id)
             squad = squads.get_squad(conn, work_item.squad_id)
@@ -765,27 +772,55 @@ def build_agent_squads_router(
                     authority=body.authority,
                     prompt_file=prompt_file,
                 )
-            try:
-                session = await manager.spawn(
-                    argv=argv,
-                    cwd=body.cwd_override or project.path,
-                    env=env,
-                    rows=body.rows,
-                    cols=body.cols,
-                    project_id=project.id,
-                    session_id=session_id,
+        # PTY startup can await platform work. Never hold the daemon's shared
+        # SQLite transaction across that await: simultaneous squad launches or
+        # a routine heartbeat would otherwise attempt BEGIN on the same live
+        # transaction and fail with an internal 500.
+        try:
+            session = await manager.spawn(
+                argv=argv,
+                cwd=body.cwd_override or project.path,
+                env=env,
+                rows=body.rows,
+                cols=body.cols,
+                project_id=project.id,
+                session_id=session_id,
+            )
+        except Exception as exc:
+            with storage.transaction() as conn:
+                coordination.end_session(conn, coordination_session.id)
+                audit(
+                    conn,
+                    AuditRecord(
+                        entity_type="agent_work_item",
+                        entity_id=work_item.id,
+                        action="launch",
+                        source=body.source,
+                        result="error",
+                        error_code="agent_work_item.invalid",
+                        details={
+                            "squad_id": squad.id,
+                            "runtime": chosen_runtime,
+                            "role_id": role.id,
+                        },
+                    ),
                 )
-            except FileNotFoundError as exc:
+            await bus.publish(
+                event_name("coordination", "session_ended"),
+                {"session_id": coordination_session.id},
+            )
+            if isinstance(exc, FileNotFoundError):
                 raise invalid("agent_work_item", str(exc))
-            except Exception as exc:
-                # A PTY spawn can fail many ways beyond a missing binary -- a bad
-                # project cwd, winpty errors, or permission issues. Surface them
-                # as a clean ErrorEnvelope (Contract #4) instead of letting the
-                # exception escape and take the daemon down.
-                raise invalid(
-                    "agent_work_item",
-                    f"Could not start a session for this work item: {exc}",
-                )
+            # A PTY spawn can fail many ways beyond a missing binary -- a bad
+            # project cwd, winpty errors, or permission issues. Surface them
+            # as a clean ErrorEnvelope (Contract #4) instead of letting the
+            # exception escape and take the daemon down.
+            raise invalid(
+                "agent_work_item",
+                f"Could not start a session for this work item: {exc}",
+            )
+
+        with storage.transaction() as conn:
             work_item = squads.set_work_item_session(
                 conn,
                 work_item.id,
@@ -884,6 +919,12 @@ def build_agent_squads_router(
             "timeout_seconds": body.timeout_seconds,
             "coordination_session_id": coordination_session.id,
         }
+
+    async def _do_launch(
+        work_item_id: str, body: AgentWorkItemLaunchRequest
+    ) -> dict[str, Any]:
+        async with launch_lock:
+            return await _do_launch_serialized(work_item_id, body)
 
     @router.post("/agent-work-items/{work_item_id}/launch", response_model=None)
     async def launch_work_item(

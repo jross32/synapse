@@ -1131,6 +1131,12 @@ def classify_worker_failure(scrollback: bytes) -> str | None:
             "Claude sign-in expired. Run `claude auth logout`, then "
             "`claude auth login --claudeai`, complete the browser sign-in, and relaunch this worker."
         )
+    if "you've hit your usage limit" in text and "codex/settings/usage" in text:
+        return (
+            "Codex usage is temporarily exhausted for this account. Open Codex Settings → Usage "
+            "to review the reset time or available credits, then relaunch this worker. Other signed-in "
+            "runtimes may continue in the meantime."
+        )
     return None
 
 

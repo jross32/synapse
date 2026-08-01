@@ -168,7 +168,7 @@
       "status": "shipped",
       "phase": "AI operator experience",
       "adr": "ADR-0034",
-      "summary": "SHIPPED (v0.1.94): delegated Codex, Claude, and Copilot launches are explicitly interactive or bounded automatic, translate named authority per runtime, preserve isolated role-scoped MCPs, and require an evidence-backed handoff instead of trusting process exit. Workers receive scoped credentials instead of the desktop root token, and Synapse owns their green presence while each PTY is alive. Live rolls reviewer evidence into the parent and adds a compact editable Goals inspector."
+      "summary": "SHIPPED (v0.1.94-0.1.95): delegated Codex, Claude, and Copilot launches are explicitly interactive or bounded automatic, translate named authority per runtime, preserve isolated role-scoped MCPs, and require an evidence-backed handoff instead of trusting process exit. Workers receive scoped credentials instead of the desktop root token, and Synapse owns their green presence while each PTY is alive. Parallel launch requests are serialized outside the shared database transaction, failed PTY startup cleans up worker presence for retry, and Codex account limits surface as actionable blockers."
     },
     {
       "id": "session-hygiene",

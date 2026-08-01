@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -209,6 +210,146 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
     assert subject.work_item_id == item["id"]
 
 
+def test_launch_releases_storage_transaction_before_awaited_pty_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+
+    async def _fake_spawn(**kwargs):
+        # This is the transaction a heartbeat, audit projection, or another
+        # request may need while platform PTY startup is awaiting. Holding the
+        # launch transaction here reproduces SQLite's nested-BEGIN failure.
+        with app.state.storage.transaction() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value_json, updated_at) "
+                "VALUES (?, ?, ?)",
+                ("spawn-heartbeat-proof", 'true', "2026-08-01T00:00:00+00:00"),
+            )
+        await asyncio.sleep(0)
+        return SimpleNamespace(
+            session_id=kwargs["session_id"],
+            exit_code=None,
+            summary=lambda: SimpleNamespace(
+                session_id=kwargs["session_id"],
+                argv=kwargs["argv"],
+                cwd=kwargs["cwd"],
+                rows=kwargs["rows"],
+                cols=kwargs["cols"],
+                started_at="now",
+                exit_code=None,
+                alive=True,
+                project_id=kwargs["project_id"],
+            ),
+        )
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        response = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "codex", "open_in_tab": False},
+        )
+
+    assert response.status_code == 200, response.text
+    saved = app.state.storage.conn.execute(
+        "SELECT value_json FROM settings WHERE key = 'spawn-heartbeat-proof'"
+    ).fetchone()
+    assert saved is not None and saved["value_json"] == "true"
+
+
+def test_parallel_launch_requests_are_serialized_without_internal_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    active_spawns = 0
+    max_active_spawns = 0
+
+    async def _fake_spawn(**kwargs):
+        nonlocal active_spawns, max_active_spawns
+        active_spawns += 1
+        max_active_spawns = max(max_active_spawns, active_spawns)
+        try:
+            await asyncio.sleep(0.05)
+            return SimpleNamespace(
+                session_id=kwargs["session_id"],
+                exit_code=None,
+                summary=lambda: SimpleNamespace(
+                    session_id=kwargs["session_id"],
+                    argv=kwargs["argv"],
+                    cwd=kwargs["cwd"],
+                    rows=kwargs["rows"],
+                    cols=kwargs["cols"],
+                    started_at="now",
+                    exit_code=None,
+                    alive=True,
+                    project_id=kwargs["project_id"],
+                ),
+            )
+        finally:
+            active_spawns -= 1
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        squad = _create_squad(c)
+        items = [
+            _create_work_item(c, squad["id"], title=f"Worker {index}")
+            for index in range(2)
+        ]
+
+        def _launch(item: dict) -> tuple[int, str]:
+            response = c.post(
+                f"/api/v1/agent-work-items/{item['id']}/launch",
+                json={"preferred_runtime": "codex", "open_in_tab": False},
+            )
+            return response.status_code, response.text
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(_launch, items))
+
+    assert [status for status, _ in results] == [200, 200], results
+    assert max_active_spawns == 1
+
+
+def test_spawn_failure_releases_preregistered_worker_presence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+
+    async def _fail_spawn(**kwargs):
+        raise RuntimeError("simulated PTY startup failure")
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fail_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        response = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "codex", "open_in_tab": False},
+        )
+        detail = c.get(f"/api/v1/agent-squads/{squad['id']}").json()
+
+    assert response.status_code == 422, response.text
+    updated = next(entry for entry in detail["work_items"] if entry["id"] == item["id"])
+    assert updated["status"] == "queued"
+    worker_sessions = [
+        session
+        for session in routes_agent_squads.coordination.list_all_sessions(app.state.storage.conn)
+        if session.task == item["title"]
+    ]
+    assert len(worker_sessions) == 1
+    assert worker_sessions[0].status.value == "gone"
+
+
 def test_copilot_work_item_launch_injects_session_only_mcp_config(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -339,6 +480,20 @@ def test_classify_worker_failure_turns_expired_claude_token_into_actionable_bloc
     assert "Claude sign-in expired" in reason
     assert "claude auth login --claudeai" in reason
     assert "401" not in reason
+
+
+def test_classify_worker_failure_turns_codex_usage_limit_into_actionable_blocker() -> None:
+    raw = (
+        b"ERROR: You've hit your usage limit. Visit "
+        b"https://chatgpt.com/codex/settings/usage or try again later."
+    )
+
+    reason = agent_squads.classify_worker_failure(raw)
+
+    assert reason is not None
+    assert "Codex usage is temporarily exhausted" in reason
+    assert "Settings" in reason
+    assert "https://" not in reason
 
 
 def test_automatic_launch_uses_absolute_prompt_and_mcp_paths(

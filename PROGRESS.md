@@ -6,7 +6,20 @@
 
 ## Current version
 
-`0.1.94`
+`0.1.95`
+
+> **Parallel squad launch reliability note (2026-08-01):** simultaneous Claude, Codex, and Copilot
+> launch requests no longer share an open SQLite transaction across awaited PTY startup. Synapse briefly
+> serializes the reservation/spawn/finalization boundary while keeping the database free for heartbeats,
+> audit entries, and other requests. A failed spawn releases its pre-registered worker presence and leaves
+> the work item queued for retry. Codex CLI usage exhaustion now appears as an actionable account-limit
+> blocker without persisting raw terminal output. Renderer/Electron typecheck and **787 passed / 14 skipped**
+> are green. A real supervised restart loaded v0.1.95, and simultaneous automatic Claude/Codex/Copilot
+> launches all returned HTTP 200, reached running, then stopped without a nested SQLite error or stale worker.
+> The post-work review found no critical correctness issue; follow-ups `a4bdab9cd169` (parallel launch
+> reservations) and `410a4a2b4a01` (observe-mode Claude handoffs) preserve the known throughput/reporting
+> improvements without reopening this fix.
+> The AI Coding Studio redesign follows from this green reliability checkpoint.
 
 > **Runtime launch trust note (2026-08-01):** ADR-0034 keeps interactive worker launch as the default and
 > adds explicit bounded automatic execution for Claude, Codex, and GitHub Copilot. Observe/workspace/full

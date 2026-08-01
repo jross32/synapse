@@ -15,6 +15,17 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.95 (parallel squad launch reliability)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-08-01 | `POST /api/v1/agent-work-items/{id}/launch` | corrective | Concurrent launch requests are serialized around PTY startup without holding the daemon's shared SQLite transaction across the await. Successful response shape is unchanged; failed spawn returns the existing ErrorEnvelope, closes pre-registered worker presence, and leaves the item queued for retry. |
+| 2026-08-01 | automatic worker failure classification | corrective | A recognized Codex CLI usage-limit exit becomes a concise account-limit blocker directing the operator to Codex Settings → Usage; raw terminal text, URLs, and reset details are not persisted in the reason. |
+
+Migration: existing v1 clients need no changes. Clients may continue launching multiple work items in
+parallel; each request now receives a deterministic launch or ErrorEnvelope result instead of sharing a
+database transaction with another startup.
+
 ### Shipped in v0.1.94 (trustworthy automatic runtime delegation)
 
 | Date | Endpoint or event | Kind | Notes |

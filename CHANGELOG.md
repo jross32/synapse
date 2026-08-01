@@ -10,6 +10,33 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.95] -- 2026-08-01
+
+### Changed
+- Squad launch reservation is serialized at the daemon boundary while the shared SQLite transaction is
+  released before awaited PTY startup, preserving per-squad capacity checks without blocking heartbeats,
+  audit writes, or simultaneous launch requests.
+
+### Fixed
+- Parallel Claude, Codex, and Copilot launch requests no longer collide with `cannot start a transaction
+  within a transaction`; each request receives its own clean launch result instead of an internal 500.
+- Failed PTY startup now closes the pre-registered worker presence, records an audited error, publishes the
+  session end, and leaves the work item safely queued for retry.
+- A Codex CLI account usage limit is classified as an actionable, secret-safe blocker that points to Codex
+  Settings → Usage and makes clear that other signed-in runtimes may continue.
+
+### Notes
+- Focused squad-launch coverage proves the transaction is released across the awaited spawn, concurrent
+  requests are serialized without 500s, failed startup releases presence, and usage-limit text is sanitized.
+- Release verification: renderer + Electron typecheck, **787 passed / 14 skipped**, a supervised full-app
+  restart to v0.1.95, and a real simultaneous Claude/Codex/Copilot acceptance launch in which all three
+  requests returned HTTP 200, reached running, and stopped without a nested-transaction error or stale worker.
+- The Synapse-hosted post-work reviewer found no critical correctness issue and verified the transaction
+  split, finalizer ordering, cleanup, ErrorEnvelope behavior, and tests. It identified serialized cold-start
+  throughput as an important follow-up (`a4bdab9cd169`); observe-mode Claude handoff reliability is tracked
+  separately as `410a4a2b4a01` after bounded reviewers exposed the limitation without editing files.
+
+
 ## [0.1.94] -- 2026-08-01
 
 ### Added
