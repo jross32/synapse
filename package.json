@@ -1,124 +1,124 @@
 {
-  "name": "synapse",
-  "productName": "Synapse",
-  "version": "0.1.95",
-  "description": "Synapse — a modular developer command center. By The WhatIf Company.",
-  "author": {
-    "name": "The WhatIf Company",
-    "email": "justinwross32@gmail.com"
-  },
-  "license": "UNLICENSED",
-  "private": true,
-  "main": "dist-electron/main.js",
-  "scripts": {
-    "dev": "echo \"Use scripts/dev.ps1 — orchestrates daemon + electron together\"",
-    "build:renderer": "vite build",
-    "build:electron": "tsc -p electron/tsconfig.json",
-    "build:daemon": "powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-daemon.ps1",
-    "build": "npm run build:renderer && npm run build:electron",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p electron/tsconfig.json",
-    "lint": "echo \"Lint placeholder — wire ESLint in Milestone C\"",
-    "start": "electron .",
-    "pack": "npm run build && npm run build:daemon && electron-builder --dir",
-    "dist": "npm run build && npm run build:daemon && electron-builder"
-  },
-  "dependencies": {
-    "@radix-ui/react-slot": "^1.2.4",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/addon-search": "^0.16.0",
-    "@xterm/xterm": "^5.5.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.16.0",
-    "qrcode": "^1.5.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "sonner": "^2.0.7",
-    "tailwind-merge": "^3.6.0",
-    "tailwindcss-animate": "^1.0.7"
-  },
-  "devDependencies": {
-    "@types/node": "^22.7.4",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^18.3.11",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.2",
-    "autoprefixer": "^10.4.20",
-    "electron": "^31.7.0",
-    "electron-builder": "^25.1.7",
-    "playwright": "^1.60.0",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.13",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.8"
-  },
-  "build": {
-    "appId": "com.whatifcompany.synapse",
-    "productName": "Synapse",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist-electron/**/*",
-      "dist/**/*",
-      "electron/icons/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "installer/daemon-dist",
-        "to": "daemon"
-      },
-      {
-        "from": "electron/icons",
-        "to": "electron/icons"
-      },
-      {
-        "from": "tools",
-        "to": "tools"
-      },
-      {
-        "from": "templates",
-        "to": "templates"
-      },
-      {
-        "from": "docs",
-        "to": "docs",
-        "filter": [
-          "*.json"
-        ]
-      },
-      {
-        "from": "CHANGELOG.md",
-        "to": "docs/CHANGELOG.md"
-      },
-      {
-        "from": "scripts/remote-recovery.ps1",
-        "to": "scripts/remote-recovery.ps1"
-      },
-      {
-        "from": "dist",
-        "to": "dist"
-      },
-      {
-        "from": "ai_os",
-        "to": "ai_os"
-      },
-      {
-        "from": "mobile",
-        "to": "mobile"
-      }
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "electron/icons/synapse.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "include": "installer/installer.nsh",
-      "createDesktopShortcut": true,
-      "shortcutName": "Synapse"
-    }
-  }
+    "name":  "synapse",
+    "productName":  "Synapse",
+    "version":  "0.1.96",
+    "description":  "Synapse â€” a modular developer command center. By The WhatIf Company.",
+    "author":  {
+                   "name":  "The WhatIf Company",
+                   "email":  "justinwross32@gmail.com"
+               },
+    "license":  "UNLICENSED",
+    "private":  true,
+    "main":  "dist-electron/main.js",
+    "scripts":  {
+                    "dev":  "echo \"Use scripts/dev.ps1 â€” orchestrates daemon + electron together\"",
+                    "build:renderer":  "vite build",
+                    "build:electron":  "tsc -p electron/tsconfig.json",
+                    "build:daemon":  "powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-daemon.ps1",
+                    "build":  "npm run build:renderer \u0026\u0026 npm run build:electron",
+                    "typecheck":  "tsc --noEmit -p tsconfig.json \u0026\u0026 tsc --noEmit -p electron/tsconfig.json",
+                    "lint":  "echo \"Lint placeholder â€” wire ESLint in Milestone C\"",
+                    "start":  "electron .",
+                    "pack":  "npm run build \u0026\u0026 npm run build:daemon \u0026\u0026 electron-builder --dir",
+                    "dist":  "npm run build \u0026\u0026 npm run build:daemon \u0026\u0026 electron-builder"
+                },
+    "dependencies":  {
+                         "@radix-ui/react-slot":  "^1.2.4",
+                         "@xterm/addon-fit":  "^0.10.0",
+                         "@xterm/addon-search":  "^0.16.0",
+                         "@xterm/xterm":  "^5.5.0",
+                         "class-variance-authority":  "^0.7.1",
+                         "clsx":  "^2.1.1",
+                         "lucide-react":  "^1.16.0",
+                         "qrcode":  "^1.5.4",
+                         "react":  "^18.3.1",
+                         "react-dom":  "^18.3.1",
+                         "sonner":  "^2.0.7",
+                         "tailwind-merge":  "^3.6.0",
+                         "tailwindcss-animate":  "^1.0.7"
+                     },
+    "devDependencies":  {
+                            "@types/node":  "^22.7.4",
+                            "@types/qrcode":  "^1.5.6",
+                            "@types/react":  "^18.3.11",
+                            "@types/react-dom":  "^18.3.0",
+                            "@vitejs/plugin-react":  "^4.3.2",
+                            "autoprefixer":  "^10.4.20",
+                            "electron":  "^31.7.0",
+                            "electron-builder":  "^25.1.7",
+                            "playwright":  "^1.60.0",
+                            "postcss":  "^8.4.47",
+                            "tailwindcss":  "^3.4.13",
+                            "typescript":  "^5.6.3",
+                            "vite":  "^5.4.8"
+                        },
+    "build":  {
+                  "appId":  "com.whatifcompany.synapse",
+                  "productName":  "Synapse",
+                  "directories":  {
+                                      "output":  "release"
+                                  },
+                  "files":  [
+                                "dist-electron/**/*",
+                                "dist/**/*",
+                                "electron/icons/**/*"
+                            ],
+                  "extraResources":  [
+                                         {
+                                             "from":  "installer/daemon-dist",
+                                             "to":  "daemon"
+                                         },
+                                         {
+                                             "from":  "electron/icons",
+                                             "to":  "electron/icons"
+                                         },
+                                         {
+                                             "from":  "tools",
+                                             "to":  "tools"
+                                         },
+                                         {
+                                             "from":  "templates",
+                                             "to":  "templates"
+                                         },
+                                         {
+                                             "from":  "docs",
+                                             "to":  "docs",
+                                             "filter":  [
+                                                            "*.json"
+                                                        ]
+                                         },
+                                         {
+                                             "from":  "CHANGELOG.md",
+                                             "to":  "docs/CHANGELOG.md"
+                                         },
+                                         {
+                                             "from":  "scripts/remote-recovery.ps1",
+                                             "to":  "scripts/remote-recovery.ps1"
+                                         },
+                                         {
+                                             "from":  "dist",
+                                             "to":  "dist"
+                                         },
+                                         {
+                                             "from":  "ai_os",
+                                             "to":  "ai_os"
+                                         },
+                                         {
+                                             "from":  "mobile",
+                                             "to":  "mobile"
+                                         }
+                                     ],
+                  "win":  {
+                              "target":  "nsis",
+                              "icon":  "electron/icons/synapse.ico"
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "perMachine":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "include":  "installer/installer.nsh",
+                               "createDesktopShortcut":  true,
+                               "shortcutName":  "Synapse"
+                           }
+              }
 }

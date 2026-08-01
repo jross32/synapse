@@ -48,6 +48,7 @@ export function Modal({
     // this, the user gets dropped back to the top of the page after a
     // keyboard interaction inside the modal -- breaks the flow badly.
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    const panelAtEffectTime = panelRef.current;
 
     function focusFirstInPanel(): void {
       const panel = panelRef.current;
@@ -105,13 +106,24 @@ export function Modal({
     return () => {
       window.removeEventListener('keydown', onKey);
       window.clearTimeout(focusTimer);
-      // Restore focus only if it's still inside the dismissed modal --
-      // otherwise the user has clicked elsewhere and we should respect that.
+      // Restore focus to whatever opened the modal, unless the user has
+      // deliberately moved focus somewhere else meanwhile.
+      //
+      // This cleanup is a passive effect, so it runs *after* React's commit has
+      // already detached the panel. Two consequences: panelRef.current is null
+      // by now, and the browser has reset document.activeElement to <body>
+      // because the element that had focus was removed. So neither the ref nor
+      // a node captured at effect time can ever satisfy a contains() check --
+      // that guard silently short-circuited and focus was never restored.
+      // "Focus fell to body/null" is the signal that it belonged to the modal.
+      const active = document.activeElement as HTMLElement | null;
+      const focusCameFromModal =
+        !active || active === document.body || panelAtEffectTime?.contains(active) === true;
       if (
         previouslyFocused &&
         typeof previouslyFocused.focus === 'function' &&
-        document.activeElement &&
-        panelRef.current?.contains(document.activeElement)
+        document.contains(previouslyFocused) &&
+        focusCameFromModal
       ) {
         previouslyFocused.focus();
       }

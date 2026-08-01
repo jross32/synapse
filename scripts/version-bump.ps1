@@ -75,20 +75,36 @@ if ($Set) {
   $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
 }
 
+# Write UTF-8 *without* a BOM, on every host.
+# `Set-Content -Encoding UTF8` means "UTF-8 with BOM" on Windows PowerShell 5.1 but
+# "UTF-8 no BOM" on PowerShell 7+, so a bump run from 5.1 used to prepend EF BB BF to
+# these four files. That silently broke `scripts/docs_sync_check.py`, which reads
+# package.json as plain utf-8 and died on the BOM -- i.e. the mandatory pre-commit gate
+# crashed rather than reporting. Writing through .NET makes the result host-independent.
+# The trailing newline replicates what Set-Content appended, so diffs stay clean.
+function Write-Utf8NoBom {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+  )
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $Value + [Environment]::NewLine, $utf8NoBom)
+}
+
 # Update package.json
 $pkg.version = $newVersion
-($pkg | ConvertTo-Json -Depth 50) | Set-Content -Path $packageJsonPath -Encoding UTF8
+Write-Utf8NoBom -Path $packageJsonPath -Value ($pkg | ConvertTo-Json -Depth 50)
 
 # Update pyproject.toml (only the [project] version line)
 $pyContent = Get-Content $pyprojectPath -Raw
 $pyContent = [regex]::Replace($pyContent, '(?m)^version = ".*"$', "version = `"$newVersion`"")
-Set-Content -Path $pyprojectPath -Value $pyContent -Encoding UTF8
+Write-Utf8NoBom -Path $pyprojectPath -Value $pyContent
 
 # Update __version__ in the package __init__.py (Contract #8: single source of truth).
 $initPath = Join-Path $root 'daemon\synapse_daemon\__init__.py'
 $initContent = Get-Content $initPath -Raw
 $initContent = [regex]::Replace($initContent, '(?m)^__version__ = ".*"$', "__version__ = `"$newVersion`"")
-Set-Content -Path $initPath -Value $initContent -Encoding UTF8
+Write-Utf8NoBom -Path $initPath -Value $initContent
 
 # Append CHANGELOG stub
 $changelog = Get-Content $changelogPath -Raw
@@ -104,7 +120,7 @@ $entry = @"
 
 "@
 $changelog = $changelog -replace '## \[Unreleased\]', "## [Unreleased]`r`n$entry"
-Set-Content -Path $changelogPath -Value $changelog -Encoding UTF8
+Write-Utf8NoBom -Path $changelogPath -Value $changelog
 
 Write-Host "Synapse bumped: $currentVersion  ->  $newVersion  (kind: $Kind)"
 Write-Host "Updated:"

@@ -26,8 +26,20 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _read(rel: str) -> str:
+    """Read a repo text file, tolerating a UTF-8 BOM.
+
+    Some Windows tooling (notably `Set-Content -Encoding UTF8` under Windows
+    PowerShell 5.1) prepends EF BB BF. Reading that as plain "utf-8" leaves a
+    leading \\ufeff, which made json.loads raise and took this gate down with a
+    traceback instead of a readable verdict. "utf-8-sig" strips the BOM if present
+    and behaves exactly like "utf-8" when it isn't.
+    """
+    return (REPO_ROOT / rel).read_text(encoding="utf-8-sig")
+
+
 def _init_version() -> str:
-    text = (REPO_ROOT / "daemon" / "synapse_daemon" / "__init__.py").read_text(encoding="utf-8")
+    text = _read("daemon/synapse_daemon/__init__.py")
     m = re.search(r'__version__\s*=\s*"([^"]+)"', text)
     if not m:
         raise SystemExit("docs-sync: no __version__ in daemon/synapse_daemon/__init__.py")
@@ -35,11 +47,11 @@ def _init_version() -> str:
 
 
 def _package_json_version() -> str:
-    return json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+    return json.loads(_read("package.json"))["version"]
 
 
 def _pyproject_version() -> str:
-    return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    return tomllib.loads(_read("pyproject.toml"))["project"]["version"]
 
 
 def check() -> list[str]:
@@ -56,13 +68,13 @@ def check() -> list[str]:
         )
 
     version = init_v
-    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    changelog = _read("CHANGELOG.md")
     if f"## [{version}]" not in changelog:
         problems.append(
             f"CHANGELOG.md has no `## [{version}]` entry -- add one describing what this version changed."
         )
 
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    readme = _read("README.md")
     if version not in readme:
         problems.append(
             f"README.md does not mention the current version ({version}) -- update the status line so the "

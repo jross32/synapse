@@ -6,7 +6,18 @@
 
 ## Current version
 
-`0.1.95`
+`0.1.96`
+
+> **Modal focus + release-tooling note (2026-08-01):** closing any dialog now returns keyboard focus to
+> the control that opened it. `Modal`'s cleanup checked `panelRef.current?.contains(document.activeElement)`,
+> but as a passive effect it runs after React detached the panel -- the ref is null and focus has already
+> fallen to `<body>` -- so the guard never matched and focus was dropped app-wide. Verified live in the
+> running renderer (no renderer test harness exists): focus returns to "Add Project" after Escape, and is
+> *not* stolen back when the user deliberately moved it first. Separately, `scripts/version-bump.ps1` was
+> writing a UTF-8 BOM when invoked from Windows PowerShell 5.1 (`Set-Content -Encoding UTF8` differs by
+> host), which crashed `scripts/docs_sync_check.py` with a traceback -- the mandatory pre-commit gate.
+> Both are fixed: the bump writes BOM-less UTF-8 via .NET on every host, and the gate reads `utf-8-sig`.
+> Closes inbox proposal `555ad47231d9`.
 
 > **Parallel squad launch reliability note (2026-08-01):** simultaneous Claude, Codex, and Copilot
 > launch requests no longer share an open SQLite transaction across awaited PTY startup. Synapse briefly
