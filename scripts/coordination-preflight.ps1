@@ -22,14 +22,23 @@
   pwsh scripts/coordination-preflight.ps1
 
 .EXAMPLE
-  pwsh scripts/coordination-preflight.ps1 -Staged
+  # Pre-commit lane gate. Pass YOUR coordination session id (or set
+  # $env:SYNAPSE_SESSION_ID) so your own lane is not reported as a conflict with
+  # yourself -- ADR-0024 tells you to claim a lane before editing, so without this
+  # the agent that followed the protocol is the one that gets blocked. Lanes held
+  # by OTHER sessions are still reported and still exit 1.
+  pwsh scripts/coordination-preflight.ps1 -Staged -SessionId <your-session-id>
 #>
 [CmdletBinding()]
 param(
   [switch]$Staged,
   [string]$Port = '7878',
   [string]$Token = $env:SYNAPSE_LOCAL_TOKEN,
-  [string]$ProjectId
+  [string]$ProjectId,
+  # Your own coordination session id, so your own lane is not reported as a conflict with
+  # yourself. ADR-0024 tells every agent to claim a lane before editing, so without this the
+  # well-behaved agent is the one that gets blocked. Defaults to $env:SYNAPSE_SESSION_ID.
+  [string]$SessionId = $env:SYNAPSE_SESSION_ID
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +99,7 @@ if ($Staged) {
     # which is the partition lanes claimed without a project land in.
     $payload = @{ paths = $stagedPaths }
     if (-not [string]::IsNullOrWhiteSpace($ProjectId)) { $payload['project_id'] = $ProjectId }
+    if (-not [string]::IsNullOrWhiteSpace($SessionId)) { $payload['exclude_session_id'] = $SessionId }
     $body = $payload | ConvertTo-Json -Depth 5
     try {
       $resp = Invoke-RestMethod -Uri "$base/coordination/overlap" -Method Post -Headers $headers `

@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.98`
+`0.1.99`
+
+> **Lane gate is now usable, and discoverable (2026-08-01):** added `-SessionId` so an agent's own lane
+> stops being reported as a conflict with itself (previously the protocol-following agent was the one
+> blocked), and pointed AGENTS.md at `coordination-preflight.ps1 -Staged` -- the agent docs only ever
+> referenced the *other* preflight script, which is much of why the gate sat broken unnoticed.
+> Verified A/B/C live, including that self-exclusion still catches a competing agent's lane.
 
 > **Lane gate hardened at the source (2026-08-01):** a blank `project_id` used to address a lane
 > partition that can never match, so `detect_overlap` reported "no conflicts" while looking at nothing.

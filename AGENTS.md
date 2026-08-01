@@ -22,6 +22,19 @@ multi-thousand-line uncommitted dump across many half-built features; land each
 **complete, compiling, tested** piece as its own commit as you go. (Both of these
 drifted recently and had to be reconciled — this rule prevents a repeat.)
 
+**When another AI is working in this tree, run the lane gate before you commit.**
+`scripts/preflight.ps1` (above) covers numbering + footprint; the *separate*
+`scripts/coordination-preflight.ps1 -Staged` is ADR-0024's one enforceable
+coordination gate — it fails (exit 1) when your staged files overlap a lane another
+session holds. Pass your own session id so your own claim isn't reported against you:
+
+```
+pwsh -NoProfile -File scripts/coordination-preflight.ps1 -Staged -SessionId <your-session-id>
+```
+
+(or set `$env:SYNAPSE_SESSION_ID`). Claim a lane first via `POST /api/v1/coordination/lanes`.
+This gate was silently broken until `0.1.97`–`0.1.98` partly because nothing here pointed at it.
+
 **Never leave the app half-done at a usage limit.** When usage/tokens run low —
 for *any* AI coder (Claude, Codex, Copilot, local) — the last action before
 stopping must be to bring the current unit to a working, tested state and
