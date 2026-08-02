@@ -12,6 +12,7 @@ Module-level CRUD taking a ``sqlite3.Connection`` (matching :mod:`project_record
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import sqlite3
 from datetime import datetime
@@ -157,15 +158,54 @@ def resolve_proposal(
     return get_proposal(conn, proposal_id)
 
 
-def find_addressed_proposal_ids(proposals: list[Proposal], commit_texts: list[str]) -> set[str]:
-    """Ids of proposals whose id string is mentioned in any commit text.
+# Words that mean "this commit dealt with it", as opposed to merely naming it.
+_RESOLUTION_MARKERS = re.compile(
+    r"\b(close[sd]?|fix(e[sd])?|resolv(e|es|ed)|address(es|ed)?|implement(s|ed)?)\b",
+    re.IGNORECASE,
+)
 
-    Proposal ids are random hex, so a commit mentioning one almost certainly landed *after*
-    the idea was filed and is referencing it -- a strong "this was likely addressed" signal.
+
+def find_addressed_proposal_hints(
+    proposals: list[Proposal], commit_texts: list[str]
+) -> dict[str, str]:
+    """Map proposal id -> the commit line that claims to have dealt with it.
+
+    A bare mention is NOT enough. Commits legitimately name a proposal to explain why it
+    was *skipped* ("Skipped <id> this pass: it needs a real restart") or to warn the next
+    agent ("<id> is already fixed -- do not re-fix"). Flagging those as addressed is worse
+    than flagging nothing: the inbox then shows work as done that nobody did. That happened
+    twice in one session, on ideas that were explicitly deferred.
+
+    So an id counts only when its own line also carries a resolution word -- uniformly,
+    subject line included. An earlier draft exempted the subject on the theory that naming
+    an id there is inherently a claim, but "chore: mentions <id>" is a subject too, and one
+    rule with no exceptions is both easier to predict and safer: under-flagging costs a
+    hint, over-flagging reports work as done.
+
+    The returned line is the matching line -- previously the hint was the commit's first
+    line, so a multi-topic commit attached an unrelated summary to the proposal.
+    """
+    hints: dict[str, str] = {}
+    ids = {p.id for p in proposals if p.id}
+    if not ids:
+        return hints
+    for text in commit_texts:
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or not _RESOLUTION_MARKERS.search(line):
+                continue
+            for proposal_id in ids:
+                if proposal_id not in hints and proposal_id in line:
+                    hints[proposal_id] = line[:200]
+    return hints
+
+
+def find_addressed_proposal_ids(proposals: list[Proposal], commit_texts: list[str]) -> set[str]:
+    """Ids of proposals a recent commit claims to have addressed.
+
     Pure + side-effect-free so it is trivially testable without a git repo.
     """
-    blob = "\n".join(commit_texts)
-    return {p.id for p in proposals if p.id and p.id in blob}
+    return set(find_addressed_proposal_hints(proposals, commit_texts))
 
 
 def mark_proposal_addressed(conn: sqlite3.Connection, proposal_id: str, commit_hint: str) -> Proposal:
@@ -192,9 +232,8 @@ def reconcile_addressed_proposals(conn: sqlite3.Connection, commit_texts: list[s
     """
     open_proposals = list_proposals(conn, ProposalStatus.OPEN)
     flagged: list[Proposal] = []
-    for proposal_id in find_addressed_proposal_ids(open_proposals, commit_texts):
-        hint = next((text for text in commit_texts if proposal_id in text), "")
-        # First line of the matching commit is the most useful hint.
-        first_line = hint.strip().splitlines()[0] if hint.strip() else ""
-        flagged.append(mark_proposal_addressed(conn, proposal_id, first_line[:200]))
+    # The hint is the line that made the claim, not the commit's subject -- a commit that
+    # touches several things would otherwise attach an unrelated summary to this proposal.
+    for proposal_id, hint in find_addressed_proposal_hints(open_proposals, commit_texts).items():
+        flagged.append(mark_proposal_addressed(conn, proposal_id, hint))
     return flagged

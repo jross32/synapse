@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.107`
+`0.1.108`
+
+> **The inbox stops claiming skipped work is done (2026-08-01):** reconcile flagged a proposal whenever
+> its id appeared in any commit, so commits that named an idea to record it was SKIPPED were reported as
+> addressed -- twice in one session. An id now counts only on a line that also carries a resolution word,
+> and the stored hint is that line rather than the commit subject. Verified against real repo history:
+> both false positives gone, both genuine closures still flagged with correct hints.
 
 > **Sync offline reads as offline, not broken (2026-08-01):** signed in with the accounts service down,
 > Profile showed a red ERROR badge and a raw `[WinError 10061]` alert -- alarming, but nothing was wrong.
