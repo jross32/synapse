@@ -331,7 +331,9 @@ export function ProfileHub({
           </p>
         </div>
         <div className='flex items-center gap-2'>
-          {profile?.signed_in && <SyncBadge syncStatus={profile.sync_status} />}
+          {profile?.signed_in && (
+            <SyncBadge syncStatus={profile.sync_status} backendReachable={accountBackendReachable} />
+          )}
           <Button
             variant='outline'
             size='sm'
@@ -585,16 +587,39 @@ export function ProfileHub({
                 </p>
               </div>
               <div className='space-y-2 text-sm'>
-                <MetaRow label='Status' value={profile.sync_status} />
+                <MetaRow
+                  label='Status'
+                  value={accountBackendReachable ? profile.sync_status : 'Offline — local-first'}
+                />
                 <MetaRow label='Backend' value={profile.sync_backend} />
                 <MetaRow label='Signed in' value='Yes' />
                 <MetaRow label='Sync enabled' value={profile.sync_enabled ? 'Yes' : 'No'} />
                 <MetaRow label='Last sync' value={profile.last_sync_at ? formatLocal(profile.last_sync_at, 'long') : 'Not yet'} />
               </div>
-              {profile.last_sync_error && (
-                <p className='rounded-2xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'>
-                  {profile.last_sync_error}
-                </p>
+              {/* A missing accounts service is an expected, benign state -- not a fault to
+                  alarm about. Explain it plainly and keep the raw connection error as muted
+                  secondary detail so it is still there for diagnosis. A real sync failure
+                  while the service IS reachable keeps the destructive treatment. */}
+              {!accountBackendReachable ? (
+                <div className='rounded-2xl border border-border/70 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground'>
+                  <p className='font-medium text-foreground'>Sync is offline</p>
+                  <p className='mt-1 leading-5'>
+                    The Synapse Accounts service is not reachable, so nothing is syncing right now.
+                    Synapse keeps running fully on this machine, and sync resumes on its own once the
+                    service is back.
+                  </p>
+                  {profile.last_sync_error && (
+                    <p className='mt-2 font-mono text-[11px] leading-4 text-muted-foreground/80'>
+                      {profile.last_sync_error}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                profile.last_sync_error && (
+                  <p className='rounded-2xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'>
+                    {profile.last_sync_error}
+                  </p>
+                )
               )}
             </Card>
           </div>
@@ -888,7 +913,25 @@ function AccountSyncUnavailable(): JSX.Element {
   );
 }
 
-function SyncBadge({ syncStatus }: { syncStatus: string }): JSX.Element {
+function SyncBadge({
+  syncStatus,
+  backendReachable = true,
+}: {
+  syncStatus: string;
+  backendReachable?: boolean;
+}): JSX.Element {
+  // An unreachable accounts service is not a fault -- Synapse is local-first and
+  // fully usable without it. Reporting that as a red ERROR badge tells the user
+  // something is broken when nothing is, and the underlying `sync_status` really
+  // is "error" in that state, so the badge has to make the distinction itself.
+  // A genuine failure while the service IS reachable stays destructive.
+  if (!backendReachable) {
+    return (
+      <span className='rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+        sync offline
+      </span>
+    );
+  }
   const tone =
     syncStatus === 'connected'
       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'

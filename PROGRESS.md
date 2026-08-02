@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.106`
+`0.1.107`
+
+> **Sync offline reads as offline, not broken (2026-08-01):** signed in with the accounts service down,
+> Profile showed a red ERROR badge and a raw `[WinError 10061]` alert -- alarming, but nothing was wrong.
+> Now a neutral "sync offline" badge, Status "Offline — local-first", and a plain explanation, with the
+> raw error kept as muted detail. A genuine failure while the service IS reachable stays destructive.
+> Verified live in exactly that state. Closes inbox proposal `3ad9aac5d55c`.
 
 > **`doctor` stops leaking a token prefix (2026-08-01):** it printed the first 8 chars of the live auth
 > token, in the one command whose output people paste into issues and chats. Now presence + source only,
