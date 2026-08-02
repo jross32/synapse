@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.103`
+`0.1.104`
+
+> **No more infinite spinners (2026-08-01):** renderer reads now carry a 30s deadline and fail with an
+> actionable `SynapseTimeoutError` instead of hanging -- Design Contract #13, and the exact symptom seen
+> when the daemon wedged earlier today. GET only, deliberately: writes stay untimed because MCP installs
+> allow 600s server-side and a Cloudtap tunnel waits 25s, so a blanket timeout would have broken them.
+> Verified live through Vite against the real module. Closes inbox proposal `7405fbf7d8b5`.
 
 > **Observe workers can report again (2026-08-01):** automatic Claude `observe` workers ran under
 > `--permission-mode plan`, which withholds action pending human approval -- yet their prompt requires

@@ -96,6 +96,47 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Override the base URL for one request. Rarely needed. */
   base?: string;
+  /**
+   * Abort the request after this many ms. `0` disables the timeout entirely.
+   * Defaults to {@link DEFAULT_GET_TIMEOUT_MS} for reads and to no timeout for
+   * anything that mutates -- see the note on that constant.
+   */
+  timeoutMs?: number;
+}
+
+/**
+ * How long a read may hang before we call it a failure (Design Contract #13:
+ * "no spinner that never resolves").
+ *
+ * When the daemon wedged, every panel sat on "Loading..." indefinitely with no
+ * way to tell what was wrong -- the failure was silent rather than actionable.
+ *
+ * This deliberately applies to **GET only**. Reads are idempotent, so aborting
+ * one is safe and re-running it is free. Mutating calls are left untimed on
+ * purpose: several are legitimately slow (an MCP marketplace install allows
+ * 600s server-side, a Cloudtap tunnel waits up to 25s for its URL, an antivirus
+ * scan 30s), and aborting a POST mid-flight tells you nothing about whether the
+ * side effect already happened. A generous 30s still never fires on a healthy
+ * daemon -- typical panel reads return in well under a second -- so in practice
+ * it only trips when something is genuinely wrong.
+ */
+export const DEFAULT_GET_TIMEOUT_MS = 30_000;
+
+/** Thrown when a request exceeded its timeout rather than failing on the wire. */
+export class SynapseTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(path: string, timeoutMs: number) {
+    // Render sub-second budgets as ms -- rounding them to seconds prints
+    // "did not respond within 0s", which reads like a bug in the message itself.
+    const budget = timeoutMs < 1000 ? `${timeoutMs}ms` : `${Math.round(timeoutMs / 1000)}s`;
+    super(
+      `Synapse did not respond within ${budget} (${path}). ` +
+        'The daemon may be busy, restarting, or another Synapse may be running on this port.'
+    );
+    this.name = 'SynapseTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
 }
 
 export async function apiFetch<T = unknown>(
@@ -110,8 +151,28 @@ async function apiFetchInternal<T = unknown>(
   options: ApiFetchOptions,
   allowLocalRefresh: boolean
 ): Promise<T> {
-  const { body, base, headers, ...rest } = options;
+  const { body, base, headers, timeoutMs, ...rest } = options;
   const url = `${base ?? baseUrl}${API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`;
+
+  // Reads time out; writes do not. See DEFAULT_GET_TIMEOUT_MS for why.
+  const method = (rest.method ?? 'GET').toUpperCase();
+  const effectiveTimeout = timeoutMs ?? (method === 'GET' ? DEFAULT_GET_TIMEOUT_MS : 0);
+
+  const controller = effectiveTimeout > 0 ? new AbortController() : null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  if (controller) {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, effectiveTimeout);
+    // Respect a caller's own signal too -- ours must add a deadline, not replace it.
+    const callerSignal = rest.signal;
+    if (callerSignal) {
+      if (callerSignal.aborted) controller.abort();
+      else callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
 
   const init: RequestInit = {
     ...rest,
@@ -123,9 +184,20 @@ async function apiFetchInternal<T = unknown>(
       ...(headers ?? {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...(controller ? { signal: controller.signal } : {}),
   };
 
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    // Distinguish "we gave up waiting" from "the caller cancelled" and from a
+    // genuine network error, so the UI can say something true.
+    if (timedOut) throw new SynapseTimeoutError(path, effectiveTimeout);
+    throw err;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
   const text = await res.text();
   const parsed = text ? safeJson(text) : null;
 
