@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import io
 from contextlib import redirect_stdout
@@ -173,7 +174,12 @@ def test_cli_doctor_reports_token_state(
     main(["doctor"])
     out = capsys.readouterr().out
     assert "token" in out
-    assert "abcdefgh" in out  # first 8 chars only
+    # v0.1.106: the prefix this used to assert (`abcdefgh`) was the leak itself.
+    # `doctor` output gets pasted into issues and chats, so it now confirms a
+    # token exists and names its source without printing any of the value.
+    assert "abcdefgh" not in out
+    assert "found" in out
+    assert "$SYNAPSE_TOKEN" in out
     assert "reach" in out
     assert "FAIL" in out
 
@@ -320,3 +326,84 @@ def test_port_is_serving_false_for_a_closed_port() -> None:
     port = sock.getsockname()[1]
     sock.close()  # nothing is listening now
     assert port_is_serving(port, timeout=0.75) is False
+
+
+# ── doctor must not print any part of the token (v0.1.106) ───────────────
+
+
+def test_doctor_never_prints_any_part_of_the_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`doctor` is the command people paste into issues, chats and AI transcripts.
+
+    It used to print `token : 0hDPU5Ee... (43 chars)`. Eight characters is not a
+    usable credential by itself, but a secret prefix must not ride along in output
+    whose whole purpose is to be shared -- and once pasted it cannot be unpasted.
+    """
+    secret = "SUPERSECRETTOKENVALUE1234567890abcdef"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "auth-token").write_text(secret, encoding="utf-8")
+    monkeypatch.delenv("SYNAPSE_TOKEN", raising=False)
+    monkeypatch.setenv("SYNAPSE_DATA_DIR", str(data_dir))
+
+    main(["doctor"])
+    out = capsys.readouterr().out
+
+    assert secret not in out
+    # No prefix of meaningful length may leak either.
+    for size in range(4, 13):
+        assert secret[:size] not in out, f"leaked a {size}-char prefix of the token"
+    # It must still confirm a token was found, and say which one.
+    assert "found" in out
+    assert str(len(secret)) in out
+    assert "auth-token" in out
+
+
+def test_doctor_names_the_env_var_when_that_is_the_source(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    secret = "ENVTOKENVALUE0987654321"
+    monkeypatch.setenv("SYNAPSE_TOKEN", secret)
+
+    main(["doctor"])
+    out = capsys.readouterr().out
+
+    assert secret not in out
+    assert secret[:8] not in out
+    assert "$SYNAPSE_TOKEN" in out
+
+
+def test_resolve_token_reports_source_without_the_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The source string is what diagnostics print, so it must never carry the secret."""
+    from synapse_daemon.cli_http import discover_token, resolve_token
+
+    secret = "FILETOKEN-abcdefghijklmnop"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "auth-token").write_text(secret, encoding="utf-8")
+    monkeypatch.delenv("SYNAPSE_TOKEN", raising=False)
+    monkeypatch.setenv("SYNAPSE_DATA_DIR", str(data_dir))
+
+    resolved = resolve_token()
+    assert resolved.value == secret
+    assert resolved.source is not None and secret not in resolved.source
+    # discover_token stays the single-value API and must agree with the resolver.
+    assert discover_token() == secret
+
+    monkeypatch.setenv("SYNAPSE_TOKEN", "ENVWINS-1234567890")
+    assert resolve_token().source == "$SYNAPSE_TOKEN"
+    assert resolve_token().value == "ENVWINS-1234567890"
+
+
+def test_resolve_token_reports_nothing_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from synapse_daemon.cli_http import resolve_token
+
+    monkeypatch.delenv("SYNAPSE_TOKEN", raising=False)
+    monkeypatch.setenv("SYNAPSE_DATA_DIR", str(tmp_path / "nope"))
+    resolved = resolve_token()
+    assert resolved.value is None and resolved.source is None

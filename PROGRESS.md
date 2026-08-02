@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.105`
+`0.1.106`
+
+> **`doctor` stops leaking a token prefix (2026-08-01):** it printed the first 8 chars of the live auth
+> token, in the one command whose output people paste into issues and chats. Now presence + source only,
+> via a single `resolve_token()` so the description cannot drift from the precedence. Also fixed a
+> defect from 0.1.105: `doctor` equated "SYNAPSE_DAEMON_BASE answered" with "7878 is serving", so with
+> that override set it called the healthy local daemon a stale holder and `--fix` would have killed it.
+> Both verified live. Closes inbox proposal `a7750f0c7015`.
 
 > **`synapse doctor` sees stuck ports now (2026-08-01):** reports who holds 7878/5173 with pid + cmdline,
 > and `--fix` clears a genuine stray. Key correction found by running it for real: the first version

@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from typing import Callable, NamedTuple
 
 from . import __version__
-from .cli_http import SynapseCliError, daemon_base, discover_token, print_json, request
+from .cli_http import SynapseCliError, daemon_base, print_json, request, resolve_token
 
 
 # ── command handlers ─────────────────────────────────────────────────────
@@ -241,11 +241,17 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     print(f"  python   : {sys.version.split()[0]}")
     print(f"  platform : {platform.system()} {platform.release()}")
     print(f"  daemon   : {daemon_base()}")
-    token = discover_token()
-    if token is None:
-        print("  token    : (not found -- set SYNAPSE_TOKEN or run from data dir)")
+    # Report that a token exists and which location supplied it -- never any of
+    # its characters. `doctor` is the command people run when something is broken
+    # and then paste into an issue, a chat, or an AI transcript, so a secret
+    # prefix riding along in that output cannot be taken back. The source is also
+    # the more useful fact: "found the wrong token" is a path problem, and the
+    # first 8 characters never helped diagnose it.
+    resolved = resolve_token()
+    if resolved.value is None:
+        print("  token    : (not found -- set SYNAPSE_TOKEN or run from the data dir)")
     else:
-        print(f"  token    : {token[:8]}... ({len(token)} chars)")
+        print(f"  token    : found ({len(resolved.value)} chars, from {resolved.source})")
     daemon_ok = False
     try:
         health = request("GET", "/health", timeout=5.0)
@@ -276,9 +282,13 @@ def _report_ports(*, daemon_ok: bool, fix: bool) -> None:
     strays: list[PortHolder] = []
     for holder in holders:
         who = f"pid {holder.pid} · {holder.name}"
-        # Serving == working. The daemon's own /health already answered this for
-        # 7878; anything else gets a direct probe.
-        serving = daemon_ok if holder.port == 7878 else port_is_serving(holder.port)
+        # Serving == working. Always probe the port itself: `daemon_ok` only says
+        # that whatever SYNAPSE_DAEMON_BASE points at answered, which is a
+        # different machine/port whenever that override is set (a remote tunnel,
+        # an alternate port). Trusting it alone let a *healthy* local daemon on
+        # 7878 be reported as a stale holder -- and `--fix` would then have offered
+        # to kill it. A successful /health is only ever an extra affirmative.
+        serving = port_is_serving(holder.port) or (holder.port == 7878 and daemon_ok)
         if serving:
             owner = "the running daemon" if holder.port == 7878 else holder.label
             print(f"  port {holder.port} : in use by {owner} ({who}) -- responding")

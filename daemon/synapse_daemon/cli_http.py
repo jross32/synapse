@@ -31,7 +31,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -53,19 +53,37 @@ def _data_dir() -> Path:
     return Path(os.environ.get("SYNAPSE_DATA_DIR", "data"))
 
 
-def discover_token() -> str | None:
-    """Return the auth token to use, or None if we couldn't find one."""
+class ResolvedToken(NamedTuple):
+    """A token plus *where it came from* -- so diagnostics can describe it.
+
+    `doctor` needs to say "a token was found, and here is which one", and the
+    honest way to do that is the source, never the value. Resolution lives in one
+    place so the description can never drift from the precedence actually used.
+    """
+
+    value: str | None
+    source: str | None  # never contains any part of the secret
+
+
+def resolve_token() -> ResolvedToken:
+    """Find the auth token and record which location supplied it."""
 
     env = os.environ.get("SYNAPSE_TOKEN")
     if env:
-        return env.strip()
+        return ResolvedToken(env.strip(), "$SYNAPSE_TOKEN")
     candidate = _data_dir() / _TOKEN_FILE
     if candidate.is_file():
         try:
-            return candidate.read_text(encoding="utf-8").strip()
+            return ResolvedToken(candidate.read_text(encoding="utf-8").strip(), str(candidate))
         except OSError:
-            return None
-    return None
+            return ResolvedToken(None, None)
+    return ResolvedToken(None, None)
+
+
+def discover_token() -> str | None:
+    """Return the auth token to use, or None if we couldn't find one."""
+
+    return resolve_token().value
 
 
 def _build_url(path: str) -> str:
