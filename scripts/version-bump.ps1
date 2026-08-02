@@ -50,7 +50,35 @@ function Get-CoreVersion([string]$v) {
   return $core
 }
 
-$pkg = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+# -- explicit-encoding file IO ------------------------------------------------
+#
+# Both directions must name the encoding, because Windows PowerShell 5.1 and
+# PowerShell 7 disagree about the default and this script rewrites whole files.
+#
+# Reading: 5.1's Get-Content decodes a BOM-less file as Windows-1252, so every
+# non-ASCII character came back as mojibake and was re-encoded as UTF-8 on write.
+# Since each bump rewrites the ENTIRE changelog, that compounded ~2.2x per release:
+# 220 KB at 0.1.95, 90 MB by 0.1.108, 201 MB by 0.1.109 -- at which point GitHub
+# refused the push for exceeding its 100 MB file limit.
+#
+# Writing: `Set-Content -Encoding UTF8` means "with BOM" on 5.1 and "without" on 7+,
+# which previously prepended EF BB BF and crashed scripts/docs_sync_check.py.
+function Read-Utf8 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  [System.IO.File]::ReadAllText($Path, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Write-Utf8NoBom {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+  )
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  # The trailing newline replicates what Set-Content appended, so diffs stay clean.
+  [System.IO.File]::WriteAllText($Path, $Value + [Environment]::NewLine, $utf8NoBom)
+}
+
+$pkg = Read-Utf8 $packageJsonPath | ConvertFrom-Json
 $currentVersion = [string]$pkg.version
 $coreVersion = Get-CoreVersion $currentVersion
 
@@ -75,39 +103,23 @@ if ($Set) {
   $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
 }
 
-# Write UTF-8 *without* a BOM, on every host.
-# `Set-Content -Encoding UTF8` means "UTF-8 with BOM" on Windows PowerShell 5.1 but
-# "UTF-8 no BOM" on PowerShell 7+, so a bump run from 5.1 used to prepend EF BB BF to
-# these four files. That silently broke `scripts/docs_sync_check.py`, which reads
-# package.json as plain utf-8 and died on the BOM -- i.e. the mandatory pre-commit gate
-# crashed rather than reporting. Writing through .NET makes the result host-independent.
-# The trailing newline replicates what Set-Content appended, so diffs stay clean.
-function Write-Utf8NoBom {
-  param(
-    [Parameter(Mandatory = $true)][string]$Path,
-    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
-  )
-  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText($Path, $Value + [Environment]::NewLine, $utf8NoBom)
-}
-
 # Update package.json
 $pkg.version = $newVersion
 Write-Utf8NoBom -Path $packageJsonPath -Value ($pkg | ConvertTo-Json -Depth 50)
 
 # Update pyproject.toml (only the [project] version line)
-$pyContent = Get-Content $pyprojectPath -Raw
+$pyContent = Read-Utf8 $pyprojectPath
 $pyContent = [regex]::Replace($pyContent, '(?m)^version = ".*"$', "version = `"$newVersion`"")
 Write-Utf8NoBom -Path $pyprojectPath -Value $pyContent
 
 # Update __version__ in the package __init__.py (Contract #8: single source of truth).
 $initPath = Join-Path $root 'daemon\synapse_daemon\__init__.py'
-$initContent = Get-Content $initPath -Raw
+$initContent = Read-Utf8 $initPath
 $initContent = [regex]::Replace($initContent, '(?m)^__version__ = ".*"$', "__version__ = `"$newVersion`"")
 Write-Utf8NoBom -Path $initPath -Value $initContent
 
 # Append CHANGELOG stub
-$changelog = Get-Content $changelogPath -Raw
+$changelog = Read-Utf8 $changelogPath
 $entry = @"
 
 ## [$newVersion] -- $(Get-Date -Format 'yyyy-MM-dd')

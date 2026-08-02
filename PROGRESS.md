@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.108`
+`0.1.109`
+
+> **One session per AI (2026-08-02, PLAN 7 Phase 1):** the Live rail measured 84 sessions, 72 top-level,
+> for a handful of real tasks. Fixed both causes: a returning agent now re-attaches via `resume_key`
+> instead of minting a number every wake, and squad workers register with `parent_session_id`, take no
+> `seq`, and render nested under their parent. Migration 030 backfills existing workers' parents from
+> `activity_journal`. Verified through the real routes on a migrated DB; the running daemon picks it up
+> on next start (Codex is live in #063, so no restart was taken).
 
 > **The inbox stops claiming skipped work is done (2026-08-01):** reconcile flagged a proposal whenever
 > its id appeared in any commit, so commits that named an idea to record it was SKIPPED were reported as

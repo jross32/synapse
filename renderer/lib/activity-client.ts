@@ -35,7 +35,14 @@ export interface ActivityFeed {
 
 export interface ActivitySession {
   id: string;
-  seq: number;
+  /** Operator-facing number. `null` for a worker nested under a main AI --
+   *  those are shown inside their parent, so they take no top-level number. */
+  seq: number | null;
+  /** The main AI this session runs under; `null` for a root session. */
+  parent_session_id?: string | null;
+  /** Workers nested under this session (only present on root rows). */
+  children?: ActivitySession[];
+  child_count?: number;
   project_id: string | null;
   runtime_id: string;
   agent_label: string;

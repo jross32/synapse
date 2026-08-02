@@ -85,8 +85,19 @@ def build_activity_router(storage: Storage, bus: EventBus | None = None) -> APIR
         # legacy worker can remain labelled "active · stale" indefinitely.
         with storage.transaction() as conn:
             coord.expire_stale_sessions(conn)
-        sessions = coord.list_all_sessions(storage.conn)
-        return {"sessions": [_session_view(s) for s in sessions]}
+        # Roots only. A squad worker is already shown inside its parent (and inside the
+        # squad drawer), so listing it here as well is what made the rail unreadable --
+        # 84 sessions for a handful of real tasks. Its children ride along so the UI can
+        # nest them without a second round trip.
+        roots = coord.list_root_sessions(storage.conn)
+        views = []
+        for session in roots:
+            view = _session_view(session)
+            children = coord.list_child_sessions(storage.conn, session.id)
+            view["children"] = [_session_view(child) for child in children]
+            view["child_count"] = len(children)
+            views.append(view)
+        return {"sessions": views}
 
     @router.get("/sessions/{session_id}", response_model=None)
     async def session_detail(session_id: str) -> dict[str, Any]:

@@ -417,3 +417,86 @@ def test_squad_created_with_session_header_stays_with_that_session(tmp_path: Pat
         )
         assert review_event["session_id"] == first["id"]
         assert "shutdown ordering blocker" in review_event["summary_md"]
+
+
+# -- session hierarchy in the Live rail (PLAN 7 Phase 1) ----------------------
+
+
+def test_live_rail_lists_roots_only_with_children_nested(tmp_path: Path) -> None:
+    """The operator-facing fix: one row per main AI, workers folded inside it.
+
+    Before this, every squad worker was its own top-level row and every reconnect
+    minted another -- 84 sessions, 72 top-level, for a handful of real tasks.
+    """
+    with _client(tmp_path) as c:
+        parent = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "claude", "agent_label": "Claude", "task": "lead the work"},
+        ).json()
+        child = c.post(
+            "/api/v1/coordination/sessions",
+            json={
+                "runtime_id": "codex",
+                "agent_label": "Codex · Reviewer",
+                "task": "review it",
+                "parent_session_id": parent["id"],
+            },
+        ).json()
+
+        rows = c.get("/api/v1/activity/sessions").json()["sessions"]
+        ids = [row["id"] for row in rows]
+        assert parent["id"] in ids
+        assert child["id"] not in ids, "a nested worker must not occupy a top-level row"
+
+        row = next(r for r in rows if r["id"] == parent["id"])
+        assert row["child_count"] == 1
+        assert [k["id"] for k in row["children"]] == [child["id"]]
+        # The child keeps its own identity for the drill-down.
+        assert row["children"][0]["agent_label"] == "Codex · Reviewer"
+        assert row["children"][0]["seq"] is None
+
+
+def test_a_nested_worker_does_not_raise_a_connected_notification(tmp_path: Path) -> None:
+    """Workers are shown rolled up, so shouting about each one was pure noise."""
+    with _client(tmp_path) as c:
+        parent = c.post(
+            "/api/v1/coordination/sessions",
+            json={"runtime_id": "claude", "agent_label": "Claude", "task": "lead"},
+        ).json()
+        before = len(c.get("/api/v1/activity/notifications").json()["notifications"])
+
+        c.post(
+            "/api/v1/coordination/sessions",
+            json={
+                "runtime_id": "copilot",
+                "agent_label": "Copilot · Tester",
+                "task": "verify",
+                "parent_session_id": parent["id"],
+            },
+        )
+        after = c.get("/api/v1/activity/notifications").json()["notifications"]
+        assert len(after) == before, "a nested worker must not add a top-level notification"
+
+
+def test_reconnecting_with_a_resume_key_keeps_one_row(tmp_path: Path) -> None:
+    """A returning agent re-attaches instead of adding another numbered session."""
+    with _client(tmp_path) as c:
+        body = {
+            "runtime_id": "claude",
+            "agent_label": "Claude - loop",
+            "task": "wake 1",
+            "resume_key": "claude:repo:loop",
+        }
+        first = c.post("/api/v1/coordination/sessions", json=body).json()
+        assert first["resumed"] is False
+
+        second = c.post(
+            "/api/v1/coordination/sessions", json={**body, "task": "wake 2"}
+        ).json()
+        assert second["resumed"] is True
+        assert second["id"] == first["id"]
+        assert second["seq"] == first["seq"]
+
+        rows = c.get("/api/v1/activity/sessions").json()["sessions"]
+        assert len([r for r in rows if r["id"] == first["id"]]) == 1
+        assert len(rows) == 1, "reconnecting must not grow the rail"

@@ -77,7 +77,14 @@ class AgentSession(BaseModel):
     id: str
     # Human-friendly monotonic session number (#001, #002, ...) -- ADR-0028. Stable per
     # install; the operator-facing identity for "which AI run was this".
-    seq: int = 0
+    # None for nested worker sessions: they are shown inside their parent, so numbering
+    # them only inflated the operator's rail (PLAN 7 / ADR-0035).
+    seq: int | None = 0
+    # The main AI this session runs under. None = a root session (an AI the operator
+    # is talking to directly).
+    parent_session_id: str | None = None
+    # Stable identity for "the same AI reconnecting" -- see resolve_or_register.
+    resume_key: str | None = None
     project_id: str | None = None
     runtime_id: str = ""
     agent_label: str = ""
@@ -103,6 +110,11 @@ class AgentSessionRegister(BaseModel):
     coder_thread_id: str | None = None
     task: str = ""
     last_intent: str = Field(default="", max_length=8000)
+    # Nest this session under a main AI instead of creating a top-level row.
+    parent_session_id: str | None = None
+    # Reconnect to an existing live session with the same key instead of creating a
+    # second one. Omit it to keep the pre-PLAN-7 behaviour of always creating.
+    resume_key: str | None = None
 
 
 class AgentSessionHeartbeat(BaseModel):
@@ -242,9 +254,12 @@ def _row_to_session(row: sqlite3.Row, *, now: datetime | None = None) -> AgentSe
     last_hb = from_iso(row["last_heartbeat_at"])
     ref = now or utc_now()
     stale = (ref - last_hb) > timedelta(seconds=SESSION_STALE_SECONDS)
+    raw_seq = row["seq"]
     return AgentSession(
         id=row["id"],
-        seq=int(row["seq"] or 0),
+        seq=int(raw_seq) if raw_seq is not None else None,
+        parent_session_id=row["parent_session_id"],
+        resume_key=row["resume_key"],
         project_id=row["project_id"],
         runtime_id=row["runtime_id"] or "",
         agent_label=row["agent_label"] or "",
@@ -288,9 +303,42 @@ def register_session(
     mcp_all_connected: bool = True,
 ) -> AgentSession:
     now = to_iso(utc_now())
+
+    # Reconnect rather than multiply. SESSION_STALE_SECONDS marks a session `gone`
+    # between wakes, so an agent that comes back -- an autonomous loop, a CLI the
+    # operator reopens -- used to mint a fresh number every time. Measured before this
+    # change: 84 sessions, 72 of them top-level, for a handful of real tasks.
+    resume_key = (payload.resume_key or "").strip() or None
+    if resume_key is not None:
+        # Deliberately does NOT require `ended_at IS NULL`. The whole point is the agent
+        # that went stale and came back: expire_stale_sessions sets `gone` + `ended_at`,
+        # so requiring a live row would refuse to resume in the exact case this exists
+        # for. Reviving clears ended_at, and the partial unique index still guarantees
+        # only one *live* session per key.
+        existing = conn.execute(
+            "SELECT * FROM agent_sessions WHERE resume_key = ? "
+            "ORDER BY registered_at DESC LIMIT 1",
+            (resume_key,),
+        ).fetchone()
+        if existing is not None:
+            # Adopt the caller's current intent; it is the same agent, new work.
+            conn.execute(
+                "UPDATE agent_sessions SET status = 'active', ended_at = NULL, "
+                "last_heartbeat_at = ?, task = ?, last_intent = ? WHERE id = ?",
+                (now, payload.task.strip(), payload.last_intent.strip(), existing["id"]),
+            )
+            return get_session(conn, existing["id"])
+
     session_id = _new_id()
     # Monotonic operator-facing session number (#001, #002, ...) -- ADR-0028.
-    seq = int(conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM agent_sessions").fetchone()[0])
+    # Only ROOT sessions are numbered: a nested worker is displayed inside its parent,
+    # so giving it a top-level number inflated the rail without telling anyone anything.
+    parent_session_id = (payload.parent_session_id or "").strip() or None
+    seq = None
+    if parent_session_id is None:
+        seq = int(
+            conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM agent_sessions").fetchone()[0]
+        )
     # Grade the connection so the operator sees green/yellow/red at a glance. The caller
     # (route) supplies the mcp signal best-effort; has_project comes from the payload.
     grade = connection_codes.classify(
@@ -299,13 +347,15 @@ def register_session(
     )
     conn.execute(
         "INSERT INTO agent_sessions "
-        "(id, seq, project_id, runtime_id, agent_label, coder_thread_id, task, status, "
-        " last_intent, connection_level, connection_code, registered_at, last_heartbeat_at, "
-        " ended_at, metadata_json) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, NULL, '{}')",
+        "(id, seq, parent_session_id, resume_key, project_id, runtime_id, agent_label, "
+        " coder_thread_id, task, status, last_intent, connection_level, connection_code, "
+        " registered_at, last_heartbeat_at, ended_at, metadata_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, NULL, '{}')",
         (
             session_id,
             seq,
+            parent_session_id,
+            resume_key,
             payload.project_id,
             payload.runtime_id.strip(),
             payload.agent_label.strip(),
@@ -560,6 +610,31 @@ def list_all_sessions(conn: sqlite3.Connection) -> list[AgentSession]:
     """
     now = utc_now()
     rows = conn.execute("SELECT * FROM agent_sessions ORDER BY seq DESC, registered_at DESC").fetchall()
+    return [_row_to_session(row, now=now) for row in rows]
+
+
+def list_root_sessions(conn: sqlite3.Connection) -> list[AgentSession]:
+    """Top-level sessions only -- the AIs the operator is actually talking to.
+
+    Workers spawned by a squad are nested under the session that created them and are
+    deliberately excluded here: they were already displayed inside the squad drawer, so
+    also listing them at the top level made the rail unreadable (PLAN 7 / ADR-0035).
+    """
+    now = utc_now()
+    rows = conn.execute(
+        "SELECT * FROM agent_sessions WHERE parent_session_id IS NULL "
+        "ORDER BY seq DESC, registered_at DESC"
+    ).fetchall()
+    return [_row_to_session(row, now=now) for row in rows]
+
+
+def list_child_sessions(conn: sqlite3.Connection, parent_session_id: str) -> list[AgentSession]:
+    """The workers running under one main AI, oldest first (the order they joined)."""
+    now = utc_now()
+    rows = conn.execute(
+        "SELECT * FROM agent_sessions WHERE parent_session_id = ? ORDER BY registered_at ASC",
+        (parent_session_id,),
+    ).fetchall()
     return [_row_to_session(row, now=now) for row in rows]
 
 

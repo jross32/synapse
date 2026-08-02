@@ -558,3 +558,136 @@ def test_router_can_correct_worker_identity_and_connection_grade(tmp_path: Path)
     assert body["coder_thread_id"] == "pty-claude-review"
     assert body["connection_level"] == "green"
     assert body["connection_code"] == "ok"
+
+
+# ── session hierarchy + resumable identity (PLAN 7 Phase 1) ──────────────
+#
+# Measured before this change: 84 sessions, 72 of them top-level, for a handful of
+# real tasks. One autonomous agent minted a new number every wake (#079..#083 were
+# all the same Claude) because SESSION_STALE_SECONDS marks a session gone between
+# wakes and registration always took MAX(seq)+1.
+
+
+def test_the_same_ai_reconnecting_resumes_instead_of_minting_a_number(tmp_path: Path) -> None:
+    """The visible bug: one agent, one session -- not one per reconnect."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        first = coord.register_session(
+            conn,
+            coord.AgentSessionRegister(
+                runtime_id="claude",
+                agent_label="Claude - autonomous loop",
+                task="ship things",
+                resume_key="claude:repo:loop",
+            ),
+        )
+    # It goes stale between wakes, exactly as a 25-minute loop would: backdate the
+    # heartbeat past the stale window, then let the sweep mark it gone.
+    with storage.transaction() as conn:
+        old_hb = to_iso(utc_now() - timedelta(seconds=coord.SESSION_STALE_SECONDS + 60))
+        conn.execute(
+            "UPDATE agent_sessions SET last_heartbeat_at = ? WHERE id = ?", (old_hb, first.id)
+        )
+        assert coord.expire_stale_sessions(conn) == 1
+    assert coord.get_session(storage.conn, first.id).status == coord.AgentSessionStatus.GONE
+
+    with storage.transaction() as conn:
+        second = coord.register_session(
+            conn,
+            coord.AgentSessionRegister(
+                runtime_id="claude",
+                agent_label="Claude - autonomous loop",
+                task="ship more things",
+                resume_key="claude:repo:loop",
+            ),
+        )
+
+    assert second.id == first.id, "reconnecting must re-attach, not create a second session"
+    assert second.seq == first.seq, "and must not burn a new number"
+    assert second.status == coord.AgentSessionStatus.ACTIVE, "resuming revives the session"
+    # The new task is adopted -- it is the same agent doing something else now.
+    assert second.task == "ship more things"
+
+
+def test_a_different_ai_does_not_hijack_another_sessions_resume_key(tmp_path: Path) -> None:
+    """Resume is identity, so it must not be a way to take over someone else's row."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        mine = coord.register_session(
+            conn,
+            coord.AgentSessionRegister(
+                runtime_id="claude", agent_label="Claude", task="a", resume_key="claude:x"
+            ),
+        )
+        theirs = coord.register_session(
+            conn,
+            coord.AgentSessionRegister(
+                runtime_id="codex", agent_label="Codex", task="b", resume_key="codex:x"
+            ),
+        )
+    assert theirs.id != mine.id
+    assert theirs.seq != mine.seq
+
+
+def test_registering_without_a_resume_key_still_creates_a_new_session(tmp_path: Path) -> None:
+    """Back-compat: callers that predate resume keys keep their old behaviour."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        a = coord.register_session(
+            conn, coord.AgentSessionRegister(runtime_id="claude", agent_label="A", task="t")
+        )
+        b = coord.register_session(
+            conn, coord.AgentSessionRegister(runtime_id="claude", agent_label="A", task="t")
+        )
+    assert a.id != b.id and a.seq != b.seq
+
+
+def test_a_child_session_is_nested_and_takes_no_number(tmp_path: Path) -> None:
+    """Workers were burning top-level numbers while already being shown nested."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        parent = coord.register_session(
+            conn, coord.AgentSessionRegister(runtime_id="claude", agent_label="Lead", task="lead")
+        )
+        child = coord.register_session(
+            conn,
+            coord.AgentSessionRegister(
+                runtime_id="codex",
+                agent_label="Codex · Reviewer",
+                task="review",
+                parent_session_id=parent.id,
+            ),
+        )
+
+    assert child.parent_session_id == parent.id
+    assert child.seq is None, "a nested worker must not consume an operator-facing number"
+    assert parent.seq is not None
+
+    roots = coord.list_root_sessions(storage.conn)
+    root_ids = {s.id for s in roots}
+    assert parent.id in root_ids
+    assert child.id not in root_ids, "children must not appear in the top-level rail"
+
+    children = coord.list_child_sessions(storage.conn, parent.id)
+    assert [c.id for c in children] == [child.id]
+
+
+def test_children_survive_as_records_even_though_they_are_not_top_level(tmp_path: Path) -> None:
+    """Nesting must hide them from the rail without losing their detail."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        parent = coord.register_session(
+            conn, coord.AgentSessionRegister(runtime_id="claude", agent_label="Lead", task="lead")
+        )
+        child = coord.register_session(
+            conn,
+            coord.AgentSessionRegister(
+                runtime_id="copilot",
+                agent_label="Copilot · Tester",
+                task="verify the UI",
+                parent_session_id=parent.id,
+            ),
+        )
+    fetched = coord.get_session(storage.conn, child.id)
+    assert fetched.task == "verify the UI"
+    assert fetched.agent_label == "Copilot · Tester"

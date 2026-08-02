@@ -505,6 +505,12 @@ def project_event(conn: sqlite3.Connection, name: str, payload: dict[str, Any]) 
     """
 
     if name == event_name("coordination", "session_registered"):
+        # A nested worker is displayed inside its parent session, so announcing it at
+        # the top of the notification centre was pure noise -- one squad launch could
+        # produce a "connected" card per worker for work the operator already sees
+        # rolled up. The worker's own record is untouched; only the shout is dropped.
+        if payload.get("parent_session_id"):
+            return None
         seq = payload.get("seq")
         runtime = str(payload.get("runtime_id") or "").strip() or "unknown runtime"
         label = str(payload.get("agent_label") or "").strip()

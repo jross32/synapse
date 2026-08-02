@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, Request
 
+from . import activity as activity_module
 from . import agent_squads as squads
 from . import coordination
 from . import mcp_servers as mcp_servers_module
@@ -746,6 +747,11 @@ def build_agent_squads_router(
                 files_touched=work_item.files_touched,
             ).resolve()
             lead_session_id = squads.lead_session_id_for_squad(conn, squad.id)
+            # Nest this worker under the main AI that created the squad, so it shows up
+            # inside that session instead of as another top-level row. The owner link is
+            # already durable: the squad-created receipt carries the caller's
+            # X-Synapse-Session (activity._owner_session_id_for_squad).
+            parent_session_id = activity_module._owner_session_id_for_squad(conn, squad.id)
             coordination_session = coordination.register_session(
                 conn,
                 coordination.AgentSessionRegister(
@@ -755,6 +761,7 @@ def build_agent_squads_router(
                     coder_thread_id=session_id,
                     task=work_item.title,
                     last_intent=f"Starting {work_item.title}",
+                    parent_session_id=parent_session_id,
                 ),
             )
             worker_credential = coordination.issue_session_credential(
@@ -785,7 +792,13 @@ def build_agent_squads_router(
                 "SYNAPSE_PTY_SESSION_ID": session_id,
                 "SYNAPSE_SESSION_ID": coordination_session.id,
                 "SYNAPSE_SESSION_KEY": worker_credential,
-                "SYNAPSE_LEAD_SESSION_ID": lead_session_id or coordination_session.id,
+                # The parent Live session this worker reports under. Prefer the real
+                # parent coordination session; `lead_session_id_for_squad` returns a PTY
+                # session id, which is a different namespace and was never usable as a
+                # session reference by anything consuming this variable.
+                "SYNAPSE_LEAD_SESSION_ID": (
+                    parent_session_id or lead_session_id or coordination_session.id
+                ),
                 "SYNAPSE_ROLE_PROMPT_FILE": str(prompt_file),
                 "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id).resolve()),
                 "SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT": AI_CONTEXT_DIRECTION_PROMPT,

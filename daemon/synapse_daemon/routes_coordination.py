@@ -79,7 +79,18 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
     ) -> dict[str, Any]:
         mcp_ok = await _mcp_all_connected(request)
         with storage.transaction() as conn:
+            # Detect re-attach vs create so the response can say which happened.
+            resume_key = (payload.resume_key or "").strip()
+            existing_id = None
+            if resume_key:
+                row = conn.execute(
+                    "SELECT id FROM agent_sessions WHERE resume_key = ? "
+                    "ORDER BY registered_at DESC LIMIT 1",
+                    (resume_key,),
+                ).fetchone()
+                existing_id = row["id"] if row else None
             session = coord.register_session(conn, payload, mcp_all_connected=mcp_ok)
+            resumed = existing_id is not None and session.id == existing_id
             session_key = coord.issue_session_credential(
                 conn,
                 session.id,
@@ -112,6 +123,7 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
                 "runtime_id": session.runtime_id,
                 "agent_label": session.agent_label,
                 "coder_thread_id": session.coder_thread_id,
+                "parent_session_id": session.parent_session_id,
                 "task": session.task,
                 "connection_level": session.connection_level,
                 "connection_code": session.connection_code,
@@ -119,6 +131,9 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
         )
         return {
             **session.model_dump(mode="json"),
+            # True when an existing session was re-attached rather than a new one
+            # created, so a returning agent can tell it kept its identity.
+            "resumed": resumed,
             # Shown once. Only its hash is stored; later list/detail responses
             # never expose the credential.
             "session_key": session_key,

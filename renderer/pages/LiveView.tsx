@@ -747,7 +747,7 @@ export function LiveViewPage(): JSX.Element {
                           aria-hidden='true'
                         />
                         <span className='font-mono text-xs text-muted-foreground'>
-                          #{String(session.seq).padStart(3, '0')}
+                          {session.seq == null ? '—' : `#${String(session.seq).padStart(3, '0')}`}
                         </span>
                         <span className='truncate text-sm font-medium'>{session.agent_label || session.runtime_id || 'AI'}</span>
                       </div>
@@ -758,6 +758,32 @@ export function LiveViewPage(): JSX.Element {
                         <p className='mt-1 line-clamp-2 text-[11px] text-foreground/75'>
                           {session.last_intent || session.task}
                         </p>
+                      )}
+                      {/* Workers run under this AI. They are listed here rather than as
+                          their own rail rows -- that duplication is what made the rail
+                          unreadable. Full detail stays in the Squads drawer. */}
+                      {!!session.child_count && (
+                        <ul className='mt-1.5 space-y-0.5 border-l border-border/60 pl-2'>
+                          {(session.children ?? []).slice(0, 4).map((child) => (
+                            <li key={child.id} className='flex items-center gap-1.5'>
+                              <span
+                                className={cn(
+                                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                                  LEVEL_DOT[child.connection_level] ?? LEVEL_DOT.info
+                                )}
+                                aria-hidden='true'
+                              />
+                              <span className='truncate text-[10px] text-muted-foreground'>
+                                {child.agent_label || child.runtime_id}
+                              </span>
+                            </li>
+                          ))}
+                          {session.child_count > 4 && (
+                            <li className='text-[10px] text-muted-foreground/70'>
+                              +{session.child_count - 4} more
+                            </li>
+                          )}
+                        </ul>
                       )}
                     </button>
                   </li>
@@ -1284,9 +1310,13 @@ export function LiveViewPage(): JSX.Element {
                   <section className='rounded-md border border-border bg-muted/10 p-2.5 text-[10px] text-muted-foreground'>
                     <p>PTY session: <span className='font-mono text-foreground'>{selectedWorker.profile.pty_session_id ?? 'not started'}</span></p>
                     <p className='mt-1'>Live session: <span className='font-mono text-foreground'>
-                      {selectedWorker.profile.coordination_session
-                        ? `#${String(selectedWorker.profile.coordination_session.seq).padStart(3, '0')}`
-                        : 'not registered'}
+                      {!selectedWorker.profile.coordination_session
+                        ? 'not registered'
+                        : selectedWorker.profile.coordination_session.seq == null
+                          // Workers are nested under their parent and no longer take an
+                          // operator-facing number, so there is nothing to render as "#NNN".
+                          ? 'nested under this session'
+                          : `#${String(selectedWorker.profile.coordination_session.seq).padStart(3, '0')}`}
                     </span></p>
                     <p className='mt-1'>MCP scope: <span className='text-foreground'>
                       {Array.isArray(selectedWorker.profile.role?.mcp_server_ids)
