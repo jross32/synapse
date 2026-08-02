@@ -28,10 +28,13 @@ import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import psutil
+
 from .. import projects as projects_module
 from ..api_versions import event_name
 from ..models import EntityStatus, ErrorRef, ToolItem, ToolState
 from ..storage import Storage
+from ..time_utils import to_iso, utc_now
 from ..ws import EventBus
 from . import ToolHandler
 
@@ -54,6 +57,89 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+# ── durable tunnel identity (Contract #6, orphan-safe) ───────────────────────
+#
+# A quick tunnel is a *public* URL into this machine, and until 0.1.102 the only
+# record of one was the in-memory `_Tunnel.proc` handle. `shutdown()` closes them on
+# a graceful exit, but nothing survives a force-kill, a crash, or a restart that
+# takes the daemon down without running it -- and the child cloudflared keeps serving
+# its own trycloudflare hostname regardless. Observed on 2026-08-01: seven cloudflared
+# processes for one tracked tunnel, six of them orphans dating back two days, each
+# still exposing localhost to the internet with nothing in the UI to show or close it.
+#
+# So tunnels are now also recorded in `managed_processes` (the same table Contract #6
+# uses for project processes, which already accepts entity_type='tool'), and a sweep on
+# construction terminates any that outlived the daemon that spawned them.
+_MANAGED_ENTITY_TYPE = "tool"
+_MANAGED_ENTITY_PREFIX = "cloudtap:"
+
+
+def _looks_like_recorded_cloudflared(pid: int, recorded_cmdline: str) -> bool:
+    """Is the live process at ``pid`` still the cloudflared we spawned?
+
+    PIDs are recycled, so a stale row must never be allowed to kill an unrelated
+    process. Requires both that the executable is still cloudflared and that the
+    tunnel target matches what we recorded.
+    """
+    try:
+        live = " ".join(psutil.Process(pid).cmdline())
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return False
+    if "cloudflared" not in live.lower():
+        return False
+    # `--url http://localhost:<port>` is the distinguishing part of our spawn.
+    marker = recorded_cmdline.split("--url", 1)
+    if len(marker) == 2:
+        return marker[1].strip() in live
+    return live == recorded_cmdline
+
+
+def reconcile_cloudtap_strays(conn, *, killer=None) -> list[dict]:
+    """Terminate cloudflared tunnels left behind by a previous daemon.
+
+    Kill rather than re-attach: the public URL is only ever printed on the child's
+    stdout at startup, and a new daemon has no handle on that stream, so an inherited
+    tunnel could never be shown or closed through the UI. Leaving it running is the
+    exact failure being fixed. WAN auto-start opens a fresh tunnel on boot anyway.
+
+    ``killer`` is injectable so tests can assert the decision without killing anything.
+    Returns one dict per swept row for logging/audit.
+    """
+    rows = conn.execute(
+        "SELECT id, entity_id, pid, cmdline FROM managed_processes "
+        "WHERE entity_type = ? AND entity_id LIKE ? AND stopped_at IS NULL",
+        (_MANAGED_ENTITY_TYPE, f"{_MANAGED_ENTITY_PREFIX}%"),
+    ).fetchall()
+
+    def _default_killer(pid: int) -> None:
+        proc = psutil.Process(pid)
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except psutil.TimeoutExpired:
+            proc.kill()
+
+    kill = killer or _default_killer
+    swept: list[dict] = []
+    for row in rows:
+        pid = int(row["pid"])
+        alive = _looks_like_recorded_cloudflared(pid, row["cmdline"] or "")
+        killed = False
+        if alive:
+            try:
+                kill(pid)
+                killed = True
+            except Exception:  # noqa: BLE001 -- a stray we cannot kill must not block boot
+                log.exception("Cloudtap: could not terminate stray tunnel pid %s.", pid)
+        conn.execute(
+            "UPDATE managed_processes "
+            "SET stopped_at = ?, stop_reason = ?, status = 'stopped' WHERE id = ?",
+            (to_iso(utc_now()), "daemon-restart", row["id"]),
+        )
+        swept.append({"pid": pid, "entity_id": row["entity_id"], "killed": killed})
+    return swept
+
+
 @dataclass
 class _Tunnel:
     """One live cloudflared tunnel tracked by :class:`CloudtapTool`."""
@@ -70,6 +156,9 @@ class _Tunnel:
     url_event: asyncio.Event = field(default_factory=asyncio.Event)
     expected_stop: bool = False
     created_at: datetime = field(default_factory=_utcnow)
+    # Durable identity for the orphan sweep (see reconcile_cloudtap_strays).
+    cmdline: str = ""
+    row_id: int | None = None
 
     def to_item(self) -> ToolItem:
         result: dict = {"local_port": self.port}
@@ -97,6 +186,25 @@ class CloudtapTool(ToolHandler):
         self._tunnels: dict[str, _Tunnel] = {}
         self._counter = 0
         self._tool_error: ErrorRef | None = None
+        self._sweep_strays_on_start()
+
+    def _sweep_strays_on_start(self) -> None:
+        """Close any public tunnel that outlived the daemon which opened it."""
+        if self._storage is None:
+            return
+        try:
+            with self._storage.transaction() as conn:
+                swept = reconcile_cloudtap_strays(conn)
+        except Exception:  # noqa: BLE001 -- never let cleanup stop the daemon booting
+            log.exception("Cloudtap: stray-tunnel reconciliation failed.")
+            return
+        killed = [row for row in swept if row["killed"]]
+        if killed:
+            log.warning(
+                "Cloudtap: terminated %d orphaned tunnel(s) from a previous daemon: %s",
+                len(killed),
+                ", ".join(f"{row['entity_id']} (pid {row['pid']})" for row in killed),
+            )
 
     # ── ToolHandler API ──────────────────────────────────────────────────
 
@@ -185,6 +293,8 @@ class CloudtapTool(ToolHandler):
             return self.state()
 
         tunnel.reader_task = asyncio.create_task(self._read_output(tunnel))
+        tunnel.cmdline = f"{exe} tunnel --url http://localhost:{port}"
+        self._record_tunnel_row(tunnel)
 
         try:
             await asyncio.wait_for(tunnel.url_event.wait(), timeout=URL_WAIT_TIMEOUT_SECONDS)
@@ -301,6 +411,10 @@ class CloudtapTool(ToolHandler):
         except Exception:  # pragma: no cover — defensive
             pass
 
+        # The child is gone either way, so its tracking row must not stay open --
+        # otherwise the next boot's sweep sees a live-looking row for a dead pid.
+        self._close_tunnel_row(tunnel, reason="user" if tunnel.expected_stop else "crashed")
+
         if tunnel.expected_stop:
             return  # _close()/_kill() owns the transition
         if tunnel.status != EntityStatus.LAUNCHED:
@@ -329,8 +443,48 @@ class CloudtapTool(ToolHandler):
 
     # ── helpers ──────────────────────────────────────────────────────────
 
+    def _record_tunnel_row(self, tunnel: _Tunnel) -> None:
+        """Persist this tunnel's pid so a later daemon can find and close it."""
+        pid = getattr(tunnel.proc, "pid", None) if tunnel.proc is not None else None
+        if self._storage is None or pid is None:
+            return
+        try:
+            with self._storage.transaction() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO managed_processes "
+                    "(entity_type, entity_id, pid, cmdline, started_at, log_path, status) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        _MANAGED_ENTITY_TYPE,
+                        f"{_MANAGED_ENTITY_PREFIX}{tunnel.id}",
+                        pid,
+                        tunnel.cmdline,
+                        to_iso(utc_now()),
+                        "",  # cloudflared output is scanned in-process, not written to a log file
+                        "launched",
+                    ),
+                )
+                tunnel.row_id = cursor.lastrowid
+        except Exception:  # noqa: BLE001 -- bookkeeping must never break opening a tunnel
+            log.exception("Cloudtap: could not record tunnel '%s' for orphan tracking.", tunnel.id)
+
+    def _close_tunnel_row(self, tunnel: _Tunnel, *, reason: str) -> None:
+        if self._storage is None or tunnel.row_id is None:
+            return
+        try:
+            with self._storage.transaction() as conn:
+                conn.execute(
+                    "UPDATE managed_processes "
+                    "SET stopped_at = ?, stop_reason = ?, status = 'stopped' WHERE id = ?",
+                    (to_iso(utc_now()), reason, tunnel.row_id),
+                )
+        except Exception:  # noqa: BLE001
+            log.exception("Cloudtap: could not close tracking row for tunnel '%s'.", tunnel.id)
+        tunnel.row_id = None
+
     async def _kill(self, tunnel: _Tunnel) -> None:
         proc = tunnel.proc
+        self._close_tunnel_row(tunnel, reason="user" if tunnel.expected_stop else "crashed")
         if proc is None or proc.returncode is not None:
             return
         try:

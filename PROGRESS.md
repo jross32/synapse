@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.101`
+`0.1.102`
+
+> **Orphaned public tunnels are swept at boot (2026-08-01):** cloudtap tracked each tunnel only via an
+> in-memory process handle, so any daemon exit that skipped `shutdown()` left a live `cloudflared`
+> serving its own public URL untracked -- seven processes for one tunnel were found, six orphans two days
+> old. Tunnels are now recorded in `managed_processes` and swept on construction. Kills rather than
+> re-attaches (the public URL is unrecoverable after the spawning daemon dies), with a PID-recycle guard
+> proven against a real live bystander process. Closes inbox proposal `674252635eff`.
 
 > **No more false-red restarts from a sub-frame (2026-08-01):** `did-fail-load` fires for sub-frames too,
 > and the handler ignored `isMainFrame`, so Live View's app-preview iframe pointing at a project that

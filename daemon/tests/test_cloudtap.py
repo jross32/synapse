@@ -7,6 +7,8 @@ network, so they are fast and CI-safe.
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -233,3 +235,137 @@ async def test_unmatched_port_falls_back_to_host_label() -> None:
         state = await tool.run_action("tunnel", {"port": 4321})
     assert state.items[0].label == "localhost:4321"
     await tool.shutdown()
+
+
+# ── orphaned-tunnel reconciliation (v0.1.102) ────────────────────────────
+#
+# A quick tunnel is a public URL into this machine. Before this, the only record of
+# one was an in-memory process handle, so any daemon exit that skipped `shutdown()`
+# (force-kill, crash, restart) left cloudflared serving its own trycloudflare
+# hostname with nothing tracking it. Six such orphans were found on 2026-08-01.
+
+
+def _insert_stray_row(storage: Storage, *, pid: int, cmdline: str, entity_id: str) -> int:
+    with storage.transaction() as conn:
+        cur = conn.execute(
+            "INSERT INTO managed_processes "
+            "(entity_type, entity_id, pid, cmdline, started_at, log_path, status) "
+            "VALUES ('tool', ?, ?, ?, '2026-08-01T00:00:00Z', '', 'launched')",
+            (entity_id, pid, cmdline),
+        )
+        return cur.lastrowid
+
+
+def _active_cloudtap_rows(storage: Storage) -> list:
+    return storage.conn.execute(
+        "SELECT * FROM managed_processes "
+        "WHERE entity_type = 'tool' AND entity_id LIKE 'cloudtap:%' AND stopped_at IS NULL"
+    ).fetchall()
+
+
+async def test_open_tunnel_is_recorded_so_a_later_daemon_can_find_it(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    try:
+        tool = CloudtapTool(EventBus(), storage)
+        proc = _FakeProc([_url_line()])
+        proc.pid = 424242
+        with patch("shutil.which", return_value="cloudflared"), patch(
+            "asyncio.create_subprocess_exec", _fake_exec_seq(proc)
+        ):
+            await tool.run_action("tunnel", {"port": 8080})
+
+        rows = _active_cloudtap_rows(storage)
+        assert len(rows) == 1, "an open tunnel must leave a durable record"
+        assert rows[0]["pid"] == 424242
+        assert "--url http://localhost:8080" in rows[0]["cmdline"]
+
+        await tool.shutdown()
+        # Closing the tunnel must close its row, or the next boot would sweep a dead pid.
+        assert _active_cloudtap_rows(storage) == []
+    finally:
+        storage.close()
+
+
+def test_stray_tunnel_from_a_dead_daemon_is_killed_and_row_closed(tmp_path: Path) -> None:
+    """The actual bug: a tunnel that outlived its daemon keeps serving a public URL."""
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    try:
+        # A *live* process whose cmdline really does look like our cloudflared spawn.
+        victim = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)  # cloudflared tunnel --url http://localhost:8080"]
+        )
+        try:
+            _insert_stray_row(
+                storage,
+                pid=victim.pid,
+                cmdline="cloudflared tunnel --url http://localhost:8080",
+                entity_id="cloudtap:t1",
+            )
+            killed: list[int] = []
+            with storage.transaction() as conn:
+                swept = cloudtap_mod.reconcile_cloudtap_strays(conn, killer=killed.append)
+
+            assert killed == [victim.pid], "the orphaned public tunnel must be terminated"
+            assert swept[0]["killed"] is True
+            assert _active_cloudtap_rows(storage) == [], "its row must not stay open"
+        finally:
+            victim.kill()
+            victim.wait(timeout=10)
+    finally:
+        storage.close()
+
+
+def test_reconcile_never_kills_a_recycled_pid(tmp_path: Path) -> None:
+    """A stale row must not become a licence to kill whatever now owns that pid.
+
+    PIDs are reused. Guard: the live process must still *be* cloudflared serving the
+    port we recorded, otherwise we only close the bookkeeping row.
+    """
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    try:
+        bystander = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        try:
+            _insert_stray_row(
+                storage,
+                pid=bystander.pid,
+                cmdline="cloudflared tunnel --url http://localhost:8080",
+                entity_id="cloudtap:t1",
+            )
+            killed: list[int] = []
+            with storage.transaction() as conn:
+                swept = cloudtap_mod.reconcile_cloudtap_strays(conn, killer=killed.append)
+
+            assert killed == [], "an unrelated process on a recycled pid must be left alone"
+            assert swept[0]["killed"] is False
+            assert bystander.poll() is None, "the bystander must still be running"
+            assert _active_cloudtap_rows(storage) == [], "the stale row is still closed out"
+        finally:
+            bystander.kill()
+            bystander.wait(timeout=10)
+    finally:
+        storage.close()
+
+
+def test_construction_sweeps_strays(tmp_path: Path) -> None:
+    """The sweep runs on construction, which is what makes it happen every boot."""
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    try:
+        _insert_stray_row(
+            storage,
+            pid=999_999_999,  # certainly dead
+            cmdline="cloudflared tunnel --url http://localhost:8080",
+            entity_id="cloudtap:t7",
+        )
+        assert len(_active_cloudtap_rows(storage)) == 1
+        CloudtapTool(EventBus(), storage)
+        assert _active_cloudtap_rows(storage) == [], "boot must clear stale tunnel rows"
+    finally:
+        storage.close()
