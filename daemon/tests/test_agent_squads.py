@@ -461,6 +461,69 @@ def test_workspace_claude_automatic_launch_uses_noninteractive_auto_permissions(
     assert argv[permission_index + 1] == "auto"
 
 
+def test_observe_claude_worker_can_still_file_its_handoff(tmp_path: Path) -> None:
+    """An observe worker must be able to complete its reporting contract.
+
+    Regression for the real failure: two post-work council reviewers launched with
+    observe authority ran under `--permission-mode plan`. Plan mode exists to withhold
+    action until a human approves a plan, so one finished its entire review and then
+    refused to POST the handoff -- the finding survived only inside a transcript -- and
+    the other produced nothing before its deadline. The worker's own prompt requires the
+    handoff, so the mode and the contract were in direct conflict.
+    """
+    argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        ["claude"],
+        runtime="claude",
+        authority=agent_squads.AgentExecutionAuthority.OBSERVE,
+        prompt_file=(tmp_path / "prompt.md").resolve(),
+    )
+
+    assert "plan" not in argv, "plan mode cannot post a handoff; that is the bug"
+    permission_index = argv.index("--permission-mode")
+    assert argv[permission_index + 1] == "auto"
+    # The prompt still demands the handoff, so the two must stay compatible.
+    assert "explicit handoff" in argv[-1]
+
+
+def test_observe_claude_worker_still_cannot_mutate_files(tmp_path: Path) -> None:
+    """Moving off plan mode must not quietly turn observe into write access."""
+    argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        ["claude"],
+        runtime="claude",
+        authority=agent_squads.AgentExecutionAuthority.OBSERVE,
+        prompt_file=(tmp_path / "prompt.md").resolve(),
+    )
+
+    denied_index = argv.index("--disallowedTools")
+    denied = argv[denied_index + 1].split()
+    assert {"Write", "Edit", "NotebookEdit"} <= set(denied)
+    # Workspace authority is the level that may edit -- it must NOT inherit the denial.
+    workspace_argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        ["claude"],
+        runtime="claude",
+        authority=agent_squads.AgentExecutionAuthority.WORKSPACE,
+        prompt_file=(tmp_path / "prompt.md").resolve(),
+    )
+    assert "--disallowedTools" not in workspace_argv
+
+
+def test_observe_codex_worker_keeps_its_real_sandbox(tmp_path: Path) -> None:
+    """Codex's observe boundary is an OS sandbox and must be left intact.
+
+    Guards the asymmetry: relaxing Claude's observe mode says nothing about Codex,
+    which has a genuine `--sandbox read-only` and should keep it.
+    """
+    argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+        ["codex"],
+        runtime="codex",
+        authority=agent_squads.AgentExecutionAuthority.OBSERVE,
+        prompt_file=(tmp_path / "prompt.md").resolve(),
+    )
+
+    sandbox_index = argv.index("--sandbox")
+    assert argv[sandbox_index + 1] == "read-only"
+
+
 def test_handoff_request_strips_terminal_control_characters() -> None:
     payload = agent_squads.AgentWorkItemHandoffRequest(
         summary_md="Reflex\x07 attached\nVerified",

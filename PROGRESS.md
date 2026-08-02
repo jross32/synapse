@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.102`
+`0.1.103`
+
+> **Observe workers can report again (2026-08-01):** automatic Claude `observe` workers ran under
+> `--permission-mode plan`, which withholds action pending human approval -- yet their prompt requires
+> POSTing a handoff. Reviews were written and then never filed. Now `auto` + `--disallowedTools "Write
+> Edit NotebookEdit"`: non-interactive, still unable to modify files. Proven by a live A/B against the
+> real CLI, including a control run where plan mode refused and said why. Codex's real `--sandbox
+> read-only` is untouched and pinned by a test. Closes inbox proposal `410a4a2b4a01`.
 
 > **Orphaned public tunnels are swept at boot (2026-08-01):** cloudtap tracked each tunnel only via an
 > in-memory process handle, so any daemon exit that skipped `shutdown()` left a live `cloudflared`

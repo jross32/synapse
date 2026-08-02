@@ -79,6 +79,12 @@ def _write_copilot_mcp_config(storage: Storage, role=None) -> tuple[Path | None,
     return path, worker_env
 
 
+# File-mutating tools withheld from a Claude OBSERVE worker. Space-separated in a
+# single argument because `--disallowedTools` is variadic -- passing them as separate
+# argv entries risks the parser swallowing the flag that follows.
+_CLAUDE_OBSERVE_DENIED_TOOLS = "Write Edit NotebookEdit"
+
+
 def _automatic_worker_argv(
     argv: list[str],
     *,
@@ -101,7 +107,26 @@ def _automatic_worker_argv(
     executable, *runtime_args = argv
     if runtime == "claude":
         permission_args = {
-            squads.AgentExecutionAuthority.OBSERVE: ["--permission-mode", "plan"],
+            # `plan` is structurally wrong for a headless worker: its entire purpose
+            # is to withhold action until a human approves a plan, but this worker's
+            # contract is to act -- it must POST its handoff before exiting. Observed
+            # in a real post-work council: one reviewer completed its whole review and
+            # then refused to file it, so the finding survived only in a transcript,
+            # and a second produced nothing before its deadline. `auto` is the
+            # non-interactive path (already proven for WORKSPACE below); read-only
+            # intent is carried by denying the file-mutating tools instead of by a
+            # mode that also denies reporting.
+            #
+            # Note the asymmetry with Codex below: `--sandbox read-only` is a real
+            # OS-level sandbox, whereas Claude has no equivalent flag, so Claude's
+            # OBSERVE is a policy boundary rather than a sandbox. Bash stays available
+            # precisely because the reporting contract is an outbound HTTP POST.
+            squads.AgentExecutionAuthority.OBSERVE: [
+                "--permission-mode",
+                "auto",
+                "--disallowedTools",
+                _CLAUDE_OBSERVE_DENIED_TOOLS,
+            ],
             # Claude's `auto` mode is the non-interactive, policy-aware path:
             # it can use an attached MCP when Claude judges the call allowed,
             # while `acceptEdits` still opens an interactive MCP prompt and can
