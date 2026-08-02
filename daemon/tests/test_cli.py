@@ -336,7 +336,7 @@ def test_doctor_never_prints_any_part_of_the_token(
 ) -> None:
     """`doctor` is the command people paste into issues, chats and AI transcripts.
 
-    It used to print `token : 0hDPU5Ee... (43 chars)`. Eight characters is not a
+    It used to print `token : a1b2c3d4... (43 chars)`. Eight characters is not a
     usable credential by itself, but a secret prefix must not ride along in output
     whose whole purpose is to be shared -- and once pasted it cannot be unpasted.
     """

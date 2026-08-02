@@ -14,7 +14,7 @@ Every commit must append an entry under the in-progress version header.
 
 ### Security
 - **`synapse doctor` no longer prints any part of the auth token.** It used to emit
-  `token : 0hDPU5Ee... (43 chars)`. Eight characters is not a usable credential on its own, but `doctor`
+  `token : a1b2c3d4... (43 chars)`. Eight characters is not a usable credential on its own, but `doctor`
   is precisely the command people run when something is broken and then paste into a GitHub issue, a chat,
   or an AI transcript -- and a pasted secret cannot be unpasted. It now reports presence and origin only:
   `token : found (43 chars, from datauth-token)`. The source is the more useful fact anyway: "found the
