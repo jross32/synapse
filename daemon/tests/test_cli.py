@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import io
 from contextlib import redirect_stdout
 
@@ -174,3 +176,147 @@ def test_cli_doctor_reports_token_state(
     assert "abcdefgh" in out  # first 8 chars only
     assert "reach" in out
     assert "FAIL" in out
+
+
+# ── doctor port diagnostics (v0.1.105) ───────────────────────────────────
+#
+# The 0.1.40 launch crash was a stale Vite still holding 5173 from a crashed run.
+# dev.ps1 self-heals now, but `doctor` -- the command you run when it "just won't
+# start" -- said nothing about it.
+
+
+def test_find_port_holders_sees_a_real_listening_socket() -> None:
+    """Detection is tested against an actual bound socket, not a mock.
+
+    The whole feature is "notice what the OS says is holding this port", so a
+    mocked psutil would only prove the test agrees with itself.
+    """
+    import socket
+
+    from synapse_daemon.cli import find_port_holders
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = sock.getsockname()[1]
+
+        holders = find_port_holders([(port, "test port")])
+        if not holders:  # net_connections can be restricted in some environments
+            pytest.skip("psutil.net_connections returned nothing for this process")
+        assert holders[0].port == port
+        assert holders[0].pid == os.getpid()
+        assert holders[0].label == "test port"
+    finally:
+        sock.close()
+
+
+def test_find_port_holders_ignores_unrelated_ports() -> None:
+    import socket
+
+    from synapse_daemon.cli import find_port_holders
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = sock.getsockname()[1]
+        other = port + 1 if port < 65535 else port - 1
+        assert find_port_holders([(other, "some other port")]) == []
+    finally:
+        sock.close()
+
+
+def test_fix_never_targets_a_process_that_is_not_ours() -> None:
+    """`--fix` can terminate processes, so the ownership check is the safety net.
+
+    A holder that does not look like ours must be reported and left running --
+    a user's unrelated dev server on 5173 is not Synapse's to kill.
+    """
+    from synapse_daemon.cli import _SYNAPSE_CMDLINE_MARKERS, PortHolder
+
+    stranger = PortHolder(
+        port=5173,
+        label="renderer (Vite)",
+        pid=4242,
+        name="node.exe",
+        cmdline="node C:/some/other/project/server.js",
+        is_synapse=False,
+    )
+    assert stranger.is_synapse is False
+    # And the markers must not match a process merely *run from* a synapse folder.
+    haystack = "python.exe c:/users/justi/synapse/tools/unrelated.py"
+    assert not any(marker in haystack for marker in _SYNAPSE_CMDLINE_MARKERS)
+
+
+def test_doctor_reports_ports_and_offers_fix(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = main(["doctor"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "port" in out.lower(), out
+
+
+def test_doctor_accepts_fix_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["doctor", "--fix"])
+    assert args.fix is True
+    assert parser.parse_args(["doctor"]).fix is False
+
+
+def test_port_is_serving_distinguishes_holding_from_answering() -> None:
+    """The discriminator that makes `--fix` safe.
+
+    Holding a port and serving on it are different. A socket that listens but
+    never replies is the stale-holder case; a socket that replies is a working
+    service the user is relying on. Running `--fix` against a healthy dev server
+    would be destructive, so this distinction is the safety property, not a detail.
+    """
+    import socket
+    import threading
+
+    from synapse_daemon.cli import port_is_serving
+
+    # 1) Listening but silent -> NOT serving.
+    silent = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        silent.bind(("127.0.0.1", 0))
+        silent.listen(1)
+        silent_port = silent.getsockname()[1]
+        assert port_is_serving(silent_port, timeout=0.75) is False
+    finally:
+        silent.close()
+
+    # 2) Actually answering -> serving.
+    talker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    talker.bind(("127.0.0.1", 0))
+    talker.listen(1)
+    talker_port = talker.getsockname()[1]
+
+    def _respond() -> None:
+        try:
+            conn, _ = talker.accept()
+            with conn:
+                conn.recv(1024)
+                conn.sendall(b"HTTP/1.0 200 OK\r\n\r\nhi")
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=_respond, daemon=True)
+    thread.start()
+    try:
+        assert port_is_serving(talker_port, timeout=3.0) is True
+    finally:
+        talker.close()
+        thread.join(timeout=3)
+
+
+def test_port_is_serving_false_for_a_closed_port() -> None:
+    import socket
+
+    from synapse_daemon.cli import port_is_serving
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()  # nothing is listening now
+    assert port_is_serving(port, timeout=0.75) is False

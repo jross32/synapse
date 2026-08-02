@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.104`
+`0.1.105`
+
+> **`synapse doctor` sees stuck ports now (2026-08-01):** reports who holds 7878/5173 with pid + cmdline,
+> and `--fix` clears a genuine stray. Key correction found by running it for real: the first version
+> called the user's *working* Vite a stray and offered to kill it, so `doctor` now probes whether a port
+> is actually **responding** -- holding != serving. `--fix` verified as a no-op on a healthy machine.
+> Closes inbox proposal `117a2fde5995`.
 
 > **No more infinite spinners (2026-08-01):** renderer reads now carry a 30s deadline and fail with an
 > actionable `SynapseTimeoutError` instead of hanging -- Design Contract #13, and the exact symptom seen
