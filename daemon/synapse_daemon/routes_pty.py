@@ -122,8 +122,8 @@ def build_pty_router(manager: PtySessionManager) -> APIRouter:
 
     @router.delete("/{session_id}", status_code=204, response_model=None)
     async def close_session(session_id: str) -> None:
-        closed = await manager.close(session_id)
-        if not closed:
-            raise not_found("pty", session_id)
+        await manager.close(session_id)
+        # Idempotent: return 204 even if it was already closed.
+        return None
 
     return router
