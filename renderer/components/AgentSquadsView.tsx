@@ -861,7 +861,7 @@ export function AgentSquadsView({
                       preferred_runtime: e.target.value,
                     }))
                   }
-                  placeholder='Optional runtime override'
+                  placeholder='Optional runtime override (claude, codex, copilot, gemini)'
                 />
                 <textarea
                   value={workItemForm.instructions_md}

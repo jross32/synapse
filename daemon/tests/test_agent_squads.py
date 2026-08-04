@@ -1212,3 +1212,28 @@ def test_launch_with_missing_cwd_returns_clean_error(tmp_path: Path) -> None:
         )
         assert res.status_code == 422, res.text
         assert c.get("/api/v1/health").status_code == 200
+
+
+def test_gemini_automatic_launch_maps_authority_to_approval_mode(tmp_path: Path) -> None:
+    """Gemini was added to every role template's preferred runtimes but the argv
+    builder still rejected it, so selecting it hard-failed the launch.
+
+    Its --approval-mode is an enforced mode rather than a policy hint, so it maps
+    directly onto our authority levels.
+    """
+    for authority, expected in (
+        (agent_squads.AgentExecutionAuthority.OBSERVE, "plan"),
+        (agent_squads.AgentExecutionAuthority.WORKSPACE, "auto_edit"),
+        (agent_squads.AgentExecutionAuthority.FULL, "yolo"),
+    ):
+        argv = routes_agent_squads._automatic_worker_argv(  # noqa: SLF001
+            ["gemini"],
+            runtime="gemini",
+            authority=authority,
+            prompt_file=(tmp_path / "prompt.md").resolve(),
+        )
+        mode_index = argv.index("--approval-mode")
+        assert argv[mode_index + 1] == expected
+        # Headless, or a spawned worker waits forever for a human.
+        assert "--prompt" in argv
+        assert "explicit handoff" in argv[-1]

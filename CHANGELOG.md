@@ -10,6 +10,51 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.112] -- 2026-08-04
+
+### Added
+- **Any AI that connects can now discover Synapse's equipment.** `GET /api/v1/ai/context` gained an
+  `mcp_servers` block listing every enabled MCP server with its transport and description, plus a
+  `how_to_use` note. Previously the endpoint returned no MCP information at all, so an external AI had
+  no way to learn that Reflex (real mouse/keyboard/screen control), Playwright, or the web scraper were
+  installed -- it had to be told by the operator. Synapse-launched workers got these injected via
+  `--mcp-config`; every other AI was flying blind.
+- The `ai_activity.hint` now tells a connecting AI to **register with a `project_id`** (registering
+  without one grades the connection yellow, `degraded.no_project`, and costs project memory, the files
+  surface, and per-project scoping) and to **resume with `resume_key`** rather than registering again,
+  which is what was filling the operator's Live tab with a fresh row on every reconnect.
+
+### Fixed
+- **Gemini workers could not actually launch.** Gemini had been added to `runtime_resolution` and to
+  every role template's `preferred_runtimes`, and offered in the squad UI -- but `_automatic_worker_argv`
+  still rejected it with "supported only for Claude, Codex, and GitHub Copilot", so choosing Gemini
+  hard-failed the launch. Added the missing branch, mapping authority onto Gemini's enforced
+  `--approval-mode`: OBSERVE -> `plan` (read-only), WORKSPACE -> `auto_edit`, FULL -> `yolo`, plus
+  `--prompt` for headless execution so a spawned worker cannot sit waiting for a human.
+
+### Notes
+- Gemini's `--approval-mode` is an enforced CLI mode, so its OBSERVE level is a genuine read-only
+  boundary (like Codex's `--sandbox read-only`) rather than the policy-only boundary Claude's OBSERVE
+  provides. Flags were verified against `gemini --help` on this machine, not assumed.
+- Registered the `synportal` project so patient-portal work connects green instead of degraded.
+- Verified live against the running daemon: `/ai/context` returns the `mcp_servers` block naming
+  github / memory / playwright / reflex / web-scraper, and the hint mentions both `project_id` and
+  `resume_key`. Sweep: agent_squads + routes_ai + mcp_servers + coordination = 99 passed / 4 skipped;
+  renderer typecheck clean.
+
+## [0.1.111] -- 2026-08-03
+
+### Added
+- Integrated Gemini as a first-class AI provider runtime, supporting both backend squad workers and frontend runtime selection.
+
+### Changed
+- daemon/synapse_daemon/runtime_resolution.py: Added detection for `gemini` binary.
+- daemon/synapse_daemon/agent_squads.py: Added `gemini` to all role template preferred runtimes.
+- renderer/components/AgentSquadsView.tsx: Updated UI runtime override placeholder to include `gemini`.
+
+## [0.1.110] -- 2026-08-03
+
+
 ## [0.1.109] -- 2026-08-02
 
 ### Changed
@@ -3590,5 +3635,7 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
+
+
 
 

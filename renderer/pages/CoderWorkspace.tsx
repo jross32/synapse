@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   Bot,
+  CheckCircle2,
   ExternalLink,
   FolderKanban,
   Loader2,
@@ -12,6 +13,7 @@ import {
   Pin,
   Play,
   Send,
+  ShieldCheck,
   Sparkles,
   TerminalSquare,
   Trash2,
@@ -29,6 +31,12 @@ import type {
 } from '@shared/generated-types';
 import { closeSession, getSession } from '@shared/pty-client';
 import { useDaemon } from '@shared/daemon-context';
+import {
+  listMcpServers,
+  updateMcpServer,
+  type McpServerView,
+} from '@shared/mcp-servers-client';
+import { handleTablistKeydown } from '@shared/tablist';
 import { cn } from '@shared/utils';
 import { formatLocal } from '../lib/format-time';
 import { getServiceConnections } from '../lib/profile-client';
@@ -58,7 +66,7 @@ import { Modal } from '../components/ui/modal';
 
 type RuntimeId = 'codex' | 'claude' | 'copilot';
 type ReviewPresetId = 'general' | 'ux' | 'qa' | 'token-efficiency' | 'judge';
-type ContextTab = 'context' | 'files' | 'records' | 'reviews' | 'terminal';
+type ContextTab = 'context' | 'tools' | 'files' | 'records' | 'reviews' | 'terminal';
 
 interface RuntimeOption {
   id: RuntimeId;
@@ -178,14 +186,17 @@ function connectionStatus(
   connections: ServiceConnection[]
 ): { label: string; tone: string } {
   const connection = connections.find((item) => item.provider === option.connectionProvider);
-  if (!connection) return { label: 'unknown', tone: 'border-border text-muted-foreground' };
+  if (!connection) return { label: 'Not detected', tone: 'border-border text-muted-foreground' };
   if (connection.status === 'connected' || connection.status === 'ready') {
-    return { label: 'ready', tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' };
+    return { label: 'Ready', tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' };
   }
   if (connection.status === 'error') {
-    return { label: 'attention', tone: 'border-rose-500/30 bg-rose-500/10 text-rose-300' };
+    return { label: 'Needs attention', tone: 'border-rose-500/30 bg-rose-500/10 text-rose-300' };
   }
-  return { label: connection.status, tone: 'border-amber-500/30 bg-amber-500/10 text-amber-300' };
+  return {
+    label: connection.status.replaceAll('_', ' '),
+    tone: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  };
 }
 
 export interface CoderWorkspacePageProps {
@@ -209,6 +220,7 @@ export function CoderWorkspacePage({
   const [context, setContext] = useState<CoderWorkspaceContext | null>(null);
   const [preferences, setPreferences] = useState<CoderWorkspacePreferences | null>(null);
   const [connections, setConnections] = useState<ServiceConnection[]>([]);
+  const [mcpServers, setMcpServers] = useState<McpServerView[]>([]);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [runtimeId, setRuntimeId] = useState<RuntimeId>('codex');
@@ -217,10 +229,16 @@ export function CoderWorkspacePage({
   const [error, setError] = useState<string | null>(null);
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
+  const [desktopRailOpen, setDesktopRailOpen] = useState(true);
+  const [desktopContextOpen, setDesktopContextOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<CoderThreadSummary | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<CoderThreadSummary | null>(null);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [legacySessionId, setLegacySessionId] = useState<string | null>(null);
   const [legacyNonce, setLegacyNonce] = useState(0);
   const lastThreadEventIdRef = useRef(0);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const sortedProjects = useMemo(() => {
     return [...projects].sort((a, b) => {
@@ -275,8 +293,8 @@ export function CoderWorkspacePage({
   }, [search, sortedProjects, threadsByProject]);
 
   const availableTabs: ContextTab[] = preferences?.advanced_terminal_enabled
-    ? ['context', 'files', 'records', 'reviews', 'terminal']
-    : ['context', 'files', 'records', 'reviews'];
+    ? ['context', 'tools', 'files', 'records', 'reviews', 'terminal']
+    : ['context', 'tools', 'files', 'records', 'reviews'];
 
   const latestRunningRun = useMemo(
     () =>
@@ -291,6 +309,15 @@ export function CoderWorkspacePage({
       setConnections(await getServiceConnections());
     } catch {
       /* keep the workspace usable even if readiness fails */
+    }
+  }, []);
+
+  const refreshMcpServers = useCallback(async () => {
+    try {
+      const result = await listMcpServers();
+      setMcpServers(result.servers);
+    } catch {
+      /* MCP availability is supplemental; keep the coding loop usable. */
     }
   }, []);
 
@@ -331,7 +358,13 @@ export function CoderWorkspacePage({
   useEffect(() => {
     void refreshConnections();
     void refreshPreferences();
-  }, [refreshConnections, refreshPreferences]);
+    void refreshMcpServers();
+  }, [refreshConnections, refreshMcpServers, refreshPreferences]);
+
+  useEffect(() => {
+    if (draft || !composerRef.current) return;
+    composerRef.current.style.height = 'auto';
+  }, [draft]);
 
   useEffect(() => {
     if (sortedProjects.length === 0) {
@@ -443,12 +476,27 @@ export function CoderWorkspacePage({
   }
 
   async function handleRenameThread(summary: CoderThreadSummary): Promise<void> {
-    const nextTitle = window.prompt('Rename thread', summary.thread.title)?.trim();
-    if (!nextTitle || nextTitle === summary.thread.title) return;
-    setBusy(`rename:${summary.thread.id}`);
+    setRenameTarget(summary);
+    setRenameDraft(summary.thread.title);
+  }
+
+  async function confirmRenameThread(): Promise<void> {
+    if (!renameTarget) return;
+    const nextTitle = renameDraft.trim();
+    if (!nextTitle) {
+      setError('Thread name cannot be empty.');
+      return;
+    }
+    if (nextTitle === renameTarget.thread.title) {
+      setRenameTarget(null);
+      return;
+    }
+    const threadId = renameTarget.thread.id;
+    setBusy(`rename:${threadId}`);
     setError(null);
     try {
-      await updateThread(summary.thread.id, { title: nextTitle });
+      await updateThread(threadId, { title: nextTitle });
+      setRenameTarget(null);
     } catch (err) {
       setError((err as Error).message || 'Could not rename the thread.');
     } finally {
@@ -457,15 +505,21 @@ export function CoderWorkspacePage({
   }
 
   async function handleDeleteThread(summary: CoderThreadSummary): Promise<void> {
-    if (!window.confirm(`Delete "${summary.thread.title}"?`)) return;
-    setBusy(`delete:${summary.thread.id}`);
+    setDeleteTarget(summary);
+  }
+
+  async function confirmDeleteThread(): Promise<void> {
+    if (!deleteTarget) return;
+    const threadId = deleteTarget.thread.id;
+    setBusy(`delete:${threadId}`);
     setError(null);
     try {
-      await deleteCoderThread(summary.thread.id);
-      if (selectedThreadId === summary.thread.id) {
+      await deleteCoderThread(threadId);
+      if (selectedThreadId === threadId) {
         setSelectedThreadId(null);
       }
       await refreshThreads();
+      setDeleteTarget(null);
     } catch (err) {
       setError((err as Error).message || 'Could not delete the thread.');
     } finally {
@@ -590,11 +644,41 @@ export function CoderWorkspacePage({
     }
   }
 
+  async function handleToggleMcp(server: McpServerView): Promise<void> {
+    setBusy(`mcp:${server.id}`);
+    setError(null);
+    try {
+      await updateMcpServer(server.id, { enabled: !server.enabled });
+      await refreshMcpServers();
+    } catch (err) {
+      setError((err as Error).message || 'Could not update the MCP server.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openThreadTools(tab: ContextTab): void {
+    setContextTab(tab);
+    if (window.matchMedia('(min-width: 1280px)').matches) {
+      setDesktopContextOpen(true);
+    } else {
+      setMobileContextOpen(true);
+    }
+  }
+
   function openLegacy(sessionId: string | null = null): void {
     setLegacySessionId(sessionId);
     setLegacyNonce((value) => value + 1);
     setLegacyOpen(true);
   }
+
+  const desktopGridClass = desktopRailOpen
+    ? desktopContextOpen
+      ? 'xl:grid-cols-[280px_minmax(0,1fr)_340px]'
+      : 'xl:grid-cols-[280px_minmax(0,1fr)]'
+    : desktopContextOpen
+      ? 'xl:grid-cols-[minmax(0,1fr)_340px]'
+      : 'xl:grid-cols-[minmax(0,1fr)]';
 
   const header = headerless ? null : (
     <PageHeader
@@ -604,10 +688,10 @@ export function CoderWorkspacePage({
   );
 
   return (
-    <div className='flex h-full flex-col gap-4'>
+    <div className='flex h-full min-h-0 flex-col gap-3 overflow-hidden'>
       {header}
 
-      <div className='flex flex-wrap items-center gap-2 lg:hidden'>
+      <div className='flex shrink-0 flex-wrap items-center gap-2 xl:hidden'>
         <Button type='button' variant='outline' size='sm' onClick={() => setMobileRailOpen(true)}>
           <PanelLeft className='h-4 w-4' /> Projects
         </Button>
@@ -633,8 +717,8 @@ export function CoderWorkspacePage({
         </Card>
       )}
 
-      <div className='grid min-h-[72vh] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_340px]'>
-        <div className='hidden min-h-0 lg:block'>
+      <div className={cn('grid min-h-0 flex-1 gap-3', desktopGridClass)}>
+        <div className={cn('min-h-0', desktopRailOpen ? 'hidden xl:block' : 'hidden')}>
           <ProjectThreadRail
             projects={visibleProjects}
             threadsByProject={threadsByProject}
@@ -662,8 +746,8 @@ export function CoderWorkspacePage({
         </div>
 
         <Card className='flex min-h-0 flex-col overflow-hidden'>
-          <div className='border-b border-border px-4 py-4'>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+          <div className='shrink-0 border-b border-border px-4 py-3'>
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
               <div className='min-w-0'>
                 <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary/85'>
                   {selectedProject?.name ?? 'No project selected'}
@@ -678,12 +762,28 @@ export function CoderWorkspacePage({
                 </p>
               </div>
               <div className='flex flex-wrap items-center gap-2'>
-                <RuntimePicker
-                  value={runtimeId}
-                  connections={connections}
-                  busy={busy === 'send'}
-                  onChange={setRuntimeId}
-                />
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  className='hidden xl:inline-flex'
+                  aria-pressed={desktopRailOpen}
+                  onClick={() => setDesktopRailOpen((value) => !value)}
+                >
+                  <PanelLeft className='h-4 w-4' />
+                  {desktopRailOpen ? 'Hide projects' : 'Show projects'}
+                </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  className='hidden xl:inline-flex'
+                  aria-pressed={desktopContextOpen}
+                  onClick={() => setDesktopContextOpen((value) => !value)}
+                >
+                  <PanelRight className='h-4 w-4' />
+                  {desktopContextOpen ? 'Hide context' : 'Context'}
+                </Button>
                 <Button
                   type='button'
                   variant='outline'
@@ -701,25 +801,6 @@ export function CoderWorkspacePage({
                 >
                   <MessageSquarePlus className='h-4 w-4' /> New thread
                 </Button>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  disabled={busy === 'prefs'}
-                  onClick={() =>
-                    void handleToggleAdvancedTerminal(
-                      !(preferences?.advanced_terminal_enabled ?? false)
-                    )
-                  }
-                >
-                  <TerminalSquare className='h-4 w-4' />
-                  {preferences?.advanced_terminal_enabled ? 'Hide terminal tools' : 'Enable terminal tools'}
-                </Button>
-                {preferences?.advanced_terminal_enabled && (
-                  <Button type='button' variant='outline' size='sm' onClick={() => openLegacy()}>
-                    <ExternalLink className='h-4 w-4' /> Legacy cockpit
-                  </Button>
-                )}
               </div>
             </div>
             <div className='mt-3 flex flex-wrap items-center gap-2'>
@@ -740,7 +821,7 @@ export function CoderWorkspacePage({
           </div>
 
           <div className='flex min-h-0 flex-1 flex-col'>
-            <div className='min-h-0 flex-1 overflow-y-auto px-4 py-4'>
+            <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-4'>
               {!detail ? (
                 <EmptyWorkspace
                   selectedProject={selectedProject}
@@ -778,23 +859,72 @@ export function CoderWorkspacePage({
                       </div>
                     );
                   })}
+                  {detail.review_passes.map((reviewPass) => (
+                    <ReviewInlineReceipt
+                      key={reviewPass.id}
+                      reviewPass={reviewPass}
+                      onOpen={() => openThreadTools('reviews')}
+                    />
+                  ))}
                 </div>
               )}
             </div>
 
-            <div className='border-t border-border bg-card/95 px-4 py-4 backdrop-blur'>
+            <div className='shrink-0 border-t border-border bg-card/95 px-3 py-3 backdrop-blur sm:px-4'>
               <div className='rounded-xl border border-border bg-secondary/20 p-3'>
                 <textarea
+                  ref={composerRef}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  rows={4}
+                  onInput={(event) => {
+                    const target = event.currentTarget;
+                    target.style.height = 'auto';
+                    target.style.height = `${Math.min(target.scrollHeight, 160)}px`;
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key !== 'Enter' ||
+                      event.shiftKey ||
+                      event.nativeEvent.isComposing
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    if (busy !== 'send' && draft.trim() && projects.length > 0) {
+                      void handleSend();
+                    }
+                  }}
+                  rows={1}
                   placeholder='Tell the runtime what to build, change, or review...'
-                  className='w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground'
+                  aria-label='Coding prompt'
+                  className='scrollbar-thin min-h-[52px] max-h-40 w-full resize-none overflow-y-auto bg-transparent text-sm outline-none placeholder:text-muted-foreground'
                 />
                 <div className='mt-3 flex flex-wrap items-center justify-between gap-2'>
-                  <p className='text-xs text-muted-foreground'>
-                    Thread runtime: <span className='font-medium text-foreground'>{runtimeOptionFor(runtimeId).label}</span>
-                  </p>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <RuntimePicker
+                      value={runtimeId}
+                      connections={connections}
+                      busy={busy === 'send'}
+                      onChange={setRuntimeId}
+                    />
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      onClick={() => openThreadTools('tools')}
+                    >
+                      <Wand2 className='h-4 w-4' /> Tools
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      disabled={!selectedThreadId}
+                      onClick={() => openThreadTools('reviews')}
+                    >
+                      <ShieldCheck className='h-4 w-4' /> Review
+                    </Button>
+                  </div>
                   <div className='flex flex-wrap items-center gap-2'>
                     {latestRunningRun && latestRunningRun.pty_session_id && (
                       <Button
@@ -822,12 +952,15 @@ export function CoderWorkspacePage({
                     </Button>
                   </div>
                 </div>
+                <p className='mt-2 text-[11px] text-muted-foreground'>
+                  Enter to send · Shift+Enter for a new line
+                </p>
               </div>
             </div>
           </div>
         </Card>
 
-        <div className='hidden min-h-0 lg:block'>
+        <div className={cn('min-h-0', desktopContextOpen ? 'hidden xl:block' : 'hidden')}>
           <WorkspaceContextPane
             detail={detail}
             context={context}
@@ -838,11 +971,13 @@ export function CoderWorkspacePage({
             availableTabs={availableTabs}
             preferences={preferences}
             connections={connections}
+            mcpServers={mcpServers}
             busy={busy}
             onSelectTab={setContextTab}
             onToggleAdvancedTerminal={handleToggleAdvancedTerminal}
             onOpenLegacy={openLegacy}
             onQuickReview={(runtime, preset) => void handleQuickReview(runtime, preset)}
+            onToggleMcp={(server) => void handleToggleMcp(server)}
           />
         </div>
       </div>
@@ -902,12 +1037,80 @@ export function CoderWorkspacePage({
           availableTabs={availableTabs}
           preferences={preferences}
           connections={connections}
+          mcpServers={mcpServers}
           busy={busy}
           onSelectTab={setContextTab}
           onToggleAdvancedTerminal={handleToggleAdvancedTerminal}
           onOpenLegacy={openLegacy}
           onQuickReview={(runtime, preset) => void handleQuickReview(runtime, preset)}
+          onToggleMcp={(server) => void handleToggleMcp(server)}
         />
+      </Modal>
+
+      <Modal
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        labelledBy='rename-coder-thread-title'
+        className='max-w-md'
+      >
+        <h2 id='rename-coder-thread-title' className='text-lg font-semibold'>
+          Rename thread
+        </h2>
+        <p className='text-sm text-muted-foreground'>
+          Use a short name that makes this coding conversation easy to find later.
+        </p>
+        <Input
+          autoFocus
+          value={renameDraft}
+          onChange={(event) => setRenameDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void confirmRenameThread();
+          }}
+          aria-label='Thread name'
+        />
+        <div className='flex justify-end gap-2'>
+          <Button type='button' variant='outline' onClick={() => setRenameTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            type='button'
+            disabled={!renameDraft.trim() || busy?.startsWith('rename:')}
+            onClick={() => void confirmRenameThread()}
+          >
+            {busy?.startsWith('rename:') && <Loader2 className='h-4 w-4 animate-spin' />}
+            Save name
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        labelledBy='delete-coder-thread-title'
+        className='max-w-md'
+      >
+        <h2 id='delete-coder-thread-title' className='text-lg font-semibold'>
+          Delete thread?
+        </h2>
+        <p className='text-sm text-muted-foreground'>
+          This permanently removes <strong className='text-foreground'>{deleteTarget?.thread.title}</strong>
+          {' '}and its saved conversation from the Coder Workspace. Linked runtime process history remains
+          in the Synapse audit trail.
+        </p>
+        <div className='flex justify-end gap-2'>
+          <Button type='button' variant='outline' onClick={() => setDeleteTarget(null)}>
+            Keep thread
+          </Button>
+          <Button
+            type='button'
+            variant='destructive'
+            disabled={busy?.startsWith('delete:')}
+            onClick={() => void confirmDeleteThread()}
+          >
+            {busy?.startsWith('delete:') && <Loader2 className='h-4 w-4 animate-spin' />}
+            Delete thread
+          </Button>
+        </div>
       </Modal>
 
       <Modal
@@ -1022,7 +1225,7 @@ function ProjectThreadRail({
           aria-label='Search projects or threads'
         />
       </div>
-      <div className='min-h-0 flex-1 overflow-y-auto p-3'>
+      <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3'>
         <div className='flex flex-col gap-3'>
           {projects.map((project) => {
             const active = project.id === selectedProjectId;
@@ -1237,6 +1440,41 @@ function MessageBubble({
   );
 }
 
+function ReviewInlineReceipt({
+  reviewPass,
+  onOpen,
+}: {
+  reviewPass: CoderThreadDetail['review_passes'][number];
+  onOpen: () => void;
+}): JSX.Element {
+  const completed = reviewPass.status === 'completed';
+  return (
+    <Card className='ml-2 border-dashed p-3'>
+      <div className='flex flex-wrap items-start justify-between gap-2'>
+        <div className='flex min-w-0 items-start gap-2'>
+          {completed ? (
+            <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-emerald-300' />
+          ) : (
+            <ShieldCheck className='mt-0.5 h-4 w-4 shrink-0 text-primary' />
+          )}
+          <div className='min-w-0'>
+            <p className='truncate text-sm font-medium'>{reviewPass.title}</p>
+            <p className='mt-1 line-clamp-3 text-xs text-muted-foreground'>
+              {reviewPass.summary_md || 'This sidecar review is linked to the current coding thread.'}
+            </p>
+          </div>
+        </div>
+        <div className='flex items-center gap-2'>
+          <Badge variant='outline'>{reviewPass.status}</Badge>
+          <Button type='button' variant='ghost' size='sm' onClick={onOpen}>
+            Details
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function RunOutputCard({
   run,
   onOpenTerminal,
@@ -1251,6 +1489,7 @@ function RunOutputCard({
   const [loading, setLoading] = useState(Boolean(run.pty_session_id));
   const [loadError, setLoadError] = useState<string | null>(null);
   const seenEventId = useRef(0);
+  const outputRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     seenEventId.current = recentEvents.reduce(
@@ -1303,6 +1542,11 @@ function RunOutputCard({
       setOutput((current) => current + chunk);
     }
   }, [recentEvents, run.pty_session_id]);
+
+  useEffect(() => {
+    if (run.status !== 'running' || !outputRef.current) return;
+    outputRef.current.scrollTop = outputRef.current.scrollHeight;
+  }, [output, run.status]);
 
   const runtime = runtimeOptionFor(run.runtime_id);
   const runReason = metadataString(run.metadata as Record<string, unknown>, 'reason');
@@ -1364,7 +1608,10 @@ function RunOutputCard({
         ) : loadError && !output ? (
           <p className='text-muted-foreground'>{loadError}</p>
         ) : (
-          <pre className='max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-mono leading-5 text-foreground'>
+          <pre
+            ref={outputRef}
+            className='scrollbar-thin max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-mono leading-5 text-foreground'
+          >
             {output || 'The runtime session has been created. Open the terminal if you want the raw PTY view.'}
           </pre>
         )}
@@ -1383,11 +1630,13 @@ function WorkspaceContextPane({
   availableTabs,
   preferences,
   connections,
+  mcpServers,
   busy,
   onSelectTab,
   onToggleAdvancedTerminal,
   onOpenLegacy,
   onQuickReview,
+  onToggleMcp,
 }: {
   detail: CoderThreadDetail | null;
   context: CoderWorkspaceContext | null;
@@ -1398,11 +1647,13 @@ function WorkspaceContextPane({
   availableTabs: ContextTab[];
   preferences: CoderWorkspacePreferences | null;
   connections: ServiceConnection[];
+  mcpServers: McpServerView[];
   busy: string | null;
   onSelectTab: (tab: ContextTab) => void;
   onToggleAdvancedTerminal: (enabled: boolean) => Promise<void>;
   onOpenLegacy: (sessionId?: string | null) => void;
   onQuickReview: (runtime: RuntimeOption, preset?: ReviewPreset) => void;
+  onToggleMcp: (server: McpServerView) => void;
 }): JSX.Element {
   return (
     <Card className='flex h-full min-h-0 flex-col overflow-hidden'>
@@ -1411,14 +1662,23 @@ function WorkspaceContextPane({
           Context
         </p>
         <h2 className='text-lg font-semibold'>Thread tools</h2>
-        <div className='mt-3 flex flex-wrap gap-2'>
+        <div
+          role='tablist'
+          aria-label='Thread context panels'
+          onKeyDown={handleTablistKeydown}
+          className='scrollbar-thin mt-3 flex gap-2 overflow-x-auto'
+        >
           {availableTabs.map((tab) => (
             <button
               key={tab}
               type='button'
+              role='tab'
+              aria-selected={contextTab === tab}
+              aria-controls='workspace-context-panel'
+              tabIndex={contextTab === tab ? 0 : -1}
               onClick={() => onSelectTab(tab)}
               className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors',
+                'shrink-0 rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors',
                 contextTab === tab
                   ? 'border-primary/40 bg-primary/10 text-foreground'
                   : 'border-border text-muted-foreground hover:text-foreground'
@@ -1430,7 +1690,12 @@ function WorkspaceContextPane({
         </div>
       </div>
 
-      <div className='min-h-0 flex-1 overflow-y-auto p-4'>
+      <div
+        id='workspace-context-panel'
+        role='tabpanel'
+        aria-label={`${contextTab} panel`}
+        className='scrollbar-thin min-h-0 flex-1 overflow-y-auto p-4'
+      >
         {contextTab === 'context' && (
           <div className='flex flex-col gap-4 text-sm'>
             <Card className='border-dashed p-4'>
@@ -1526,6 +1791,66 @@ function WorkspaceContextPane({
               <Card className='border-dashed p-6 text-sm text-muted-foreground'>
                 Select a project to view its files.
               </Card>
+            )}
+          </div>
+        )}
+
+        {contextTab === 'tools' && (
+          <div className='flex flex-col gap-3 text-sm'>
+            <Card className='border-dashed p-4'>
+              <p className='font-medium'>MCP tools for AI runs</p>
+              <p className='mt-1 text-xs text-muted-foreground'>
+                Enabled stdio tools are attached as an isolated process for each eligible AI run.
+                Standalone HTTP tools keep their own Synapse status and autorun setting.
+              </p>
+            </Card>
+            {mcpServers.length === 0 ? (
+              <Card className='border-dashed p-5 text-xs text-muted-foreground'>
+                No MCP servers are installed yet. Add one from My Tools to make it available here.
+              </Card>
+            ) : (
+              [...mcpServers]
+                .sort((left, right) => Number(right.enabled) - Number(left.enabled) || left.name.localeCompare(right.name))
+                .map((server) => (
+                  <Card key={server.id} className='border-dashed p-3'>
+                    <div className='flex items-start justify-between gap-2'>
+                      <div className='min-w-0'>
+                        <p className='truncate font-medium'>{server.name}</p>
+                        <p className='mt-1 text-[11px] text-muted-foreground'>
+                          {server.transport === 'stdio'
+                            ? 'Starts as an isolated child for each AI'
+                            : server.autorun
+                              ? 'Standalone server · starts with Synapse'
+                              : 'Standalone server · manual start'}
+                        </p>
+                      </div>
+                      <Badge variant='outline'>
+                        {server.status === 'stdio_ready'
+                          ? 'Ready'
+                          : server.status === 'connected'
+                            ? 'Connected'
+                            : server.status === 'error'
+                              ? 'Needs attention'
+                              : server.status.replaceAll('_', ' ')}
+                      </Badge>
+                    </div>
+                    <Button
+                      type='button'
+                      variant={server.enabled ? 'outline' : 'default'}
+                      size='sm'
+                      className='mt-3'
+                      disabled={busy === `mcp:${server.id}`}
+                      onClick={() => onToggleMcp(server)}
+                    >
+                      {busy === `mcp:${server.id}` ? (
+                        <Loader2 className='h-4 w-4 animate-spin' />
+                      ) : (
+                        <Wand2 className='h-4 w-4' />
+                      )}
+                      {server.enabled ? 'Available to AI' : 'Enable for AI'}
+                    </Button>
+                  </Card>
+                ))
             )}
           </div>
         )}

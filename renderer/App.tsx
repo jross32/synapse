@@ -451,7 +451,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
         <main
           className={cn(
             'flex-1',
-            route.kind === 'core' && route.page === 'live'
+            route.kind === 'core' && (route.page === 'live' || route.page === 'ai-coding')
               ? 'min-h-0 overflow-hidden'
               : 'overflow-y-auto'
           )}
@@ -459,7 +459,9 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
           <div
             className={cn(
               'mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8',
-              route.kind === 'core' && route.page === 'live' && 'h-full min-h-0',
+              route.kind === 'core' &&
+                (route.page === 'live' || route.page === 'ai-coding') &&
+                'h-full min-h-0',
               mobileRoute && 'pb-44'
             )}
           >

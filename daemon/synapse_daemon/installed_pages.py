@@ -199,23 +199,40 @@ async def get_web_scraper_overview(conn) -> WebScraperOverview | None:  # noqa: 
 
 
 async def list_installed_pages(conn) -> list[InstalledPageView]:  # noqa: ANN001
+    pages: list[InstalledPageView] = []
     overview = await get_web_scraper_overview(conn)
-    if overview is None:
-        return []
-    return [
-        InstalledPageView(
-            id="web-scraper",
-            label="Web Scraper",
-            description="A dedicated browser + scraping workspace for your installed Web Scraper MCP server.",
-            icon="globe",
-            route_kind="dedicated-page",
-            source_kind="mcp-server",
-            source_id=overview.source_id,
-            default_visible=False,
-            status=overview.status,
-            detail=overview.detail,
+    if overview is not None:
+        pages.append(
+            InstalledPageView(
+                id="web-scraper",
+                label="Web Scraper",
+                description="A dedicated browser + scraping workspace for your installed Web Scraper MCP server.",
+                icon="globe",
+                route_kind="dedicated-page",
+                source_kind="mcp-server",
+                source_id=overview.source_id,
+                default_visible=False,
+                status=overview.status,
+                detail=overview.detail,
+            )
         )
-    ]
+
+    if any(s.id == "reflex" for s in mcp.list_servers(conn)):
+        pages.append(
+            InstalledPageView(
+                id="reflex",
+                label="Reflex",
+                description="AI computer control for Windows: perception, mouse, keyboard, windows, and visible execution.",
+                icon="monitor",
+                route_kind="dedicated-page",
+                source_kind="mcp-server",
+                source_id="reflex",
+                default_visible=True,
+                status=InstalledPageStatus.CONNECTED,
+                detail="Ready for Windows perception and computer control.",
+            )
+        )
+    return pages
 
 
 __all__ = [
@@ -226,3 +243,4 @@ __all__ = [
     "get_web_scraper_overview",
     "list_installed_pages",
 ]
+

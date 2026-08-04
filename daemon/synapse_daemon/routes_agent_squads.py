@@ -178,9 +178,29 @@ def _automatic_worker_argv(
             "--prompt",
             prompt,
         ]
+    if runtime == "gemini":
+        # Gemini's --approval-mode maps cleanly onto our authority levels, so unlike
+        # Claude (where OBSERVE is only a policy boundary) this is an enforced mode:
+        #   plan      -> read-only, the CLI refuses mutating tools
+        #   auto_edit -> auto-approves edit tools but still gates shell
+        #   yolo      -> auto-approves everything
+        # -p/--prompt is its headless flag; without it the CLI opens interactively and
+        # a spawned worker would sit forever waiting for a human.
+        permission_args = {
+            squads.AgentExecutionAuthority.OBSERVE: ["--approval-mode", "plan"],
+            squads.AgentExecutionAuthority.WORKSPACE: ["--approval-mode", "auto_edit"],
+            squads.AgentExecutionAuthority.FULL: ["--approval-mode", "yolo"],
+        }[authority]
+        return [
+            executable,
+            *runtime_args,
+            *permission_args,
+            "--prompt",
+            prompt,
+        ]
     raise invalid(
         "agent_work_item",
-        "Automatic execution is supported only for Claude, Codex, and GitHub Copilot workers.",
+        "Automatic execution is supported only for Claude, Codex, GitHub Copilot, and Gemini workers.",
     )
 
 

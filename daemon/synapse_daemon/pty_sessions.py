@@ -325,7 +325,10 @@ class _WindowsBackend:
             data = _normalize_windows_input(data)
         # pywinpty's .write() wants str; encode-decode round-trip is safe
         # because the renderer sends UTF-8 from the keyboard.
-        self.proc.write(data.decode("utf-8", errors="replace"))
+        try:
+            self.proc.write(data.decode("utf-8", errors="replace"))
+        except EOFError:
+            log.debug("PTY session %s closed, ignoring write", self.session_id)
 
     def resize(self, rows: int, cols: int) -> None:
         if self.proc is None:

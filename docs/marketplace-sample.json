@@ -81,6 +81,37 @@
       }
     },
     {
+      "id": "gemini",
+      "name": "Gemini CLI",
+      "publisher": "The WhatIf Company",
+      "tier": "declarative",
+      "category": "ai-assistants",
+      "tags": ["google", "gemini", "terminal", "agent"],
+      "featured": true,
+      "sort_rank": 17,
+      "version": "1.0.0",
+      "description": "Run Google Gemini CLI as a Synapse session tab. Requires `gemini` on PATH.",
+      "homepage": "https://github.com/google/generative-ai-python",
+      "verified": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "gemini",
+        "name": "Gemini CLI",
+        "icon": "wrench",
+        "description": "Live Gemini CLI session under a real PTY.",
+        "version": "1.0.0",
+        "actions": [
+          {
+            "id": "open",
+            "label": "Open Gemini session",
+            "primary": true,
+            "primitive": "pty.spawn",
+            "params": {"argv": ["gemini"]}
+          }
+        ]
+      }
+    },
+    {
       "id": "codex",
       "name": "OpenAI Codex CLI",
       "publisher": "The WhatIf Company",

@@ -24,24 +24,26 @@ export function AiCodingPage({
   onConsumedPendingSession,
 }: AiCodingPageProps): JSX.Element {
   return (
-    <div className='flex min-h-[72vh] flex-col gap-6'>
-      <PageHeader
-        title='AI Coding'
-        subtitle='Your coder workspace: project threads, runtime switching, Agent Squads, assistant, and review inbox in one place.'
-        helpText='AI Coding is where you run AI coders (Claude, Codex, Copilot) on your projects. Use Coder Workspace for structured threads, Squads to coordinate multiple AI workers, and Review to act on AI work that needs human sign-off.'
-      />
+    <div className='flex h-full min-h-0 flex-col gap-3 overflow-hidden'>
+      <div className='shrink-0'>
+        <PageHeader
+          title='AI Coding'
+          subtitle='One workspace for project threads, AI runtimes, squads, tools, and review.'
+          helpText='Start in Workspace for a chat-first coding loop. Synapse keeps the selected project, runtime, files, reviews, and linked terminal work together while Squads, Assistant, Review, and ChatGPT remain one click away.'
+        />
+      </div>
 
       <div
         role='tablist'
         aria-label='AI Coding sections'
         onKeyDown={handleTablistKeydown}
-        className='flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/30 p-1'
+        className='scrollbar-thin flex shrink-0 gap-1 overflow-x-auto rounded-lg border border-border bg-secondary/30 p-1'
       >
         <TopTab
           active={section === 'sessions'}
           onClick={() => onSectionChange?.('sessions')}
           icon={Sparkles}
-          label='Coder Workspace'
+          label='Workspace'
         />
         <TopTab
           active={section === 'squads'}
@@ -69,17 +71,24 @@ export function AiCodingPage({
         />
       </div>
 
-      {section === 'sessions' && (
-        <CoderWorkspacePage
-          headerless
-          initialSessionId={pendingSessionId}
-          onConsumedInitial={onConsumedPendingSession}
-        />
-      )}
-      {section === 'squads' && <SessionsPage headerless defaultMode='squads' />}
-      {section === 'assistant' && <AssistantPage headerless />}
-      {section === 'review' && <ReviewPage headerless />}
-      {section === 'chatgpt' && <ChatgptCompanionPage headerless />}
+      <div
+        className={cn(
+          'min-h-0 flex-1',
+          section === 'sessions' ? 'overflow-hidden' : 'scrollbar-thin overflow-y-auto'
+        )}
+      >
+        {section === 'sessions' && (
+          <CoderWorkspacePage
+            headerless
+            initialSessionId={pendingSessionId}
+            onConsumedInitial={onConsumedPendingSession}
+          />
+        )}
+        {section === 'squads' && <SessionsPage headerless defaultMode='squads' />}
+        {section === 'assistant' && <AssistantPage headerless />}
+        {section === 'review' && <ReviewPage headerless />}
+        {section === 'chatgpt' && <ChatgptCompanionPage headerless />}
+      </div>
     </div>
   );
 }
@@ -103,7 +112,7 @@ function TopTab({
       tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+        'flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
         active
           ? 'bg-card text-foreground shadow-sm'
           : 'text-muted-foreground hover:text-foreground'

@@ -28,6 +28,7 @@ from . import ai_cases as ai_cases_module
 from . import ai_factory as ai_factory_module
 from . import benchmarks as benchmarks_module
 from . import coder_workspace as coder_workspace_module
+from . import mcp_servers as mcp_servers_module
 from . import quality_os as quality_os_module
 from .ai_context_memory import ai_context_metadata
 from .files_storage import list_for_project
@@ -368,7 +369,14 @@ def build_ai_router(
                 for event in _activity.list_journal_events(storage.conn, limit=10)
             ],
             "hint": (
-                "Register yourself with POST /api/v1/coordination/sessions to get your own "
+                "Register yourself with POST /api/v1/coordination/sessions, and PASS A project_id -- "
+                "pick the project you are working in from the `projects` list above (register a new one "
+                "through POST /api/v1/projects first if it is missing). Registering without a project_id "
+                "grades the connection yellow (`degraded.no_project`) and costs you project memory, the "
+                "files surface, and per-project scoping. Keep the returned resume_key: if you drop and "
+                "come back, RESUME with it instead of registering again, so you keep one session number "
+                "rather than adding a new row to the operator's Live tab every time. "
+                "Registering gets you your own "
                 "session number, connection grade, and one-time session_key (squad workers are already "
                 "registered in SYNAPSE_SESSION_ID); update last_intent on heartbeats; report deliberate "
                 "operator summaries to POST /api/v1/activity/sessions/{id}/events; keep the shared "
@@ -382,10 +390,44 @@ def build_ai_router(
             ),
         }
 
+        # Which MCP servers this install has, so a connecting AI can DISCOVER its
+        # equipment instead of guessing. Without this block an external AI had no
+        # way to learn that Reflex (real mouse/keyboard/screen control), the web
+        # scraper, or Playwright were installed -- it would have had to be told.
+        # Synapse-launched workers get these injected via --mcp-config; every other
+        # AI reads them here.
+        mcp_block: dict[str, Any] = {"servers": [], "how_to_use": "", "note": ""}
+        try:
+            installed = mcp_servers_module.list_servers(storage.conn)
+            mcp_block["servers"] = [
+                {
+                    "id": server.id,
+                    "name": server.name,
+                    "enabled": server.enabled,
+                    "transport": server.transport.value,
+                    "description": server.description,
+                }
+                for server in installed
+                if server.enabled
+            ]
+        except Exception:  # noqa: BLE001 -- discovery must never break /ai/context
+            mcp_block["note"] = "MCP server list unavailable on this install."
+        mcp_block["how_to_use"] = (
+            "These are installed on this machine and are yours to use -- they are equipment, "
+            "not extras that need permission. If you were launched by Synapse they are already "
+            "wired into your runtime. If you are an AI the user started themselves (a Claude Code "
+            "or Codex chat), the same servers are configured in the user's own MCP config, so call "
+            "them as mcp__<server-id>__<tool>. Reflex drives this machine's real mouse, keyboard "
+            "and screen; playwright drives a real browser; web-scraper does structured page, DOM "
+            "and network extraction. Use them to VERIFY your work end to end -- look at the running "
+            "app the way the user would rather than assuming it works."
+        )
+
         return {
             "schema": "synapse.ai.context/v1",
             "projects": projects,
             "tools": tools,
+            "mcp_servers": mcp_block,
             "sessions": sessions,
             "ai_activity": activity_block,
             "agent_squads": agent_squads,

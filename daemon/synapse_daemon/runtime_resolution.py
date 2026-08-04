@@ -48,6 +48,15 @@ def resolve_command(command: str) -> str | None:
             ]
         )
 
+    if lowered in {"gemini", "gemini.cmd", "gemini.exe", "gemini.ps1"}:
+        candidates.extend(
+            [
+                appdata / "npm" / "gemini.cmd",
+                appdata / "npm" / "gemini.exe",
+                appdata / "npm" / "gemini.ps1",
+            ]
+        )
+
     if lowered in {"codex", "codex.exe"}:
         for root in (home / ".vscode" / "extensions", home / ".vscode-insiders" / "extensions"):
             if not root.exists():
