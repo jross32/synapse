@@ -10,6 +10,38 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.115] -- 2026-08-08
+
+### Added
+- **Persistent conversations with local models** (migration 031). Chats are stored as a row
+  per message rather than a JSON blob per chat, so appending is cheap, an interrupted stream
+  can be repaired in place, and tool calls stay attached to the message that made them.
+  Chats are auto-titled from their opening prompt, listed most-recent-first, renameable,
+  archivable and deletable. `project_id` is nullable on purpose -- a local chat is usually a
+  scratch conversation, and forcing a project would push people into inventing throwaway ones.
+- **Streamed replies over SSE** (`POST /local-ai/chats/{id}/send`). The stream reports real
+  phases -- `engine_starting`, `model_loading`, `ready` -- then tokens, then tool activity,
+  then a final `done` with token count and duration.
+- **The engine starts only when it is wanted.** Ollama is not launched, and no model is
+  loaded, merely because Synapse is open: a resident 5 GB model on a 16 GB laptop costs the
+  user everything else they are doing. The first prompt brings it up, and failures name the
+  phase that failed with a concrete remedy rather than hanging on a spinner.
+- Chat CRUD: `GET/POST /local-ai/chats`, `GET/PATCH/DELETE /local-ai/chats/{id}`,
+  `GET /local-ai/chats/{id}/messages`.
+- `daemon/tests/test_local_ai.py` -- 20 hermetic tests covering permission gating, workspace
+  containment, tool-argument validation, hardware profiling and chat storage. Nothing in the
+  suite needs a GPU or a 5 GB download, because a test that does is a test nobody runs.
+
+### Fixed
+- Local models invented absolute paths like `/home/user/workspace/x.py`, were refused by the
+  containment check, and then looped inventing different absolute paths. The system prompt now
+  states the workspace root and that paths must be relative to it, and the refusal message
+  says what to do instead. Verified: the model now writes and reads a file successfully.
+- "Connected" was only emitted on the first text token, so a turn that opened with a tool call
+  looked stalled. It now fires on the first sign of life.
+- A tool called with missing arguments produced a raw `TypeError`. Missing arguments are now
+  named, so the model can correct the call instead of repeating it.
+
 ## [0.1.114] -- 2026-08-08
 
 ### Added

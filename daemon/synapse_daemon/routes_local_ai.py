@@ -9,13 +9,15 @@ models exist and what they are measured to be good at, then hand a job to
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import local_models, ollama_client
+from . import local_chat, local_models, ollama_client
 from .errors import invalid
 from .local_agent import MAX_STEPS_DEFAULT, AgentRun, PermissionMode, run_agent
 
@@ -40,7 +42,27 @@ class AgentRunRequest(BaseModel):
     num_ctx: int = 8192
 
 
-def build_local_ai_router(data_dir: Path) -> APIRouter:
+class CreateChatRequest(BaseModel):
+    model: str
+    title: str | None = None
+    mode: PermissionMode = PermissionMode.AUTO
+    workspace: str | None = None
+    project_id: str | None = None
+
+
+class SendRequest(BaseModel):
+    prompt: str
+    allow_web: bool = True
+
+
+class PatchChatRequest(BaseModel):
+    title: str | None = None
+    model: str | None = None
+    mode: PermissionMode | None = None
+    workspace: str | None = None
+
+
+def build_local_ai_router(storage: Any, data_dir: Path) -> APIRouter:
     router = APIRouter(prefix="/local-ai", tags=["local-ai"])
 
     # Agents write here unless a workspace is named, so a careless call can't scribble
@@ -113,5 +135,97 @@ def build_local_ai_router(data_dir: Path) -> APIRouter:
             max_steps=max(1, min(payload.max_steps, 40)),
             num_ctx=payload.num_ctx,
         )
+
+    # ── conversations ────────────────────────────────────────────────────────────
+
+    @router.get("/chats", response_model=list[local_chat.Chat])
+    async def list_chats(include_archived: bool = False) -> list[local_chat.Chat]:
+        return local_chat.list_chats(storage.conn, include_archived=include_archived)
+
+    @router.post("/chats", response_model=local_chat.Chat)
+    async def create_chat(payload: CreateChatRequest) -> local_chat.Chat:
+        if not payload.model.strip():
+            raise invalid("model", "Pick a model for this chat.")
+        return local_chat.create_chat(
+            storage.conn, model=payload.model.strip(), title=payload.title,
+            mode=payload.mode.value,
+            workspace=str(Path(payload.workspace).resolve()) if payload.workspace
+            else str(default_ws.resolve()),
+            project_id=payload.project_id)
+
+    @router.get("/chats/{chat_id}", response_model=local_chat.Chat)
+    async def get_chat(chat_id: str) -> local_chat.Chat:
+        chat = local_chat.get_chat(storage.conn, chat_id)
+        if not chat:
+            raise invalid("chat_id", "No such chat.")
+        return chat
+
+    @router.get("/chats/{chat_id}/messages", response_model=list[local_chat.ChatMessage])
+    async def chat_messages(chat_id: str) -> list[local_chat.ChatMessage]:
+        if not local_chat.get_chat(storage.conn, chat_id):
+            raise invalid("chat_id", "No such chat.")
+        return local_chat.get_messages(storage.conn, chat_id)
+
+    @router.patch("/chats/{chat_id}", response_model=local_chat.Chat)
+    async def patch_chat(chat_id: str, payload: PatchChatRequest) -> local_chat.Chat:
+        chat = local_chat.get_chat(storage.conn, chat_id)
+        if not chat:
+            raise invalid("chat_id", "No such chat.")
+        if payload.title is not None:
+            local_chat.rename_chat(storage.conn, chat_id, payload.title)
+        sets, vals = [], []
+        if payload.model:
+            sets.append("model=?"); vals.append(payload.model.strip())
+        if payload.mode:
+            sets.append("mode=?"); vals.append(payload.mode.value)
+        if payload.workspace is not None:
+            sets.append("workspace=?"); vals.append(payload.workspace)
+        if sets:
+            vals.append(chat_id)
+            storage.conn.execute(f"UPDATE local_chats SET {', '.join(sets)} WHERE id=?", vals)
+            storage.conn.commit()
+        return local_chat.get_chat(storage.conn, chat_id)
+
+    @router.delete("/chats/{chat_id}")
+    async def remove_chat(chat_id: str) -> dict[str, bool]:
+        if not local_chat.get_chat(storage.conn, chat_id):
+            raise invalid("chat_id", "No such chat.")
+        local_chat.delete_chat(storage.conn, chat_id)
+        return {"deleted": True}
+
+    @router.post("/chats/{chat_id}/send")
+    async def send(chat_id: str, payload: SendRequest) -> StreamingResponse:
+        """Stream one turn as server-sent events.
+
+        SSE rather than a websocket: this is strictly one-way, it survives proxies, and it
+        reconnects on its own. The client reads phases (engine starting, model loading,
+        connected), then tokens, then tool activity, then a final done event.
+        """
+        chat = local_chat.get_chat(storage.conn, chat_id)
+        if not chat:
+            raise invalid("chat_id", "No such chat.")
+        prompt = payload.prompt.strip()
+        if not prompt:
+            raise invalid("prompt", "Type something to send.")
+
+        # Name the conversation after its opening line, once.
+        if chat.message_count == 0 and chat.title in ("New chat", ""):
+            local_chat.rename_chat(storage.conn, chat_id,
+                                   local_chat.title_from_prompt(prompt))
+            chat = local_chat.get_chat(storage.conn, chat_id)
+
+        async def event_stream() -> AsyncIterator[bytes]:
+            try:
+                async for ev in local_chat.stream_reply(
+                        storage.conn, chat, prompt, allow_web=payload.allow_web):
+                    yield f"data: {json.dumps(ev)}\n\n".encode("utf-8")
+            except Exception as exc:  # noqa: BLE001 -- a crash must still close the stream
+                err = {"type": "error", "phase": "server",
+                       "message": f"{type(exc).__name__}: {exc}"}
+                yield f"data: {json.dumps(err)}\n\n".encode("utf-8")
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache",
+                                          "X-Accel-Buffering": "no"})
 
     return router

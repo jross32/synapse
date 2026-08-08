@@ -88,6 +88,22 @@ MODE_TOOLS: dict[PermissionMode, set[str]] = {
 
 MUTATING_TOOLS = {"write_file", "run_command"}
 
+# Required arguments per tool, used to turn a raw TypeError into a correction the model
+# can act on. Small models frequently call write_file with only a path, and "missing 1
+# required positional argument" tells them nothing useful.
+TOOL_REQUIRED_ARGS: dict[str, list[str]] = {
+    "read_file": ["path"],
+    "write_file": ["path", "content"],
+    "list_dir": [],
+    "run_command": ["command"],
+    "web_search": ["query"],
+    "web_fetch": ["url"],
+}
+
+
+def missing_args(name: str, args: dict[str, Any]) -> list[str]:
+    return [a for a in TOOL_REQUIRED_ARGS.get(name, []) if a not in args or args[a] in (None, "")]
+
 
 class ToolCall(BaseModel):
     name: str
@@ -137,7 +153,12 @@ class Workspace:
     def _resolve(self, rel: str) -> Path:
         target = (self.root / rel).resolve()
         if target != self.root and self.root not in target.parents:
-            raise ValueError(f"path escapes the workspace: {rel}")
+            # Say what to do instead. Models routinely invent absolute paths like
+            # /home/user/workspace/x.py, and a bare refusal sends them into a loop of
+            # inventing different absolute paths.
+            raise ValueError(
+                f"path escapes the workspace: {rel!r}. Use a path relative to the "
+                f"workspace root, e.g. 'greet.py' or 'src/greet.py' - never an absolute path.")
         return target
 
     def read_file(self, path: str) -> str:
