@@ -25,8 +25,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import shlex
 import time
+from enum import Enum
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -48,6 +48,47 @@ _DESTRUCTIVE = re.compile(
 )
 
 
+class PermissionMode(str, Enum):
+    """How much the agent may do without a human saying yes.
+
+    Enforced at the tool layer. Asking a model to police itself does not work — a small
+    model will cheerfully ignore "do not write files" the moment it decides a file needs
+    writing — so unavailable tools are simply not offered, and mutating calls are refused
+    even if the model invents them.
+    """
+
+    PLAN = "plan"
+    """Read-only. Investigate and produce a plan; no writes, no shell."""
+
+    MANUAL = "manual"
+    """Every mutating action needs explicit approval before it runs."""
+
+    ACCEPT_EDITS = "accept_edits"
+    """File edits happen freely; shell commands still need approval."""
+
+    AUTO = "auto"
+    """Acts freely inside the workspace, including the shell. Destructive commands still refused."""
+
+    BYPASS = "bypass"
+    """No gates at all, including the destructive-command guard. Use deliberately."""
+
+
+# Which tools each mode may even see. A tool that isn't offered can't be misused.
+MODE_TOOLS: dict[PermissionMode, set[str]] = {
+    PermissionMode.PLAN: {"read_file", "list_dir", "web_search", "web_fetch"},
+    PermissionMode.MANUAL: {"read_file", "list_dir", "web_search", "web_fetch",
+                            "write_file", "run_command"},
+    PermissionMode.ACCEPT_EDITS: {"read_file", "list_dir", "web_search", "web_fetch",
+                                  "write_file"},
+    PermissionMode.AUTO: {"read_file", "list_dir", "web_search", "web_fetch",
+                          "write_file", "run_command"},
+    PermissionMode.BYPASS: {"read_file", "list_dir", "web_search", "web_fetch",
+                            "write_file", "run_command"},
+}
+
+MUTATING_TOOLS = {"write_file", "run_command"}
+
+
 class ToolCall(BaseModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
@@ -67,6 +108,7 @@ class AgentStep(BaseModel):
 class AgentRun(BaseModel):
     model: str
     task: str
+    mode: str = PermissionMode.AUTO.value
     answer: str = ""
     steps: list[AgentStep] = Field(default_factory=list)
     completed: bool = False
@@ -86,9 +128,11 @@ class Workspace:
     shell tool can still do damage if enabled, which is why it is opt-in.
     """
 
-    def __init__(self, root: str | Path, allow_shell: bool = False) -> None:
+    def __init__(self, root: str | Path, allow_shell: bool = False,
+                 allow_destructive: bool = False) -> None:
         self.root = Path(root).resolve()
         self.allow_shell = allow_shell
+        self.allow_destructive = allow_destructive
 
     def _resolve(self, rel: str) -> Path:
         target = (self.root / rel).resolve()
@@ -124,7 +168,7 @@ class Workspace:
         if not self.allow_shell:
             return ("ERROR: shell execution is disabled for this run. Use read_file, "
                     "write_file or list_dir instead.")
-        if _DESTRUCTIVE.search(command):
+        if _DESTRUCTIVE.search(command) and not self.allow_destructive:
             return "ERROR: refused - that command looks destructive."
         import subprocess  # noqa: PLC0415
 
@@ -208,32 +252,39 @@ def web_search(query: str) -> str:
 
 # ---------------------------------------------------------------- tool schemas
 
-def build_tools(allow_shell: bool, allow_web: bool) -> list[dict[str, Any]]:
+def build_tools(mode: PermissionMode, allow_web: bool) -> list[dict[str, Any]]:
+    """Offer only the tools this mode permits.
+
+    Network access is orthogonal to the permission mode: a plan-mode agent may still need
+    to read documentation, while an auto-mode agent may be deliberately kept offline.
+    """
+
     def fn(name: str, desc: str, props: dict, required: list[str]) -> dict:
         return {"type": "function", "function": {
             "name": name, "description": desc,
             "parameters": {"type": "object", "properties": props, "required": required}}}
 
-    tools = [
-        fn("read_file", "Read a text file from the workspace.",
-           {"path": {"type": "string", "description": "Path relative to the workspace"}},
-           ["path"]),
-        fn("write_file", "Create or overwrite a file in the workspace.",
-           {"path": {"type": "string"}, "content": {"type": "string"}},
-           ["path", "content"]),
-        fn("list_dir", "List files and directories.",
-           {"path": {"type": "string", "description": "Defaults to the workspace root"}},
-           []),
-    ]
-    if allow_shell:
-        tools.append(fn("run_command", "Run a shell command in the workspace.",
-                        {"command": {"type": "string"}}, ["command"]))
-    if allow_web:
-        tools.append(fn("web_search", "Search the web and get titles, snippets and URLs.",
-                        {"query": {"type": "string"}}, ["query"]))
-        tools.append(fn("web_fetch", "Fetch a URL and return its text content.",
-                        {"url": {"type": "string"}}, ["url"]))
-    return tools
+    allowed = MODE_TOOLS[mode]
+    catalog = {
+        "read_file": fn("read_file", "Read a text file from the workspace.",
+                        {"path": {"type": "string",
+                                  "description": "Path relative to the workspace"}}, ["path"]),
+        "write_file": fn("write_file", "Create or overwrite a file in the workspace.",
+                         {"path": {"type": "string"}, "content": {"type": "string"}},
+                         ["path", "content"]),
+        "list_dir": fn("list_dir", "List files and directories.",
+                       {"path": {"type": "string",
+                                 "description": "Defaults to the workspace root"}}, []),
+        "run_command": fn("run_command", "Run a shell command in the workspace.",
+                          {"command": {"type": "string"}}, ["command"]),
+        "web_search": fn("web_search", "Search the web and get titles, snippets and URLs.",
+                         {"query": {"type": "string"}}, ["query"]),
+        "web_fetch": fn("web_fetch", "Fetch a URL and return its text content.",
+                        {"url": {"type": "string"}}, ["url"]),
+    }
+    web = {"web_search", "web_fetch"}
+    return [spec for name, spec in catalog.items()
+            if name in allowed and (allow_web or name not in web)]
 
 
 SYSTEM_PROMPT = """You are a focused worker agent. You complete one task, then stop.
@@ -288,17 +339,26 @@ async def run_agent(
     task: str,
     workspace: str | Path,
     *,
-    allow_shell: bool = False,
+    mode: PermissionMode = PermissionMode.AUTO,
     allow_web: bool = True,
     max_steps: int = MAX_STEPS_DEFAULT,
     num_ctx: int = 8192,
     timeout: float = 240.0,
     on_step: Callable[[AgentStep], None] | None = None,
+    approve: Callable[[str, dict], bool] | None = None,
 ) -> AgentRun:
-    """Drive a local model until it answers, gives up, or exhausts its step budget."""
-    ws = Workspace(workspace, allow_shell=allow_shell)
-    tools = build_tools(allow_shell, allow_web)
-    run = AgentRun(model=model, task=task)
+    """Drive a local model until it answers, gives up, or exhausts its step budget.
+
+    ``approve`` is consulted in MANUAL mode before any mutating call. With no approver
+    supplied, MANUAL refuses mutations rather than silently behaving like AUTO — failing
+    closed is the only safe default for a permission gate.
+    """
+    allowed = MODE_TOOLS[mode]
+    ws = Workspace(workspace,
+                   allow_shell="run_command" in allowed,
+                   allow_destructive=(mode is PermissionMode.BYPASS))
+    tools = build_tools(mode, allow_web)
+    run = AgentRun(model=model, task=task, mode=mode.value)
     started = time.time()
 
     handlers: dict[str, Callable[..., str]] = {
@@ -310,8 +370,27 @@ async def run_agent(
         "web_fetch": web_fetch,
     }
 
+    # Tell the model what it may do, in addition to enforcing it. Enforcement stops damage;
+    # telling it stops the model wasting steps on calls that will be refused.
+    mode_note = {
+        PermissionMode.PLAN: (
+            "\nYou are in PLAN mode: read-only. Investigate, then give a concrete "
+            "step-by-step plan. You cannot write files or run commands."),
+        PermissionMode.MANUAL: (
+            "\nYou are in MANUAL mode: every file write and command needs the user's "
+            "approval, so explain what you intend before you attempt it."),
+        PermissionMode.ACCEPT_EDITS: (
+            "\nYou are in ACCEPT-EDITS mode: you may create and edit files freely, but "
+            "you cannot run shell commands."),
+        PermissionMode.AUTO: (
+            "\nYou are in AUTO mode: you may read, write and run commands inside the "
+            "workspace. Stay inside it."),
+        PermissionMode.BYPASS: (
+            "\nYou are in BYPASS mode: no restrictions. Be careful."),
+    }[mode]
+
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": SYSTEM_PROMPT + mode_note},
         {"role": "user", "content": task},
     ]
     seen_calls: list[str] = []
@@ -356,7 +435,18 @@ async def run_agent(
             if handler is None:
                 tc.error = True
                 tc.result = (f"ERROR: no tool named {name!r}. Available: "
-                             f"{', '.join(sorted(handlers))}.")
+                             f"{', '.join(sorted(allowed))}.")
+            elif name not in allowed:
+                # The model invented a tool it was never offered. Say why, so it adapts
+                # instead of retrying the same call.
+                tc.error = True
+                tc.result = (f"ERROR: {name} is not permitted in {mode.value} mode. "
+                             f"Available here: {', '.join(sorted(allowed))}.")
+            elif (mode is PermissionMode.MANUAL and name in MUTATING_TOOLS
+                  and not (approve and approve(name, args))):
+                tc.error = True
+                tc.result = (f"ERROR: {name} was not approved. In manual mode every "
+                             "file write and command needs explicit approval first.")
             else:
                 fingerprint = f"{name}:{json.dumps(args, sort_keys=True)[:200]}"
                 if seen_calls.count(fingerprint) >= 2:

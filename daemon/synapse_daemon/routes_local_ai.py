@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from . import local_models, ollama_client
 from .errors import invalid
-from .local_agent import MAX_STEPS_DEFAULT, AgentRun, run_agent
+from .local_agent import MAX_STEPS_DEFAULT, AgentRun, PermissionMode, run_agent
 
 
 class LocalAiOverview(BaseModel):
@@ -34,7 +34,7 @@ class AgentRunRequest(BaseModel):
     model: str
     task: str
     workspace: str | None = None
-    allow_shell: bool = False
+    mode: PermissionMode = PermissionMode.AUTO
     allow_web: bool = True
     max_steps: int = MAX_STEPS_DEFAULT
     num_ctx: int = 8192
@@ -108,7 +108,7 @@ def build_local_ai_router(data_dir: Path) -> APIRouter:
             model=model,
             task=task,
             workspace=ws,
-            allow_shell=payload.allow_shell,
+            mode=payload.mode,
             allow_web=payload.allow_web,
             max_steps=max(1, min(payload.max_steps, 40)),
             num_ctx=payload.num_ctx,
