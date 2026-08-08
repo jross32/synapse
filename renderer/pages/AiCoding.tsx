@@ -1,9 +1,10 @@
-import { Bot, Inbox, MessagesSquare, Sparkles, Users } from 'lucide-react';
+import { Bot, Cpu, Inbox, MessagesSquare, Sparkles, Users } from 'lucide-react';
 
 import type { AiCodingSection } from '@shared/nav';
 import { cn } from '@shared/utils';
 import { handleTablistKeydown } from '@shared/tablist';
 import { PageHeader } from '../components/PageHeader';
+import { LocalAiPage } from './LocalAi';
 import { AssistantPage } from './Assistant';
 import { ChatgptCompanionPage } from './ChatgptCompanion';
 import { CoderWorkspacePage } from './CoderWorkspace';
@@ -52,6 +53,12 @@ export function AiCodingPage({
           label='Squads'
         />
         <TopTab
+          active={section === 'local'}
+          onClick={() => onSectionChange?.('local')}
+          icon={Cpu}
+          label='Local AI'
+        />
+        <TopTab
           active={section === 'assistant'}
           onClick={() => onSectionChange?.('assistant')}
           icon={Bot}
@@ -85,6 +92,7 @@ export function AiCodingPage({
           />
         )}
         {section === 'squads' && <SessionsPage headerless defaultMode='squads' />}
+        {section === 'local' && <LocalAiPage headerless />}
         {section === 'assistant' && <AssistantPage headerless />}
         {section === 'review' && <ReviewPage headerless />}
         {section === 'chatgpt' && <ChatgptCompanionPage headerless />}

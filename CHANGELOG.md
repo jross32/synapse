@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.116] -- 2026-08-08
+
+### Added
+- **A place to actually code with your local model.** New *Local AI* section under AI Coding:
+  conversation sidebar, streamed replies, collapsible tool rows showing exactly which files
+  were read or written, a model picker that displays each model's **measured** throughput,
+  and a permission-mode picker with a plain-language description of what each mode allows.
+  The machine's GPU and VRAM are shown so the constraint is visible rather than mysterious.
+- `renderer/lib/local-ai-client.ts` -- typed client plus an SSE reader built on `fetch`
+  rather than `EventSource`, because `EventSource` cannot send the `X-Synapse-Token` header
+  the daemon requires. It returns an abort handle so Stop genuinely stops: a local model on a
+  laptop can take a while, and being unable to cancel is worse than being slow.
+
+### Fixed
+- **The streamed reply never appeared in the thread.** Sending from a brand-new chat set
+  `activeId`, which fired the load-transcript effect, which replaced the in-flight bubbles
+  with the database's view (just the user message). The stream then patched a bubble that no
+  longer existed, so every token was silently discarded while the file was really being
+  written on disk. Guarded with a ref, and the transcript is re-read from the server once the
+  turn completes so it reflects what was actually stored.
+- The workspace path is now stored absolute, so the path the model is told matches the one
+  the containment check enforces.
+
+### Verified end to end, in the real UI
+Typed a prompt as a user, watched the model write `tip.py` with a working `calculate_tip`
+function, read it back, and explain it -- then asked it to list the workspace, where it
+answered "three files: greet.py, hello.py, tip.py", which is exactly correct. It also tried
+an absolute path once, received the corrected error message, and fixed its own call.
+
 ## [0.1.115] -- 2026-08-08
 
 ### Added
