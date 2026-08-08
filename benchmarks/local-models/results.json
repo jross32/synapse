@@ -1,0 +1,135 @@
+{
+ "runs": {
+  "qwen2.5:1.5b": {
+   "tasks": {
+    "tool_call_simple": {
+     "category": "tool-calling",
+     "pass_rate": 0.0,
+     "attempts": [
+      {
+       "error": "TimeoutError: timed out",
+       "wall_s": 240.0139398574829,
+       "passed": false,
+       "detail": "TimeoutError: timed out"
+      }
+     ]
+    },
+    "tool_call_select": {
+     "category": "tool-calling",
+     "pass_rate": 1.0,
+     "attempts": [
+      {
+       "text": "",
+       "tool_calls": [
+        {
+         "id": "call_sxufdxyh",
+         "function": {
+          "index": 0,
+          "name": "read_file",
+          "arguments": {
+           "path": "/etc/hosts"
+          }
+         }
+        }
+       ],
+       "wall_s": 77.92,
+       "tokens_out": 22,
+       "tok_per_s": 0.6,
+       "ttft_s": 0.28,
+       "passed": true,
+       "detail": ""
+      }
+     ]
+    },
+    "json_output": {
+     "category": "structured-output",
+     "pass_rate": 1.0,
+     "attempts": [
+      {
+       "text": "{\n  \"file\": \"src/main/java/com/example/Example.java\",\n  \"line\": 123,\n  \"severity\": \"High\",\n  \"summary\": \"Potential SQL Injection Vulnerability\"\n}",
+       "tool_calls": [],
+       "wall_s": 2.85,
+       "tokens_out": 44,
+       "tok_per_s": 24.7,
+       "ttft_s": 0.24,
+       "passed": true,
+       "detail": ""
+      }
+     ]
+    },
+    "code_generate": {
+     "category": "coding",
+     "pass_rate": 1.0,
+     "attempts": [
+      {
+       "text": "```python\ndef merge_intervals(intervals):\n    \"\"\"\n    Merge overlapping intervals and return a new list with unique intervals.\n    \n    Parameters:\n    intervals (list of [start, end]): A list of intervals where each interval is represented as [start, end].\n    \n    Returns:\n    list: A list of merged intervals sorted by start.\n    \"\"\"\n    if not intervals:\n        return []\n\n    # Sort the intervals based on their start times\n    intervals.sort(key=lambda x: x[0])\n\n    merged = []\n    for interval in intervals:\n        # If the list is empty or the current interval does not overlap with the previous one, add it to the merged list\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append(interval)\n        else:\n            # Merge the current interval with the last added interval\n            merged[-1][1] = max(merged[-1][1], interval[1])\n\n    return merged\n\n# Check function to verify the correctness of the solution\ndef check_solution():\n    assert merge_intervals([[1, 3], [2, 6], [8, 10], [15, 18]]) == [[1, 6], [8, 10], [15, 18]], \"Test case 1 failed\"\n    assert merge_intervals([[1, 4], [4, 5]]) == [[1, 5]], \"Test case 2 failed\"\n    assert merge_intervals([]) == [], \"Test case 3 failed\"\n    print(\"All test cases passed!\")\n\ncheck_solution()\n```",
+       "tool_calls": [],
+       "wall_s": 14.36,
+       "tokens_out": 330,
+       "tok_per_s": 24.8,
+       "ttft_s": 0.19,
+       "passed": true,
+       "detail": ""
+      }
+     ]
+    },
+    "code_repair": {
+     "category": "coding",
+     "pass_rate": 1.0,
+     "attempts": [
+      {
+       "text": "```python\ndef average(nums):\n    if not nums: \n        return 0\n    total = 0\n    for n in nums:\n        total += n\n    return total / len(nums)\n```",
+       "tool_calls": [],
+       "wall_s": 2.8,
+       "tokens_out": 44,
+       "tok_per_s": 24.7,
+       "ttft_s": 0.21,
+       "passed": true,
+       "detail": ""
+      }
+     ]
+    },
+    "instruction_adherence": {
+     "category": "control",
+     "pass_rate": 1.0,
+     "attempts": [
+      {
+       "text": "DONE",
+       "tool_calls": [],
+       "wall_s": 1.36,
+       "tokens_out": 2,
+       "tok_per_s": 42.5,
+       "ttft_s": 0.15,
+       "passed": true,
+       "detail": ""
+      }
+     ]
+    },
+    "diff_reasoning": {
+     "category": "review",
+     "pass_rate": 0.0,
+     "attempts": [
+      {
+       "text": "Injection",
+       "tool_calls": [],
+       "wall_s": 1.15,
+       "tokens_out": 2,
+       "tok_per_s": 40.0,
+       "ttft_s": 0.29,
+       "passed": false,
+       "detail": "got: 'Injection'"
+      }
+     ]
+    }
+   },
+   "vram": {
+    "size_gb": 1.17,
+    "vram_gb": 1.17,
+    "fully_on_gpu": true,
+    "gpu_fraction": 1.0
+   },
+   "median_tok_per_s": 24.8,
+   "overall_pass_rate": 0.714
+  }
+ }
+}

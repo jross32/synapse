@@ -28,6 +28,7 @@ from . import ai_cases as ai_cases_module
 from . import ai_factory as ai_factory_module
 from . import benchmarks as benchmarks_module
 from . import coder_workspace as coder_workspace_module
+from . import local_models as local_models_module
 from . import mcp_servers as mcp_servers_module
 from . import quality_os as quality_os_module
 from .ai_context_memory import ai_context_metadata
@@ -423,11 +424,21 @@ def build_ai_router(
             "app the way the user would rather than assuming it works."
         )
 
+        # Local models are free to run. Any AI reading this context should know what is
+        # installed on this machine and what each model is *measured* to be good at, so it
+        # can offload work that doesn't need a frontier model instead of burning tokens.
+        local_ai_block: dict[str, Any] = {}
+        try:
+            local_ai_block = local_models_module.summarize_for_ai()
+        except Exception:  # noqa: BLE001 -- discovery must never break /ai/context
+            local_ai_block = {"note": "Local model discovery unavailable on this install."}
+
         return {
             "schema": "synapse.ai.context/v1",
             "projects": projects,
             "tools": tools,
             "mcp_servers": mcp_block,
+            "local_ai": local_ai_block,
             "sessions": sessions,
             "ai_activity": activity_block,
             "agent_squads": agent_squads,

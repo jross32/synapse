@@ -10,6 +10,40 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.113] -- 2026-08-08
+
+### Added
+- **Local models can now do real work, and every AI can find them.** Synapse gained a local-AI
+  layer so jobs that don't need a frontier model cost no API tokens at all.
+  - `daemon/synapse_daemon/local_models.py` profiles the machine honestly and turns measured
+    benchmark results into per-role recommendations. VRAM comes from `nvidia-smi` rather than
+    `Win32_VideoController.AdapterRAM`, which is a 32-bit field that silently caps at 4 GB --
+    a 6 GB card reports as 4 GB, and every recommendation built on that number is wrong.
+  - `daemon/synapse_daemon/local_agent.py` is a real agent loop: prompt -> tool calls ->
+    execute -> feed results back -> repeat. Local models had no CLI and therefore could not be
+    squad workers; this supplies the missing execution path. Tools are filesystem (confined to
+    a workspace root), opt-in shell, and **web search + fetch, which gives local models
+    internet access**. Tool output is truncated hard and repeated calls are detected, because
+    a 7B at 4k context silently drops its system prompt when the transcript overflows and
+    small models loop.
+  - `GET /api/v1/local-ai/hardware`, `GET /api/v1/local-ai/models`, and
+    `POST /api/v1/local-ai/agent/run`.
+  - `GET /api/v1/ai/context` gained a `local_ai` block listing installed models, what each is
+    measured to be good at, and how to call them -- so any connecting AI can offload work
+    instead of burning tokens on it.
+- **A benchmark that measures rather than guesses** (`benchmarks/local-models/`). Seven tasks
+  across tool-calling, structured output, code generation, code repair, instruction adherence
+  and diff reasoning, plus two vision tasks. Generated code is executed against real
+  assertions and tool calls are shape-validated, so no model grades itself. Test images are
+  produced by a hand-written PNG encoder rather than a Pillow dependency, so the suite runs on
+  any user's machine. Results are written after every task, so a long run survives an
+  interrupt.
+
+### Fixed
+- Web search returned zero results because DuckDuckGo serves a stripped, result-less page to
+  anything that doesn't look like a browser. Corrected the User-Agent and made the result
+  parser independent of HTML attribute order.
+
 ## [0.1.112] -- 2026-08-04
 
 ### Added

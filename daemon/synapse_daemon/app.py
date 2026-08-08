@@ -60,6 +60,7 @@ from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
 from .routes_assistant import build_assistant_router
+from .routes_local_ai import build_local_ai_router
 from .routes_models import build_models_router
 from .model_market import ModelPullManager
 from .routes_review import build_review_router
@@ -380,6 +381,13 @@ def build_app(
         dependencies=[token_guard],
     )
     app.include_router(build_profile_router(storage, auth, profile_manager), prefix=API_PREFIX)
+
+    # ── Local AI: hardware profile, measured model strengths, agent runs ───────────
+    app.include_router(
+        build_local_ai_router(storage.data_dir),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
 
     # ── PTY sessions (v0.1.25 · ADR-0002 Phase A) ──────────────────────
     # The manager is attached to the bus so the pty.spawn tool primitive
