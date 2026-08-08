@@ -10,6 +10,34 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.117] -- 2026-08-08
+
+### Added
+- **Local model runs appear in Live View.** A local model driving this machine is an AI at
+  work like any other, so each conversation registers a coordination session (`runtime_id:
+  ollama`) and heartbeats its current step as it reads and writes files. One session per
+  conversation via `resume_key`, not one per message. Registration failure never breaks a
+  chat -- visibility is a nicety, the conversation is the point.
+- **All twelve installed models benchmarked, including vision.**
+
+### Measured -- the numbers that change what you should run
+| Role | Winner | Score | Speed |
+|---|---|---|---|
+| Agent / tools | `qwen2.5:1.5b` | 100% | 24.8 tok/s |
+| Coding | `qwen2.5:1.5b` | 100% | 24.8 tok/s |
+| Review | `llama3.2:3b` | 100% | 14.7 tok/s |
+| Structured output | `qwen2.5:1.5b` | 100% | 24.8 tok/s |
+| Vision | `qwen2.5vl:3b` | 100% | 14.2 tok/s |
+
+- **`qwen2.5vl:3b` matches `llava:7b` on vision (both 100%) at nearly 3x the speed**, because
+  the 7B spills out of 6 GB of VRAM and the 3B does not.
+- **`moondream` fails both vision tasks outright** despite being the fastest model measured at
+  54.7 tok/s. Speed is worthless when the answer is wrong, which is exactly why the
+  recommendation ranks on capability first and throughput second.
+- **`qwen2.5-coder:1.5b` scores 42.9%** -- the weakest model tested -- while plain
+  `qwen2.5:1.5b` of the same size scores 85.7%. The coder-tuned variants cannot call tools at
+  all, and that costs them more than their coding advantage returns.
+
 ## [0.1.116] -- 2026-08-08
 
 ### Added

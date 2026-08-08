@@ -278,6 +278,36 @@ async def stream_reply(
     append_message(conn, chat.id, "user", prompt)
     yield {"type": "user_saved"}
 
+    # Register in Live View. A local model driving this machine is an AI at work like any
+    # other, and the operator should see it there rather than have it run invisibly. The
+    # resume_key ties every turn of one conversation to a single session instead of minting
+    # a new number per message.
+    session_id: str | None = None
+    try:
+        from . import coordination  # local import: chat must not hard-depend on it
+
+        session = coordination.register_session(conn, coordination.AgentSessionRegister(
+            project_id=chat.project_id,
+            runtime_id="ollama",
+            agent_label=f"Local · {chat.model}",
+            task=prompt[:200],
+            resume_key=f"local-chat:{chat.id}",
+        ))
+        session_id = session.id
+    except Exception:  # noqa: BLE001 -- visibility is a nicety; never fail a chat over it
+        session_id = None
+
+    def _beat(intent: str) -> None:
+        if not session_id:
+            return
+        try:
+            from . import coordination  # noqa: PLC0415
+
+            coordination.heartbeat_session(
+                conn, session_id, coordination.AgentSessionHeartbeat(last_intent=intent[:8000]))
+        except Exception:  # noqa: BLE001
+            pass
+
     async for ev in ensure_ready(chat.model):
         yield ev
         if ev.get("type") == "error":
@@ -368,6 +398,7 @@ async def stream_reply(
             append_message(conn, chat.id, "assistant", assistant_text,
                            tokens_out=total_tokens,
                            duration_s=round(time.time() - started, 2))
+            _beat("replied")
             yield {"type": "done", "tokens_out": total_tokens,
                    "duration_s": round(time.time() - started, 2)}
             return
@@ -387,6 +418,7 @@ async def stream_reply(
             args = args if isinstance(args, dict) else {}
 
             yield {"type": "tool_start", "name": name, "arguments": args}
+            _beat(f"{name} {list(args.values())[:1]}")
 
             if name not in allowed or name not in handlers:
                 result = (f"ERROR: {name} is not available in {mode.value} mode. "
