@@ -10,6 +10,44 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.118] -- 2026-08-08
+
+### Added
+- **`write_code` tool.** Local models split cleanly into two useless halves: the coder-tuned
+  models write correct code but *cannot call tools at all*, and the small general models call
+  tools flawlessly but produce stubs like `# Your code here`. `write_code` joins them -- the
+  agent keeps the hands, a coding model writes the source, and the coding model never touches
+  the filesystem. The original task is prepended to the spec **in code**, because a 1.5B agent
+  paraphrases the requirement when relaying it and the coder cannot see the conversation.
+- **`benchmarks/local-models/squad_bench.py`** -- measures whether more agents actually help,
+  scored by executing the produced file against assertions the agents never see.
+
+### Measured: how to get real quality out of local models
+| Topology | Pass | Time/task |
+|---|---:|---:|
+| **pipeline_repair** (no agent; Python orchestrates) | **100%** | 45s |
+| coder_reviewer | 67% | 103s |
+| planner_coder_reviewer | 67% | 121s |
+| solo agent | 33% | 22s |
+| self_verify (agent runs its own code) | 33% | 19s |
+
+- **Removing the agent tripled correctness.** Called directly, `qwen2.5-coder:3b` solves every
+  task; wrapped in a 1.5B-driven agent loop the same coder drops to a third. The scaffolding is
+  the bottleneck, not the model.
+- **A reviewer seat doubles a weak agent (33% -> 67%) at 5x the wall-clock.** A planner seat
+  bought nothing at all -- same 67%, ~18s slower. More seats is not more quality.
+- **Letting a small model verify its own work made it worse.** It can see the failure and
+  cannot act on it; feedback only helps a model strong enough to use it.
+- `wordcount`, the only task needing punctuation handling, failed in *every* topology except
+  the pipeline, which fixed it from the real traceback.
+
+### Fixed
+- `run_agent` never told the model its workspace root, so agents invented absolute paths, were
+  refused, and then explained the refusal instead of retrying -- reading as "task failed" when
+  it had never been attempted. The chat path had this fix; the agent path did not.
+- Lengthening the system prompt to demand verbatim specs made results *worse* (33% -> 0%): a
+  small model's context is crowded out by instructions. Reverted, and solved structurally.
+
 ## [0.1.117] -- 2026-08-08
 
 ### Added

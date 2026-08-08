@@ -77,16 +77,16 @@ class PermissionMode(str, Enum):
 MODE_TOOLS: dict[PermissionMode, set[str]] = {
     PermissionMode.PLAN: {"read_file", "list_dir", "web_search", "web_fetch"},
     PermissionMode.MANUAL: {"read_file", "list_dir", "web_search", "web_fetch",
-                            "write_file", "run_command"},
+                            "write_file", "write_code", "run_command"},
     PermissionMode.ACCEPT_EDITS: {"read_file", "list_dir", "web_search", "web_fetch",
-                                  "write_file"},
+                                  "write_file", "write_code"},
     PermissionMode.AUTO: {"read_file", "list_dir", "web_search", "web_fetch",
-                          "write_file", "run_command"},
+                          "write_file", "write_code", "run_command"},
     PermissionMode.BYPASS: {"read_file", "list_dir", "web_search", "web_fetch",
-                            "write_file", "run_command"},
+                            "write_file", "write_code", "run_command"},
 }
 
-MUTATING_TOOLS = {"write_file", "run_command"}
+MUTATING_TOOLS = {"write_file", "run_command", "write_code"}
 
 # Required arguments per tool, used to turn a raw TypeError into a correction the model
 # can act on. Small models frequently call write_file with only a path, and "missing 1
@@ -98,6 +98,7 @@ TOOL_REQUIRED_ARGS: dict[str, list[str]] = {
     "run_command": ["command"],
     "web_search": ["query"],
     "web_fetch": ["url"],
+    "write_code": ["path", "spec"],
 }
 
 
@@ -145,10 +146,13 @@ class Workspace:
     """
 
     def __init__(self, root: str | Path, allow_shell: bool = False,
-                 allow_destructive: bool = False) -> None:
+                 allow_destructive: bool = False, task_context: str = "") -> None:
         self.root = Path(root).resolve()
         self.allow_shell = allow_shell
         self.allow_destructive = allow_destructive
+        # The original request, replayed into every write_code call so the coding model
+        # sees the real requirement rather than the agent's paraphrase of it.
+        self.task_context = task_context
 
     def _resolve(self, rel: str) -> Path:
         target = (self.root / rel).resolve()
@@ -176,6 +180,32 @@ class Workspace:
         p.write_text(content, encoding="utf-8")
         return f"wrote {len(content)} characters to {path}"
 
+    def write_code(self, path: str, spec: str, coder_model: str = "") -> str:
+        """Delegate the writing to a coding model, then store the result.
+
+        Split deliberately: the coder model never gets filesystem access, and the agent
+        never has to produce correct code itself. Each does only what it is good at.
+
+        The original task is prepended to the spec automatically. Measured: a 1.5B agent
+        summarises the requirement when relaying it, and the coder - which cannot see the
+        conversation - then writes something subtly wrong. The same coder passes the same
+        task when handed the full brief. Instructing the agent to copy the spec verbatim
+        made things *worse*, because a longer system prompt crowds out a small model's
+        context. Doing it structurally removes the failure mode instead of asking a weak
+        model to avoid it.
+        """
+        full_spec = f"{self.task_context}\n\n{spec}" if self.task_context else spec
+        code = generate_code(full_spec, model=coder_model or DEFAULT_CODER_MODEL)
+        if code.startswith("ERROR:"):
+            return code
+        p = self._resolve(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(code, encoding="utf-8")
+        # Echo the code back: the agent needs to see what was written to decide whether it
+        # satisfies the task, and it has no other way to inspect it without another read.
+        preview = code if len(code) < 700 else code[:700] + "\n...[truncated]"
+        return f"wrote {len(code)} characters to {path}:\n{preview}"
+
     def list_dir(self, path: str = ".") -> str:
         p = self._resolve(path)
         if not p.exists():
@@ -200,6 +230,43 @@ class Workspace:
             return "ERROR: command timed out after 60s"
         out = (proc.stdout or "") + (("\n[stderr]\n" + proc.stderr) if proc.stderr else "")
         return out.strip() or f"(no output, exit code {proc.returncode})"
+
+
+# Measured on this machine: qwen2.5-coder:3b writes correct code for every benchmark task
+# AND fits entirely in 6 GB of VRAM at ~15 tok/s. The 7B is no more correct and spills to CPU.
+DEFAULT_CODER_MODEL = "qwen2.5-coder:3b"
+
+
+def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 300.0) -> str:
+    """Ask a coding-tuned model to write code, with no tools involved.
+
+    This exists because of a hard split measured on real runs: the coder-tuned models write
+    correct code but **cannot call tools at all** (Ollama returns HTTP 400 - they ship with
+    no tools template), while the small general models call tools flawlessly but produce
+    stubs like ``# Your code here``. Neither can do the job alone.
+
+    So the tool-using agent keeps the hands, and delegates the actual writing here. The
+    coder never touches the filesystem; it just returns source, which the agent then writes.
+    """
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content":
+                      f"{spec}\n\nOutput ONLY the code in a single ```python block. "
+                      f"No explanation before or after."}],
+        "stream": False,
+        "options": {"temperature": 0, "num_ctx": 4096},
+    }
+    try:
+        req = urllib.request.Request(
+            f"{OLLAMA_URL}/api/chat", data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            text = json.loads(resp.read().decode("utf-8"))["message"]["content"]
+    except Exception as exc:  # noqa: BLE001
+        return f"ERROR: the code model failed: {type(exc).__name__}: {exc}"
+
+    fences = re.findall(r"```(?:python|py)?\s*\n(.*?)```", text, re.S)
+    return (max(fences, key=len) if fences else text).strip()
 
 
 def web_fetch(url: str) -> str:
@@ -302,6 +369,16 @@ def build_tools(mode: PermissionMode, allow_web: bool) -> list[dict[str, Any]]:
                          {"query": {"type": "string"}}, ["query"]),
         "web_fetch": fn("web_fetch", "Fetch a URL and return its text content.",
                         {"url": {"type": "string"}}, ["url"]),
+        "write_code": fn(
+            "write_code",
+            "Write source code to a file. Describe what the code must do in `spec` and a "
+            "specialised coding model writes it for you. Prefer this over write_file for "
+            "anything non-trivial.",
+            {"path": {"type": "string", "description": "Relative path, e.g. solution.py"},
+             "spec": {"type": "string",
+                      "description": "What the code must do, including function names and "
+                                     "expected behaviour."}},
+            ["path", "spec"]),
     }
     web = {"web_search", "web_fetch"}
     return [spec for name, spec in catalog.items()
@@ -316,6 +393,9 @@ Rules:
 - When you have finished the task, reply with your final answer as plain text and no
   tool call. That is how you signal completion.
 - Be concise. Long replies waste the limited context you have.
+
+- Use write_code to create code files. Pasting code into your reply saves nothing; only a
+  tool call changes a file.
 """
 
 
@@ -377,7 +457,8 @@ async def run_agent(
     allowed = MODE_TOOLS[mode]
     ws = Workspace(workspace,
                    allow_shell="run_command" in allowed,
-                   allow_destructive=(mode is PermissionMode.BYPASS))
+                   allow_destructive=(mode is PermissionMode.BYPASS),
+                   task_context=task)
     tools = build_tools(mode, allow_web)
     run = AgentRun(model=model, task=task, mode=mode.value)
     started = time.time()
@@ -385,6 +466,7 @@ async def run_agent(
     handlers: dict[str, Callable[..., str]] = {
         "read_file": ws.read_file,
         "write_file": ws.write_file,
+        "write_code": ws.write_code,
         "list_dir": ws.list_dir,
         "run_command": ws.run_command,
         "web_search": web_search,
@@ -410,8 +492,18 @@ async def run_agent(
             "\nYou are in BYPASS mode: no restrictions. Be careful."),
     }[mode]
 
+    # State the workspace root explicitly. Without it models invent absolute paths like
+    # /home/user/workspace/solution.py, get refused by the containment check, and then
+    # explain the refusal back to the user instead of retrying with a relative path -
+    # which reads as "the task failed" when the agent never actually attempted it.
+    workspace_note = (
+        f"\n\nYour workspace is: {ws.root}\n"
+        "Every path you pass to a tool MUST be relative to that root - 'solution.py' or "
+        "'src/app.py'. Never pass an absolute path; it will be refused."
+    )
+
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT + mode_note},
+        {"role": "system", "content": SYSTEM_PROMPT + mode_note + workspace_note},
         {"role": "user", "content": task},
     ]
     seen_calls: list[str] = []

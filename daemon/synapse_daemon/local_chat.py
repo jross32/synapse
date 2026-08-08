@@ -268,10 +268,12 @@ async def stream_reply(
     allowed = MODE_TOOLS[mode]
     ws_root = chat.workspace or str(_default_workspace())
     ws = Workspace(ws_root, allow_shell="run_command" in allowed,
-                   allow_destructive=(mode is PermissionMode.BYPASS))
+                   allow_destructive=(mode is PermissionMode.BYPASS),
+                   task_context=prompt)
     tools = build_tools(mode, allow_web)
 
     handlers = {"read_file": ws.read_file, "write_file": ws.write_file,
+                "write_code": ws.write_code,
                 "list_dir": ws.list_dir, "run_command": ws.run_command,
                 "web_search": web_search, "web_fetch": web_fetch}
 
