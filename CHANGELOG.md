@@ -10,6 +10,27 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.119] -- 2026-08-08
+
+### Added
+- **`local_pipeline` + `POST /api/v1/local-ai/pipeline`** -- the cheapest way to get correct
+  code out of this machine, and the shape the benchmark selected: generate, write a test from
+  the same requirement, run it, repair from the real error, repeat. Measured at 100% versus
+  33% for an agent-driven loop.
+- **Escalation instead of silent failure.** When the local loop is genuinely stuck the result
+  carries an `escalation_packet` -- requirement, current code, the test, the real error, and
+  why it stopped -- sized for a frontier model to finish in one shot. Local attempts are free
+  and can run all night; a frontier model's budget is not, so it is invited in only when the
+  free effort is exhausted, and then handed a briefing rather than a transcript.
+- Gives up early when the model returns identical code twice, because a model that has stopped
+  changing its answer is not one attempt away from success.
+
+### Fixed
+- **`run_pipeline` blocked the event loop.** It ran the generated code with a synchronous
+  `subprocess.run` inside an async function, which would freeze every other request the daemon
+  was serving for up to 45 seconds, and deadlocks outright on Windows' Proactor loop. Now runs
+  off-thread. Found because the test suite hung, not by reading the code.
+
 ## [0.1.118] -- 2026-08-08
 
 ### Added

@@ -8,6 +8,8 @@ are pure logic and all of which would be dangerous to get wrong.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from synapse_daemon import local_chat, local_models
