@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.120] -- 2026-08-08
+
+### Added
+- **`estimate_vram_fit()`** -- answers "will this model actually run well here" *before* a
+  multi-gigabyte download, and how much context it can hold. Spilling even slightly into
+  system RAM is the largest performance cliff on a small card (~6 tok/s versus ~25 measured),
+  and the KV cache is the part people forget: it grows linearly with context and is ~1 GB at
+  4k on a 7B, which is exactly the difference between fitting and not on 6 GB.
+  It independently reproduces what the benchmark measured -- a 7B does not fit on this card
+  at 4k, but does at 1.5k.
+
+### Fixed
+- **The pipeline's generated tests could prove nothing.** Left to itself the coding model
+  pasted a *copy* of the implementation into the test file and asserted against that, so the
+  test passed while never importing the module being shipped. A test that doesn't import what
+  it claims to test is worse than no test, because it manufactures confidence. The generator
+  now demands an import and the pipeline verifies one is present, repairing the test if not.
+
+### Dogfooding note
+This release was written the way the benchmark says local models should be used: the local
+pipeline produced the first draft of the estimator for free, its own test loop caught that it
+was wrong, it exhausted its repair attempts, and escalated a compact packet. Reviewing that
+packet took a fraction of the tokens writing it from scratch would have -- and the review
+caught two real bugs (`max_context` dividing gigabytes by 512 instead of solving for tokens,
+and reporting 0 context whenever `fits` was false) plus the self-test flaw above.
+
 ## [0.1.119] -- 2026-08-08
 
 ### Added

@@ -186,6 +186,54 @@ ROLE_TASKS: dict[str, dict[str, Any]] = {
 }
 
 
+# CUDA context, cuBLAS workspaces and framework allocations that exist before a single
+# weight is loaded. Measured empirically rather than assumed: on this 6 GB card a 4.68 GB
+# model plus a 4k cache spills, which only adds up once this overhead is counted.
+VRAM_RESERVE_GB = 0.6
+
+
+def estimate_vram_fit(model_size_gb: float, vram_gb: float, context_tokens: int = 4096,
+                      hidden_size: int = 3584, num_layers: int = 28) -> dict[str, Any]:
+    """Will this model fit entirely in GPU memory, and how much context can it hold?
+
+    Spilling even slightly into system RAM is the single largest performance cliff on a
+    small card -- measured here as ~6 tok/s versus ~25 for a model that fits -- so "does it
+    fit" deserves an answer before a multi-gigabyte download, not after.
+
+    The KV cache is the part people forget. It grows linearly with context: two tensors
+    (keys and values) per layer, ``hidden_size`` wide, two bytes per element at fp16. At 4k
+    context on a 7B that is roughly 1 GB, which is exactly the difference between fitting
+    and not on a 6 GB card.
+    """
+    if model_size_gb <= 0:
+        raise ValueError("model_size_gb must be positive")
+    if vram_gb <= 0:
+        raise ValueError("vram_gb must be positive")
+    if context_tokens <= 0:
+        raise ValueError("context_tokens must be positive")
+
+    kv_per_token_gb = (2 * num_layers * hidden_size * 2) / 1e9
+    kv_cache_gb = kv_per_token_gb * context_tokens
+    available = vram_gb - VRAM_RESERVE_GB
+    required = model_size_gb + kv_cache_gb
+
+    # Solve for tokens rather than scaling the requested context: the answer to "how much
+    # context can I actually have" is independent of what was asked for.
+    spare_for_cache = available - model_size_gb
+    if spare_for_cache <= 0:
+        max_context = 0
+    else:
+        max_context = int((spare_for_cache / kv_per_token_gb) // 512 * 512)
+
+    return {
+        "fits": required <= available,
+        "required_gb": round(required, 2),
+        "kv_cache_gb": round(kv_cache_gb, 2),
+        "headroom_gb": round(available - required, 2),
+        "max_context": max_context,
+    }
+
+
 class ModelProfile(BaseModel):
     name: str
     installed: bool = True

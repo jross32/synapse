@@ -119,13 +119,28 @@ async def run_pipeline(
     # The test is written from the requirement, independently of the implementation, so it
     # encodes what was asked for rather than what the code happens to do.
     emit("writing_test")
+    module = Path(path).stem
     test_spec = (
         f"{spec}\n\n"
-        f"Write a self-contained test for that code. Import from {Path(path).stem} and "
-        "assert the behaviour on representative inputs including edge cases. Use plain "
-        "asserts, no test framework. Print 'OK' on the last line. Output only the test code."
+        f"Write a test for that code. It MUST begin with `from {module} import *` and test "
+        f"the imported functions. Do NOT re-define or re-implement any of the functions in "
+        f"the test file - import them. Assert the behaviour on representative inputs "
+        f"including edge cases. Use plain asserts, no test framework. Print 'OK' on the last "
+        f"line. Output only the test code."
     )
     test_code = await asyncio.to_thread(generate_code, test_spec, coder_model)
+
+    # Verify the test actually imports the module. Left to itself the model happily pastes a
+    # copy of the implementation into the test file and asserts against *that*, so the test
+    # passes while proving nothing about the code being shipped. A test that does not import
+    # what it claims to test is worse than no test, because it manufactures confidence.
+    if f"from {module} import" not in test_code and f"import {module}" not in test_code:
+        emit("test_rejected", reason="the generated test did not import the module")
+        test_code = (f"from {module} import *\n\n"
+                     + "\n".join(line for line in test_code.splitlines()
+                                 if not line.startswith(("def ", "import ", "from ")))
+                     + "\nprint('OK')\n")
+
     test_file = ws / "_pipeline_test.py"
     test_file.write_text(test_code, encoding="utf-8")
     result.test_code = test_code

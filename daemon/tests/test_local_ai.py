@@ -197,3 +197,46 @@ def test_deleting_a_chat_takes_its_messages(storage):
     local_chat.append_message(storage.conn, chat.id, "user", "hi")
     local_chat.delete_chat(storage.conn, chat.id)
     assert local_chat.get_messages(storage.conn, chat.id) == []
+
+
+# ---------------------------------------------------------------- vram fit
+
+
+def test_vram_estimate_matches_what_was_actually_measured():
+    """The 7B/6 GB case is the one that matters, and it was measured, not guessed.
+
+    Every 7B model in benchmarks/local-models/REPORT.md spilled to CPU on this card and
+    collapsed to ~6 tok/s. The estimator must independently reach the same verdict, or it
+    will happily recommend a download that cannot run well.
+    """
+    seven_b = local_models.estimate_vram_fit(4.68, 6.0, 4096)
+    assert seven_b["fits"] is False
+    assert seven_b["headroom_gb"] < 0
+
+    three_b = local_models.estimate_vram_fit(2.02, 6.0, 4096)
+    assert three_b["fits"] is True
+
+
+def test_a_7b_fits_once_the_context_is_small_enough():
+    """Refusing outright would be wrong: the cache, not the weights, is what overflows."""
+    assert local_models.estimate_vram_fit(4.68, 6.0, 1024)["fits"] is True
+
+
+def test_max_context_is_solved_for_not_scaled_from_the_request():
+    """max_context answers "how much can I have", so it must not depend on what was asked."""
+    a = local_models.estimate_vram_fit(2.02, 6.0, 512)["max_context"]
+    b = local_models.estimate_vram_fit(2.02, 6.0, 8192)["max_context"]
+    assert a == b
+    assert a % 512 == 0
+
+
+def test_a_model_too_big_for_the_card_reports_no_context_at_all():
+    r = local_models.estimate_vram_fit(20.0, 6.0, 4096)
+    assert r["fits"] is False
+    assert r["max_context"] == 0
+
+
+@pytest.mark.parametrize("bad", [(0, 6.0, 4096), (4.0, 0, 4096), (4.0, 6.0, 0)])
+def test_vram_estimate_rejects_impossible_input(bad):
+    with pytest.raises(ValueError):
+        local_models.estimate_vram_fit(*bad)
