@@ -30,6 +30,9 @@ class LocalAiOverview(BaseModel):
     recommendations: list[local_models.RoleRecommendation] = Field(default_factory=list)
     benchmark_present: bool = False
     benchmark_hint: str = ""
+    playbook: dict[str, Any] = Field(default_factory=dict)
+    """The measured how-to, served to the UI from the same constant the AI reads in
+    /ai/context - so the human guidance and the machine guidance cannot drift apart."""
 
 
 class AgentRunRequest(BaseModel):
@@ -113,6 +116,7 @@ def build_local_ai_router(storage: Any, data_dir: Path) -> APIRouter:
                           key=lambda p: -(p.overall_pass_rate or -1)),
             recommendations=local_models.recommend_for_roles(hw, profiles),
             benchmark_present=local_models.benchmark_path().exists(),
+            playbook=local_models.PLAYBOOK,
             benchmark_hint=(
                 "Run `python benchmarks/local-models/bench.py` to measure the models on "
                 "this machine. Recommendations are only as good as the measurements."

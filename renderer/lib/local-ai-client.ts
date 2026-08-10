@@ -48,6 +48,10 @@ export interface RoleRecommendation {
   alternatives: string[];
 }
 
+import type { Playbook } from '../components/LocalAiHowTo';
+
+export type { Playbook };
+
 export interface LocalAiOverview {
   ollama_installed: boolean;
   ollama_running: boolean;
@@ -56,6 +60,8 @@ export interface LocalAiOverview {
   recommendations: RoleRecommendation[];
   benchmark_present: boolean;
   benchmark_hint: string;
+  /** Measured how-to, shared with what /ai/context serves to connecting AIs. */
+  playbook?: Playbook;
 }
 
 export interface LocalChat {

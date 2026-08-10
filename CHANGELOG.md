@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+### Added
+- **A measured playbook for local models, served to humans and AIs from one constant.**
+  `local_models.PLAYBOOK` is injected into `/ai/context` and returned by
+  `GET /local-ai/models`, and the new "How to use local AI" panel on the Local AI page
+  renders that same object. An AI told "use the local models" now learns the right approach
+  in one read instead of rediscovering it by experiment -- which would spend exactly the
+  tokens the local models exist to save. It states the decision rule, the endpoint for each
+  kind of work, and the four approaches that were tried and measurably made things worse.
+
 ## [0.1.119] -- 2026-08-08
 
 ### Added

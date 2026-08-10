@@ -128,8 +128,10 @@ def test_role_recommendations_cover_every_role():
 def test_summary_for_ai_has_usage_instructions():
     """An AI reading /ai/context needs to know how to actually call these models."""
     summary = local_models.summarize_for_ai()
-    assert "how_to_use" in summary
-    assert "11434" in summary["how_to_use"]
+    assert "playbook" in summary
+    endpoints = summary["playbook"]["endpoints"]
+    assert "11434" in endpoints["raw_completion"]
+    assert endpoints["write_code"].endswith("/local-ai/pipeline")
 
 
 # ---------------------------------------------------------------- chat titles
@@ -240,3 +242,18 @@ def test_a_model_too_big_for_the_card_reports_no_context_at_all():
 def test_vram_estimate_rejects_impossible_input(bad):
     with pytest.raises(ValueError):
         local_models.estimate_vram_fit(*bad)
+
+
+def test_playbook_tells_a_connecting_ai_the_measured_workflow():
+    """An AI told "use the local models" must learn the right approach from one read.
+
+    If it has to experiment to discover that the pipeline beats the agent loop, it spends
+    exactly the expensive tokens the local models exist to save.
+    """
+    playbook = local_models.summarize_for_ai()["playbook"]
+    assert "/api/v1/local-ai/pipeline" in playbook["for_writing_code"]["do"]
+    assert "escalation_packet" in playbook["for_writing_code"]["then"]
+    # The single most costly mistake must be stated, not implied.
+    assert "orchestrate" in playbook["the_one_rule"].lower()
+    assert playbook["what_does_not_work"], "known dead ends must be listed"
+    assert "judgement" in playbook["when_to_use_your_own_tokens_instead"]

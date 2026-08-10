@@ -37,6 +37,7 @@ import {
 import { cn } from '@shared/utils';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { LocalAiHowTo } from '../components/LocalAiHowTo';
 import { PageHeader } from '../components/PageHeader';
 
 const SELECT_CLASS =
@@ -339,6 +340,12 @@ export function LocalAiPage({ headerless = false }: LocalAiPageProps): JSX.Eleme
           subtitle='Code with a model running on this machine. No API cost.'
         />
       )}
+
+      {/* Collapsed by default: it is reference material, not something to scroll past
+          every visit. Expanding it costs nothing and it never pushes the chat off-screen. */}
+      <div className='mb-3 shrink-0'>
+        <LocalAiHowTo playbook={overview?.playbook} />
+      </div>
 
       <div className='flex min-h-0 flex-1 gap-3'>
         {/* ── conversations ─────────────────────────────────────────────── */}

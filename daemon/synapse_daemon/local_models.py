@@ -351,6 +351,75 @@ def recommend_for_roles(hw: HardwareProfile | None = None,
     return out
 
 
+# Everything below is measured on this machine, not assumed. It is served verbatim to any
+# AI that reads /ai/context so that "use the local models" costs one read instead of a
+# discovery session -- the whole point being to save the expensive model's tokens, which is
+# defeated if it has to spend them working out how.
+PLAYBOOK: dict[str, Any] = {
+    "summary": (
+        "Local models run through Ollama at http://127.0.0.1:11434 and cost zero API "
+        "tokens. They are slow but free and can run unattended, so the right instinct is: "
+        "let them grind, and spend your own tokens only on what they cannot finish."
+    ),
+    "the_one_rule": (
+        "Do NOT make a small model orchestrate. Measured on this machine: a coding model "
+        "called directly solves 100% of the benchmark tasks; the same model wrapped in an "
+        "agent loop driven by a small tool-calling model solves 33%. The scaffolding is the "
+        "bottleneck, not the model - the small model has to pick a tool, format the call, "
+        "relay the spec and read the result, and none of those four failure points is about "
+        "coding. Keep orchestration in code."
+    ),
+    "for_writing_code": {
+        "do": "POST /api/v1/local-ai/pipeline with {spec, path, workspace}",
+        "why": (
+            "Generates the code, writes a test from the same brief, runs it, and repairs "
+            "from the real traceback. Measured 100% pass where an agent loop scored 33%."
+        ),
+        "then": (
+            "If the response has needs_escalation=true, read escalation_packet - it is "
+            "self-contained (requirement, current code, the test, the real error) and is "
+            "designed so you can fix it in one shot without reading anything else."
+        ),
+        "raise_max_repairs_freely": (
+            "Every attempt is local and free. The only reason it is bounded is that a model "
+            "which has failed four times with the same error is not one attempt away."
+        ),
+    },
+    "for_everything_else": {
+        "do": "POST /api/v1/local-ai/agent/run with {model, task, mode}",
+        "good_for": (
+            "Reading and summarising files, renaming, mechanical edits, first-pass triage, "
+            "extracting structure from text - work where being wrong is cheap to detect."
+        ),
+        "modes": "plan (read-only), accept_edits (files, no shell), auto (shell too), bypass",
+    },
+    "what_does_not_work": [
+        "Adding a planner seat: identical 67% pass to coder+reviewer, ~18s slower per task. "
+        "More seats is not more quality.",
+        "Letting a small model verify its own work: 33% and slower than not verifying. It "
+        "runs the code, sees the failure, and cannot act on it. Feedback only helps a model "
+        "already strong enough to use it.",
+        "Giving a coder-tuned model tools: they ship without a tools template and Ollama "
+        "returns HTTP 400. Coders write code; general models call tools.",
+        "Writing longer system prompts to get better compliance: made results worse "
+        "(33% -> 0%), because instructions crowd out a small model's context.",
+    ],
+    "when_to_use_your_own_tokens_instead": (
+        "Work needing judgement rather than verification - architecture, security review, "
+        "anything where correctness cannot be checked by running it. Local models are safe "
+        "where a program can prove the answer, and unreliable where it cannot."
+    ),
+    "endpoints": {
+        "what_this_machine_can_run": "GET /api/v1/local-ai/models",
+        "hardware": "GET /api/v1/local-ai/hardware",
+        "write_code": "POST /api/v1/local-ai/pipeline",
+        "run_an_agent": "POST /api/v1/local-ai/agent/run",
+        "raw_completion": "POST http://127.0.0.1:11434/api/chat",
+    },
+    "measured_in": "benchmarks/local-models/REPORT.md and SQUAD_REPORT.md",
+}
+
+
 def summarize_for_ai(hw: HardwareProfile | None = None) -> dict[str, Any]:
     """Compact, honest picture for injection into /ai/context.
 
@@ -388,14 +457,7 @@ def summarize_for_ai(hw: HardwareProfile | None = None) -> dict[str, Any]:
             {"role": r.role, "model": r.model, "score": r.score, "reason": r.reason}
             for r in recs
         ],
-        "how_to_use": (
-            "These models run locally through Ollama at http://127.0.0.1:11434 and cost no "
-            "API tokens. Call POST /api/v1/local-agent/run with {model, task} to run one as "
-            "an agent with file and shell tools, or POST directly to Ollama's /api/chat for "
-            "a single completion. Offload bulk or mechanical work here - summarising, "
-            "renaming, boilerplate, first-pass triage - and keep frontier models for work "
-            "that genuinely needs them."
-        ),
+        "playbook": PLAYBOOK,
         "caveat": (
             "Scores come from benchmarks/local-models/bench.py run on this machine and are "
             "measured, not estimated. A role with no passing model means the work should not "
