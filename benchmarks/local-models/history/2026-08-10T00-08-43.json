@@ -1,0 +1,6985 @@
+{
+ "started": "2026-08-10T00:08:43",
+ "host": {
+  "gpu": "NVIDIA GeForce GTX 1660 Ti with Max-Q Design",
+  "vram_gb": 6.0
+ },
+ "skills": [
+  "coding",
+  "debugging",
+  "instruction_following",
+  "reasoning",
+  "structured_output",
+  "tool_calling"
+ ],
+ "models": [
+  {
+   "model": "qwen2.5vl:3b",
+   "skills": {
+    "coding": {
+     "score": 0.4,
+     "unsupported": false,
+     "seconds": 42.4,
+     "tokens_out": 1003,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 16.86,
+       "tokens_in": 44,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": false,
+       "seconds": 2.88,
+       "tokens_in": 71,
+       "tokens_out": 102,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": false,
+       "seconds": 4.07,
+       "tokens_in": 52,
+       "tokens_out": 188,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": false,
+       "seconds": 1.67,
+       "tokens_in": 51,
+       "tokens_out": 40,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 3.01,
+       "tokens_in": 44,
+       "tokens_out": 119,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 2.57,
+       "tokens_in": 44,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 3.57,
+       "tokens_in": 66,
+       "tokens_out": 151,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": false,
+       "seconds": 3.6,
+       "tokens_in": 45,
+       "tokens_out": 155,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": false,
+       "seconds": 2.29,
+       "tokens_in": 48,
+       "tokens_out": 76,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 1.91,
+       "tokens_in": 53,
+       "tokens_out": 52,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 17.0,
+     "tokens_out": 356,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 1.83,
+       "tokens_in": 58,
+       "tokens_out": 34,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 1.6,
+       "tokens_in": 63,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 1.49,
+       "tokens_in": 67,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 1.27,
+       "tokens_in": 51,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": false,
+       "seconds": 1.87,
+       "tokens_in": 68,
+       "tokens_out": 42,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 2.07,
+       "tokens_in": 79,
+       "tokens_out": 57,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": false,
+       "seconds": 1.39,
+       "tokens_in": 55,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 1.3,
+       "tokens_in": 60,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 2.56,
+       "tokens_in": 55,
+       "tokens_out": 84,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 1.66,
+       "tokens_in": 65,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 20.1,
+     "tokens_out": 221,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 1.02,
+       "tokens_in": 30,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 1.32,
+       "tokens_in": 31,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 1.0,
+       "tokens_in": 34,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 1.05,
+       "tokens_in": 33,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 1.19,
+       "tokens_in": 31,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 1.4,
+       "tokens_in": 36,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 1.37,
+       "tokens_in": 32,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 1.28,
+       "tokens_in": 30,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 8.89,
+       "tokens_in": 35,
+       "tokens_out": 116,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 1.57,
+       "tokens_in": 35,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 12.8,
+     "tokens_out": 29,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 1.3,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 1.31,
+       "tokens_in": 38,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 1.31,
+       "tokens_in": 42,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 1.47,
+       "tokens_in": 35,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 1.19,
+       "tokens_in": 37,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 1.14,
+       "tokens_in": 36,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.27,
+       "tokens_in": 40,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 1.28,
+       "tokens_in": 52,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 1.38,
+       "tokens_in": 43,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 1.18,
+       "tokens_in": 38,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 17.8,
+     "tokens_out": 104,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 2.14,
+       "tokens_in": 44,
+       "tokens_out": 16,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 2.66,
+       "tokens_in": 33,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 1.75,
+       "tokens_in": 44,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 1.52,
+       "tokens_in": 56,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 1.5,
+       "tokens_in": 37,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 1.25,
+       "tokens_in": 30,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 2.38,
+       "tokens_in": 41,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 1.92,
+       "tokens_in": 44,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 1.46,
+       "tokens_in": 43,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 1.2,
+       "tokens_in": 33,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": null,
+     "unsupported": true,
+     "seconds": 6.3,
+     "tokens_out": 0,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 0.63,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 0.55,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 0.64,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 1.02,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      }
+     ]
+    }
+   },
+   "total_score": 0.74,
+   "total_seconds": 116.4,
+   "total_tokens_out": 1713
+  },
+  {
+   "model": "moondream:latest",
+   "skills": {
+    "coding": {
+     "score": 0.1,
+     "unsupported": false,
+     "seconds": 30.6,
+     "tokens_out": 409,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 15.18,
+       "tokens_in": 37,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": false,
+       "seconds": 1.68,
+       "tokens_in": 70,
+       "tokens_out": 40,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": false,
+       "seconds": 0.71,
+       "tokens_in": 42,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": false,
+       "seconds": 1.45,
+       "tokens_in": 47,
+       "tokens_out": 34,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": false,
+       "seconds": 0.64,
+       "tokens_in": 37,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": false,
+       "seconds": 3.43,
+       "tokens_in": 39,
+       "tokens_out": 100,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 3.36,
+       "tokens_in": 60,
+       "tokens_out": 96,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": false,
+       "seconds": 1.06,
+       "tokens_in": 40,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": false,
+       "seconds": 1.01,
+       "tokens_in": 44,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": false,
+       "seconds": 2.09,
+       "tokens_in": 46,
+       "tokens_out": 54,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.4,
+     "unsupported": false,
+     "seconds": 13.2,
+     "tokens_out": 282,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 0.92,
+       "tokens_in": 57,
+       "tokens_out": 16,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": false,
+       "seconds": 1.21,
+       "tokens_in": 62,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 1.06,
+       "tokens_in": 65,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 0.85,
+       "tokens_in": 49,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": false,
+       "seconds": 1.48,
+       "tokens_in": 70,
+       "tokens_out": 33,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": false,
+       "seconds": 1.65,
+       "tokens_in": 76,
+       "tokens_out": 39,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": false,
+       "seconds": 2.72,
+       "tokens_in": 51,
+       "tokens_out": 67,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": false,
+       "seconds": 0.93,
+       "tokens_in": 59,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": false,
+       "seconds": 1.02,
+       "tokens_in": 55,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 1.32,
+       "tokens_in": 65,
+       "tokens_out": 29,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.5,
+     "unsupported": false,
+     "seconds": 34.6,
+     "tokens_out": 142,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 26.78,
+       "tokens_in": 17,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": true,
+       "seconds": 0.36,
+       "tokens_in": 19,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": false,
+       "seconds": 0.37,
+       "tokens_in": 22,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": false,
+       "seconds": 1.9,
+       "tokens_in": 21,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": false,
+       "seconds": 0.82,
+       "tokens_in": 18,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": false,
+       "seconds": 0.42,
+       "tokens_in": 23,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 1.16,
+       "tokens_in": 21,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": true,
+       "seconds": 0.49,
+       "tokens_in": 17,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 1.86,
+       "tokens_in": 25,
+       "tokens_out": 48,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 0.44,
+       "tokens_in": 20,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.2,
+     "unsupported": false,
+     "seconds": 4.1,
+     "tokens_out": 15,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 0.41,
+       "tokens_in": 32,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": false,
+       "seconds": 0.41,
+       "tokens_in": 25,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": false,
+       "seconds": 0.4,
+       "tokens_in": 28,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": false,
+       "seconds": 0.38,
+       "tokens_in": 22,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 0.45,
+       "tokens_in": 23,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": false,
+       "seconds": 0.37,
+       "tokens_in": 22,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": false,
+       "seconds": 0.36,
+       "tokens_in": 26,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 0.47,
+       "tokens_in": 39,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 0.43,
+       "tokens_in": 29,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 0.38,
+       "tokens_in": 27,
+       "tokens_out": 1,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.4,
+     "unsupported": false,
+     "seconds": 14.9,
+     "tokens_out": 341,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 2.38,
+       "tokens_in": 36,
+       "tokens_out": 65,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": false,
+       "seconds": 1.52,
+       "tokens_in": 20,
+       "tokens_out": 36,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": false,
+       "seconds": 0.9,
+       "tokens_in": 34,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": false,
+       "seconds": 0.4,
+       "tokens_in": 39,
+       "tokens_out": 1,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 0.79,
+       "tokens_in": 24,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": false,
+       "seconds": 0.92,
+       "tokens_in": 18,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 6.31,
+       "tokens_in": 32,
+       "tokens_out": 190,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": false,
+       "seconds": 0.66,
+       "tokens_in": 34,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 0.6,
+       "tokens_in": 31,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": false,
+       "seconds": 0.4,
+       "tokens_in": 21,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": null,
+     "unsupported": true,
+     "seconds": 2.0,
+     "tokens_out": 0,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 0.24,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 0.21,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 0.2,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 0.16,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 0.18,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 0.22,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 0.2,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 0.2,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 0.19,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 0.2,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      }
+     ]
+    }
+   },
+   "total_score": 0.32,
+   "total_seconds": 99.4,
+   "total_tokens_out": 1189
+  },
+  {
+   "model": "llava:7b",
+   "skills": {
+    "coding": {
+     "score": 0.6,
+     "unsupported": false,
+     "seconds": 355.8,
+     "tokens_out": 1363,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 39.65,
+       "tokens_in": 38,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": false,
+       "seconds": 16.01,
+       "tokens_in": 70,
+       "tokens_out": 76,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": false,
+       "seconds": 90.48,
+       "tokens_in": 48,
+       "tokens_out": 412,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": false,
+       "seconds": 10.78,
+       "tokens_in": 48,
+       "tokens_out": 44,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 14.47,
+       "tokens_in": 39,
+       "tokens_out": 62,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 31.29,
+       "tokens_in": 39,
+       "tokens_out": 122,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 64.25,
+       "tokens_in": 60,
+       "tokens_out": 257,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 22.83,
+       "tokens_in": 42,
+       "tokens_out": 90,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 50.13,
+       "tokens_in": 42,
+       "tokens_out": 186,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 15.9,
+       "tokens_in": 46,
+       "tokens_out": 64,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 98.6,
+     "tokens_out": 355,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 12.35,
+       "tokens_in": 58,
+       "tokens_out": 46,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 15.08,
+       "tokens_in": 62,
+       "tokens_out": 56,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 7.28,
+       "tokens_in": 65,
+       "tokens_out": 25,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 5.82,
+       "tokens_in": 50,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": false,
+       "seconds": 15.5,
+       "tokens_in": 73,
+       "tokens_out": 57,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": false,
+       "seconds": 10.83,
+       "tokens_in": 77,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": false,
+       "seconds": 5.84,
+       "tokens_in": 52,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 6.32,
+       "tokens_in": 60,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 7.9,
+       "tokens_in": 56,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 11.7,
+       "tokens_in": 64,
+       "tokens_out": 42,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 73.5,
+     "tokens_out": 198,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 3.32,
+       "tokens_in": 20,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 4.68,
+       "tokens_in": 21,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 3.73,
+       "tokens_in": 24,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 6.82,
+       "tokens_in": 23,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 4.34,
+       "tokens_in": 20,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 9.77,
+       "tokens_in": 26,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 8.89,
+       "tokens_in": 21,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 16.31,
+       "tokens_in": 19,
+       "tokens_out": 56,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 11.93,
+       "tokens_in": 27,
+       "tokens_out": 44,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 3.66,
+       "tokens_in": 24,
+       "tokens_out": 6,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 53.1,
+     "tokens_out": 72,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 5.92,
+       "tokens_in": 35,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 4.17,
+       "tokens_in": 27,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 5.39,
+       "tokens_in": 31,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 4.12,
+       "tokens_in": 24,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": true,
+       "seconds": 4.37,
+       "tokens_in": 26,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 8.04,
+       "tokens_in": 25,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 7.1,
+       "tokens_in": 29,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 4.1,
+       "tokens_in": 41,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 5.43,
+       "tokens_in": 33,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 4.49,
+       "tokens_in": 28,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 61.2,
+     "tokens_out": 147,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 9.17,
+       "tokens_in": 35,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 7.84,
+       "tokens_in": 22,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 3.72,
+       "tokens_in": 37,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 3.8,
+       "tokens_in": 47,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": false,
+       "seconds": 8.05,
+       "tokens_in": 28,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 3.62,
+       "tokens_in": 19,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 11.01,
+       "tokens_in": 30,
+       "tokens_out": 29,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 3.93,
+       "tokens_in": 39,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 5.97,
+       "tokens_in": 32,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 4.14,
+       "tokens_in": 24,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": null,
+     "unsupported": true,
+     "seconds": 0.9,
+     "tokens_out": 0,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 0.12,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 0.1,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      }
+     ]
+    }
+   },
+   "total_score": 0.74,
+   "total_seconds": 643.1,
+   "total_tokens_out": 2135
+  },
+  {
+   "model": "deepseek-coder:6.7b",
+   "skills": {
+    "coding": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 570.9,
+     "tokens_out": 1870,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 28.21,
+       "tokens_in": 100,
+       "tokens_out": 34,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 34.2,
+       "tokens_in": 135,
+       "tokens_out": 135,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 86.44,
+       "tokens_in": 109,
+       "tokens_out": 309,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": false,
+       "seconds": 46.24,
+       "tokens_in": 112,
+       "tokens_out": 161,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 45.96,
+       "tokens_in": 103,
+       "tokens_out": 157,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 33.47,
+       "tokens_in": 102,
+       "tokens_out": 113,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 77.77,
+       "tokens_in": 126,
+       "tokens_out": 258,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 81.22,
+       "tokens_in": 105,
+       "tokens_out": 262,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 117.66,
+       "tokens_in": 108,
+       "tokens_out": 379,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 19.74,
+       "tokens_in": 110,
+       "tokens_out": 62,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 313.3,
+     "tokens_out": 1033,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 35.22,
+       "tokens_in": 118,
+       "tokens_out": 112,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 36.78,
+       "tokens_in": 122,
+       "tokens_out": 114,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 27.69,
+       "tokens_in": 127,
+       "tokens_out": 87,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 26.69,
+       "tokens_in": 110,
+       "tokens_out": 78,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 40.15,
+       "tokens_in": 134,
+       "tokens_out": 136,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 27.09,
+       "tokens_in": 139,
+       "tokens_out": 88,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 26.45,
+       "tokens_in": 112,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 40.31,
+       "tokens_in": 121,
+       "tokens_out": 140,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": false,
+       "seconds": 32.24,
+       "tokens_in": 116,
+       "tokens_out": 107,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 20.71,
+       "tokens_in": 124,
+       "tokens_out": 78,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.3,
+     "unsupported": false,
+     "seconds": 134.3,
+     "tokens_out": 412,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": false,
+       "seconds": 15.04,
+       "tokens_in": 81,
+       "tokens_out": 48,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 19.33,
+       "tokens_in": 82,
+       "tokens_out": 63,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 4.63,
+       "tokens_in": 86,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 6.08,
+       "tokens_in": 85,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 6.53,
+       "tokens_in": 81,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": false,
+       "seconds": 24.46,
+       "tokens_in": 87,
+       "tokens_out": 74,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 18.29,
+       "tokens_in": 84,
+       "tokens_out": 66,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 15.08,
+       "tokens_in": 81,
+       "tokens_out": 58,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": false,
+       "seconds": 16.6,
+       "tokens_in": 89,
+       "tokens_out": 55,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": false,
+       "seconds": 8.22,
+       "tokens_in": 86,
+       "tokens_out": 20,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.3,
+     "unsupported": false,
+     "seconds": 313.6,
+     "tokens_out": 1080,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 51.05,
+       "tokens_in": 96,
+       "tokens_out": 207,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": false,
+       "seconds": 18.59,
+       "tokens_in": 89,
+       "tokens_out": 64,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": false,
+       "seconds": 55.85,
+       "tokens_in": 93,
+       "tokens_out": 199,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": false,
+       "seconds": 21.48,
+       "tokens_in": 85,
+       "tokens_out": 69,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 23.45,
+       "tokens_in": 87,
+       "tokens_out": 77,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": false,
+       "seconds": 21.66,
+       "tokens_in": 86,
+       "tokens_out": 70,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 41.53,
+       "tokens_in": 91,
+       "tokens_out": 139,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": false,
+       "seconds": 20.45,
+       "tokens_in": 103,
+       "tokens_out": 74,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": false,
+       "seconds": 29.26,
+       "tokens_in": 94,
+       "tokens_out": 90,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": true,
+       "seconds": 30.24,
+       "tokens_in": 91,
+       "tokens_out": 91,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.4,
+     "unsupported": false,
+     "seconds": 381.5,
+     "tokens_out": 1224,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": false,
+       "seconds": 71.81,
+       "tokens_in": 101,
+       "tokens_out": 250,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": false,
+       "seconds": 34.86,
+       "tokens_in": 83,
+       "tokens_out": 112,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": false,
+       "seconds": 51.19,
+       "tokens_in": 100,
+       "tokens_out": 175,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 49.64,
+       "tokens_in": 109,
+       "tokens_out": 165,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 15.63,
+       "tokens_in": 89,
+       "tokens_out": 39,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": false,
+       "seconds": 13.25,
+       "tokens_in": 81,
+       "tokens_out": 37,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": false,
+       "seconds": 44.96,
+       "tokens_in": 95,
+       "tokens_out": 140,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 60.88,
+       "tokens_in": 100,
+       "tokens_out": 202,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 8.43,
+       "tokens_in": 95,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": false,
+       "seconds": 30.88,
+       "tokens_in": 87,
+       "tokens_out": 93,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": null,
+     "unsupported": true,
+     "seconds": 1.1,
+     "tokens_out": 0,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 0.11,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 0.09,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 0.08,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 0.12,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 0.13,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 0.1,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 0.11,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 0.14,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 0.14,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 0.11,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      }
+     ]
+    }
+   },
+   "total_score": 0.54,
+   "total_seconds": 1714.7,
+   "total_tokens_out": 5619
+  },
+  {
+   "model": "qwen2.5-coder:1.5b",
+   "skills": {
+    "coding": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 58.3,
+     "tokens_out": 844,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 16.51,
+       "tokens_in": 54,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": false,
+       "seconds": 2.93,
+       "tokens_in": 81,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 6.8,
+       "tokens_in": 62,
+       "tokens_out": 145,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 5.75,
+       "tokens_in": 61,
+       "tokens_out": 117,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 2.88,
+       "tokens_in": 54,
+       "tokens_out": 46,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 4.77,
+       "tokens_in": 54,
+       "tokens_out": 94,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 5.54,
+       "tokens_in": 76,
+       "tokens_out": 112,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 4.2,
+       "tokens_in": 55,
+       "tokens_out": 80,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": false,
+       "seconds": 5.79,
+       "tokens_in": 58,
+       "tokens_out": 118,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 3.13,
+       "tokens_in": 63,
+       "tokens_out": 55,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 20.6,
+     "tokens_out": 265,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 2.26,
+       "tokens_in": 68,
+       "tokens_out": 33,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 2.27,
+       "tokens_in": 73,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 1.74,
+       "tokens_in": 77,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 1.49,
+       "tokens_in": 61,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 2.85,
+       "tokens_in": 78,
+       "tokens_out": 47,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": false,
+       "seconds": 2.16,
+       "tokens_in": 89,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 2.1,
+       "tokens_in": 65,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 1.58,
+       "tokens_in": 70,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 1.78,
+       "tokens_in": 65,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 2.35,
+       "tokens_in": 75,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 17.8,
+     "tokens_out": 203,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 0.96,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 1.66,
+       "tokens_in": 41,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 0.97,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 1.06,
+       "tokens_in": 43,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 1.07,
+       "tokens_in": 41,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 1.74,
+       "tokens_in": 46,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 1.23,
+       "tokens_in": 42,
+       "tokens_out": 8,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 2.83,
+       "tokens_in": 40,
+       "tokens_out": 40,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 5.07,
+       "tokens_in": 45,
+       "tokens_out": 97,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 1.18,
+       "tokens_in": 45,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 22.1,
+     "tokens_out": 319,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 0.98,
+       "tokens_in": 55,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 0.99,
+       "tokens_in": 48,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 7.4,
+       "tokens_in": 52,
+       "tokens_out": 157,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 1.01,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 1.0,
+       "tokens_in": 47,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 0.97,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.03,
+       "tokens_in": 50,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": false,
+       "seconds": 1.05,
+       "tokens_in": 62,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 6.7,
+       "tokens_in": 53,
+       "tokens_out": 143,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": true,
+       "seconds": 0.93,
+       "tokens_in": 48,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 15.4,
+     "tokens_out": 136,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 2.01,
+       "tokens_in": 54,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 1.78,
+       "tokens_in": 43,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 1.3,
+       "tokens_in": 54,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 1.31,
+       "tokens_in": 66,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 1.51,
+       "tokens_in": 47,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": false,
+       "seconds": 1.46,
+       "tokens_in": 40,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 2.42,
+       "tokens_in": 51,
+       "tokens_out": 36,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 1.37,
+       "tokens_in": 54,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 1.18,
+       "tokens_in": 53,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 1.06,
+       "tokens_in": 43,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 0.2,
+     "unsupported": false,
+     "seconds": 25.9,
+     "tokens_out": 375,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 3.01,
+       "tokens_in": 342,
+       "tokens_out": 36,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 2.56,
+       "tokens_in": 342,
+       "tokens_out": 37,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 2.16,
+       "tokens_in": 343,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 2.81,
+       "tokens_in": 349,
+       "tokens_out": 48,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 2.33,
+       "tokens_in": 341,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 3.75,
+       "tokens_in": 348,
+       "tokens_out": 66,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 2.15,
+       "tokens_in": 347,
+       "tokens_out": 29,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 2.24,
+       "tokens_in": 343,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 2.28,
+       "tokens_in": 342,
+       "tokens_out": 32,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 2.56,
+       "tokens_in": 343,
+       "tokens_out": 36,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.683,
+   "total_seconds": 160.1,
+   "total_tokens_out": 2142
+  },
+  {
+   "model": "qwen2.5-coder:3b",
+   "skills": {
+    "coding": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 101.0,
+     "tokens_out": 1135,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 12.95,
+       "tokens_in": 54,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 8.23,
+       "tokens_in": 81,
+       "tokens_out": 97,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 15.58,
+       "tokens_in": 62,
+       "tokens_out": 204,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 10.26,
+       "tokens_in": 61,
+       "tokens_out": 131,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 4.3,
+       "tokens_in": 54,
+       "tokens_out": 46,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 7.64,
+       "tokens_in": 54,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 11.56,
+       "tokens_in": 76,
+       "tokens_out": 148,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 11.56,
+       "tokens_in": 55,
+       "tokens_out": 149,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": false,
+       "seconds": 14.12,
+       "tokens_in": 58,
+       "tokens_out": 185,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 4.79,
+       "tokens_in": 63,
+       "tokens_out": 55,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 29.2,
+     "tokens_out": 269,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 3.01,
+       "tokens_in": 68,
+       "tokens_out": 29,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 3.13,
+       "tokens_in": 73,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 2.26,
+       "tokens_in": 77,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 1.93,
+       "tokens_in": 61,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 4.32,
+       "tokens_in": 78,
+       "tokens_out": 47,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 4.08,
+       "tokens_in": 89,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 2.39,
+       "tokens_in": 65,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 2.07,
+       "tokens_in": 70,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 2.48,
+       "tokens_in": 65,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 3.56,
+       "tokens_in": 75,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 17.6,
+     "tokens_out": 127,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 0.97,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 1.87,
+       "tokens_in": 41,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 1.02,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 1.27,
+       "tokens_in": 43,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 1.27,
+       "tokens_in": 41,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 3.28,
+       "tokens_in": 46,
+       "tokens_out": 34,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 1.71,
+       "tokens_in": 42,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 2.74,
+       "tokens_in": 40,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 2.3,
+       "tokens_in": 45,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 1.18,
+       "tokens_in": 45,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.6,
+     "unsupported": false,
+     "seconds": 25.9,
+     "tokens_out": 241,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 1.11,
+       "tokens_in": 55,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 1.12,
+       "tokens_in": 48,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 16.24,
+       "tokens_in": 52,
+       "tokens_out": 218,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 1.01,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 1.01,
+       "tokens_in": 47,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": false,
+       "seconds": 1.06,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.09,
+       "tokens_in": 50,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 1.16,
+       "tokens_in": 62,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 1.13,
+       "tokens_in": 53,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 1.01,
+       "tokens_in": 48,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 17.4,
+     "tokens_out": 119,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 2.61,
+       "tokens_in": 54,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 2.14,
+       "tokens_in": 43,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 1.56,
+       "tokens_in": 54,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 1.35,
+       "tokens_in": 66,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 1.45,
+       "tokens_in": 47,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 1.1,
+       "tokens_in": 40,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 3.1,
+       "tokens_in": 51,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 1.68,
+       "tokens_in": 54,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 1.34,
+       "tokens_in": 53,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 1.08,
+       "tokens_in": 43,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 0.2,
+     "unsupported": false,
+     "seconds": 30.2,
+     "tokens_out": 289,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 3.73,
+       "tokens_in": 342,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 3.45,
+       "tokens_in": 342,
+       "tokens_out": 37,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 3.04,
+       "tokens_in": 343,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 4.24,
+       "tokens_in": 349,
+       "tokens_out": 48,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 2.97,
+       "tokens_in": 341,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 3.54,
+       "tokens_in": 348,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 1.78,
+       "tokens_in": 347,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 2.14,
+       "tokens_in": 343,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 2.86,
+       "tokens_in": 342,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 2.46,
+       "tokens_in": 343,
+       "tokens_out": 23,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.717,
+   "total_seconds": 221.3,
+   "total_tokens_out": 2180
+  },
+  {
+   "model": "qwen2.5-coder:7b",
+   "skills": {
+    "coding": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 215.1,
+     "tokens_out": 900,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 29.34,
+       "tokens_in": 54,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 11.47,
+       "tokens_in": 81,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 49.84,
+       "tokens_in": 62,
+       "tokens_out": 235,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 15.99,
+       "tokens_in": 61,
+       "tokens_out": 86,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 10.54,
+       "tokens_in": 54,
+       "tokens_out": 46,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 18.2,
+       "tokens_in": 54,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 20.98,
+       "tokens_in": 76,
+       "tokens_out": 100,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": false,
+       "seconds": 29.31,
+       "tokens_in": 55,
+       "tokens_out": 130,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 17.72,
+       "tokens_in": 58,
+       "tokens_out": 82,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 11.73,
+       "tokens_in": 63,
+       "tokens_out": 51,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 61.6,
+     "tokens_out": 257,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 3.98,
+       "tokens_in": 68,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 6.96,
+       "tokens_in": 73,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 4.64,
+       "tokens_in": 77,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 3.78,
+       "tokens_in": 61,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 11.71,
+       "tokens_in": 78,
+       "tokens_out": 49,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 8.85,
+       "tokens_in": 89,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 4.81,
+       "tokens_in": 65,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 4.02,
+       "tokens_in": 70,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 5.18,
+       "tokens_in": 65,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 7.72,
+       "tokens_in": 75,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 43.9,
+     "tokens_out": 151,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 1.93,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": true,
+       "seconds": 4.47,
+       "tokens_in": 41,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 2.08,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 2.68,
+       "tokens_in": 43,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 2.84,
+       "tokens_in": 41,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 5.84,
+       "tokens_in": 46,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 4.51,
+       "tokens_in": 42,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": true,
+       "seconds": 3.98,
+       "tokens_in": 40,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 13.1,
+       "tokens_in": 45,
+       "tokens_out": 64,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 2.5,
+       "tokens_in": 45,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 25.7,
+     "tokens_out": 26,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 2.93,
+       "tokens_in": 55,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 2.63,
+       "tokens_in": 48,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 3.06,
+       "tokens_in": 52,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 2.37,
+       "tokens_in": 45,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 2.52,
+       "tokens_in": 47,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 2.49,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 2.78,
+       "tokens_in": 50,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 1.7,
+       "tokens_in": 62,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 3.0,
+       "tokens_in": 53,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 2.19,
+       "tokens_in": 48,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 41.3,
+     "tokens_out": 124,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 6.43,
+       "tokens_in": 54,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 5.49,
+       "tokens_in": 43,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 3.93,
+       "tokens_in": 54,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 2.3,
+       "tokens_in": 66,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 3.43,
+       "tokens_in": 47,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 2.41,
+       "tokens_in": 40,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 7.67,
+       "tokens_in": 51,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 3.87,
+       "tokens_in": 54,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 3.52,
+       "tokens_in": 53,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 2.27,
+       "tokens_in": 43,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 0.2,
+     "unsupported": false,
+     "seconds": 65.9,
+     "tokens_out": 261,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 8.07,
+       "tokens_in": 342,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 5.69,
+       "tokens_in": 342,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 4.77,
+       "tokens_in": 343,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 10.16,
+       "tokens_in": 349,
+       "tokens_out": 44,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 6.22,
+       "tokens_in": 341,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 6.42,
+       "tokens_in": 348,
+       "tokens_out": 25,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 3.57,
+       "tokens_in": 347,
+       "tokens_out": 10,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 6.3,
+       "tokens_in": 343,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 7.41,
+       "tokens_in": 342,
+       "tokens_out": 32,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 7.33,
+       "tokens_in": 343,
+       "tokens_out": 32,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.783,
+   "total_seconds": 453.5,
+   "total_tokens_out": 1719
+  },
+  {
+   "model": "llama3.2:1b",
+   "skills": {
+    "coding": {
+     "score": 0.6,
+     "unsupported": false,
+     "seconds": 66.1,
+     "tokens_out": 943,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 13.95,
+       "tokens_in": 50,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": false,
+       "seconds": 3.36,
+       "tokens_in": 77,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": false,
+       "seconds": 15.46,
+       "tokens_in": 56,
+       "tokens_out": 308,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 3.01,
+       "tokens_in": 57,
+       "tokens_out": 42,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 5.36,
+       "tokens_in": 50,
+       "tokens_out": 92,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 5.39,
+       "tokens_in": 50,
+       "tokens_out": 94,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 5.85,
+       "tokens_in": 70,
+       "tokens_out": 102,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": false,
+       "seconds": 5.55,
+       "tokens_in": 51,
+       "tokens_out": 97,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 4.67,
+       "tokens_in": 54,
+       "tokens_out": 77,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 3.54,
+       "tokens_in": 59,
+       "tokens_out": 54,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 25.4,
+     "tokens_out": 326,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 2.47,
+       "tokens_in": 64,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 2.17,
+       "tokens_in": 69,
+       "tokens_out": 25,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 1.88,
+       "tokens_in": 73,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 2.29,
+       "tokens_in": 57,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 3.31,
+       "tokens_in": 74,
+       "tokens_out": 49,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": false,
+       "seconds": 2.91,
+       "tokens_in": 85,
+       "tokens_out": 40,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 1.78,
+       "tokens_in": 61,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 2.41,
+       "tokens_in": 66,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 3.54,
+       "tokens_in": 61,
+       "tokens_out": 54,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": false,
+       "seconds": 2.6,
+       "tokens_in": 71,
+       "tokens_out": 34,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 16.5,
+     "tokens_out": 146,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 1.08,
+       "tokens_in": 36,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": true,
+       "seconds": 2.3,
+       "tokens_in": 37,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 1.04,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 1.25,
+       "tokens_in": 39,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 1.22,
+       "tokens_in": 37,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 2.74,
+       "tokens_in": 42,
+       "tokens_out": 37,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": true,
+       "seconds": 1.6,
+       "tokens_in": 38,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": true,
+       "seconds": 1.46,
+       "tokens_in": 35,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 2.75,
+       "tokens_in": 41,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 1.07,
+       "tokens_in": 39,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.5,
+     "unsupported": false,
+     "seconds": 11.0,
+     "tokens_out": 26,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 1.07,
+       "tokens_in": 51,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 1.1,
+       "tokens_in": 44,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 1.12,
+       "tokens_in": 46,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": false,
+       "seconds": 1.15,
+       "tokens_in": 41,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": true,
+       "seconds": 1.1,
+       "tokens_in": 42,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": false,
+       "seconds": 1.07,
+       "tokens_in": 41,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.08,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": false,
+       "seconds": 1.16,
+       "tokens_in": 58,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 1.1,
+       "tokens_in": 47,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 1.05,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 15.3,
+     "tokens_out": 121,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 1.79,
+       "tokens_in": 49,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": false,
+       "seconds": 3.2,
+       "tokens_in": 39,
+       "tokens_out": 48,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 1.4,
+       "tokens_in": 50,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": false,
+       "seconds": 1.21,
+       "tokens_in": 57,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 1.31,
+       "tokens_in": 43,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 1.11,
+       "tokens_in": 36,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 1.84,
+       "tokens_in": 47,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": false,
+       "seconds": 1.11,
+       "tokens_in": 48,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 1.24,
+       "tokens_in": 48,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 1.11,
+       "tokens_in": 39,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 22.1,
+     "tokens_out": 257,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": true,
+       "seconds": 2.43,
+       "tokens_in": 347,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": true,
+       "seconds": 2.25,
+       "tokens_in": 347,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": true,
+       "seconds": 2.04,
+       "tokens_in": 348,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": true,
+       "seconds": 2.87,
+       "tokens_in": 354,
+       "tokens_out": 40,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": true,
+       "seconds": 1.79,
+       "tokens_in": 346,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": true,
+       "seconds": 1.92,
+       "tokens_in": 351,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": false,
+       "seconds": 2.9,
+       "tokens_in": 352,
+       "tokens_out": 41,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 1.9,
+       "tokens_in": 348,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 1.73,
+       "tokens_in": 347,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": true,
+       "seconds": 2.26,
+       "tokens_in": 348,
+       "tokens_out": 27,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.733,
+   "total_seconds": 156.4,
+   "total_tokens_out": 1819
+  },
+  {
+   "model": "qwen2.5:1.5b",
+   "skills": {
+    "coding": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 57.5,
+     "tokens_out": 1069,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 8.07,
+       "tokens_in": 54,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 3.05,
+       "tokens_in": 81,
+       "tokens_out": 55,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": false,
+       "seconds": 9.51,
+       "tokens_in": 62,
+       "tokens_out": 220,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 3.71,
+       "tokens_in": 61,
+       "tokens_out": 70,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 3.25,
+       "tokens_in": 54,
+       "tokens_out": 59,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 4.59,
+       "tokens_in": 54,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 9.0,
+       "tokens_in": 76,
+       "tokens_out": 204,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 6.66,
+       "tokens_in": 55,
+       "tokens_out": 146,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": false,
+       "seconds": 6.53,
+       "tokens_in": 58,
+       "tokens_out": 140,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 3.11,
+       "tokens_in": 63,
+       "tokens_out": 55,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 19.5,
+     "tokens_out": 269,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 2.29,
+       "tokens_in": 68,
+       "tokens_out": 35,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 2.12,
+       "tokens_in": 73,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 1.6,
+       "tokens_in": 77,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 1.42,
+       "tokens_in": 61,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 2.88,
+       "tokens_in": 78,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": false,
+       "seconds": 2.15,
+       "tokens_in": 89,
+       "tokens_out": 32,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": false,
+       "seconds": 1.68,
+       "tokens_in": 65,
+       "tokens_out": 17,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 1.42,
+       "tokens_in": 70,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 1.67,
+       "tokens_in": 65,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 2.28,
+       "tokens_in": 75,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 13.5,
+     "tokens_out": 135,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 0.86,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 1.77,
+       "tokens_in": 41,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 0.87,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 1.14,
+       "tokens_in": 43,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 1.03,
+       "tokens_in": 41,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 2.11,
+       "tokens_in": 46,
+       "tokens_out": 32,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 1.36,
+       "tokens_in": 42,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 1.51,
+       "tokens_in": 40,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 1.8,
+       "tokens_in": 45,
+       "tokens_out": 25,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 1.01,
+       "tokens_in": 45,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 14.3,
+     "tokens_out": 159,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 0.88,
+       "tokens_in": 55,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 0.91,
+       "tokens_in": 48,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 5.71,
+       "tokens_in": 52,
+       "tokens_out": 124,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 0.93,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 0.92,
+       "tokens_in": 47,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 0.86,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.28,
+       "tokens_in": 50,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 0.92,
+       "tokens_in": 62,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 1.0,
+       "tokens_in": 53,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 0.87,
+       "tokens_in": 48,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 13.8,
+     "tokens_out": 137,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 1.83,
+       "tokens_in": 54,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 1.78,
+       "tokens_in": 43,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 1.29,
+       "tokens_in": 54,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 1.04,
+       "tokens_in": 66,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": false,
+       "seconds": 1.33,
+       "tokens_in": 47,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": false,
+       "seconds": 1.12,
+       "tokens_in": 40,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 2.17,
+       "tokens_in": 51,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 1.3,
+       "tokens_in": 54,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 1.08,
+       "tokens_in": 53,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 0.91,
+       "tokens_in": 43,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 19.0,
+     "tokens_out": 255,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": true,
+       "seconds": 2.25,
+       "tokens_in": 332,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": true,
+       "seconds": 1.96,
+       "tokens_in": 332,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": true,
+       "seconds": 1.68,
+       "tokens_in": 333,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": true,
+       "seconds": 2.35,
+       "tokens_in": 339,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": true,
+       "seconds": 1.63,
+       "tokens_in": 331,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": true,
+       "seconds": 1.93,
+       "tokens_in": 338,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 1.27,
+       "tokens_in": 337,
+       "tokens_out": 10,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": true,
+       "seconds": 3.04,
+       "tokens_in": 333,
+       "tokens_out": 56,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 1.31,
+       "tokens_in": 332,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": true,
+       "seconds": 1.6,
+       "tokens_in": 333,
+       "tokens_out": 20,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.783,
+   "total_seconds": 137.6,
+   "total_tokens_out": 2024
+  },
+  {
+   "model": "llama3.2:3b",
+   "skills": {
+    "coding": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 81.5,
+     "tokens_out": 868,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 11.99,
+       "tokens_in": 50,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": false,
+       "seconds": 4.72,
+       "tokens_in": 77,
+       "tokens_out": 50,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 14.02,
+       "tokens_in": 56,
+       "tokens_out": 183,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 4.49,
+       "tokens_in": 57,
+       "tokens_out": 47,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 5.18,
+       "tokens_in": 50,
+       "tokens_out": 58,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 7.73,
+       "tokens_in": 50,
+       "tokens_out": 94,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 9.29,
+       "tokens_in": 70,
+       "tokens_out": 115,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 7.94,
+       "tokens_in": 51,
+       "tokens_out": 97,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 6.61,
+       "tokens_in": 54,
+       "tokens_out": 78,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 9.54,
+       "tokens_in": 59,
+       "tokens_out": 119,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 31.4,
+     "tokens_out": 287,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 3.3,
+       "tokens_in": 64,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 3.28,
+       "tokens_in": 69,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 2.42,
+       "tokens_in": 73,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 2.04,
+       "tokens_in": 57,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 4.6,
+       "tokens_in": 74,
+       "tokens_out": 49,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": false,
+       "seconds": 3.49,
+       "tokens_in": 85,
+       "tokens_out": 33,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 2.56,
+       "tokens_in": 61,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 2.16,
+       "tokens_in": 66,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 3.93,
+       "tokens_in": 61,
+       "tokens_out": 41,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 3.66,
+       "tokens_in": 71,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 21.7,
+     "tokens_out": 163,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 1.14,
+       "tokens_in": 36,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": true,
+       "seconds": 2.08,
+       "tokens_in": 37,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 1.12,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 1.43,
+       "tokens_in": 39,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 1.43,
+       "tokens_in": 37,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 3.73,
+       "tokens_in": 42,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": true,
+       "seconds": 1.97,
+       "tokens_in": 38,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 2.57,
+       "tokens_in": 35,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 5.02,
+       "tokens_in": 41,
+       "tokens_out": 56,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 1.17,
+       "tokens_in": 39,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 14.4,
+     "tokens_out": 58,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 1.24,
+       "tokens_in": 51,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 1.26,
+       "tokens_in": 44,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 1.19,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 3.58,
+       "tokens_in": 41,
+       "tokens_out": 36,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": true,
+       "seconds": 1.23,
+       "tokens_in": 42,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 1.13,
+       "tokens_in": 41,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.17,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 1.25,
+       "tokens_in": 58,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 1.18,
+       "tokens_in": 47,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 1.14,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 22.2,
+     "tokens_out": 167,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 2.09,
+       "tokens_in": 49,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 1.98,
+       "tokens_in": 39,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": false,
+       "seconds": 2.92,
+       "tokens_in": 50,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 1.35,
+       "tokens_in": 57,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 1.76,
+       "tokens_in": 43,
+       "tokens_out": 10,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": false,
+       "seconds": 3.48,
+       "tokens_in": 36,
+       "tokens_out": 35,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 2.08,
+       "tokens_in": 47,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 1.59,
+       "tokens_in": 48,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 1.48,
+       "tokens_in": 48,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": false,
+       "seconds": 3.52,
+       "tokens_in": 39,
+       "tokens_out": 35,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 28.3,
+     "tokens_out": 234,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": true,
+       "seconds": 3.96,
+       "tokens_in": 347,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": true,
+       "seconds": 2.79,
+       "tokens_in": 347,
+       "tokens_out": 24,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": true,
+       "seconds": 2.34,
+       "tokens_in": 348,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": true,
+       "seconds": 3.55,
+       "tokens_in": 354,
+       "tokens_out": 35,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": true,
+       "seconds": 2.35,
+       "tokens_in": 346,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": true,
+       "seconds": 2.61,
+       "tokens_in": 351,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": false,
+       "seconds": 3.32,
+       "tokens_in": 352,
+       "tokens_out": 32,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": true,
+       "seconds": 2.31,
+       "tokens_in": 348,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 2.35,
+       "tokens_in": 347,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": true,
+       "seconds": 2.7,
+       "tokens_in": 348,
+       "tokens_out": 23,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.85,
+   "total_seconds": 199.5,
+   "total_tokens_out": 1777
+  },
+  {
+   "model": "qwen2.5:7b",
+   "skills": {
+    "coding": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 238.4,
+     "tokens_out": 1037,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 28.59,
+       "tokens_in": 54,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 12.48,
+       "tokens_in": 81,
+       "tokens_out": 65,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 29.48,
+       "tokens_in": 62,
+       "tokens_out": 178,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 25.72,
+       "tokens_in": 61,
+       "tokens_out": 123,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 27.87,
+       "tokens_in": 54,
+       "tokens_out": 132,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 22.37,
+       "tokens_in": 54,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 28.31,
+       "tokens_in": 76,
+       "tokens_out": 133,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": true,
+       "seconds": 29.06,
+       "tokens_in": 55,
+       "tokens_out": 131,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 23.02,
+       "tokens_in": 58,
+       "tokens_out": 104,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 11.51,
+       "tokens_in": 63,
+       "tokens_out": 51,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 58.0,
+     "tokens_out": 245,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 4.0,
+       "tokens_in": 68,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 6.53,
+       "tokens_in": 73,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 4.44,
+       "tokens_in": 77,
+       "tokens_out": 18,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 3.77,
+       "tokens_in": 61,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 9.27,
+       "tokens_in": 78,
+       "tokens_out": 40,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 8.26,
+       "tokens_in": 89,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 4.78,
+       "tokens_in": 65,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 3.92,
+       "tokens_in": 70,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 5.15,
+       "tokens_in": 65,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 7.86,
+       "tokens_in": 75,
+       "tokens_out": 32,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 38.0,
+     "tokens_out": 114,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 1.92,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": true,
+       "seconds": 4.41,
+       "tokens_in": 41,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 2.13,
+       "tokens_in": 44,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 2.67,
+       "tokens_in": 43,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 2.78,
+       "tokens_in": 41,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 5.58,
+       "tokens_in": 46,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": true,
+       "seconds": 3.76,
+       "tokens_in": 42,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": true,
+       "seconds": 3.08,
+       "tokens_in": 40,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 9.17,
+       "tokens_in": 45,
+       "tokens_out": 39,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 2.46,
+       "tokens_in": 45,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 25.3,
+     "tokens_out": 25,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 3.0,
+       "tokens_in": 55,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 2.62,
+       "tokens_in": 48,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 2.92,
+       "tokens_in": 52,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 2.43,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 2.34,
+       "tokens_in": 47,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 1.93,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 2.93,
+       "tokens_in": 50,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 1.78,
+       "tokens_in": 62,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 2.88,
+       "tokens_in": 53,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": true,
+       "seconds": 2.44,
+       "tokens_in": 48,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 36.4,
+     "tokens_out": 94,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 5.37,
+       "tokens_in": 54,
+       "tokens_out": 16,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 3.99,
+       "tokens_in": 43,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 4.22,
+       "tokens_in": 54,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 2.31,
+       "tokens_in": 66,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": true,
+       "seconds": 3.08,
+       "tokens_in": 47,
+       "tokens_out": 7,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 2.1,
+       "tokens_in": 40,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 5.42,
+       "tokens_in": 51,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 4.43,
+       "tokens_in": 54,
+       "tokens_out": 11,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 3.42,
+       "tokens_in": 53,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": true,
+       "seconds": 2.07,
+       "tokens_in": 43,
+       "tokens_out": 3,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 71.1,
+     "tokens_out": 287,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": true,
+       "seconds": 8.58,
+       "tokens_in": 332,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "weather_unit",
+       "passed": true,
+       "seconds": 6.27,
+       "tokens_in": 332,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "search_pick",
+       "passed": true,
+       "seconds": 5.41,
+       "tokens_in": 333,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "email_all_args",
+       "passed": true,
+       "seconds": 8.77,
+       "tokens_in": 339,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "read_file",
+       "passed": true,
+       "seconds": 5.54,
+       "tokens_in": 331,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "math_tool",
+       "passed": true,
+       "seconds": 7.16,
+       "tokens_in": 338,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 3.64,
+       "tokens_in": 337,
+       "tokens_out": 10,
+       "unsupported": false
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": true,
+       "seconds": 5.44,
+       "tokens_in": 333,
+       "tokens_out": 21,
+       "unsupported": false
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 13.99,
+       "tokens_in": 332,
+       "tokens_out": 68,
+       "unsupported": false
+      },
+      {
+       "id": "weather_then_city",
+       "passed": true,
+       "seconds": 6.27,
+       "tokens_in": 333,
+       "tokens_out": 26,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.967,
+   "total_seconds": 467.2,
+   "total_tokens_out": 1802
+  },
+  {
+   "model": "sim:latest",
+   "skills": {
+    "coding": {
+     "score": 0.4,
+     "unsupported": false,
+     "seconds": 1059.8,
+     "tokens_out": 1692,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": false,
+       "seconds": 107.92,
+       "tokens_in": 4078,
+       "tokens_out": 117,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 77.77,
+       "tokens_in": 4088,
+       "tokens_out": 96,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": false,
+       "seconds": 115.81,
+       "tokens_in": 4084,
+       "tokens_out": 214,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": false,
+       "seconds": 113.87,
+       "tokens_in": 4085,
+       "tokens_out": 162,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 107.76,
+       "tokens_in": 4078,
+       "tokens_out": 171,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 98.61,
+       "tokens_in": 4078,
+       "tokens_out": 146,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 126.82,
+       "tokens_in": 4081,
+       "tokens_out": 263,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": false,
+       "seconds": 108.5,
+       "tokens_in": 4079,
+       "tokens_out": 188,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": true,
+       "seconds": 112.53,
+       "tokens_in": 4082,
+       "tokens_out": 205,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": false,
+       "seconds": 90.19,
+       "tokens_in": 4087,
+       "tokens_out": 130,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 655.6,
+     "tokens_out": 673,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 64.08,
+       "tokens_in": 4092,
+       "tokens_out": 49,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 42.69,
+       "tokens_in": 2050,
+       "tokens_out": 62,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 70.32,
+       "tokens_in": 4084,
+       "tokens_out": 69,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 69.83,
+       "tokens_in": 4085,
+       "tokens_out": 64,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 76.03,
+       "tokens_in": 4085,
+       "tokens_out": 89,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 51.48,
+       "tokens_in": 2050,
+       "tokens_out": 97,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 64.87,
+       "tokens_in": 4089,
+       "tokens_out": 49,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": false,
+       "seconds": 68.12,
+       "tokens_in": 4094,
+       "tokens_out": 61,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": false,
+       "seconds": 73.66,
+       "tokens_in": 4089,
+       "tokens_out": 55,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 74.53,
+       "tokens_in": 4082,
+       "tokens_out": 78,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.6,
+     "unsupported": false,
+     "seconds": 348.8,
+     "tokens_out": 282,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 51.4,
+       "tokens_in": 4064,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 37.37,
+       "tokens_in": 4065,
+       "tokens_out": 93,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 51.34,
+       "tokens_in": 4068,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 11.36,
+       "tokens_in": 4067,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": false,
+       "seconds": 17.08,
+       "tokens_in": 4065,
+       "tokens_out": 23,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 20.37,
+       "tokens_in": 4070,
+       "tokens_out": 31,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 57.61,
+       "tokens_in": 4066,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": true,
+       "seconds": 13.02,
+       "tokens_in": 4063,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 34.82,
+       "tokens_in": 4069,
+       "tokens_out": 79,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": false,
+       "seconds": 54.47,
+       "tokens_in": 4067,
+       "tokens_out": 12,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 413.8,
+     "tokens_out": 343,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 24.9,
+       "tokens_in": 4079,
+       "tokens_out": 35,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 51.43,
+       "tokens_in": 4072,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": false,
+       "seconds": 17.89,
+       "tokens_in": 4074,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 21.7,
+       "tokens_in": 4069,
+       "tokens_out": 33,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 52.54,
+       "tokens_in": 4070,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 15.18,
+       "tokens_in": 4069,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 34.62,
+       "tokens_in": 4073,
+       "tokens_out": 81,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 66.71,
+       "tokens_in": 4086,
+       "tokens_out": 56,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 72.0,
+       "tokens_in": 4075,
+       "tokens_out": 76,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 56.8,
+       "tokens_in": 4072,
+       "tokens_out": 18,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.4,
+     "unsupported": false,
+     "seconds": 329.2,
+     "tokens_out": 207,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 16.65,
+       "tokens_in": 4077,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": false,
+       "seconds": 24.15,
+       "tokens_in": 4067,
+       "tokens_out": 43,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 53.36,
+       "tokens_in": 4078,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 9.99,
+       "tokens_in": 4085,
+       "tokens_out": 10,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": false,
+       "seconds": 14.31,
+       "tokens_in": 4071,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": false,
+       "seconds": 10.53,
+       "tokens_in": 4064,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": false,
+       "seconds": 23.43,
+       "tokens_in": 4075,
+       "tokens_out": 41,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 60.58,
+       "tokens_in": 4076,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": false,
+       "seconds": 60.9,
+       "tokens_in": 4076,
+       "tokens_out": 30,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": false,
+       "seconds": 55.28,
+       "tokens_in": 4067,
+       "tokens_out": 13,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": null,
+     "unsupported": true,
+     "seconds": 5.9,
+     "tokens_out": 0,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 0.6,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 0.57,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 0.58,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 0.58,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 0.6,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      }
+     ]
+    }
+   },
+   "total_score": 0.58,
+   "total_seconds": 2813.1,
+   "total_tokens_out": 3197
+  },
+  {
+   "model": "dolphin-llama3:latest",
+   "skills": {
+    "coding": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 357.9,
+     "tokens_out": 1563,
+     "results": [
+      {
+       "id": "even_sum",
+       "passed": true,
+       "seconds": 28.31,
+       "tokens_in": 48,
+       "tokens_out": 115,
+       "unsupported": false
+      },
+      {
+       "id": "fizzbuzz",
+       "passed": true,
+       "seconds": 22.79,
+       "tokens_in": 75,
+       "tokens_out": 96,
+       "unsupported": false
+      },
+      {
+       "id": "roman",
+       "passed": true,
+       "seconds": 49.88,
+       "tokens_in": 54,
+       "tokens_out": 225,
+       "unsupported": false
+      },
+      {
+       "id": "word_count",
+       "passed": true,
+       "seconds": 23.55,
+       "tokens_in": 55,
+       "tokens_out": 97,
+       "unsupported": false
+      },
+      {
+       "id": "flatten",
+       "passed": true,
+       "seconds": 22.41,
+       "tokens_in": 48,
+       "tokens_out": 86,
+       "unsupported": false
+      },
+      {
+       "id": "binary_search",
+       "passed": true,
+       "seconds": 63.01,
+       "tokens_in": 48,
+       "tokens_out": 275,
+       "unsupported": false
+      },
+      {
+       "id": "parse_duration",
+       "passed": false,
+       "seconds": 41.62,
+       "tokens_in": 68,
+       "tokens_out": 195,
+       "unsupported": false
+      },
+      {
+       "id": "merge_intervals",
+       "passed": false,
+       "seconds": 48.04,
+       "tokens_in": 49,
+       "tokens_out": 211,
+       "unsupported": false
+      },
+      {
+       "id": "is_balanced",
+       "passed": false,
+       "seconds": 23.11,
+       "tokens_in": 52,
+       "tokens_out": 99,
+       "unsupported": false
+      },
+      {
+       "id": "chunk",
+       "passed": true,
+       "seconds": 35.13,
+       "tokens_in": 57,
+       "tokens_out": 164,
+       "unsupported": false
+      }
+     ]
+    },
+    "debugging": {
+     "score": 1.0,
+     "unsupported": false,
+     "seconds": 114.2,
+     "tokens_out": 471,
+     "results": [
+      {
+       "id": "fix_off_by_one",
+       "passed": true,
+       "seconds": 10.37,
+       "tokens_in": 62,
+       "tokens_out": 41,
+       "unsupported": false
+      },
+      {
+       "id": "fix_mutable_default",
+       "passed": true,
+       "seconds": 9.75,
+       "tokens_in": 67,
+       "tokens_out": 38,
+       "unsupported": false
+      },
+      {
+       "id": "fix_int_div",
+       "passed": true,
+       "seconds": 14.24,
+       "tokens_in": 71,
+       "tokens_out": 64,
+       "unsupported": false
+      },
+      {
+       "id": "fix_shadowing",
+       "passed": true,
+       "seconds": 5.86,
+       "tokens_in": 55,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "fix_key_error",
+       "passed": true,
+       "seconds": 19.74,
+       "tokens_in": 72,
+       "tokens_out": 86,
+       "unsupported": false
+      },
+      {
+       "id": "fix_infinite_loop",
+       "passed": true,
+       "seconds": 11.17,
+       "tokens_in": 83,
+       "tokens_out": 45,
+       "unsupported": false
+      },
+      {
+       "id": "fix_string_compare",
+       "passed": true,
+       "seconds": 7.11,
+       "tokens_in": 59,
+       "tokens_out": 26,
+       "unsupported": false
+      },
+      {
+       "id": "fix_none_return",
+       "passed": true,
+       "seconds": 18.26,
+       "tokens_in": 64,
+       "tokens_out": 82,
+       "unsupported": false
+      },
+      {
+       "id": "fix_range_bounds",
+       "passed": true,
+       "seconds": 7.3,
+       "tokens_in": 59,
+       "tokens_out": 28,
+       "unsupported": false
+      },
+      {
+       "id": "fix_zero_div",
+       "passed": true,
+       "seconds": 10.44,
+       "tokens_in": 69,
+       "tokens_out": 41,
+       "unsupported": false
+      }
+     ]
+    },
+    "instruction_following": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 62.1,
+     "tokens_out": 153,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 2.99,
+       "tokens_in": 34,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "no_punctuation",
+       "passed": false,
+       "seconds": 8.07,
+       "tokens_in": 35,
+       "tokens_out": 27,
+       "unsupported": false
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 3.54,
+       "tokens_in": 38,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "json_only",
+       "passed": true,
+       "seconds": 4.51,
+       "tokens_in": 37,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 5.68,
+       "tokens_in": 35,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "starts_with",
+       "passed": true,
+       "seconds": 8.54,
+       "tokens_in": 40,
+       "tokens_out": 22,
+       "unsupported": false
+      },
+      {
+       "id": "no_word",
+       "passed": false,
+       "seconds": 7.24,
+       "tokens_in": 36,
+       "tokens_out": 19,
+       "unsupported": false
+      },
+      {
+       "id": "max_chars",
+       "passed": false,
+       "seconds": 4.51,
+       "tokens_in": 33,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "numbered",
+       "passed": true,
+       "seconds": 13.66,
+       "tokens_in": 39,
+       "tokens_out": 48,
+       "unsupported": false
+      },
+      {
+       "id": "refuse_extra",
+       "passed": true,
+       "seconds": 3.41,
+       "tokens_in": 37,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    },
+    "reasoning": {
+     "score": 0.9,
+     "unsupported": false,
+     "seconds": 76.3,
+     "tokens_out": 197,
+     "results": [
+      {
+       "id": "apples",
+       "passed": true,
+       "seconds": 4.67,
+       "tokens_in": 49,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 4.21,
+       "tokens_in": 42,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": false,
+       "seconds": 8.6,
+       "tokens_in": 44,
+       "tokens_out": 20,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 4.31,
+       "tokens_in": 39,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": true,
+       "seconds": 4.17,
+       "tokens_in": 40,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 6.73,
+       "tokens_in": 39,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 16.44,
+       "tokens_in": 43,
+       "tokens_out": 62,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 1.74,
+       "tokens_in": 56,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 18.48,
+       "tokens_in": 45,
+       "tokens_out": 71,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": true,
+       "seconds": 6.93,
+       "tokens_in": 42,
+       "tokens_out": 16,
+       "unsupported": false
+      }
+     ]
+    },
+    "structured_output": {
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 55.2,
+     "tokens_out": 99,
+     "results": [
+      {
+       "id": "json_person",
+       "passed": true,
+       "seconds": 7.58,
+       "tokens_in": 47,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "json_list",
+       "passed": true,
+       "seconds": 5.75,
+       "tokens_in": 37,
+       "tokens_out": 14,
+       "unsupported": false
+      },
+      {
+       "id": "extract_email",
+       "passed": true,
+       "seconds": 6.34,
+       "tokens_in": 48,
+       "tokens_out": 9,
+       "unsupported": false
+      },
+      {
+       "id": "extract_number",
+       "passed": true,
+       "seconds": 2.27,
+       "tokens_in": 55,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "csv_row",
+       "passed": false,
+       "seconds": 6.51,
+       "tokens_in": 41,
+       "tokens_out": 13,
+       "unsupported": false
+      },
+      {
+       "id": "key_value",
+       "passed": true,
+       "seconds": 3.29,
+       "tokens_in": 34,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "json_nested",
+       "passed": true,
+       "seconds": 6.91,
+       "tokens_in": 45,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "date_iso",
+       "passed": true,
+       "seconds": 7.42,
+       "tokens_in": 46,
+       "tokens_out": 15,
+       "unsupported": false
+      },
+      {
+       "id": "bool_json",
+       "passed": true,
+       "seconds": 5.22,
+       "tokens_in": 46,
+       "tokens_out": 6,
+       "unsupported": false
+      },
+      {
+       "id": "split_names",
+       "passed": false,
+       "seconds": 3.9,
+       "tokens_in": 37,
+       "tokens_out": 4,
+       "unsupported": false
+      }
+     ]
+    },
+    "tool_calling": {
+     "score": null,
+     "unsupported": true,
+     "seconds": 5.7,
+     "tokens_out": 0,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": false,
+       "seconds": 0.58,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_unit",
+       "passed": false,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 0.57,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "email_all_args",
+       "passed": false,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "read_file",
+       "passed": false,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "math_tool",
+       "passed": false,
+       "seconds": 0.58,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 0.59,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": false,
+       "seconds": 0.58,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "no_hallucinated_tool",
+       "passed": true,
+       "seconds": 0.57,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      },
+      {
+       "id": "weather_then_city",
+       "passed": false,
+       "seconds": 0.56,
+       "tokens_in": 0,
+       "tokens_out": 0,
+       "unsupported": true
+      }
+     ]
+    }
+   },
+   "total_score": 0.82,
+   "total_seconds": 671.4,
+   "total_tokens_out": 2483
+  }
+ ]
+}

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -42,7 +43,7 @@ WORKROOT = HERE / ".squad_work"
 
 # Measured in REPORT.md on this machine. The agent seat needs tool-calling, which the
 # coder-tuned variants cannot do at all, so they are deliberately not used as agents.
-AGENT_MODEL = "qwen2.5:1.5b"     # 100% tool-calling, 24.8 tok/s, fits VRAM
+AGENT_MODEL = os.environ.get("SQUAD_AGENT_MODEL", "qwen2.5:1.5b")     # 100% tool-calling, 24.8 tok/s, fits VRAM
 REVIEW_MODEL = "llama3.2:3b"     # 100% on diff reasoning, 14.7 tok/s, fits VRAM
 
 
