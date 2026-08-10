@@ -220,9 +220,16 @@ export function ProjectTile({
         <p className='text-sm text-muted-foreground'>{project.description}</p>
       )}
 
-      <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs'>
+      {/* minmax(0,1fr) rather than 1fr: a plain `1fr` track cannot shrink below its
+          min-content width, and a launch command like
+          "C:\Users\...\Python312\python.exe" has no break opportunities, so its whole
+          length becomes the track's minimum and the card blows out of the grid. Measured
+          at 375px: one tile reported 556px of content in a 237px box. `break-all` then
+          lets the path itself wrap mid-token, since `break-words` only breaks between
+          words and a path has none. */}
+      <dl className='grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs'>
         <dt className='font-mono text-muted-foreground'>cmd</dt>
-        <dd className='break-words font-mono text-secondary-foreground'>{project.launch_cmd}</dd>
+        <dd className='break-all font-mono text-secondary-foreground'>{project.launch_cmd}</dd>
         {project.expected_port !== null && (
           <>
             <dt className='font-mono text-muted-foreground'>port</dt>

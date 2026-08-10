@@ -447,9 +447,12 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
             >
               Open Apps
             </Button>
+            {/* The Button base sets whitespace-nowrap, so this label - the longest of the
+                shortcuts - pushed 228px into a 189px column on a phone. Allowing it to wrap
+                keeps the useful detail instead of trading it for an ellipsis. */}
             <Button
               variant='secondary'
-              className='justify-start'
+              className='h-auto justify-start whitespace-normal py-2 text-left'
               onClick={() => onNavigate({ page: 'ai-coding', section: 'sessions' })}
             >
               Sessions (Claude / Codex / shells)

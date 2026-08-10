@@ -504,8 +504,10 @@ export function AiFactoryPage(): JSX.Element {
                     ))}
                   </select>
                 </label>
-                <div className='grid grid-cols-2 gap-3'>
-                  <label className='grid gap-2 text-sm'>
+                {/* One column on phones: two side-by-side selects leave ~120px each at
+                    375px, which truncates their own option labels. */}
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                  <label className='grid min-w-0 gap-2 text-sm'>
                     <span className='text-muted-foreground'>Runtime</span>
                     <select
                       className='rounded-lg border border-border bg-background px-3 py-2'
@@ -836,8 +838,14 @@ export function AiFactoryPage(): JSX.Element {
 
 function MetricCard({ label, value }: { label: string; value: string }): JSX.Element {
   return (
-    <div className='rounded-2xl border border-border bg-secondary/40 p-3'>
-      <p className='text-xs uppercase tracking-[0.22em] text-muted-foreground'>{label}</p>
+    <div className='min-w-0 rounded-2xl border border-border bg-secondary/40 p-3'>
+      {/* Wide letter-spacing is the look, but 0.22em on uppercase makes even a single word
+          like "Components" 106px wide, which overflows an 89px cell once these cards sit
+          two-up on a phone. Tighten the tracking below `sm` and let the word break rather
+          than push the card out of its grid. */}
+      <p className='break-words text-xs uppercase tracking-[0.12em] text-muted-foreground sm:tracking-[0.22em]'>
+        {label}
+      </p>
       <p className='mt-1 text-xl font-semibold'>{value}</p>
     </div>
   );
