@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.121] -- 2026-08-10
+
+### Fixed (found by auditing the running app, not by reading code)
+- **A second event-loop blocker.** `POST /review/proposals/reconcile` ran `git log -n 300`
+  inline in an async route with a 15s timeout, stalling every other request behind it -- the
+  daemon appears hung rather than slow. Found by an AST sweep for blocking calls inside
+  `async def`, which is now the check to re-run after touching any route.
+- **A wall of 404s in the live UI.** The coder workspace fetched terminal scrollback for
+  historical runs and reported "Could not read session output" for each. PTY buffers live in
+  the daemon's memory, so after any restart every past run legitimately has none -- normal
+  behaviour was being presented as failure, and real errors were buried among dozens of
+  identical red messages. Now says so plainly.
+- **The new "How to use local AI" panel overflowed at 375px** (`scrollWidth` 497 against a
+  237px track). Grid and flex children default to `min-width: auto`, so the long monospace
+  endpoint strings set the track's minimum and `truncate` never got the chance to act.
+  Verified fixed in the running app: zero overflowing elements, no horizontal page scroll.
+
 ### Added
 - **`local_router.py` + `POST /local-ai/do`** -- one call that works out *how* to do a task
   locally and then does it. Callers no longer need to know that code belongs in the pipeline,

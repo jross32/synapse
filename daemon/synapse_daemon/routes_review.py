@@ -173,24 +173,34 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
         # Scan recent commit messages for open-proposal ids and FLAG matches as possibly
         # addressed (metadata.addressed_by) -- never auto-resolves. Catches ideas whose fix
         # landed without the AI closing the proposal.
+        import asyncio
         import subprocess
 
         from .runtime_paths import repo_root
 
-        commit_texts: list[str] = []
-        try:
-            result = subprocess.run(
-                ["git", "log", "-n", "300", "--format=%h %s%n%b%x1e"],
-                cwd=str(repo_root()),
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False,
-            )
-            if result.stdout:
-                commit_texts = [chunk.strip() for chunk in result.stdout.split("\x1e") if chunk.strip()]
-        except Exception:  # noqa: BLE001 - git may be unavailable; reconcile is best-effort
-            commit_texts = []
+        def read_recent_commits() -> list[str]:
+            """Read commit messages in a worker thread.
+
+            `git log` over 300 commits takes long enough on a real repository to matter, and
+            running it inline in an async route stalls every other request behind it for up
+            to the full 15s timeout - the daemon appears hung, not slow.
+            """
+            try:
+                result = subprocess.run(
+                    ["git", "log", "-n", "300", "--format=%h %s%n%b%x1e"],
+                    cwd=str(repo_root()),
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
+                )
+            except Exception:  # noqa: BLE001 - git may be unavailable; reconcile is best-effort
+                return []
+            if not result.stdout:
+                return []
+            return [chunk.strip() for chunk in result.stdout.split("\x1e") if chunk.strip()]
+
+        commit_texts = await asyncio.to_thread(read_recent_commits)
         with storage.transaction() as conn:
             flagged = proposals_module.reconcile_addressed_proposals(conn, commit_texts)
         for proposal in flagged:

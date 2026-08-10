@@ -1515,7 +1515,16 @@ function RunOutputCard({
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError((err as Error).message || 'Could not read session output.');
+        // A 404 here is expected, not a fault: terminal scrollback lives in the daemon's
+        // memory, so every past run's buffer is legitimately gone after a restart. Showing
+        // it as an error made normal behaviour look broken and buried real failures in a
+        // wall of identical red messages.
+        const status = (err as { status?: number }).status;
+        setLoadError(
+          status === 404
+            ? 'Live output is no longer available — terminal history is cleared when the daemon restarts.'
+            : (err as Error).message || 'Could not read session output.',
+        );
         setLoading(false);
       });
     return () => {

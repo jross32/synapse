@@ -33,7 +33,7 @@ function CopyLine({ text }: { text: string }): JSX.Element {
         });
       }}
       title='Copy'
-      className='group flex w-full items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-left font-mono text-xs hover:bg-muted'
+      className='group flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-left font-mono text-xs hover:bg-muted'
     >
       <span className='min-w-0 flex-1 truncate'>{text}</span>
       {copied ? (
@@ -53,7 +53,7 @@ export function LocalAiHowTo({ playbook }: { playbook?: Playbook }): JSX.Element
   const other = playbook.for_everything_else ?? {};
 
   return (
-    <section className='rounded-lg border border-border bg-card'>
+    <section className='min-w-0 rounded-lg border border-border bg-card'>
       <button
         type='button'
         onClick={() => setOpen((v) => !v)}
@@ -71,7 +71,7 @@ export function LocalAiHowTo({ playbook }: { playbook?: Playbook }): JSX.Element
       </button>
 
       {open && (
-        <div className='space-y-4 border-t border-border px-3 py-3 text-sm'>
+        <div className='min-w-0 space-y-4 border-t border-border px-3 py-3 text-sm'>
           {playbook.summary && <p className='text-muted-foreground'>{playbook.summary}</p>}
 
           {/* The single most expensive mistake, stated first so it is the thing you read. */}
@@ -79,11 +79,11 @@ export function LocalAiHowTo({ playbook }: { playbook?: Playbook }): JSX.Element
             <p className='mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide'>
               <TriangleAlert className='h-3.5 w-3.5' /> The one rule
             </p>
-            <p className='text-sm leading-relaxed'>{playbook.the_one_rule}</p>
+            <p className='break-words text-sm leading-relaxed'>{playbook.the_one_rule}</p>
           </div>
 
-          <div className='grid gap-3 md:grid-cols-2'>
-            <div className='space-y-2 rounded-md border border-border p-3'>
+          <div className='grid min-w-0 gap-3 md:grid-cols-2'>
+            <div className='min-w-0 space-y-2 rounded-md border border-border p-3'>
               <p className='flex items-center gap-1.5 text-sm font-medium'>
                 <Zap className='h-4 w-4' /> Writing code
               </p>
@@ -97,7 +97,7 @@ export function LocalAiHowTo({ playbook }: { playbook?: Playbook }): JSX.Element
               )}
             </div>
 
-            <div className='space-y-2 rounded-md border border-border p-3'>
+            <div className='min-w-0 space-y-2 rounded-md border border-border p-3'>
               <p className='flex items-center gap-1.5 text-sm font-medium'>
                 <Wrench className='h-4 w-4' /> Everything else
               </p>
