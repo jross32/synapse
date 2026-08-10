@@ -11,6 +11,19 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **`local_router.py` + `POST /local-ai/do`** -- one call that works out *how* to do a task
+  locally and then does it. Callers no longer need to know that code belongs in the pipeline,
+  that file work needs an agent, or which of thirteen installed models is strongest at each:
+  the strategy is chosen in code and the model is chosen from the testbench scorecard.
+- **`local_models.skill_scores()` / `best_model_for()`** -- routing now reads the measured
+  per-skill results, so the coder seat gets whichever model actually scored highest at coding
+  on this machine, and the file-handling seat deliberately avoids the coding leader, since
+  coder-tuned models cannot call tools at all.
+- Judgement work (`should we`, `trade-off`, `security review`, `best approach`) is **never
+  attempted locally**. Code can be proved wrong by running it; an architectural opinion
+  cannot, so a confident wrong answer would cost the caller more than an honest handoff.
+
+### Added
 - **`benchmarks/local-models/testbench.py`** -- a per-skill scorecard for every installed
   model: six skills x ten checks, all machine-verified (code executed, JSON parsed, tool
   calls inspected). No model grades another, so nothing can be talked into a pass. Results

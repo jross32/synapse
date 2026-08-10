@@ -420,6 +420,44 @@ PLAYBOOK: dict[str, Any] = {
 }
 
 
+def skill_scores() -> dict[str, dict[str, float]]:
+    """Per-skill scores from the most recent testbench sweep: ``{skill: {model: score}}``.
+
+    Separate from ``load_benchmarks`` because the two measure different things. That one
+    records speed and VRAM fit; this one records what each model is actually *good at*,
+    which is what routing needs - the fastest model on this machine is also one of the
+    weakest coders, so picking by speed picks wrong.
+
+    Returns an empty mapping when no sweep has been run, and callers fall back to their
+    defaults rather than pretending to have evidence.
+    """
+    history = _repo_root() / "benchmarks" / "local-models" / "history"
+    if not history.is_dir():
+        return {}
+    runs = sorted(history.glob("*.json"))
+    if not runs:
+        return {}
+    try:
+        data = json.loads(runs[-1].read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 -- a truncated run must not break routing
+        return {}
+
+    out: dict[str, dict[str, float]] = {}
+    for entry in data.get("models", []):
+        name = entry.get("model")
+        for skill, detail in (entry.get("skills") or {}).items():
+            score = (detail or {}).get("score")
+            if name and score is not None:
+                out.setdefault(skill, {})[name] = float(score)
+    return out
+
+
+def best_model_for(skill: str, fallback: str = "") -> str:
+    """Highest measured scorer for ``skill``; ``fallback`` when nothing has been measured."""
+    scores = skill_scores().get(skill) or {}
+    return max(scores, key=scores.__getitem__) if scores else fallback
+
+
 def summarize_for_ai(hw: HardwareProfile | None = None) -> dict[str, Any]:
     """Compact, honest picture for injection into /ai/context.
 

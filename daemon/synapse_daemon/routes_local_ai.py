@@ -17,7 +17,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import local_chat, local_models, local_pipeline, ollama_client
+from . import local_chat, local_models, local_pipeline, local_router, ollama_client
 from .errors import invalid
 from .local_agent import MAX_STEPS_DEFAULT, AgentRun, PermissionMode, run_agent
 
@@ -52,6 +52,14 @@ class PipelineRequest(BaseModel):
     model: str = ""
     max_repairs: int = 4
     write_test: bool = True
+
+
+class DoRequest(BaseModel):
+    task: str
+    workspace: str | None = None
+    path: str = "solution.py"
+    max_repairs: int = 4
+    allow_shell: bool = False
 
 
 class CreateChatRequest(BaseModel):
@@ -176,6 +184,30 @@ def build_local_ai_router(storage: Any, data_dir: Path) -> APIRouter:
             max_repairs=max(0, min(payload.max_repairs, 20)),
             write_test=payload.write_test,
         )
+
+    @router.post("/do", response_model=local_router.RoutedResult)
+    async def do_task(payload: DoRequest) -> local_router.RoutedResult:
+        """One call: work out how to do this locally, then do it.
+
+        Saves the caller from having to know that code belongs in the pipeline, that file
+        work needs an agent, or which of the installed models is strongest at each - all of
+        which is decided here from the measured scorecard. Returns a finished result, or
+        `needs_escalation` with a self-contained packet when the honest answer is that a
+        local model should not be trusted with it.
+        """
+        task = payload.task.strip()
+        if not task:
+            raise invalid("task", "Describe what you want done.")
+        if not ollama_client.is_installed():
+            raise invalid("model", "Ollama isn't installed, so local models can't run.")
+        if not await ollama_client.server_up():
+            raise invalid("model", "The Ollama server isn't running. Start it first.")
+
+        ws = Path(payload.workspace).resolve() if payload.workspace else default_ws
+        return await local_router.run_task(
+            task, workspace=ws, path=payload.path,
+            max_repairs=max(0, min(payload.max_repairs, 20)),
+            allow_shell=payload.allow_shell)
 
     # ── conversations ────────────────────────────────────────────────────────────
 

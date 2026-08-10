@@ -257,3 +257,39 @@ def test_playbook_tells_a_connecting_ai_the_measured_workflow():
     assert "orchestrate" in playbook["the_one_rule"].lower()
     assert playbook["what_does_not_work"], "known dead ends must be listed"
     assert "judgement" in playbook["when_to_use_your_own_tokens_instead"]
+
+
+# ---------------------------------------------------------------- routing
+
+
+@pytest.mark.parametrize(("task", "expected"), [
+    ("Write a function that parses ISO dates", "pipeline"),
+    ("Fix the bug in utils.py", "pipeline"),
+    ("Summarise what is in the logs folder", "agent"),
+    ("Rewrite this sentence to be shorter", "completion"),
+    ("Should we move off Supabase to Neon?", "escalate"),
+    ("What is the best approach for caching here?", "escalate"),
+])
+def test_routing_picks_the_strategy_that_matches_the_work(task, expected):
+    from synapse_daemon.local_router import route
+    assert route(task).strategy.value == expected
+
+
+def test_judgement_work_is_never_attempted_locally():
+    """The expensive failure is a confident wrong answer, not a refusal.
+
+    Code can be proved wrong by running it; an architectural opinion cannot, so the caller
+    would have to detect the error themselves before they could fix it.
+    """
+    from synapse_daemon.local_router import route
+    decision = route("Should we redesign the auth layer for security?")
+    assert decision.strategy.value == "escalate"
+    assert not decision.model, "escalation must not name a local model to blame"
+    assert decision.matched, "the decision must be explainable, not a black box"
+
+
+def test_file_work_avoids_the_coder_model():
+    """Coder-tuned models cannot call tools at all, so they are the worst pick for file work
+    despite being the best at code."""
+    from synapse_daemon.local_router import route
+    assert "coder" not in route("List the files in the src directory").model
