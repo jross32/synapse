@@ -13,6 +13,7 @@ import { cn } from '../lib/utils';
 export interface Playbook {
   summary?: string;
   the_one_rule?: string;
+  correction_worth_reading?: string;
   for_writing_code?: { do?: string; why?: string; then?: string; raise_max_repairs_freely?: string };
   for_everything_else?: { do?: string; good_for?: string; modes?: string };
   what_does_not_work?: string[];
@@ -81,6 +82,17 @@ export function LocalAiHowTo({ playbook }: { playbook?: Playbook }): JSX.Element
             </p>
             <p className='break-words text-sm leading-relaxed'>{playbook.the_one_rule}</p>
           </div>
+
+          {playbook.correction_worth_reading && (
+            <div className='rounded-md border border-border bg-muted/30 p-3'>
+              <p className='mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+                A correction
+              </p>
+              <p className='break-words text-xs text-muted-foreground'>
+                {playbook.correction_worth_reading}
+              </p>
+            </div>
+          )}
 
           <div className='grid min-w-0 gap-3 md:grid-cols-2'>
             <div className='min-w-0 space-y-2 rounded-md border border-border p-3'>

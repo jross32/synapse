@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.123] -- 2026-08-10
+
+### Changed -- a headline finding corrected by better measurement
+The full 13-model sweep disproved this project's own claim that "the scaffolding is the
+bottleneck, not the model". Re-running the agent topologies with `qwen2.5:7b` in the seat:
+
+| Approach | Pass | Time/task |
+|---|---:|---:|
+| solo agent, qwen2.5:1.5b | 33% | 22s |
+| coder+reviewer, 1.5b | 67% | 103s |
+| pipeline, no agent | 100% | 45s |
+| **solo agent, qwen2.5:7b** | **100%** | 87s |
+| coder+reviewer, 7b | 100% | 171s |
+
+Capability, not scaffolding, was the binding constraint. The original conclusion generalised
+from one 1.5B model to all local models without ever putting a larger one in the same seat.
+The pipeline is still the right default -- 100% in half the time, because it never pays for
+tool-calling round trips -- but for the right reason now.
+
+The finding that *survived* is stronger for having been retested at both capability levels:
+**extra seats buy nothing.** A planner seat scored identically and cost ~18s; a reviewer
+behind a capable agent took 100% to 100% and added 84s.
+
+`PLAYBOOK` now carries the correction explicitly, and the UI panel renders it, because an AI
+reading a confident but wrong rule is worse off than one reading nothing.
+
 ## [0.1.122] -- 2026-08-10
 
 ### Fixed -- mobile overflow, found by measuring every page at 375px

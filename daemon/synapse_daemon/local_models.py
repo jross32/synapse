@@ -362,12 +362,19 @@ PLAYBOOK: dict[str, Any] = {
         "let them grind, and spend your own tokens only on what they cannot finish."
     ),
     "the_one_rule": (
-        "Do NOT make a small model orchestrate. Measured on this machine: a coding model "
-        "called directly solves 100% of the benchmark tasks; the same model wrapped in an "
-        "agent loop driven by a small tool-calling model solves 33%. The scaffolding is the "
-        "bottleneck, not the model - the small model has to pick a tool, format the call, "
-        "relay the spec and read the result, and none of those four failure points is about "
-        "coding. Keep orchestration in code."
+        "Match the model to the seat, and never put a 1-2B model in charge of anything. "
+        "Measured on the same three tasks: a 1.5B agent scored 33%, the same loop with "
+        "qwen2.5:7b scored 100%, and a code-orchestrated pipeline with no agent at all "
+        "scored 100% in half the time. Capability was the binding constraint, not the "
+        "scaffolding - but the pipeline still wins on speed, because it never pays for "
+        "tool-calling round trips."
+    ),
+    "correction_worth_reading": (
+        "An earlier version of this playbook said 'the scaffolding is the bottleneck, not "
+        "the model'. That was wrong, and wrong in an instructive way: it generalised from a "
+        "single 1.5B model to all local models without testing a bigger one in the same "
+        "seat. Once qwen2.5:7b was measured in the agent seat it scored 100%. Trust the "
+        "scorecard over any narrative, including this one."
     ),
     "for_writing_code": {
         "do": "POST /api/v1/local-ai/pipeline with {spec, path, workspace}",
@@ -394,15 +401,19 @@ PLAYBOOK: dict[str, Any] = {
         "modes": "plan (read-only), accept_edits (files, no shell), auto (shell too), bypass",
     },
     "what_does_not_work": [
-        "Adding a planner seat: identical 67% pass to coder+reviewer, ~18s slower per task. "
-        "More seats is not more quality.",
-        "Letting a small model verify its own work: 33% and slower than not verifying. It "
+        "Extra seats. A planner seat scored identically to coder+reviewer and cost ~18s a "
+        "task. A reviewer behind a capable agent took 100% to 100% and added 84s. Seats buy "
+        "nothing once the primary model can already do the job.",
+        "Putting a 1-2B model in charge. qwen2.5:1.5b calls tools perfectly (100%) but "
+        "codes at 70% and writes stubs like '# Your code here'. It is a fine pair of hands "
+        "and a poor decision-maker.",
+        "Letting a weak model verify its own work: 33% and slower than not verifying. It "
         "runs the code, sees the failure, and cannot act on it. Feedback only helps a model "
         "already strong enough to use it.",
         "Giving a coder-tuned model tools: they ship without a tools template and Ollama "
         "returns HTTP 400. Coders write code; general models call tools.",
-        "Writing longer system prompts to get better compliance: made results worse "
-        "(33% -> 0%), because instructions crowd out a small model's context.",
+        "Writing longer system prompts to get better compliance: made a 1.5B model worse "
+        "(33% -> 0%), because instructions crowd out a small context.",
     ],
     "when_to_use_your_own_tokens_instead": (
         "Work needing judgement rather than verification - architecture, security review, "
