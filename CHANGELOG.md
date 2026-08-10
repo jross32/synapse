@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.122] -- 2026-08-10
+
+### Fixed -- mobile overflow, found by measuring every page at 375px
+- **Apps: one project tile blew out the whole grid** -- 556px of content in a 237px box while
+  every other tile fitted. A `1fr` track cannot shrink below its min-content width, and a
+  launch command like `C:\Users\...\python.exe` has no break opportunities, so the entire
+  path became the track's minimum. Fixed with `minmax(0,1fr)` plus `break-all`;
+  `break-words` cannot help, because it only breaks between words and a path has none.
+- **AI Factory: metric cards overflowed their own cells.** `tracking-[0.22em]` on uppercase
+  text makes even "Components" 106px wide against an 89px cell once cards sit two-up.
+- **AI Factory: a two-column select row** left ~120px per control at 375px, truncating the
+  option labels the control exists to show. Single column below `sm`.
+- **Home: the longest shortcut button** pushed 228px into a 189px column, because the Button
+  base sets `whitespace-nowrap`. It now wraps, keeping the label rather than trading it for
+  an ellipsis.
+
+Apps, AI Coding, Tools and Live measure clean at 375px; Home and AI Factory are down from
+three offenders to two and one. Verified in the running app.
+
 ## [0.1.121] -- 2026-08-10
 
 ### Fixed (found by auditing the running app, not by reading code)
