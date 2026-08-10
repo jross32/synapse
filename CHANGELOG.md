@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.119] -- 2026-08-08
+
+### Added
+- **`local_pipeline.py` + `POST /local-ai/pipeline`** -- the shape the benchmark selected:
+  generate, write a test from the same brief, run it, repair from the real traceback, repeat.
+  Python does the orchestrating and the model only writes code, which measured 100% against
+  33% for an agent-driven loop. Local inference is free, so repairs are cheap; a frontier
+  model is only invited in when the loop is genuinely stuck, and then it receives a compact
+  `escalation_packet` (requirement, current code, real error) instead of a transcript.
+- Three hermetic pipeline tests -- repair-from-error, escalation-packet completeness, and
+  early stop when the model stops changing its answer.
+
+### Fixed
+- **The pipeline blocked the event loop.** `subprocess.run` was awaited inline inside an async
+  handler, so a single pipeline call would freeze every other request the daemon was serving
+  for up to 45 seconds, and on Windows deadlocked the Proactor loop outright. Found because
+  the test suite hung only when a prior test had already created a loop; each test passed
+  alone. Now dispatched through `asyncio.to_thread`.
+
 ## [0.1.120] -- 2026-08-08
 
 ### Added
