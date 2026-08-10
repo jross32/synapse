@@ -1,0 +1,108 @@
+{
+ "started": "2026-08-10T00:08:08",
+ "host": {
+  "gpu": "NVIDIA GeForce GTX 1660 Ti with Max-Q Design",
+  "vram_gb": 6.0
+ },
+ "skills": [
+  "reasoning"
+ ],
+ "models": [
+  {
+   "model": "qwen2.5:1.5b",
+   "skills": {
+    "reasoning": {
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 10.6,
+     "tokens_out": 159,
+     "results": [
+      {
+       "id": "apples",
+       "passed": false,
+       "seconds": 1.17,
+       "tokens_in": 55,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "older",
+       "passed": true,
+       "seconds": 1.12,
+       "tokens_in": 48,
+       "tokens_out": 4,
+       "unsupported": false
+      },
+      {
+       "id": "cheaper",
+       "passed": true,
+       "seconds": 2.29,
+       "tokens_in": 52,
+       "tokens_out": 124,
+       "unsupported": false
+      },
+      {
+       "id": "odd_one",
+       "passed": true,
+       "seconds": 0.8,
+       "tokens_in": 45,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "days",
+       "passed": false,
+       "seconds": 0.84,
+       "tokens_in": 47,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "remainder",
+       "passed": true,
+       "seconds": 0.83,
+       "tokens_in": 46,
+       "tokens_out": 2,
+       "unsupported": false
+      },
+      {
+       "id": "sequence",
+       "passed": true,
+       "seconds": 1.06,
+       "tokens_in": 50,
+       "tokens_out": 12,
+       "unsupported": false
+      },
+      {
+       "id": "negation",
+       "passed": true,
+       "seconds": 0.78,
+       "tokens_in": 62,
+       "tokens_out": 3,
+       "unsupported": false
+      },
+      {
+       "id": "units",
+       "passed": true,
+       "seconds": 0.83,
+       "tokens_in": 53,
+       "tokens_out": 5,
+       "unsupported": false
+      },
+      {
+       "id": "counting",
+       "passed": false,
+       "seconds": 0.87,
+       "tokens_in": 48,
+       "tokens_out": 2,
+       "unsupported": false
+      }
+     ]
+    }
+   },
+   "total_score": 0.7,
+   "total_seconds": 10.6,
+   "total_tokens_out": 159
+  }
+ ]
+}

@@ -11,6 +11,25 @@ Every commit must append an entry under the in-progress version header.
 ## [Unreleased]
 
 ### Added
+- **`benchmarks/local-models/testbench.py`** -- a per-skill scorecard for every installed
+  model: six skills x ten checks, all machine-verified (code executed, JSON parsed, tool
+  calls inspected). No model grades another, so nothing can be talked into a pass. Results
+  append to `history/` so the effect of a change is visible as a delta rather than a vibe.
+  Skills mirror how models are actually evaluated in public work: execution-checked coding,
+  repair-from-error, verifiable instruction constraints, function calling, structured
+  extraction, and short-chain reasoning. Reported per skill and only then blended, because
+  the best coder here is not the best instruction-follower and a squad wants the right
+  specialist per seat.
+
+### Fixed
+- **The bench was mis-scoring reasoning by 20 points.** Numeric answers were graded with a
+  substring check over the first 20 characters, so "The next number is 32." -- entirely
+  correct -- was marked wrong, while "32" would also have matched inside "1032". Now graded
+  on the final number in the reply, the convention GSM8K-style scoring uses, because a model
+  that reasons aloud puts its conclusion last. Caught by spot-checking raw model output
+  instead of trusting the harness.
+
+### Added
 - **A measured playbook for local models, served to humans and AIs from one constant.**
   `local_models.PLAYBOOK` is injected into `/ai/context` and returned by
   `GET /local-ai/models`, and the new "How to use local AI" panel on the Local AI page
