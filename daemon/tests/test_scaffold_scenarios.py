@@ -1,0 +1,212 @@
+"""The contract says the door is the right shape; the scenario walks through it.
+
+Pinned from a real false pass. The first blueprint build reported three of four pieces as
+passing. All three were unusable:
+
+* ``passwords.verify_password`` raised ``NameError: name 'hmac' is not defined`` on every
+  call - the module's whole purpose, broken, graded a clean pass with zero repairs.
+* ``storage.create_user`` returned ``None`` and ``get_user_by_email`` returned a bare row
+  tuple that did not even include the password hash, so its only caller could neither open
+  a session nor check a password.
+* ``pages`` never linked the supplied UI kit, so the design assets the scaffold exists to
+  provide were silently not used.
+
+Every one of those modules matched its declared contract exactly. Signatures were never the
+thing that was wrong. These tests exist so that stays fixed.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+
+from synapse_daemon.blueprints import CheckKind, Piece
+from synapse_daemon.local_pipeline import run_pipeline
+
+BLUEPRINT = (Path(__file__).resolve().parents[2] / "blueprints" / "webapp-auth-crud"
+             / "blueprint.json")
+
+
+def _run_async(coro):
+    """pytest-asyncio is not assumed here; these cases only need a loop of their own."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+def _scenario(name: str) -> str:
+    pieces = json.loads(BLUEPRINT.read_text(encoding="utf-8"))["pieces"]
+    return next(p["tests"] for p in pieces if p["name"] == name)
+
+
+def _run_scenario(tmp_path: Path, module: str, source: str) -> tuple[bool, str]:
+    (tmp_path / f"{module}.py").write_text(source, encoding="utf-8")
+    test = tmp_path / f"_scenario_{module}.py"
+    test.write_text(f"from {module} import *\n\n{_scenario(module)}\nprint('OK')\n",
+                    encoding="utf-8")
+    import subprocess
+    import sys
+    proc = subprocess.run([sys.executable, test.name], capture_output=True, text=True,
+                          timeout=120, cwd=str(tmp_path))
+    return proc.returncode == 0, (proc.stderr or proc.stdout)
+
+
+# The exact module the local model shipped, reduced to the part that matters.
+BROKEN_PASSWORDS = """
+import hashlib
+import secrets
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 200000)
+    return f'pbkdf2_sha256$200000${salt.hex()}${digest.hex()}'
+
+def verify_password(password: str, stored: str) -> bool:
+    parts = stored.split('$')
+    salt = bytes.fromhex(parts[2])
+    expected = bytes.fromhex(parts[3])
+    got = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 200000)
+    return hmac.compare_digest(expected, got)
+"""
+
+FIXED_PASSWORDS = BROKEN_PASSWORDS.replace("import hashlib", "import hashlib\nimport hmac")
+
+
+def test_scenario_catches_a_module_that_crashes_on_its_main_function(tmp_path):
+    """`hmac` is never imported, so verify_password raises on every call."""
+    ok, output = _run_scenario(tmp_path, "passwords", BROKEN_PASSWORDS)
+    assert not ok, "the scenario passed a module whose verify_password cannot run"
+    assert "hmac" in output
+
+
+def test_scenario_passes_the_repaired_module(tmp_path):
+    """A checker that fails everything is no better than one that passes everything."""
+    ok, output = _run_scenario(tmp_path, "passwords", FIXED_PASSWORDS)
+    assert ok, f"the scenario rejected a correct module:\n{output}"
+
+
+UNSALTED_PASSWORDS = """
+import hashlib
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, stored: str) -> bool:
+    return hashlib.sha256(password.encode()).hexdigest() == stored
+"""
+
+
+def test_scenario_catches_an_unsalted_hash(tmp_path):
+    """Runs, verifies correctly, and is still the wrong thing to ship."""
+    ok, output = _run_scenario(tmp_path, "passwords", UNSALTED_PASSWORDS)
+    assert not ok, "the scenario accepted an unsalted password hash"
+    assert "unsalted" in output
+
+
+STORAGE_STUB = """
+import sqlite3
+
+_DB = 'database.db'
+
+def init_db():
+    c = sqlite3.connect(_DB)
+    c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT '
+              'UNIQUE, password_hash TEXT)')
+    c.commit(); c.close()
+
+def create_user(email, password_hash):
+    c = sqlite3.connect(_DB)
+    try:
+        c.execute('INSERT INTO users (email, password_hash) VALUES (?, ?)',
+                  (email, password_hash))
+        c.commit()
+    finally:
+        c.close()
+
+def get_user_by_email(email):
+    c = sqlite3.connect(_DB)
+    row = c.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+    c.close()
+    return row
+
+def create_session(user_id): return 'tok'
+def user_id_for_token(token): return None
+def delete_session(token): pass
+def add_record(user_id, title, amount, date): pass
+def list_records(user_id): return []
+def delete_record(record_id, user_id): pass
+"""
+
+
+def test_scenario_catches_correct_signatures_with_unusable_returns(tmp_path):
+    """Every signature matches the contract. Nothing the caller needs comes back."""
+    from synapse_daemon.scaffold import contracts as contracts_mod
+
+    (tmp_path / "storage.py").write_text(STORAGE_STUB, encoding="utf-8")
+    declared = json.loads(BLUEPRINT.read_text(encoding="utf-8"))["pieces"]
+    spec = next(p for p in declared if p["name"] == "storage")["contract"]
+    expected = contracts_mod.ModuleContract(
+        module="storage",
+        functions=[contracts_mod.FunctionSpec(name=f["name"], args=f.get("args", []))
+                   for f in spec["functions"]])
+
+    # The old gate is satisfied by this module...
+    assert contracts_mod.check_contract(tmp_path / "storage.py", expected) == []
+
+    # ...and the new one is not.
+    ok, output = _run_scenario(tmp_path, "storage", STORAGE_STUB)
+    assert not ok, "the scenario accepted a storage module its caller cannot use"
+    assert "create_user must RETURN" in output
+
+
+def test_runner_feeds_the_scenario_into_the_repair_loop(tmp_path):
+    """The scenario has to run *during* the build, not as a post-mortem.
+
+    Checked through the pipeline's own plumbing with a stub generator, so it verifies the
+    wiring rather than a model's output.
+    """
+    piece = Piece(name="storage", spec="irrelevant", module="storage",
+                  tests="assert False, 'scenario reached the loop'",
+                  checks=[CheckKind.UNIT])
+
+    seen: dict[str, str] = {}
+
+    def fake_run(test_file: Path, cwd: Path) -> tuple[bool, str]:
+        seen["test"] = test_file.read_text(encoding="utf-8")
+        return True, ""
+
+    import synapse_daemon.local_pipeline as lp
+
+    original = lp.generate_code
+    lp.generate_code = lambda spec, model="": "def noop():\n    pass\n"
+    try:
+        _run_async(run_pipeline("spec", workspace=tmp_path, path="storage.py",
+                                max_repairs=0, runner=fake_run,
+                                extra_test=piece.tests))
+    finally:
+        lp.generate_code = original
+
+    assert "scenario reached the loop" in seen.get("test", ""), (
+        "the blueprint's scenario never reached the test the pipeline runs, so a piece "
+        "could pass the build while failing the only check that models its caller")
+
+
+def test_each_piece_keeps_its_own_test_file(tmp_path):
+    """Two pieces in one workspace must not overwrite each other's evidence."""
+    import synapse_daemon.local_pipeline as lp
+
+    original = lp.generate_code
+    lp.generate_code = lambda spec, model="": "def noop():\n    pass\n"
+    try:
+        for module in ("passwords", "storage"):
+            _run_async(run_pipeline("spec", workspace=tmp_path, path=f"{module}.py",
+                                    max_repairs=0, runner=lambda p, c: (True, "")))
+    finally:
+        lp.generate_code = original
+
+    written = sorted(p.name for p in tmp_path.glob("_test_*.py"))
+    assert written == ["_test_passwords.py", "_test_storage.py"], (
+        f"pieces shared a test filename and clobbered each other: {written}")

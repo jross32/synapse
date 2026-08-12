@@ -1,210 +1,210 @@
 {
- "id": "webapp-auth-crud",
- "name": "Web app with accounts and records",
- "kind": "web-app",
- "summary": "A running web app: landing page, sign up, log in, and a private dashboard where each account keeps its own records. One file to run, no build step.",
- "what_you_get": [
-  "Four working pages: landing, sign up, log in, dashboard",
-  "Accounts with hashed passwords and real session tokens",
-  "Records that belong to one account and are invisible to every other",
-  "A REST API underneath, so the same data is reachable programmatically"
- ],
- "guarantees": [
-  "Passwords are hashed with PBKDF2 and are not recoverable from the database",
-  "Every input has a label and every control is at least 44px tall",
-  "User text is escaped, proven by storing a hostile payload and rendering it",
-  "Anonymous requests get 401 and malformed ones get 422, never a 500",
-  "One account cannot read or delete another account's records",
-  "No horizontal scrolling at 390px"
- ],
- "tags": [
-  "auth",
-  "crud",
-  "sqlite",
-  "fastapi",
-  "starter"
- ],
- "stack": [
-  "python",
-  "fastapi",
-  "sqlite",
-  "vanilla-js"
- ],
- "est_minutes": 25,
- "provides": [
-  "http-api",
-  "user-identity",
-  "session-auth",
-  "sqlite-store",
-  "web-ui"
- ],
- "requires": [],
- "pieces": [
-  {
-   "name": "passwords",
-   "spec": "Write a module with exactly two functions and no framework imports:\n    hash_password(password: str) -> str\n    verify_password(password: str, stored: str) -> bool\n\nUse hashlib.pbkdf2_hmac with sha256, 200000 iterations, and a random 16-byte salt from the\nsecrets module. hash_password returns ONE string containing the algorithm name, the iteration\ncount, the salt as hex and the digest as hex, separated by '$'.\n\nverify_password must split that string into EXACTLY the same number of parts that\nhash_password produced. If the two disagree, split() raises, your except clause returns False,\nand every single verification fails including correct passwords. Count them.\n\nCompare with hmac.compare_digest. Return False (never raise) for malformed, empty or None\ninput.",
-   "module": "passwords",
-   "contract": {
-    "functions": [
-     {
-      "name": "hash_password",
-      "args": [
-       "password"
-      ]
-     },
-     {
-      "name": "verify_password",
-      "args": [
-       "password",
-       "stored"
-      ]
-     }
-    ]
-   },
-   "tests": "",
-   "checks": [
-    "unit",
-    "contract"
-   ],
-   "depends_on": [],
-   "suggested_skill": "coding"
+  "id": "webapp-auth-crud",
+  "name": "Web app with accounts and records",
+  "kind": "web-app",
+  "summary": "A running web app: landing page, sign up, log in, and a private dashboard where each account keeps its own records. One file to run, no build step.",
+  "what_you_get": [
+    "Four working pages: landing, sign up, log in, dashboard",
+    "Accounts with hashed passwords and real session tokens",
+    "Records that belong to one account and are invisible to every other",
+    "A REST API underneath, so the same data is reachable programmatically"
+  ],
+  "guarantees": [
+    "Passwords are hashed with PBKDF2 and are not recoverable from the database",
+    "Every input has a label and every control is at least 44px tall",
+    "User text is escaped, proven by storing a hostile payload and rendering it",
+    "Anonymous requests get 401 and malformed ones get 422, never a 500",
+    "One account cannot read or delete another account's records",
+    "No horizontal scrolling at 390px"
+  ],
+  "tags": [
+    "auth",
+    "crud",
+    "sqlite",
+    "fastapi",
+    "starter"
+  ],
+  "stack": [
+    "python",
+    "fastapi",
+    "sqlite",
+    "vanilla-js"
+  ],
+  "est_minutes": 25,
+  "provides": [
+    "http-api",
+    "user-identity",
+    "session-auth",
+    "sqlite-store",
+    "web-ui"
+  ],
+  "requires": [],
+  "pieces": [
+    {
+      "name": "passwords",
+      "spec": "Write a module with exactly two functions and no framework imports:\n    hash_password(password: str) -> str\n    verify_password(password: str, stored: str) -> bool\n\nUse hashlib.pbkdf2_hmac with sha256, 200000 iterations, and a random 16-byte salt from the\nsecrets module. hash_password returns ONE string containing the algorithm name, the iteration\ncount, the salt as hex and the digest as hex, separated by '$'.\n\nverify_password must split that string into EXACTLY the same number of parts that\nhash_password produced. If the two disagree, split() raises, your except clause returns False,\nand every single verification fails including correct passwords. Count them.\n\nCompare with hmac.compare_digest. Return False (never raise) for malformed, empty or None\ninput.",
+      "module": "passwords",
+      "contract": {
+        "functions": [
+          {
+            "name": "hash_password",
+            "args": [
+              "password"
+            ]
+          },
+          {
+            "name": "verify_password",
+            "args": [
+              "password",
+              "stored"
+            ]
+          }
+        ]
+      },
+      "tests": "# --- blueprint scenario: exercised the way api.py actually calls it -------------\n_h = hash_password(\"correct horse battery\")\nassert isinstance(_h, str) and _h, (\n    \"hash_password must RETURN the stored string. Got %r. api.py does \"\n    \"storage.create_user(email, hash_password(pw)) - it stores the return value.\" % (_h,))\nassert \"correct horse battery\" not in _h, (\n    \"hash_password returned something containing the plaintext password: %r. \"\n    \"Hash it, do not encode it.\" % (_h,))\nassert hash_password(\"correct horse battery\") != _h, (\n    \"hash_password returned the same string twice for the same password, so it is \"\n    \"unsalted. Generate a fresh random salt per call and store it inside the result.\")\nassert verify_password(\"correct horse battery\", _h) is True, (\n    \"verify_password(password, stored) must return True for the right password. \"\n    \"Note the argument order: plaintext first, stored hash second.\")\nassert verify_password(\"wrong password\", _h) is False, (\n    \"verify_password must return False - not None, not raise - for a wrong password.\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "storage",
+      "spec": "Write a storage module using only sqlite3, secrets, hashlib and time.\n\nTables:\n    users(id, email unique, password_hash, created_at)\n    sessions(token_hash primary key, user_id, created_at)\n    records(id, user_id, title, amount, date, created_at)\n\ncreate_session returns a random secrets.token_urlsafe token and stores ONLY its sha256 hash,\nso a leaked database does not hand over live sessions.\n\nlist_records and delete_record MUST filter by user_id inside the SQL statement, so one account\ncan never see or delete another account's rows.\n\ncreate_user raises ValueError if the email already exists.\n\nadd_record and list_records return dicts whose keys are exactly: id, title, amount, date. The\nfrontend reads those exact names; any other spelling renders as \"undefined\" on screen.\n\nEvery function opens and closes its own connection.",
+      "module": "storage",
+      "contract": {
+        "functions": [
+          {
+            "name": "init_db",
+            "args": []
+          },
+          {
+            "name": "create_user",
+            "args": [
+              "email",
+              "password_hash"
+            ]
+          },
+          {
+            "name": "get_user_by_email",
+            "args": [
+              "email"
+            ]
+          },
+          {
+            "name": "create_session",
+            "args": [
+              "user_id"
+            ]
+          },
+          {
+            "name": "user_id_for_token",
+            "args": [
+              "token"
+            ]
+          },
+          {
+            "name": "delete_session",
+            "args": [
+              "token"
+            ]
+          },
+          {
+            "name": "add_record",
+            "args": [
+              "user_id",
+              "title",
+              "amount",
+              "date"
+            ]
+          },
+          {
+            "name": "list_records",
+            "args": [
+              "user_id"
+            ]
+          },
+          {
+            "name": "delete_record",
+            "args": [
+              "record_id",
+              "user_id"
+            ]
+          }
+        ]
+      },
+      "tests": "# --- blueprint scenario: exercised the way api.py actually calls it -------------\n# Every assertion below mirrors one real call site. A module can define all nine\n# signatures correctly and still be unusable, which is exactly what happened before\n# this scenario existed.\nimport os\nfor _f in (\"database.db\", \"app.db\", \"data.db\"):\n    if os.path.exists(_f):\n        os.remove(_f)\ninit_db()\n\n_uid = create_user(\"scenario@test.io\", \"hashed-value-here\")\nassert _uid is not None, (\n    \"create_user must RETURN the new user's id. It returned None, so its caller has \"\n    \"nothing to open a session with: api.py does create_session(create_user(e, h)).\")\nassert isinstance(_uid, int), (\n    \"create_user must return the id itself as an int, not %r.\" % (_uid,))\n\ntry:\n    create_user(\"scenario@test.io\", \"hashed-value-here\")\n    raise AssertionError(\n        \"create_user must raise ValueError on a duplicate email. It returned normally, \"\n        \"so two accounts can share one address.\")\nexcept ValueError:\n    pass\n\n_user = get_user_by_email(\"scenario@test.io\")\nassert _user is not None, \"get_user_by_email must find a user that was just created.\"\nassert not isinstance(_user, tuple), (\n    \"get_user_by_email returned a raw sqlite row %r. Return a dict so the caller can \"\n    \"read fields by name: {'id': ..., 'email': ..., 'password_hash': ...}.\" % (_user,))\nassert _user[\"password_hash\"] == \"hashed-value-here\", (\n    \"get_user_by_email must include 'password_hash' in what it returns. Without it the \"\n    \"login route cannot check the password at all. SELECT that column.\")\nassert int(_user[\"id\"]) == int(_uid), \"get_user_by_email must return the same id.\"\nassert get_user_by_email(\"nobody@test.io\") is None, (\n    \"get_user_by_email must return None for an unknown email, not raise and not [].\")\n\n_tok = create_session(int(_uid))\nassert isinstance(_tok, str) and len(_tok) >= 16, (\n    \"create_session must return the session token as a string of at least 16 \"\n    \"characters. Got %r.\" % (_tok,))\nassert user_id_for_token(_tok) is not None, \"user_id_for_token must resolve a live token.\"\nassert int(user_id_for_token(_tok)) == int(_uid), (\n    \"user_id_for_token must return the user's id itself (an int), not a row tuple. \"\n    \"Got %r.\" % (user_id_for_token(_tok),))\nassert user_id_for_token(\"not-a-real-token\") is None, (\n    \"user_id_for_token must return None for an unknown token - that is how the API \"\n    \"answers 401 instead of crashing.\")\n\n_rec = add_record(int(_uid), \"Sunrise loop\", 12.5, \"2026-01-01\")\nassert isinstance(_rec, dict) and \"id\" in _rec, (\n    \"add_record must return the created record as a dict including its new 'id'. \"\n    \"Got %r.\" % (_rec,))\n_rows = list_records(int(_uid))\nassert isinstance(_rows, list) and len(_rows) == 1, (\n    \"list_records must return a list of the user's records. Got %r.\" % (_rows,))\nassert isinstance(_rows[0], dict), (\n    \"list_records must return dicts, not row tuples - the page renders fields by name. \"\n    \"Got %r.\" % (_rows[0],))\nfor _k in (\"id\", \"title\", \"amount\", \"date\"):\n    assert _k in _rows[0], (\n        \"each record needs the key %r so the dashboard can render it. Got keys %r\"\n        % (_k, sorted(_rows[0])))\nassert _rows[0][\"title\"] == \"Sunrise loop\", \"list_records returned the wrong title.\"\n\n_other = create_user(\"intruder@test.io\", \"x\")\nassert list_records(int(_other)) == [], (\n    \"list_records must only return the records belonging to the user id it is given. \"\n    \"A second user could see the first user's data.\")\nassert delete_record(int(_rows[0][\"id\"]), int(_other)) in (False, 0, None), (\n    \"delete_record must not delete another user's record.\")\nassert list_records(int(_uid)) != [], (\n    \"delete_record deleted a record belonging to a different user - it is filtering on \"\n    \"record id only. Filter on BOTH record_id and user_id.\")\n\nassert delete_record(int(_rows[0][\"id\"]), int(_uid)) in (True, 1), (\n    \"delete_record must return True when it deleted something, so the API can answer \"\n    \"404 when it did not.\")\nassert list_records(int(_uid)) == [], \"delete_record did not actually delete the record.\"\nassert delete_record(9999, int(_uid)) in (False, 0), (\n    \"delete_record must return False for a record that does not exist.\")\n\ndelete_session(_tok)\nassert user_id_for_token(_tok) is None, (\n    \"delete_session must invalidate the token - logging out has to actually log out.\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [
+        "passwords"
+      ],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "pages",
+      "spec": "Write a module returning four complete HTML documents:\n    landing_page(), signup_page(), login_page(), dashboard_page()\n\nIMPORTANT - import the house UI kit and use it. Do NOT write your own CSS:\n    from scaffold_partials import (page, field, button, link_button, message_slot,\n                                   empty_state, card, auth_fetch_helper)\n\nBuild each page with page(title, body, script=...). Build every input with\nfield(name, label, kind=..., autocomplete=...) so it is labelled. Use button() for actions and\nmessage_slot() for errors.\n\nsignup_page and login_page post JSON to /api/signup and /api/login, store the returned token\nwith setToken(), then go to /dashboard.\n\ndashboard_page loads GET /api/records, renders each with a Delete button, posts new ones to\nPOST /api/records, and deletes via DELETE /api/records/{id}. Include auth_fetch_helper() in\nits script so the Authorization header is set for you.\n\nWhen rendering a record you MUST pass its text through escapeHtml(), which is already defined\non every page. Writing user text into innerHTML unescaped is a stored cross-site-scripting\nhole, and the checks will catch it.",
+      "module": "pages",
+      "contract": {
+        "functions": [
+          {
+            "name": "landing_page",
+            "args": []
+          },
+          {
+            "name": "signup_page",
+            "args": []
+          },
+          {
+            "name": "login_page",
+            "args": []
+          },
+          {
+            "name": "dashboard_page",
+            "args": []
+          }
+        ]
+      },
+      "tests": "# --- blueprint scenario: what the browser will actually be served ---------------\nfor _name, _fn in ((\"landing\", landing_page), (\"signup\", signup_page),\n                   (\"login\", login_page), (\"dashboard\", dashboard_page)):\n    _html = _fn()\n    assert isinstance(_html, str) and len(_html) > 200, (\n        \"%s_page() must return the full HTML document as a string. Got %r\"\n        % (_name, type(_html)))\n    _low = _html.lower()\n    assert \"<!doctype html\" in _low, (\n        \"%s_page() is missing its doctype - browsers fall into quirks mode without it.\"\n        % _name)\n    assert \"viewport\" in _low, (\n        \"%s_page() has no viewport meta tag, so it renders desktop-width on a phone.\"\n        % _name)\n    # The supplied page() helper inlines the kit, so the kit's own tokens are the proof\n    # it was used. Do not write CSS by hand - build the page with scaffold_partials.page().\n    assert \"--tap\" in _html and \"--accent\" in _html, (\n        \"%s_page() did not go through scaffold_partials.page(), so it is missing the \"\n        \"house stylesheet. Import it and return page(title, body) - the kit is what \"\n        \"supplies focus rings, 44px tap targets and AA contrast.\" % _name)\n    assert \"undefined\" not in _low, (\n        \"%s_page() contains a literal 'undefined' placeholder.\" % _name)\n\nfor _name, _fn in ((\"signup\", signup_page), (\"login\", login_page)):\n    _html = _fn().lower()\n    assert _html.count(\"<label\") >= 2, (\n        \"%s_page() needs a <label for=...> on every input. Use the supplied field() \"\n        \"helper, which cannot emit an input without one.\" % _name)\n    assert 'type=\"password\"' in _html, (\n        '%s_page() must use type=\"password\" for the password field.' % _name)\n    assert \"autocomplete\" in _html, (\n        \"%s_page() should set autocomplete on its fields so password managers work.\"\n        % _name)",
+      "checks": [
+        "unit",
+        "web"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "api",
+      "spec": "Write a FastAPI module defining `app` that imports the modules that already\nexist:\n    from passwords import hash_password, verify_password\n    import storage\n    import pages\n\nRoutes:\n    GET    /api/health          -> {\"status\": \"ok\"}\n    POST   /api/signup          -> 409 if the email exists, else 201 with {\"token\": ...}\n    POST   /api/login           -> 401 on bad credentials, else {\"token\": ...}\n    POST   /api/logout          -> {\"ok\": true}\n    GET    /api/records         -> the caller's records\n    POST   /api/records         -> creates one, 201\n    DELETE /api/records/{id}    -> 404 if it is not the caller's\n    GET    /, /signup, /login, /dashboard -> HTMLResponse(pages.<name>_page())\n\nUse pydantic models for request bodies so malformed input returns 422, never 500.\n\nAUTHENTICATION - this is the part that is easy to get wrong. Write your own function that\ntakes `request: Request`, reads the Authorization header, and resolves the bearer token with\nstorage.user_id_for_token, raising HTTPException(401) when it is absent or unknown. Then use\nDepends(your_function).\n\nDo NOT pass a storage function directly to Depends. FastAPI inspects the signature and would\ntreat its `token` parameter as a QUERY parameter, so anonymous callers get 422 instead of 401\nand the auth check never runs.",
+      "module": "api",
+      "contract": {},
+      "tests": "",
+      "checks": [
+        "unit",
+        "http",
+        "web"
+      ],
+      "depends_on": [
+        "passwords",
+        "storage",
+        "pages"
+      ],
+      "suggested_skill": "coding"
+    }
+  ],
+  "assets": {
+    "ui_kit": "scaffold/ui_kit/kit.css",
+    "partials": "scaffold/partials.py"
   },
-  {
-   "name": "storage",
-   "spec": "Write a storage module using only sqlite3, secrets, hashlib and time.\n\nTables:\n    users(id, email unique, password_hash, created_at)\n    sessions(token_hash primary key, user_id, created_at)\n    records(id, user_id, title, amount, date, created_at)\n\ncreate_session returns a random secrets.token_urlsafe token and stores ONLY its sha256 hash,\nso a leaked database does not hand over live sessions.\n\nlist_records and delete_record MUST filter by user_id inside the SQL statement, so one account\ncan never see or delete another account's rows.\n\ncreate_user raises ValueError if the email already exists.\n\nadd_record and list_records return dicts whose keys are exactly: id, title, amount, date. The\nfrontend reads those exact names; any other spelling renders as \"undefined\" on screen.\n\nEvery function opens and closes its own connection.",
-   "module": "storage",
-   "contract": {
-    "functions": [
-     {
-      "name": "init_db",
-      "args": []
-     },
-     {
-      "name": "create_user",
-      "args": [
-       "email",
-       "password_hash"
-      ]
-     },
-     {
-      "name": "get_user_by_email",
-      "args": [
-       "email"
-      ]
-     },
-     {
-      "name": "create_session",
-      "args": [
-       "user_id"
-      ]
-     },
-     {
-      "name": "user_id_for_token",
-      "args": [
-       "token"
-      ]
-     },
-     {
-      "name": "delete_session",
-      "args": [
-       "token"
-      ]
-     },
-     {
-      "name": "add_record",
-      "args": [
-       "user_id",
-       "title",
-       "amount",
-       "date"
-      ]
-     },
-     {
-      "name": "list_records",
-      "args": [
-       "user_id"
-      ]
-     },
-     {
-      "name": "delete_record",
-      "args": [
-       "record_id",
-       "user_id"
-      ]
-     }
-    ]
-   },
-   "tests": "",
-   "checks": [
-    "unit",
-    "contract"
-   ],
-   "depends_on": [
-    "passwords"
-   ],
-   "suggested_skill": "coding"
+  "preview": [],
+  "score": null,
+  "provenance": {
+    "authored": "2026-08-12",
+    "basis": "benchmarks/app-build/SPEC.md"
   },
-  {
-   "name": "pages",
-   "spec": "Write a module returning four complete HTML documents:\n    landing_page(), signup_page(), login_page(), dashboard_page()\n\nIMPORTANT - import the house UI kit and use it. Do NOT write your own CSS:\n    from scaffold_partials import (page, field, button, link_button, message_slot,\n                                   empty_state, card, auth_fetch_helper)\n\nBuild each page with page(title, body, script=...). Build every input with\nfield(name, label, kind=..., autocomplete=...) so it is labelled. Use button() for actions and\nmessage_slot() for errors.\n\nsignup_page and login_page post JSON to /api/signup and /api/login, store the returned token\nwith setToken(), then go to /dashboard.\n\ndashboard_page loads GET /api/records, renders each with a Delete button, posts new ones to\nPOST /api/records, and deletes via DELETE /api/records/{id}. Include auth_fetch_helper() in\nits script so the Authorization header is set for you.\n\nWhen rendering a record you MUST pass its text through escapeHtml(), which is already defined\non every page. Writing user text into innerHTML unescaped is a stored cross-site-scripting\nhole, and the checks will catch it.",
-   "module": "pages",
-   "contract": {
-    "functions": [
-     {
-      "name": "landing_page",
-      "args": []
-     },
-     {
-      "name": "signup_page",
-      "args": []
-     },
-     {
-      "name": "login_page",
-      "args": []
-     },
-     {
-      "name": "dashboard_page",
-      "args": []
-     }
-    ]
-   },
-   "tests": "",
-   "checks": [
-    "unit",
-    "web"
-   ],
-   "depends_on": [],
-   "suggested_skill": "coding"
-  },
-  {
-   "name": "api",
-   "spec": "Write a FastAPI module defining `app` that imports the modules that already\nexist:\n    from passwords import hash_password, verify_password\n    import storage\n    import pages\n\nRoutes:\n    GET    /api/health          -> {\"status\": \"ok\"}\n    POST   /api/signup          -> 409 if the email exists, else 201 with {\"token\": ...}\n    POST   /api/login           -> 401 on bad credentials, else {\"token\": ...}\n    POST   /api/logout          -> {\"ok\": true}\n    GET    /api/records         -> the caller's records\n    POST   /api/records         -> creates one, 201\n    DELETE /api/records/{id}    -> 404 if it is not the caller's\n    GET    /, /signup, /login, /dashboard -> HTMLResponse(pages.<name>_page())\n\nUse pydantic models for request bodies so malformed input returns 422, never 500.\n\nAUTHENTICATION - this is the part that is easy to get wrong. Write your own function that\ntakes `request: Request`, reads the Authorization header, and resolves the bearer token with\nstorage.user_id_for_token, raising HTTPException(401) when it is absent or unknown. Then use\nDepends(your_function).\n\nDo NOT pass a storage function directly to Depends. FastAPI inspects the signature and would\ntreat its `token` parameter as a QUERY parameter, so anonymous callers get 422 instead of 401\nand the auth check never runs.",
-   "module": "api",
-   "contract": {},
-   "tests": "",
-   "checks": [
-    "unit",
-    "http",
-    "web"
-   ],
-   "depends_on": [
-    "passwords",
-    "storage",
-    "pages"
-   ],
-   "suggested_skill": "coding"
-  }
- ],
- "assets": {
-  "ui_kit": "scaffold/ui_kit/kit.css",
-  "partials": "scaffold/partials.py"
- },
- "preview": [],
- "score": null,
- "provenance": {
-  "authored": "2026-08-12",
-  "basis": "benchmarks/app-build/SPEC.md"
- },
- "source": "builtin",
- "draft": false
+  "source": "builtin",
+  "draft": false
 }

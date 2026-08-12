@@ -168,7 +168,11 @@ async def run_pipeline(
     if extra_test:
         test_code = extra_test.rstrip() + "\n\n" + test_code
 
-    test_file = ws / "_pipeline_test.py"
+    # Named after the module rather than a fixed `_pipeline_test.py`: several pieces share one
+    # workspace, so a single name meant each piece silently erased the evidence for the one
+    # before it. When a piece later turned out to have passed on a test that could not
+    # possibly have passed, the test that let it through no longer existed to be read.
+    test_file = ws / f"_test_{Path(path).stem}.py"
     test_file.write_text(test_code, encoding="utf-8")
     result.test_code = test_code
 

@@ -47,6 +47,15 @@ class PieceOutcome(BaseModel):
     stop_reason: str = ""
     checks: dict[str, str] = Field(default_factory=dict)
     escalation_packet: str = ""
+    test_source: str = ""
+    """The test that actually decided this piece's verdict.
+
+    Kept because a pass is only as trustworthy as the test behind it, and the first build
+    of this blueprint reported `passwords` as passing with zero repairs while its
+    `verify_password` raised `NameError` on every call. The test that waved it through had
+    already been overwritten by the next piece, so the false pass could not be explained
+    afterwards - only observed. Recording it makes that diagnosable rather than mysterious.
+    """
 
 
 class BuildResult(BaseModel):
@@ -170,6 +179,16 @@ async def build_blueprint(
         if expected is not None and CheckKind.CONTRACT in piece.checks:
             contract_test = contracts_mod.contract_test_source(module, expected)
 
+        # The blueprint's own scenario, run in the same file. Measured need: `storage` passed
+        # its contract with all nine signatures correct while `create_user` returned None and
+        # `get_user_by_email` returned a bare tuple without the password hash - so its only
+        # caller could neither start a session nor check a password. Signatures describe the
+        # door; only calling through it proves there is a room behind. The scenario is written
+        # once into the blueprint and re-earns its cost on every later build.
+        if piece.tests.strip():
+            contract_test = (contract_test.rstrip() + "\n\n" + piece.tests.strip()
+                             if contract_test else piece.tests.strip())
+
         pipeline = await run_pipeline(
             full_spec,
             workspace=ws,
@@ -187,6 +206,7 @@ async def build_blueprint(
             seconds=round(time.time() - piece_started, 1),
             stop_reason=pipeline.stop_reason,
             escalation_packet=pipeline.escalation_packet,
+            test_source=pipeline.test_code,
         )
 
         # Contract check runs even when the unit test passed: a module can satisfy a
@@ -202,6 +222,13 @@ async def build_blueprint(
                 if problems:
                     outcome.passed = False
                     outcome.stop_reason = problems[0]
+
+        # Reported separately from the contract so the two cannot be confused. A piece can
+        # pass the contract and fail the scenario - that combination is the whole reason the
+        # scenario exists, and collapsing them into one tick would hide it again.
+        outcome.checks["scenario"] = (
+            ("pass" if pipeline.passed else "fail") if piece.tests.strip()
+            else "not_run: no scenario declared")
 
         if not outcome.passed:
             outcome.escalated = True
