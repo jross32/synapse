@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.123] -- 2026-08-12
+
+### Added -- the generation scaffold (phases 1-4)
+- **`scaffold/ui_kit/kit.css` + `scaffold/partials.py`** -- a house style the models may use
+  but not invent. `field()` takes the label as a *required argument*, so there is no call that
+  produces an unlabelled input; every page ships `escapeHtml` so client-side rendering has a
+  safe default available. The build-off's pages had 0 labels, 0 focus styles, 0 tap-target
+  rules and 0 media queries -- not from incapacity, but because the model was asked to design.
+- **`scaffold/webcheck.py`** -- renders the app and attacks it. Delegates broken links and
+  security-header grading to the web-scraper already running on :12345 rather than
+  reimplementing them, and adds what it cannot do: a stored-XSS probe, a scan for `undefined`
+  reaching the screen, tap-target and focus checks. Missing dependencies report `not_run`,
+  never `pass`.
+- **`scaffold/contracts.py`** -- reads real signatures off generated files and fails a module
+  whose interface drifts, inside the loop. This is the `distance` vs `distance_km` failure.
+- **`scaffold/assertions.py`** -- assertions that render got-vs-expected plus a likely cause.
+  Measured worth: a bare `AssertionError` cost four wasted repairs; the explanatory version
+  fixed the same bug in one.
+- **Early escalation** in `local_pipeline` -- `error_fingerprint` normalises line numbers and
+  paths, so a *recurring* error stops the loop. Arm B spent ~20 minutes emitting four
+  identical `user_exists` errors; two is enough to know.
+
+### Fixed -- a false green in my own security check
+The XSS probe initially **passed** against an app that is genuinely vulnerable. Two causes:
+it assumed a localStorage key name (the app used a different one, so the page bounced to
+/login and never rendered), and it treated "payload did not fire" as proof of escaping. It now
+detects the key from the page's own JavaScript, and reports `not_run` when the record never
+rendered -- because a payload that was never given the chance to run proves nothing. A
+security check that can produce a false pass is worse than no check.
+
 ## [0.1.124] -- 2026-08-11
 
 ### Fixed -- driving a runtime from a phone

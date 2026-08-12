@@ -17,6 +17,7 @@ already tried) rather than the whole history.
 from __future__ import annotations
 
 import asyncio
+import re
 import subprocess
 import sys
 import time
@@ -54,6 +55,23 @@ class PipelineResult(BaseModel):
     possible, so it carries the requirement, the current code and the actual error - not a
     transcript of every local attempt.
     """
+
+
+def error_fingerprint(error: str) -> str:
+    """Reduce a traceback to the part identifying *which* failure it is.
+
+    Line numbers, temp paths and object addresses change between attempts even when the
+    underlying fault is identical, so comparing raw text would never detect a repeat. The
+    final exception line is the stable part, and it is what a human reads first anyway.
+    """
+    lines = [ln.strip() for ln in (error or "").strip().splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    for line in reversed(lines):
+        if re.match(r"^[A-Za-z_.]*(Error|Exception)\b", line):
+            # Strip the parts that vary run to run so the same fault compares equal.
+            return re.sub(r"line \d+|0x[0-9a-fA-F]+|['\"][^'\"]*[/\\][^'\"]*['\"]", "", line)[:300]
+    return lines[-1][:300]
 
 
 def _run(path: Path, cwd: Path, timeout: float = 45.0) -> tuple[bool, str]:
@@ -145,6 +163,8 @@ async def run_pipeline(
     test_file.write_text(test_code, encoding="utf-8")
     result.test_code = test_code
 
+    seen_errors: set[str] = set()
+
     for attempt in range(max_repairs + 1):
         emit("testing", attempt=attempt)
         t0 = time.time()
@@ -160,6 +180,22 @@ async def run_pipeline(
         if attempt == max_repairs:
             result.stop_reason = f"still failing after {max_repairs} repair attempts"
             break
+
+        # Stop on a *recurring* error rather than spending the whole budget on it. Measured:
+        # a 7B model emitted the identical "module has no attribute user_exists" four times
+        # in a row, costing about twenty minutes to learn what the second attempt had already
+        # shown. An error that does not change after a repair is the signature of one the
+        # model cannot fix, and escalating early is strictly better than grinding.
+        fingerprint = error_fingerprint(error)
+        if fingerprint and fingerprint in seen_errors:
+            result.attempts.append(RepairAttempt(attempt=attempt + 1, error=error[:600],
+                                                 changed=False,
+                                                 seconds=round(time.time() - t0, 1)))
+            result.stop_reason = (
+                "the same error recurred after a repair, so more attempts are unlikely to "
+                f"help: {fingerprint[:150]}")
+            break
+        seen_errors.add(fingerprint)
 
         emit("repairing", attempt=attempt + 1, error=error[:300])
         repair_spec = (
