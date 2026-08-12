@@ -42,6 +42,48 @@ async def test_repairs_from_a_real_error(tmp_path, monkeypatch):
     assert not result.needs_escalation
 
 
+async def test_a_repair_is_never_discarded_untested(tmp_path, monkeypatch):
+    """Detecting a repeated error must not throw away the fix just written for it.
+
+    From a real build: `passwords` shipped without `import hmac`, so `verify_password`
+    raised `NameError` on every call. The loop saw the same fingerprint twice, wrote a
+    repair that added the import - the correct fix - and then escalated without running it.
+    The saving early-escalation exists for is the generation step, which by then has already
+    been spent; one more test run is the difference between a pass and a false escalation.
+    """
+    IMPL_FIXED = "import hmac\n" + IMPL_RIGHT
+    answers = iter([IMPL_WRONG, TEST_CODE, IMPL_RIGHT, IMPL_FIXED])
+    monkeypatch.setattr(local_pipeline, "generate_code", lambda *a, **k: next(answers))
+
+    same = "NameError: name 'hmac' is not defined"
+    result = await local_pipeline.run_pipeline(
+        "Write add(a, b) returning the sum.", workspace=tmp_path, max_repairs=5,
+        # Same fingerprint twice -> the loop notices it is circling. The third run is the
+        # repair it wrote in response, and that one passes.
+        runner=_fake_runner([(False, same), (False, same), (True, "")]))
+
+    assert result.passed, (
+        f"the loop escalated while holding a repair that passes: {result.stop_reason}")
+    assert "import hmac" in result.code
+    assert not result.needs_escalation
+
+
+async def test_still_escalates_when_the_extra_attempt_also_fails(tmp_path, monkeypatch):
+    """The economy of giving up early has to survive the fix above."""
+    answers = iter([IMPL_WRONG, TEST_CODE, IMPL_RIGHT, "def add(a, b):\n    return a * b\n"])
+    monkeypatch.setattr(local_pipeline, "generate_code", lambda *a, **k: next(answers))
+
+    same = "TypeError: unsupported operand"
+    result = await local_pipeline.run_pipeline(
+        "Write add(a, b) returning the sum.", workspace=tmp_path, max_repairs=9,
+        runner=_fake_runner([(False, same), (False, same), (False, same)]))
+
+    assert not result.passed
+    assert "circling" in result.stop_reason, result.stop_reason
+    assert len(result.attempts) == 2, (
+        f"gave up early should still mean early: {len(result.attempts)} attempts")
+
+
 async def test_escalates_with_a_self_contained_packet(tmp_path, monkeypatch):
     """Escalation only saves money if a stronger model can act on the packet alone."""
     codes = iter([IMPL_WRONG, TEST_CODE,

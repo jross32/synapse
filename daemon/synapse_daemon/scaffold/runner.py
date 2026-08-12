@@ -40,6 +40,17 @@ SCAFFOLD_DIR = Path(__file__).parent
 class PieceOutcome(BaseModel):
     name: str
     passed: bool = False
+    verified: bool = False
+    """Whether a check the *model did not write* actually ran and passed.
+
+    Distinct from ``passed`` on purpose. A piece passes when the tests in its workspace go
+    green, and those tests are mostly written by the same model that wrote the code - so
+    ``passed`` alone attests that the model agrees with itself. ``verified`` requires the
+    blueprint's own scenario, written independently and shaped like the real call site.
+
+    The distinction is not hypothetical: the first build of this blueprint reported three
+    passing pieces, none of which its own caller could use.
+    """
     escalated: bool = False
     repairs: int = 0
     seconds: float = 0.0
@@ -70,9 +81,17 @@ class BuildResult(BaseModel):
 
     def summary(self) -> str:
         ok = sum(1 for p in self.pieces if p.passed)
-        return (f"{ok}/{len(self.pieces)} pieces built locally, "
-                f"{len(self.escalations)} escalation(s), {self.local_tokens} local tokens, "
-                f"{self.seconds:.0f}s")
+        verified = sum(1 for p in self.pieces if p.verified)
+        # Both numbers, always. Reporting only the first is how "3/4 pieces built locally"
+        # came to mean three modules that could not be imported and used.
+        line = (f"{ok}/{len(self.pieces)} pieces built locally, {verified} independently "
+                f"verified, {len(self.escalations)} escalation(s), "
+                f"{self.local_tokens} local tokens, {self.seconds:.0f}s")
+        unverified = [p.name for p in self.pieces if p.passed and not p.verified]
+        if unverified:
+            line += (f"\n  NOT independently verified: {', '.join(unverified)} - these "
+                     f"passed a test the model wrote about its own code and nothing else.")
+        return line
 
 
 def _install_assets(workspace: Path) -> None:
@@ -229,6 +248,7 @@ async def build_blueprint(
         outcome.checks["scenario"] = (
             ("pass" if pipeline.passed else "fail") if piece.tests.strip()
             else "not_run: no scenario declared")
+        outcome.verified = bool(piece.tests.strip()) and outcome.passed
 
         if not outcome.passed:
             outcome.escalated = True

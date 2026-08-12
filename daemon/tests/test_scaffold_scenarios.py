@@ -194,6 +194,51 @@ def test_runner_feeds_the_scenario_into_the_repair_loop(tmp_path):
         "could pass the build while failing the only check that models its caller")
 
 
+def test_summary_separates_passing_from_independently_verified():
+    """"N pieces built" must never again be able to mean N unusable modules."""
+    from synapse_daemon.scaffold.runner import BuildResult, PieceOutcome
+
+    result = BuildResult(
+        blueprint_id="webapp-auth-crud", workspace="/tmp",
+        pieces=[PieceOutcome(name="passwords", passed=True, verified=True),
+                PieceOutcome(name="storage", passed=True, verified=False),
+                PieceOutcome(name="pages", passed=True, verified=False)])
+
+    text = result.summary()
+    assert "3/3 pieces built locally, 1 independently verified" in text
+    assert "NOT independently verified: storage, pages" in text, (
+        f"the summary hid which pieces had no independent check:\n{text}")
+
+
+def test_a_piece_without_a_scenario_is_never_marked_verified(tmp_path):
+    """`tests: ""` means unverified, not verified-by-default."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.blueprints import Blueprint, Piece
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    blueprint = Blueprint(id="t", name="t", summary="t",
+                          pieces=[Piece(name="thing", spec="anything", module="thing")])
+
+    def stub(spec: str, model: str = "") -> str:
+        # The pipeline asks the same callable for the code and then for a test of it.
+        if "Write a test for that code" in spec:
+            return "from thing import *\n\nassert noop() is None\nprint('OK')\n"
+        return "def noop():\n    pass\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        result = _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+    finally:
+        lp.generate_code = original
+
+    piece = result.pieces[0]
+    assert piece.passed, "the stub should pass its own generated test"
+    assert not piece.verified, (
+        "a piece with no declared scenario was reported as independently verified")
+    assert piece.checks["scenario"].startswith("not_run")
+
+
 def test_each_piece_keeps_its_own_test_file(tmp_path):
     """Two pieces in one workspace must not overwrite each other's evidence."""
     import synapse_daemon.local_pipeline as lp

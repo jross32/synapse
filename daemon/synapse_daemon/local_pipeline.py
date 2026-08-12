@@ -178,6 +178,8 @@ async def run_pipeline(
 
     seen_errors: set[str] = set()
 
+    circling: str = ""
+
     for attempt in range(max_repairs + 1):
         emit("testing", attempt=attempt)
         t0 = time.time()
@@ -188,6 +190,17 @@ async def run_pipeline(
         if ok:
             result.passed = True
             result.stop_reason = "tests passed"
+            break
+
+        # Giving up is decided here, *after* testing the repair, rather than at the moment
+        # the repeat was detected. Bailing out earlier discarded a fix the model had already
+        # written without ever running it - measured: `passwords` ended a build holding
+        # correct code, having just added the missing `import hmac`, and was still reported
+        # as an escalation because the loop left before testing it. The saving that
+        # early-escalation exists for is the *generation* step, and that has already been
+        # paid by this point; one more test run costs a second.
+        if circling:
+            result.stop_reason = circling
             break
 
         if attempt == max_repairs:
@@ -225,11 +238,12 @@ async def run_pipeline(
             # It produced *different* code and still hit the same failure - it is circling a
             # problem it does not understand. Measured: a 7B model emitted the identical
             # "module has no attribute user_exists" four times running, costing about twenty
-            # minutes to learn what the second attempt had already shown.
-            result.stop_reason = (
+            # minutes to learn what the second attempt had already shown. Recorded rather
+            # than acted on, so the repair just written still gets tested at the top of the
+            # next pass; if it passes, the model was one attempt from success after all.
+            circling = (
                 "a different fix produced the same error, so the model is circling a problem "
                 f"it cannot diagnose: {fingerprint[:150]}")
-            break
 
     result.total_seconds = round(time.time() - started, 1)
 
