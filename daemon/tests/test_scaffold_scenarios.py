@@ -27,6 +27,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from synapse_daemon.blueprints import CheckKind, Piece
 from synapse_daemon.local_pipeline import run_pipeline
 
@@ -431,6 +433,43 @@ def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
     assert "create_user(email, password_hash)" in draft, (
         f"the piece was held to a contract it was never shown:\n{draft}")
     assert "init_db()" in draft, draft
+
+
+def test_a_scenario_gives_the_same_verdict_when_run_again(tmp_path):
+    """A scenario runs once per repair attempt. If it leaves state, attempt 2 fails free.
+
+    Measured: the storage scenario deleted three guessed database filenames. The model
+    called its database `storage.db`, so the rows survived, and
+    `create_user("scenario@test.io", ...)` raised `ValueError: Email already exists` on
+    every attempt after the first. The build reported the model as circling a problem it
+    could not diagnose - correctly, since the problem was in the scenario.
+
+    Uses the same known-good module, renamed to the filename the model actually picked.
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    control = Path(__file__).resolve().parent / "fixtures" / "control_storage.py"
+    if not control.exists():  # pragma: no cover - fixture is committed alongside
+        pytest.skip("control storage fixture not present")
+
+    shutil.copy(control, tmp_path / "storage.py")
+    scenario = next(p.tests for p in _pieces() if p.name == "storage")
+    (tmp_path / "_s.py").write_text(f"from storage import *\n\n{scenario}\nprint('OK')\n",
+                                    encoding="utf-8")
+
+    verdicts = []
+    for _ in range(3):
+        proc = subprocess.run([sys.executable, "-B", "_s.py"], capture_output=True,
+                              text=True, timeout=180, cwd=str(tmp_path))
+        verdicts.append((proc.returncode, (proc.stderr or proc.stdout)[-300:]))
+
+    assert verdicts[0][0] == 0, f"the scenario rejected a correct module: {verdicts[0][1]}"
+    failed = [i for i, (rc, _) in enumerate(verdicts) if rc != 0]
+    assert not failed, (
+        f"the scenario passed run 1 and failed run(s) {failed} on the same correct module, "
+        f"so it leaves state behind:\n{verdicts[failed[0]][1]}")
 
 
 def test_the_scenario_actually_executes_rather_than_merely_being_present(tmp_path):

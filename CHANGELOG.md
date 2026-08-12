@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.137] - 2026-08-12
+
+### Fixed
+- **A scenario was failing every repair attempt after the first, for free.** The storage
+  scenario cleared three guessed database filenames. The model called its database
+  `storage.db`, so nothing was deleted, rows survived between attempts, and
+  `create_user("scenario@test.io", ...)` raised `ValueError: Email already exists` from
+  attempt two onward. The build reported the model as "circling a problem it cannot
+  diagnose" - accurately, since the problem was in the scenario. Both scenarios now clear
+  whatever database the module actually created.
+
+  This is the second time in two versions that a build blamed the model for a defect in the
+  harness, and both were found by reading a failing run rather than by a test. So:
+  `test_a_scenario_gives_the_same_verdict_when_run_again` runs the storage scenario three
+  times against a committed known-good module named the way the model named it. A scenario
+  that passes once and fails twice is not a check, it is a fuse.
+
+### Added
+- `daemon/tests/fixtures/control_storage.py`: a correct storage module kept as the positive
+  control, so "the scenario rejected a correct module" and "the scenario leaks state" are
+  distinguishable failures rather than one confusing one.
+
 ## [0.1.136] - 2026-08-12
 
 ### Added
