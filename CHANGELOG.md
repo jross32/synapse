@@ -10,6 +10,27 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.128] -- 2026-08-12
+
+### Added -- build modes
+- `preferences.build_mode` with three settings, validated so an unknown value is refused:
+  **`assist`** (a frontier model writes the code, local models do bulk work), **`review`**
+  (the default -- local models write, machine checks run, then a frontier model reviews before
+  it reaches the user), and **`auto`** (local models write, machine checks alone gate it).
+- `review` is the default because it is the only mode that would have caught the two defects
+  the build-off actually shipped -- a stored XSS hole and a dashboard rendering "undefined" --
+  both of which passed every automated check.
+- The modes are published in `PLAYBOOK`, so a connecting AI reads the user's setting and obeys
+  it rather than deciding for itself how much to trust local output.
+
+### Fixed
+- The two "stuck" conditions were being reported as one. When a model repeats itself the error
+  necessarily repeats too, so the recurring-error guard was firing first and reporting the
+  symptom instead of the cause. They are now distinct: **"the model stopped changing the
+  code"** when the output is identical, and **"a different fix produced the same error"** when
+  it is circling a problem it cannot diagnose. The two suggest different remedies, so
+  collapsing them lost information.
+
 ## [0.1.127] -- 2026-08-12
 
 ### Added

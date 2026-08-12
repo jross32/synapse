@@ -144,7 +144,7 @@ def test_pipeline_stops_when_the_same_error_repeats(tmp_path, monkeypatch):
                                         max_repairs=10, runner=always_same_error))
 
     assert not result.passed
-    assert "recurred" in result.stop_reason
+    assert "same error" in result.stop_reason, result.stop_reason
     assert len(result.attempts) <= 3, (
         f"should escalate after the error repeats, not burn all 10 attempts "
         f"(took {len(result.attempts)})")

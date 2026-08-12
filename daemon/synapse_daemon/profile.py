@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .errors import invalid
 from .runtime_resolution import resolve_command
@@ -125,6 +125,20 @@ class ProfilePreferences(BaseModel):
     sidebar_layout: dict[str, Any] | None = None
     sessions_quick_actions_collapsed: bool | None = None
     discover_recent_keys: list[str] = Field(default_factory=list)
+    build_mode: str = "review"
+    """How much the local models are trusted to produce finished work.
+
+    ``assist``  - a frontier model writes the code; local models do bulk mechanical work.
+    ``review``  - local models write, machine checks run, then a frontier model reviews
+                  before it reaches the user. The default.
+    ``auto``    - local models write and only the machine checks gate the result.
+
+    ``review`` is the default because it is the only mode that would have caught the two
+    defects the build-off actually shipped - a stored XSS hole and a dashboard rendering
+    "undefined" - both of which passed every automated check. ``auto`` stays available
+    because it is genuinely right for boilerplate and costs almost nothing.
+    """
+
     updated_at: str | None = None
 
 
@@ -155,11 +169,22 @@ class ProfileConfigUpdate(BaseModel):
     sync_enabled: bool | None = None
 
 
+BUILD_MODES = ("assist", "review", "auto")
+
+
 class ProfilePreferencesUpdate(BaseModel):
     theme: str | None = None
     sidebar_layout: dict[str, Any] | None = None
     sessions_quick_actions_collapsed: bool | None = None
     discover_recent_keys: list[str] | None = None
+    build_mode: str | None = None
+
+    @field_validator("build_mode")
+    @classmethod
+    def known_mode(cls, value: str | None) -> str | None:
+        if value is not None and value not in BUILD_MODES:
+            raise ValueError(f"build_mode must be one of {BUILD_MODES}")
+        return value
 
 
 def _now_iso() -> str:

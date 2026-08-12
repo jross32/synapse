@@ -190,20 +190,8 @@ async def run_pipeline(
             result.stop_reason = f"still failing after {max_repairs} repair attempts"
             break
 
-        # Stop on a *recurring* error rather than spending the whole budget on it. Measured:
-        # a 7B model emitted the identical "module has no attribute user_exists" four times
-        # in a row, costing about twenty minutes to learn what the second attempt had already
-        # shown. An error that does not change after a repair is the signature of one the
-        # model cannot fix, and escalating early is strictly better than grinding.
         fingerprint = error_fingerprint(error)
-        if fingerprint and fingerprint in seen_errors:
-            result.attempts.append(RepairAttempt(attempt=attempt + 1, error=error[:600],
-                                                 changed=False,
-                                                 seconds=round(time.time() - t0, 1)))
-            result.stop_reason = (
-                "the same error recurred after a repair, so more attempts are unlikely to "
-                f"help: {fingerprint[:150]}")
-            break
+        error_repeated = bool(fingerprint) and fingerprint in seen_errors
         seen_errors.add(fingerprint)
 
         emit("repairing", attempt=attempt + 1, error=error[:300])
@@ -222,9 +210,21 @@ async def run_pipeline(
         result.attempts.append(RepairAttempt(attempt=attempt + 1, error=error[:600],
                                              changed=changed,
                                              seconds=round(time.time() - t0, 1)))
+        # Two distinct ways of being stuck, reported distinctly because they suggest
+        # different fixes. Identical code is checked first: when the model repeats itself the
+        # error necessarily repeats too, and "it stopped changing the code" is the root
+        # cause, while "the same error came back" would be the symptom.
         if not changed:
-            # Producing the same text again means more attempts will not help.
             result.stop_reason = "the model stopped changing the code"
+            break
+        if error_repeated:
+            # It produced *different* code and still hit the same failure - it is circling a
+            # problem it does not understand. Measured: a 7B model emitted the identical
+            # "module has no attribute user_exists" four times running, costing about twenty
+            # minutes to learn what the second attempt had already shown.
+            result.stop_reason = (
+                "a different fix produced the same error, so the model is circling a problem "
+                f"it cannot diagnose: {fingerprint[:150]}")
             break
 
     result.total_seconds = round(time.time() - started, 1)

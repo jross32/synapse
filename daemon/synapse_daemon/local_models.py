@@ -453,6 +453,18 @@ PLAYBOOK: dict[str, Any] = {
         "Writing longer system prompts to get better compliance: made a 1.5B model worse "
         "(33% -> 0%), because instructions crowd out a small context.",
     ],
+    "build_modes": {
+        "what": ("The user sets how far local models are trusted. Read it from "
+                 "/api/v1/profile (preferences.build_mode) and obey it - do not decide for "
+                 "yourself, and do not silently exceed it."),
+        "assist": "You write the code; local models do bulk mechanical work only.",
+        "review": ("DEFAULT. Local models write, machine checks run, then YOU review before "
+                   "it reaches the user. Review is not optional in this mode - the two "
+                   "defects that shipped in the build-off (a stored XSS hole and a dashboard "
+                   "rendering 'undefined') both passed every automated check."),
+        "auto": ("Local models write and only the machine checks gate the result. Right for "
+                 "boilerplate; wrong for anything a user will look at or trust."),
+    },
     "when_to_use_your_own_tokens_instead": (
         "Work needing judgement rather than verification - architecture, security review, "
         "anything where correctness cannot be checked by running it. Local models are safe "
