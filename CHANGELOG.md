@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.130] - 2026-08-12
+
+### Fixed
+- Blueprint pieces declared a `tests` scenario that the build runner never read, so the
+  only behavioural check on a generated module was the test the model wrote about its own
+  code. Scenarios now run inside the repair loop, where a failure is fixed locally and free.
+- `check_contract` compares names and argument lists without calling anything, so a
+  `storage` module passed with every signature correct while `create_user` returned `None`
+  and `get_user_by_email` returned a bare row tuple without the password hash. Its caller
+  could neither open a session nor verify a password.
+- `passwords` was graded a clean pass with zero repairs while `verify_password` raised
+  `NameError: name 'hmac' is not defined` on every call.
+- `pages` never routed through `scaffold_partials.page()`, so the UI kit was silently
+  unused by the build it exists to style.
+- Each piece wrote its test to a shared `_pipeline_test.py`, erasing the evidence for the
+  piece before it; tests are now per-module and the deciding test is recorded on the
+  outcome.
+
+### Added
+- `daemon/tests/test_scaffold_scenarios.py`, pinning each defect verbatim.
+- `benchmarks/app-build/arm-c-run1-signatures-only/`: the build that reported 3/4 pieces
+  passing, kept with a write-up of why none of the three worked.
+
 ## [0.1.129] -- 2026-08-12
 
 ### Fixed -- the rubric can now see the bugs it used to miss
