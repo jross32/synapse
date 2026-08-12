@@ -386,6 +386,12 @@ def build_app(
     # ── Local AI: hardware profile, measured model strengths, agent runs ───────────
     app.include_router(
         build_local_ai_router(storage, storage.data_dir),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+
+    # ── Blueprints: verified recipes any AI or human can build from ────────────────
+    app.include_router(
         build_blueprints_router(storage, storage.data_dir),
         prefix=API_PREFIX,
         dependencies=[token_guard],

@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.127] -- 2026-08-12
+
+### Added
+- **Blueprints gallery** (AI Coding -> Blueprints). Follows the one-window rule: the page
+  itself never scrolls, only the list and the detail panel scroll internally, and long lists
+  page with "show more" rather than growing without end.
+- **Blueprints are discoverable by any AI.** The catalog is injected into `/ai/context`, and
+  `PLAYBOOK` gained `for_building_a_whole_app` and `for_measuring_and_improving`, so an AI told
+  "build me an app" or "use the local models" finds the route in one read instead of
+  rediscovering it by experiment -- which would spend exactly the tokens this exists to save.
+- The detail panel shows **enforced guarantees** rather than a description, and says plainly
+  that each maps to a check which runs during the build.
+
+### Fixed
+- Registering the blueprints router passed it as a second *positional* argument to
+  `include_router`, which crashed the daemon at startup. Caught because the API was checked
+  rather than assumed to work after the edit.
+- The blueprint card overflowed its grid track: a `<button>` does not shrink to its container
+  the way a `div` does, so the title's intrinsic width set the card's `scrollWidth`. Verified
+  fixed in the running app at 1280px and 390px -- zero overflowing elements, and the page
+  scrolls in neither direction.
+
 ## [0.1.126] -- 2026-08-12
 
 ### Added -- the improver: bounded search that earns its autonomy

@@ -392,6 +392,44 @@ PLAYBOOK: dict[str, Any] = {
             "which has failed four times with the same error is not one attempt away."
         ),
     },
+    "for_building_a_whole_app": {
+        "do": "GET /api/v1/blueprints, then POST /api/v1/blueprints/{id}/build",
+        "why": (
+            "A blueprint is a verified recipe, not a template: it carries the pieces to "
+            "build, the contracts each must satisfy, the checks that prove they work, and "
+            "the score it achieved last time it ran. Building through one is how a local "
+            "model produces something with labelled inputs, escaped output and real auth, "
+            "rather than something that merely runs."
+        ),
+        "guarantees_are_enforced": (
+            "Each blueprint's `guarantees` list maps to a check that actually runs. They are "
+            "not descriptions - if a build cannot satisfy one, the piece escalates."
+        ),
+        "composing": (
+            "Blueprints declare what they `provide` and `require`. "
+            "GET /api/v1/blueprints/{id}/compatible finds what fits with one, and "
+            "POST /api/v1/blueprints/stack assembles a set and names any unmet requirement "
+            "instead of quietly dropping it."
+        ),
+        "adding_your_own": (
+            "POST /api/v1/blueprints registers one - they are data, so the library grows "
+            "without code changes."
+        ),
+    },
+    "for_measuring_and_improving": {
+        "scorecard": "GET /api/v1/local-ai/bench - per-skill scores measured on this machine",
+        "trend": "GET /api/v1/local-ai/bench/history?skill=coding - is it getting better or worse",
+        "measure_now": "POST /api/v1/local-ai/bench/run",
+        "improve": (
+            "POST /api/v1/local-ai/improve/run searches harness configurations on free local "
+            "compute. It starts in shadow mode and only earns the right to change anything "
+            "after its predictions hold up on checks it was never tuned against."
+        ),
+        "why_it_matters": (
+            "Recommendations are only as good as the measurements behind them. A stale "
+            "scorecard is worse than none, because it is confidently wrong."
+        ),
+    },
     "for_everything_else": {
         "do": "POST /api/v1/local-ai/agent/run with {model, task, mode}",
         "good_for": (
@@ -424,6 +462,9 @@ PLAYBOOK: dict[str, Any] = {
         "what_this_machine_can_run": "GET /api/v1/local-ai/models",
         "hardware": "GET /api/v1/local-ai/hardware",
         "write_code": "POST /api/v1/local-ai/pipeline",
+        "build_a_whole_app": "POST /api/v1/blueprints/{id}/build",
+        "what_can_be_built": "GET /api/v1/blueprints",
+        "model_scorecard": "GET /api/v1/local-ai/bench",
         "run_an_agent": "POST /api/v1/local-ai/agent/run",
         "raw_completion": "POST http://127.0.0.1:11434/api/chat",
     },
