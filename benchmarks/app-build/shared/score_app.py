@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import asyncio
+import shutil
 import socket
 import subprocess
 import sys
@@ -187,9 +189,14 @@ def score(app_dir: Path, port: int) -> tuple[Result, dict[str, Any]]:
         res.add("spec_compliance", "starts with no extra setup", 0, 3, "no app.py to start")
     else:
         res.add("spec_compliance", "app.py exists", 2, 2)
-        proc = subprocess.Popen([sys.executable, "app.py", "--port", str(port)],
+        # Never grade an app assembled from cached bytecode. Python treats a .pyc as current
+        # when the source's mtime in whole seconds and its size both match, and a build
+        # rewrites these modules repeatedly - so a score could describe an earlier attempt.
+        shutil.rmtree(app_dir / "__pycache__", ignore_errors=True)
+        proc = subprocess.Popen([sys.executable, "-B", "app.py", "--port", str(port)],
                                 cwd=str(app_dir), stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+                                stderr=subprocess.STDOUT, text=True,
+                                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
         started = wait_for_port(port)
         res.add("spec_compliance", "starts with no extra setup", 3 if started else 0, 3,
                 "" if started else "never bound the port")

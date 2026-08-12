@@ -10,6 +10,45 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.131] - 2026-08-12
+
+Three of these are measurement bugs rather than feature work. Each one made a local model
+look less capable than it is, so every escalation count taken through this pipeline was a
+lower bound rather than a measurement.
+
+### Fixed
+- **Repairs were graded against stale bytecode.** Python treats a cached `.pyc` as current
+  when the source's mtime (whole seconds) and size both match, and a repair routinely
+  rewrites a module to the same byte length within the same second - so the test subprocess
+  imported the *previous* attempt's code and blamed the fix just written. Reproduced in
+  isolation before fixing. `__pycache__` is now cleared and `-B` /
+  `PYTHONDONTWRITEBYTECODE=1` set at all three launch sites: the repair loop, the web checks
+  that serve the assembled app, and the benchmark scorer.
+- **"The model stopped changing the code" was measuring the sampler.** `generate_code`
+  hardcoded `temperature: 0`, so a near-identical repair prompt returned near-identical code
+  by construction. Measured: `storage` gave up after 2 of 10 allowed repairs having never
+  reached its acceptance scenario. Identical repairs are now resampled at 0.4 then 0.8, and
+  the stop reason states how many samples were drawn.
+- **Pieces were held to a contract they were never shown.** The storage spec described its
+  tables and rules in prose and never listed the nine signatures a contract test asserted
+  exactly, so every build opened by discovering the contract through failure - on two
+  consecutive runs, repair 1 was "init_db is missing" and repair 2 was "create_user takes
+  ['email', 'password'] but the contract requires ['email', 'password_hash']". The declared
+  contract is now part of the generation prompt.
+- A declared `web` check reported "the build runner does not execute web checks yet" when
+  the build does run them, once, against the assembled app. It now says where it runs.
+- `_run`'s timeout message hardcoded "45s" regardless of the timeout actually applied.
+
+### Added
+- An acceptance scenario for the `api` piece - the only piece that escalated on both builds
+  and the only one that never carried one. Verified in both directions: it rejects the api
+  module the local model produced and accepts the escalated one.
+- `test_every_builtin_piece_declares_a_scenario`, so a new blueprint cannot reintroduce a
+  piece that passes a build with no check the model did not write itself.
+- `benchmarks/app-build/probe_storage_repairs.py`, which records what each repair attempt
+  changed and runs the contract-in-prompt A/B. It is the tool that found two of the bugs
+  above.
+
 ## [0.1.130] - 2026-08-12
 
 ### Fixed

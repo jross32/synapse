@@ -7,34 +7,40 @@ def landing_page() -> str:
         '<p class="lede">Sign up or log in to get started.</p>'
         + card(
             '<form id="landing-form" novalidate>'
-            + button("Sign Up")
-            + button("Log In")
+            + field("username", "Username", autocomplete="username")
+            + field("password", "Password", kind="password", autocomplete="current-password")
+            + button("Log In / Sign Up")
             + message_slot("msg")
             + "</form>"
         )
     )
 
     script = auth_fetch_helper("app_token") + """
+if (getToken()) location.href = '/dashboard';
+
 document.getElementById('landing-form').addEventListener('submit', async function (e) {
   e.preventDefault();
   clearMessage('msg');
-  const action = e.target.querySelector('button[type="submit"]').textContent;
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
+  if (!username || !password) { showMessage('msg', 'Username and password are required.', 'err'); return; }
   try {
-    if (action === 'Sign Up') {
-      await api('/api/signup', { method: 'POST' });
-    } else {
-      await api('/api/login', { method: 'POST' });
-    }
+    const response = await api('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: username, password: password })
+    });
+    const data = await response.json();
+    setToken(data.token);
     location.href = '/dashboard';
   } catch (err) { showMessage('msg', err.message, 'err'); }
 });
 """
-    return page("Welcome", body, script=script, brand="Service")
+    return page("Landing Page", body, script=script, brand="Service")
 
 def signup_page() -> str:
     body = (
         "<h1>Sign Up</h1>"
-        '<p class="lede">Create an account to use our service.</p>'
+        '<p class="lede">Create an account to get started.</p>'
         + card(
             '<form id="signup-form" novalidate>'
             + field("username", "Username", autocomplete="username")
@@ -59,7 +65,6 @@ document.getElementById('signup-form').addEventListener('submit', async function
       method: 'POST',
       body: JSON.stringify({ username: username, email: email, password: password })
     });
-    setToken(await response.json().token);
     location.href = '/dashboard';
   } catch (err) { showMessage('msg', err.message, 'err'); }
 });
@@ -69,7 +74,7 @@ document.getElementById('signup-form').addEventListener('submit', async function
 def login_page() -> str:
     body = (
         "<h1>Log In</h1>"
-        '<p class="lede">Enter your credentials to access your account.</p>'
+        '<p class="lede">Enter your credentials to log in.</p>'
         + card(
             '<form id="login-form" novalidate>'
             + field("username", "Username", autocomplete="username")
@@ -86,13 +91,14 @@ document.getElementById('login-form').addEventListener('submit', async function 
   clearMessage('msg');
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  if (!username || !password) { showMessage('msg', 'All fields are required.', 'err'); return; }
+  if (!username || !password) { showMessage('msg', 'Username and password are required.', 'err'); return; }
   try {
-    await api('/api/login', {
+    const response = await api('/api/login', {
       method: 'POST',
       body: JSON.stringify({ username: username, password: password })
     });
-    setToken(await response.json().token);
+    const data = await response.json();
+    setToken(data.token);
     location.href = '/dashboard';
   } catch (err) { showMessage('msg', err.message, 'err'); }
 });
@@ -102,11 +108,11 @@ document.getElementById('login-form').addEventListener('submit', async function 
 def dashboard_page() -> str:
     body = (
         "<h1>Dashboard</h1>"
-        '<p class="lede">Manage your records here.</p>'
+        '<p class="lede">Manage your trails here.</p>'
         + card(
-            '<form id="new-record" novalidate>'
-            + field("text", "Record Text", kind="textarea")
-            + button("Add Record")
+            '<form id="new-trail-form" novalidate>'
+            + field("text", "Trail Text", kind="textarea")
+            + button("Add Trail")
             + message_slot("msg")
             + "</form>"
         )
@@ -114,27 +120,25 @@ def dashboard_page() -> str:
     )
 
     script = auth_fetch_helper("app_token") + """
-if (!getToken()) location.href = '/login';
-
 const list = document.getElementById('list');
 
 function render(rows) {
   if (!rows.length) {
-    list.innerHTML = '<div class="empty">Nothing here yet. Add your first one above.</div>';
+    list.innerHTML = '<div class="empty">No trails yet. Add one above.</div>';
     return;
   }
   list.innerHTML = rows.map(function (r) {
     return '<div class="list-row">'
          +   '<div>' + escapeHtml(r.text) + '</div>'
          +   '<button class="btn btn-danger" data-id="' + r.id + '"'
-         +   ' aria-label="Delete ' + escapeHtml(r.text) + '">Delete</button>'
+         +   ' aria-label="Delete Trail">Delete</button>'
          + '</div>';
   }).join('');
 
   list.querySelectorAll('button[data-id]').forEach(function (btn) {
     btn.onclick = async function () {
       try {
-        await api('/api/records/' + btn.dataset.id, { method: 'DELETE' });
+        await api('/api/trails/' + btn.dataset.id, { method: 'DELETE' });
         load();
       } catch (err) { showMessage('msg', err.message, 'err'); }
     };
@@ -143,20 +147,20 @@ function render(rows) {
 
 async function load() {
   try {
-    render(await api('/api/records'));
+    render(await api('/api/trails'));
   } catch (err) {
     if (/sign in|no longer valid/i.test(err.message)) { clearToken(); location.href = '/login'; }
     else list.innerHTML = '<div class="empty">' + escapeHtml(err.message) + '</div>';
   }
 }
 
-document.getElementById('new-record').addEventListener('submit', async function (e) {
+document.getElementById('new-trail-form').addEventListener('submit', async function (e) {
   e.preventDefault();
   clearMessage('msg');
   const text = document.getElementById('text').value.trim();
-  if (!text) { showMessage('msg', 'Record text is required.', 'err'); return; }
+  if (!text) { showMessage('msg', 'Trail text is required.', 'err'); return; }
   try {
-    await api('/api/records', {
+    await api('/api/trails', {
       method: 'POST',
       body: JSON.stringify({ text: text })
     });

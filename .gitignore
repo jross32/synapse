@@ -91,3 +91,11 @@ synapse.lnk
 icon-check.*
 icon-preview.*
 benchmarks/app-build/*/trailmark.db
+
+# Scratch workspaces and per-run test files from the build probes. The test that decided a
+# piece's verdict is recorded in build_result.json (PieceOutcome.test_source), so the loose
+# copies are regenerated noise rather than evidence.
+benchmarks/app-build/probe-storage*/
+benchmarks/app-build/*/_test_*.py
+benchmarks/app-build/*/_check_*.py
+benchmarks/app-build/*/_scenario_*.py

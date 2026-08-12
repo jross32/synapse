@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import secrets
 
 def hash_password(password: str) -> str:

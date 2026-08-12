@@ -17,7 +17,9 @@ already tried) rather than the whole history.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -29,10 +31,20 @@ from pydantic import BaseModel, Field
 from .local_agent import DEFAULT_CODER_MODEL, generate_code
 
 
+RESAMPLE_TEMPERATURES = (0.4, 0.8)
+"""Temperatures to retry a repair at when the model returns byte-identical code.
+
+Two, escalating. One is often not enough to leave a strong attractor, and past ~0.8 a coding
+model starts inventing APIs, which trades a stuck loop for a confidently wrong one.
+"""
+
+
 class RepairAttempt(BaseModel):
     attempt: int
     error: str = ""
     changed: bool = False
+    resamples: int = 0
+    """How many extra samples this repair needed before the model wrote anything new."""
     seconds: float = 0.0
 
 
@@ -75,11 +87,25 @@ def error_fingerprint(error: str) -> str:
 
 
 def _run(path: Path, cwd: Path, timeout: float = 45.0) -> tuple[bool, str]:
+    # Python decides a cached .pyc is current by comparing the source's mtime *in whole
+    # seconds* and its size. A repair very often rewrites the module with the same byte
+    # length inside the same second - `return 0` to `return 1` is the smallest example - and
+    # then the import serves the previous attempt's bytecode. The loop grades code that was
+    # never run, blames the fix that had just been written, and repairs its way around a
+    # problem that no longer exists. Reproduced directly before fixing.
+    shutil.rmtree(cwd / "__pycache__", ignore_errors=True)
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
     try:
-        proc = subprocess.run([sys.executable, path.name], capture_output=True, text=True,
-                              timeout=timeout, cwd=str(cwd))
+        # -B as well as the variable: the flag stops it writing a new cache, and deleting
+        # the directory stops it reading an old one. Either alone leaves the hole open.
+        proc = subprocess.run([sys.executable, "-B", path.name], capture_output=True,
+                              text=True, timeout=timeout, cwd=str(cwd), env=env)
     except subprocess.TimeoutExpired:
-        return False, "the code did not finish within 45s (probable infinite loop)"
+        # Report the timeout that was actually applied. Hardcoding "45s" here meant a
+        # caller-supplied budget produced an error message contradicting it, which sends
+        # whoever reads it looking for a limit that was never in force.
+        return False, (f"the code did not finish within {timeout:g}s "
+                       f"(probable infinite loop)")
     except Exception as exc:  # noqa: BLE001
         return False, f"{type(exc).__name__}: {exc}"
     if proc.returncode == 0:
@@ -220,19 +246,38 @@ async def run_pipeline(
             "Output only the corrected code."
         )
         fixed = await asyncio.to_thread(generate_code, repair_spec, coder_model)
+
+        # Greedy decoding is deterministic, so an unchanged answer to a near-identical
+        # prompt is what the sampler is *for*, not evidence the model is out of ideas.
+        # Measured: `storage` was reported as "the model stopped changing the code" after
+        # two repairs, having never once reached its acceptance scenario - the loop gave up
+        # eight attempts early on the strength of a property of temperature 0. Drawing a
+        # different sample costs local time, which is free, and is the one thing that can
+        # break the tie.
+        resamples = 0
+        while (fixed == result.code and not fixed.startswith("ERROR:")
+               and resamples < len(RESAMPLE_TEMPERATURES)):
+            temperature = RESAMPLE_TEMPERATURES[resamples]
+            resamples += 1
+            emit("resampling", attempt=attempt + 1, temperature=temperature)
+            fixed = await asyncio.to_thread(generate_code, repair_spec, coder_model,
+                                            900.0, 8192, temperature)
+
         changed = bool(fixed) and not fixed.startswith("ERROR:") and fixed != result.code
         if changed:
             target.write_text(fixed, encoding="utf-8")
             result.code = fixed
         result.attempts.append(RepairAttempt(attempt=attempt + 1, error=error[:600],
-                                             changed=changed,
+                                             changed=changed, resamples=resamples,
                                              seconds=round(time.time() - t0, 1)))
         # Two distinct ways of being stuck, reported distinctly because they suggest
         # different fixes. Identical code is checked first: when the model repeats itself the
         # error necessarily repeats too, and "it stopped changing the code" is the root
         # cause, while "the same error came back" would be the symptom.
         if not changed:
-            result.stop_reason = "the model stopped changing the code"
+            result.stop_reason = (
+                f"the model returned identical code across {resamples + 1} samples, "
+                f"including {resamples} at raised temperature")
             break
         if error_repeated:
             # It produced *different* code and still hit the same failure - it is circling a

@@ -235,6 +235,37 @@ def test_instantiating_with_nothing_keeps_the_default_vocabulary():
     assert "title" in default.entrypoint["flow"]["create"]["body"]
 
 
+def test_every_builtin_piece_declares_a_scenario():
+    """`tests: ""` is legal, means "no independent check", and is silent about it.
+
+    That combination is what shipped three unusable modules. `api` in particular carried no
+    scenario at all while being the hardest piece and the only one to escalate on both
+    builds - it was asked for the most with the least feedback. This keeps the gap from
+    being reintroduced by writing a new blueprint.
+    """
+    from synapse_daemon.blueprints import load_catalog
+
+    missing: list[str] = []
+    for blueprint in load_catalog():
+        if blueprint.draft:
+            continue
+        for piece in blueprint.instantiate().pieces:
+            if not piece.tests.strip():
+                missing.append(f"{blueprint.id}.{piece.name}")
+
+    assert not missing, (
+        "these pieces can pass a build without any check the model did not write "
+        f"itself: {missing}")
+
+
+def test_no_scenario_still_carries_its_placeholders():
+    """A `{{records}}` left unsubstituted would make the scenario assert on literal text."""
+    for piece in _pieces():
+        assert "{{" not in piece.tests, (
+            f"{piece.name}'s scenario still contains an unresolved placeholder, so it "
+            f"would test a route that does not exist")
+
+
 def test_summary_separates_passing_from_independently_verified():
     """"N pieces built" must never again be able to mean N unusable modules."""
     from synapse_daemon.scaffold.runner import BuildResult, PieceOutcome
@@ -304,9 +335,137 @@ def test_declared_checks_the_runner_cannot_execute_are_reported(tmp_path):
         lp.generate_code = original
 
     checks = result.pieces[0].checks
-    assert checks.get("web", "").startswith("not_run"), (
+    # `web` is deferred rather than unimplemented - a page can only be rendered once the
+    # app is assembled - so it must say that, not claim it was never run and not vanish.
+    assert checks.get("web", "").startswith("deferred"), (
         f"a declared web check vanished instead of reporting itself: {checks}")
+    assert "assembled app" in checks["web"], checks["web"]
     assert checks.get("http", "").startswith("not_run"), checks
+
+
+def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
+    """Enforcing signatures that were never stated makes the model pay to discover them.
+
+    Measured on two consecutive runs of the `storage` piece: repair 1 was always "init_db
+    is missing" and repair 2 was always "create_user takes ['email', 'password'] but the
+    contract requires ['email', 'password_hash']" - roughly twelve minutes of local compute
+    spent learning a fact that costs a few tokens to state.
+    """
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.blueprints import Blueprint, CheckKind, Piece
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    blueprint = Blueprint(
+        id="t", name="t", summary="t",
+        pieces=[Piece(name="store", spec="Write a store.", module="store",
+                      checks=[CheckKind.UNIT, CheckKind.CONTRACT],
+                      contract={"functions": [
+                          {"name": "init_db", "args": []},
+                          {"name": "create_user", "args": ["email", "password_hash"]}]})])
+
+    prompts: list[str] = []
+
+    def stub(spec: str, *a, **k) -> str:
+        prompts.append(spec)
+        if "Write a test for that code" in spec:
+            return "from store import *\n\nprint('OK')\n"
+        return ("def init_db():\n    pass\n\n\n"
+                "def create_user(email, password_hash):\n    return 1\n")
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+    finally:
+        lp.generate_code = original
+
+    draft = prompts[0]
+    assert "create_user(email, password_hash)" in draft, (
+        f"the piece was held to a contract it was never shown:\n{draft}")
+    assert "init_db()" in draft, draft
+
+
+def test_identical_code_is_resampled_before_the_loop_gives_up(tmp_path):
+    """Greedy decoding repeats itself by construction; that is not the model giving up.
+
+    Measured: `storage` stopped after two of ten allowed repairs with "the model stopped
+    changing the code", having never once reached its acceptance scenario.
+    """
+    import synapse_daemon.local_pipeline as lp
+
+    temperatures: list[float] = []
+
+    def stub(spec: str, model: str = "", timeout: float = 900.0, num_ctx: int = 8192,
+             temperature: float = 0.0) -> str:
+        if "Write a test for that code" in spec:
+            return "from solution import *\n\nassert broken() == 1\nprint('OK')\n"
+        if "Running the tests produced" in spec:
+            temperatures.append(temperature)
+            # Deterministic until the sampler is actually turned up, exactly like the real
+            # thing: same prompt, same answer.
+            if temperature == 0.0:
+                return "def broken():\n    return 0\n"
+            return "def broken():\n    return 1\n"
+        return "def broken():\n    return 0\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        result = _run_async(run_pipeline("spec", workspace=tmp_path, max_repairs=2))
+    finally:
+        lp.generate_code = original
+
+    assert temperatures[0] == 0.0, "the first repair should still be the model's best guess"
+    assert temperatures[1] == lp.RESAMPLE_TEMPERATURES[0], (
+        f"an identical repair was not resampled at a raised temperature: {temperatures}")
+    assert result.passed, (
+        f"resampling produced a working fix but the loop did not use it: "
+        f"{result.stop_reason}")
+    assert result.attempts[0].resamples == 1, "the resample was not recorded on the attempt"
+
+
+def test_giving_up_says_how_many_samples_were_drawn(tmp_path):
+    """A model that repeats itself at three temperatures really has run out."""
+    import synapse_daemon.local_pipeline as lp
+
+    def stub(spec: str, model: str = "", timeout: float = 900.0, num_ctx: int = 8192,
+             temperature: float = 0.0) -> str:
+        if "Write a test for that code" in spec:
+            return "from solution import *\n\nassert broken() == 1\nprint('OK')\n"
+        return "def broken():\n    return 0\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        result = _run_async(run_pipeline("spec", workspace=tmp_path, max_repairs=2))
+    finally:
+        lp.generate_code = original
+
+    assert not result.passed
+    assert "identical code across 3 samples" in result.stop_reason, result.stop_reason
+    assert result.attempts[0].resamples == len(lp.RESAMPLE_TEMPERATURES)
+
+
+def test_a_repair_is_never_graded_against_cached_bytecode(tmp_path):
+    """A same-size rewrite inside one mtime tick used to be served from __pycache__.
+
+    Python compares source mtime in whole seconds plus size, and repairs routinely rewrite
+    a module to the same length within the same second. The test then ran the *previous*
+    attempt's code and attributed the result to the fix just written.
+    """
+    from synapse_daemon.local_pipeline import _run
+
+    (tmp_path / "solution.py").write_text("def broken():\n    return 0\n", encoding="utf-8")
+    (tmp_path / "_t.py").write_text(
+        "from solution import *\n\nassert broken() == 1, 'still zero'\n", encoding="utf-8")
+
+    ok, _ = _run(tmp_path / "_t.py", tmp_path)
+    assert not ok, "the first version should fail"
+
+    # Same byte length, immediately afterwards - the exact shape of a real repair.
+    (tmp_path / "solution.py").write_text("def broken():\n    return 1\n", encoding="utf-8")
+    ok, error = _run(tmp_path / "_t.py", tmp_path)
+    assert ok, f"the repair was graded against stale bytecode: {error}"
 
 
 def test_each_piece_keeps_its_own_test_file(tmp_path):

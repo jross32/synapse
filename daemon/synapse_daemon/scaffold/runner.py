@@ -22,6 +22,7 @@ reported as `not_run`, and a build with unmet checks is not called passing.
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
 import sys
@@ -152,9 +153,15 @@ async def _run_web_checks(blueprint: Blueprint, ws: Path,
 
     proc = None
     try:
+        # Same bytecode-staleness hazard as the repair loop, and worse here: this app is
+        # assembled from modules the build has just rewritten, so a cached .pyc would have
+        # the render-level checks grading a *previous* attempt's code and reporting the
+        # verdict against what shipped. See `local_pipeline._run`.
+        shutil.rmtree(ws / "__pycache__", ignore_errors=True)
         proc = subprocess.Popen(
-            [sys.executable, path.name, "--port", str(port)], cwd=str(ws),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            [sys.executable, "-B", path.name, "--port", str(port)], cwd=str(ws),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
         healthy = await asyncio.to_thread(
             _wait_for_health, base + entry.get("health", "/"), time.time() + 45)
         if not healthy:
@@ -192,6 +199,27 @@ def _contract_from_piece(piece: Piece) -> contracts_mod.ModuleContract | None:
                                               returns=f.get("returns", ""))
                    for f in fns],
         constants=spec.get("constants", []))
+
+
+def _own_contract_context(expected: contracts_mod.ModuleContract | None) -> str:
+    """The signatures this piece will be *held to*, given to it before it writes anything.
+
+    They were being enforced without ever being stated. The storage spec described its
+    tables and its rules in prose and never once listed the nine functions it had to expose,
+    yet a contract test asserted them exactly - so every build opened with the model
+    discovering the contract by trial and error. Measured, twice, on consecutive runs: the
+    first repair was always "init_db is missing" and the second was always "create_user
+    takes ['email', 'password'] but the contract requires ['email', 'password_hash']".
+
+    Those two repairs cost roughly six minutes each and taught the model nothing it could
+    not have been told for free. Contract-in-the-prompt is the cheapest thing in the whole
+    scaffold: a handful of tokens, spent before the first draft rather than after it.
+    """
+    if expected is None or not expected.functions:
+        return ""
+    return ("\n\nThe module MUST expose exactly these, with these parameter names in this "
+            "order - callers are already written against them:\n\n"
+            + expected.as_prompt())
 
 
 def _dependency_context(piece: Piece, workspace: Path) -> str:
@@ -263,11 +291,13 @@ async def build_blueprint(
         piece_started = time.time()
         module = piece.module or piece.name
 
-        full_spec = piece.spec + _dependency_context(piece, ws) + _asset_context(piece)
+        expected = _contract_from_piece(piece)
+
+        full_spec = (piece.spec + _own_contract_context(expected)
+                     + _dependency_context(piece, ws) + _asset_context(piece))
 
         # Turn the declared contract into assertions that run inside the repair loop, so a
         # wrong signature is fixed locally and free rather than escalated.
-        expected = _contract_from_piece(piece)
         contract_test = ""
         if expected is not None and CheckKind.CONTRACT in piece.checks:
             contract_test = contracts_mod.contract_test_source(module, expected)
@@ -306,7 +336,6 @@ async def build_blueprint(
         # generated test and still expose the wrong signature to its callers, which is
         # precisely how two pieces ended up disagreeing about a field name.
         if CheckKind.CONTRACT in piece.checks:
-            expected = _contract_from_piece(piece)
             if expected is None:
                 outcome.checks["contract"] = "not_run: no contract declared"
             else:
@@ -332,6 +361,15 @@ async def build_blueprint(
         # that somebody thought it mattered.
         for kind in piece.checks:
             if kind in (CheckKind.UNIT, CheckKind.CONTRACT):
+                continue
+            if kind is CheckKind.WEB:
+                # Not unimplemented, just not per-piece: a rendered page only exists once
+                # the app is assembled, so this runs after the last piece. Saying "does not
+                # execute web checks yet" here would understate the build as badly as the
+                # silent drop it replaced overstated it.
+                outcome.checks.setdefault(
+                    kind.value, "deferred: run once against the assembled app, see "
+                                "web_checks")
                 continue
             outcome.checks.setdefault(
                 kind.value,

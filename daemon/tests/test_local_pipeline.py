@@ -107,16 +107,36 @@ async def test_escalates_with_a_self_contained_packet(tmp_path, monkeypatch):
 
 
 async def test_gives_up_when_the_model_stops_changing_anything(tmp_path, monkeypatch):
-    """An identical answer twice means more attempts cannot help, so stop early."""
-    monkeypatch.setattr(
-        local_pipeline, "generate_code",
-        lambda spec, *a, **k: TEST_CODE if "test" in spec.lower() else IMPL_WRONG)
+    """An identical answer at every temperature means more attempts cannot help.
+
+    "Identical" only counts once the sampler has been given a chance: at temperature 0 a
+    repeated answer is what greedy decoding does, not a model out of ideas, so the loop
+    resamples before concluding anything.
+    """
+    temperatures: list[float] = []
+
+    def stub(spec, *a, **k):
+        # Match the pipeline's actual marker, not the bare word "test": the *repair* prompt
+        # says "Running the tests produced", so a substring check on "test" routes every
+        # repair into the test-writing branch and the repair path is never exercised.
+        if "Write a test for that code" in spec:
+            return TEST_CODE
+        temperatures.append(k.get("temperature", a[3] if len(a) > 3 else 0.0))
+        return IMPL_WRONG
+
+    monkeypatch.setattr(local_pipeline, "generate_code", stub)
 
     result = await local_pipeline.run_pipeline(
         "Write add(a, b).", workspace=tmp_path, max_repairs=10,
         runner=_fake_runner([(False, "AssertionError")] * 11))
 
-    assert "stopped changing" in result.stop_reason
+    assert "identical code across 3 samples" in result.stop_reason
+    # [initial draft, first repair, then one call per resample] - all at temperature 0
+    # except the resamples, which is the whole point.
+    assert temperatures[:2] == [0.0, 0.0], (
+        f"the draft and the first repair should be the model's best guess: {temperatures}")
+    assert temperatures[2:] == list(local_pipeline.RESAMPLE_TEMPERATURES), (
+        f"the sampler was never turned up before giving up: {temperatures}")
     assert len(result.attempts) < 10, "should give up early, not burn every attempt"
     assert result.needs_escalation
 

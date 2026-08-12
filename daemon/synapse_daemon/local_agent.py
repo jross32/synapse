@@ -238,7 +238,7 @@ DEFAULT_CODER_MODEL = "qwen2.5-coder:3b"
 
 
 def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 900.0,
-                  num_ctx: int = 8192) -> str:
+                  num_ctx: int = 8192, temperature: float = 0.0) -> str:
     """Ask a coding-tuned model to write code, with no tools involved.
 
     This exists because of a hard split measured on real runs: the coder-tuned models write
@@ -259,7 +259,13 @@ def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 
         # exemplar plus its dependencies' interfaces has no room left to emit a full module,
         # which surfaces as a timeout rather than as an obvious "context exhausted" error -
         # measured: the pages piece failed this way at 300s having produced nothing.
-        "options": {"temperature": 0, "num_ctx": num_ctx},
+        # temperature defaults to 0 because a first draft wants the model's best guess, not
+        # a lottery ticket. The repair loop raises it deliberately: greedy decoding is
+        # deterministic, so re-asking with a near-identical prompt returns near-identical
+        # code, and "it stopped changing the code" would describe the sampler rather than
+        # the model. Measured: `storage` was declared stuck after two repairs having never
+        # reached its scenario.
+        "options": {"temperature": temperature, "num_ctx": num_ctx},
     }
     try:
         req = urllib.request.Request(
