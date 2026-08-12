@@ -10,6 +10,41 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.142] - 2026-08-12
+
+### The storage piece passed
+
+`qwen2.5-coder:7b` wrote a complete, correct nine-function stateful storage module locally,
+for free, in 31 minutes - every signature right and, for the first time, every return shape
+right:
+
+```
+passed=True  attempts=6  1843s
+stop_reason: tests passed
+```
+
+Verified independently of the build: the acceptance scenario re-run against the produced
+module three times from a cleared bytecode cache, three passes.
+
+**The model did not change.** Same 7B, same 6 GB card, same repair budget. What changed was
+the harness around it: the contract stated up front (0.1.131), bytecode staleness fixed
+(0.1.131), scenarios that actually execute (0.1.134), a scenario that survives being re-run
+(0.1.137), and failures that name what came back and what a caller needs (0.1.138).
+
+Before those, `storage` escalated on every attempt, and the reasonable reading was that a 7B
+cannot write a nine-function stateful module. That reading was wrong. The harness was
+measuring itself.
+
+`benchmarks/app-build/CONTRACT_AB.md` carries the full trail, including what these numbers
+are *not*: the pass followed five changes at once, so it is evidence the stack works rather
+than a measurement of any one part, and one pass on one piece is a proof of possibility, not
+a rate.
+
+### Fixed
+- The probe's verdict line never consulted `result.passed`, so it reported a successful
+  build as "PROGRESSING - ran out of budget". The same class of mistake as everything else
+  it found: a summary that ignores the field which settles the question.
+
 ## [0.1.141] - 2026-08-12
 
 ### Fixed

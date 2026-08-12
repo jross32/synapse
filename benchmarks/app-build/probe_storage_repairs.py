@@ -114,10 +114,18 @@ async def main() -> None:
 
     print(f"\ndistinct failures: {prints['distinct_fingerprints']} across {len(trail)} repairs")
     print(f"scenario positions reached: {positions}")
-    print("verdict:", "THRASHING - it went backwards" if positions and not
-          prints["monotonic_progress"] else
-          ("STUCK - same place every time" if len(set(positions)) <= 1 else
-           "PROGRESSING - ran out of budget, not ideas"))
+    # `passed` first. Without it this reported a successful build as "PROGRESSING - ran out
+    # of budget", which is the same class of mistake as everything else this probe found:
+    # a summary that never consults the one field that settles the question.
+    if result.passed:
+        verdict = f"PASSED - every scenario assertion, after {len(trail)} repairs"
+    elif positions and not prints["monotonic_progress"]:
+        verdict = "THRASHING - it went backwards"
+    elif len(set(positions)) <= 1:
+        verdict = "STUCK - same place every time"
+    else:
+        verdict = "PROGRESSING - ran out of budget, not ideas"
+    print("verdict:", verdict)
 
 
 asyncio.run(main())
