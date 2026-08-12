@@ -519,6 +519,66 @@ def test_a_scenario_gives_the_same_verdict_when_run_again(tmp_path):
         f"so it leaves state behind:\n{verdicts[failed[0]][1]}")
 
 
+def test_a_generated_test_that_only_defines_a_function_is_made_to_run():
+    """The mechanism behind the worst false pass this project has produced.
+
+    Small models routinely emit `def test_storage(): ... assert ...` and stop, with even the
+    closing `print('OK')` indented inside. Nothing at module level executes, the file exits
+    0 having asserted nothing, and the piece is recorded as passing.
+
+    That is how `passwords` was graded a clean pass in 117 seconds with zero repairs while
+    `verify_password` raised `NameError: name 'hmac' is not defined` on every call: its
+    generated test *did* call `verify_password`, inside a function nobody ran. The test file
+    had been overwritten by the next piece before the false pass was noticed, so the
+    mechanism was unrecoverable until an identical one turned up in a later build.
+
+    Verbatim shape from `probe-storage-contract/_test_storage.py`.
+    """
+    from synapse_daemon.local_pipeline import _ensure_the_test_runs
+
+    never_ran = (
+        "from storage import *\n\n"
+        "def test_storage():\n"
+        "    init_db()\n"
+        "    assert False, 'THE-ASSERTIONS-RAN'\n"
+        "    print('OK')\n")
+
+    events: list[dict] = []
+    fixed = _ensure_the_test_runs(never_ran, lambda kind, **rest: events.append(
+        {"type": kind, **rest}))
+
+    assert fixed.rstrip().endswith("test_storage()"), (
+        f"the uncalled test function was left uncalled:\n{fixed}")
+    assert events and events[0]["type"] == "test_never_ran", (
+        "the pipeline silently repaired the test instead of reporting it")
+
+    # And it really executes now, rather than merely looking like it would.
+    namespace: dict = {"init_db": lambda: None}
+    try:
+        exec(compile(fixed.replace("from storage import *\n", ""), "<t>", "exec"), namespace)
+    except AssertionError as exc:
+        assert "THE-ASSERTIONS-RAN" in str(exc)
+    else:  # pragma: no cover - the point of the test
+        raise AssertionError("the assertions still did not run")
+
+
+def test_a_test_that_already_calls_itself_is_left_alone():
+    """Appending a second call would run every assertion twice and can corrupt state."""
+    from synapse_daemon.local_pipeline import _ensure_the_test_runs
+
+    already_fine = ("from storage import *\n\n"
+                    "def test_storage():\n    assert True\n\n\ntest_storage()\n")
+    assert _ensure_the_test_runs(already_fine, lambda *a, **k: None) == already_fine
+
+    plain = "from storage import *\n\nassert True\nprint('OK')\n"
+    assert _ensure_the_test_runs(plain, lambda *a, **k: None) == plain
+
+    # A helper taking arguments was written to be called with them, not blind.
+    helper = ("from storage import *\n\n"
+              "def check(value):\n    assert value\n\n\ncheck(1)\n")
+    assert _ensure_the_test_runs(helper, lambda *a, **k: None) == helper
+
+
 def test_the_scenario_actually_executes_rather_than_merely_being_present(tmp_path):
     """Being in the file is not the same as running.
 

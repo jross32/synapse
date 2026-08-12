@@ -16,6 +16,7 @@ already tried) rather than the whole history.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import os
 import re
@@ -86,6 +87,56 @@ def error_fingerprint(error: str) -> str:
             # Strip the parts that vary run to run so the same fault compares equal.
             return re.sub(r"line \d+|0x[0-9a-fA-F]+|['\"][^'\"]*[/\\][^'\"]*['\"]", "", line)[:300]
     return lines[-1][:300]
+
+
+def _ensure_the_test_runs(test_code: str, emit: Callable[..., None]) -> str:
+    """Call the test functions the model defined but never invoked.
+
+    Small models routinely emit ``def test_storage(): ... assert ...`` and stop, with even
+    the final ``print('OK')`` indented inside the function. Nothing at module level executes,
+    so the file exits 0 having asserted nothing, and the piece is recorded as passing.
+
+    This is not hypothetical and it is not rare. It is the mechanism behind the worst false
+    pass this project has produced: `passwords` was graded a clean pass in 117 seconds with
+    zero repairs while `verify_password` raised ``NameError: name 'hmac' is not defined`` on
+    every call. Its generated test did call `verify_password` - inside a function nobody ran.
+
+    Appending the calls is deliberately preferred over rejecting the test. The assertions
+    the model wrote are usually reasonable; they were simply never reached.
+    """
+    try:
+        tree = ast.parse(test_code)
+    except SyntaxError:
+        return test_code  # a broken test fails the loop honestly and gets repaired
+
+    defined = [node.name for node in tree.body
+               if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    if not defined:
+        return test_code
+
+    called = {
+        node.value.func.id
+        for node in tree.body
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+    }
+    uncalled = [name for name in defined if name not in called]
+    # Only functions that take no arguments can be called blind; anything else was probably
+    # a helper the test uses on purpose.
+    callable_now = [
+        node.name for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in uncalled
+        and not (node.args.args or node.args.posonlyargs or node.args.kwonlyargs
+                 or node.args.vararg or node.args.kwarg)
+    ]
+    if not callable_now:
+        return test_code
+
+    emit("test_never_ran", functions=callable_now)
+    return (test_code.rstrip() + "\n\n"
+            + "# Added by the pipeline: defined above and never called, so nothing in it\n"
+            + "# would have executed and the file would have passed having asserted nothing.\n"
+            + "".join(f"{name}()\n" for name in callable_now))
 
 
 def _run(path: Path, cwd: Path, timeout: float = 45.0) -> tuple[bool, str]:
@@ -194,6 +245,8 @@ async def run_pipeline(
                      + "\n".join(line for line in test_code.splitlines()
                                  if not line.startswith(("def ", "import ", "from ")))
                      + "\nprint('OK')\n")
+
+    test_code = _ensure_the_test_runs(test_code, emit)
 
     # Contract assertions run *first* in the same file, so a signature mismatch fails the
     # loop and gets repaired locally like any other error. Checking the contract only after

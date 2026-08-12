@@ -10,6 +10,30 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.141] - 2026-08-12
+
+### Fixed
+- **Generated tests that define a test function and never call it.** Small models routinely
+  emit `def test_storage(): ... assert ...` and stop, with even the closing `print('OK')`
+  indented inside. Nothing at module level executes, so the file exits 0 having asserted
+  nothing, and the piece is recorded as passing.
+
+  This is the mechanism behind the worst false pass this project has produced. `passwords`
+  was graded a clean pass in 117 seconds with zero repairs while `verify_password` raised
+  `NameError: name 'hmac' is not defined` on **every** call. Its generated test did call
+  `verify_password` - inside a function nobody ran. The evidence was unrecoverable at the
+  time because each piece overwrote the previous piece's test file (fixed in 0.1.130); the
+  mechanism was only identified when an identical test turned up in a later build and could
+  be read directly.
+
+  `_ensure_the_test_runs` now appends calls to zero-argument functions the model defined and
+  left uncalled, and emits a `test_never_ran` event rather than repairing it silently. Tests
+  that already call themselves, module-level tests, and helpers that take arguments are left
+  alone - appending a second call would run every assertion twice and can corrupt state.
+
+  Appending is preferred to rejecting: the assertions the model wrote are usually
+  reasonable, they were simply never reached.
+
 ## [0.1.140] - 2026-08-12
 
 ### Added
