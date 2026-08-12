@@ -117,6 +117,23 @@ class Blueprint(BaseModel):
     ontology would be wrong before the tenth blueprint."""
 
     pieces: list[Piece] = Field(default_factory=list)
+    entrypoint: dict[str, Any] = Field(default_factory=dict)
+    """How to run the assembled result, so the web checks have something to attack.
+
+    Data, not code, for the same reason everything else here is: a new blueprint should need
+    no changes to the runner. Recognised keys:
+
+    ``source``   literal text written to the workspace once the pieces are built
+    ``path``     where to write it (default ``app.py``)
+    ``port``     the port to serve on
+    ``health``   a path that answers 200 when the app is up (default ``/``)
+    ``pages``    paths to render and check
+    ``flow``     the signup-then-create flow the hostile-input probe drives
+
+    Without this the render-and-attack pass cannot run at all, which is how the first build
+    of ``webapp-auth-crud`` reported `checks={}` on both of its web-facing pieces.
+    """
+
     assets: dict[str, str] = Field(default_factory=dict)
     preview: list[str] = Field(default_factory=list)
     score: BlueprintScore | None = None

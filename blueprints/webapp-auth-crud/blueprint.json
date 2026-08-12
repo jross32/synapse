@@ -206,5 +206,36 @@
     "basis": "benchmarks/app-build/SPEC.md"
   },
   "source": "builtin",
-  "draft": false
+  "draft": false,
+  "entrypoint": {
+    "source": "\"\"\"Entry point: wires the built pieces together and serves them.\"\"\"\nfrom __future__ import annotations\n\nimport argparse\n\nimport storage\nfrom api import app\n\n\ndef main() -> None:\n    ap = argparse.ArgumentParser(description=\"Run the app.\")\n    ap.add_argument(\"--port\", type=int, default=8099)\n    ap.add_argument(\"--host\", default=\"127.0.0.1\")\n    args = ap.parse_args()\n    storage.init_db()\n    import uvicorn\n    uvicorn.run(app, host=args.host, port=args.port, log_level=\"warning\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "path": "app.py",
+    "port": 8099,
+    "health": "/api/health",
+    "pages": [
+      "/",
+      "/signup",
+      "/login",
+      "/dashboard"
+    ],
+    "flow": {
+      "token_key": "app_token",
+      "signup": {
+        "path": "/api/signup",
+        "body": {
+          "email": "probe-xss@probe.test",
+          "password": "probe-password-123"
+        }
+      },
+      "create": {
+        "path": "/api/records",
+        "body": {
+          "title": "<img src=x onerror=\"window.__xss_fired=1\">",
+          "amount": 1.0,
+          "date": "2026-01-01"
+        }
+      },
+      "view": "/dashboard"
+    }
+  }
 }

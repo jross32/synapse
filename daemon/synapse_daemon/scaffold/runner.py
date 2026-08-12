@@ -21,8 +21,12 @@ reported as `not_run`, and a build with unmet checks is not called passing.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
+import subprocess
+import sys
 import time
+import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
@@ -78,6 +82,8 @@ class BuildResult(BaseModel):
     local_tokens: int = 0
     escalations: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    web_checks: dict[str, str] = Field(default_factory=dict)
+    """Render-level results for the assembled app: stored XSS, placeholders, labels, taps."""
 
     def summary(self) -> str:
         ok = sum(1 for p in self.pieces if p.passed)
@@ -110,6 +116,69 @@ def _install_assets(workspace: Path) -> None:
         'KIT_DIR = Path(__file__).parent / "ui_kit"',
         'KIT_DIR = Path(__file__).parent / "ui_kit"')
     (workspace / "scaffold_partials.py").write_text(partials_src, encoding="utf-8")
+
+
+def _wait_for_health(url: str, deadline: float) -> bool:
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as resp:
+                if resp.status < 500:
+                    return True
+        except Exception:  # noqa: BLE001 -- not up yet is the expected case here
+            time.sleep(0.4)
+    return False
+
+
+async def _run_web_checks(blueprint: Blueprint, ws: Path,
+                          result: BuildResult) -> dict[str, str]:
+    """Assemble the app, serve it, render it and attack it.
+
+    Nothing called ``webcheck`` before this, so every ``web`` check a blueprint declared was
+    silently skipped - including the stored-XSS probe that exists because the build-off
+    shipped a stored-XSS hole. A declared check that never runs is the failure mode this
+    whole area keeps rediscovering, so anything that cannot be established here is reported
+    as ``not_run`` and never as a pass.
+    """
+    from . import webcheck as webcheck_mod
+
+    entry = blueprint.entrypoint
+    if not entry.get("source"):
+        return {"web": "not_run: the blueprint declares no entrypoint to serve"}
+
+    path = ws / entry.get("path", "app.py")
+    path.write_text(entry["source"], encoding="utf-8")
+    port = int(entry.get("port", 8099))
+    base = f"http://127.0.0.1:{port}"
+
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, path.name, "--port", str(port)], cwd=str(ws),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        healthy = await asyncio.to_thread(
+            _wait_for_health, base + entry.get("health", "/"), time.time() + 45)
+        if not healthy:
+            out = ""
+            if proc.poll() is not None and proc.stdout:
+                out = proc.stdout.read()[-600:]
+            return {"web": f"not_run: the app never came up on {base}. {out}".strip()}
+
+        report = await webcheck_mod.check_app(
+            base, pages=entry.get("pages") or ["/"], flow=entry.get("flow"))
+        result.notes.append("webcheck: " + report.summary())
+        return {r.name: (r.status if r.status == "pass" else f"{r.status}: {r.detail}")
+                for r in report.results}
+    except Exception as exc:  # noqa: BLE001 -- a broken probe must not read as a pass
+        return {"web": f"not_run: {type(exc).__name__}: {exc}"}
+    finally:
+        # Always, on every path. A leaked uvicorn holds the port and every later build in
+        # this workspace would fail to bind for a reason that looks nothing like the cause.
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
 
 def _contract_from_piece(piece: Piece) -> contracts_mod.ModuleContract | None:
@@ -270,8 +339,23 @@ async def build_blueprint(
         result.pieces.append(outcome)
         emit("piece_finished", piece=piece.name, passed=outcome.passed)
 
+    # Web checks run once, against the assembled application, because that is the only place
+    # a rendered page exists. Attempted even when a piece escalated: a build that is 3/4 done
+    # can still be rendered, and knowing it carries a stored-XSS hole is worth having before
+    # the last piece is written rather than after.
+    if any(CheckKind.WEB in p.checks or CheckKind.HTTP in p.checks
+           for p in blueprint.pieces):
+        emit("web_checks_started")
+        result.web_checks = await _run_web_checks(blueprint, ws, result)
+        emit("web_checks_finished", results=result.web_checks)
+
     result.seconds = round(time.time() - started, 1)
     result.passed = all(p.passed for p in result.pieces)
+    if any(v == "fail" or str(v).startswith("fail") for v in result.web_checks.values()):
+        result.passed = False
+        result.notes.append(
+            "The pieces built but the assembled app failed a render-level check. Those "
+            "failures are in web_checks and are phrased for a repair prompt.")
     if not result.passed:
         result.notes.append(
             "Some pieces need a stronger model. Their escalation_packet fields are "

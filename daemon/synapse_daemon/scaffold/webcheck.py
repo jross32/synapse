@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
 import time
 import urllib.error
 import urllib.request
@@ -201,6 +202,18 @@ async def run_browser_checks(base_url: str, report: WebCheckReport,
             console_errors: list[str] = []
             page.on("console", lambda m: console_errors.append(m.text)
                     if m.type == "error" else None)
+            # A thrown exception never reaches the console listener, and an uncaught
+            # TypeError is the single most likely reason a view renders nothing.
+            page.on("pageerror", lambda e: console_errors.append(f"uncaught: {e}"))
+
+            # Sign in before inspecting anything. Running the page checks first meant every
+            # authenticated view was graded as the login page it redirects to: against Arm B
+            # the dashboard was reported as having two unlabelled controls (they were the
+            # login form's) and no console errors (its own JavaScript throws on load, but
+            # that code never ran). A check pointed at the wrong page cannot fail correctly.
+            setup_failure = ""
+            if flow:
+                setup_failure = await _setup_flow(page, base_url, flow, report)
 
             for path in pages:
                 await page.goto(f"{base_url}{path}", wait_until="networkidle")
@@ -245,7 +258,7 @@ async def run_browser_checks(base_url: str, report: WebCheckReport,
                        "; ".join(console_errors[:3]) if console_errors else "")
 
             if flow:
-                await _xss_probe(page, base_url, flow, report)
+                await _xss_verdict(page, base_url, flow, report, setup_failure)
         finally:
             await browser.close()
 
@@ -259,31 +272,72 @@ async def _detect_token_key(page: Any, base_url: str, view: str) -> str:
     """
     try:
         await page.goto(f"{base_url}{view}", wait_until="domcontentloaded")
+        # No newline escape anywhere in this snippet. The previous version joined on '\n'
+        # written as a real line break inside a JS string literal, which is a syntax error;
+        # page.evaluate threw, the except below swallowed it, and the function returned its
+        # fallback every single time it was ever called. It looked like detection and was a
+        # hardcoded constant - the exact assumption its own docstring warns against.
         found = await page.evaluate(
             r"""() => {
-              const src = [...document.querySelectorAll('script')].map(s => s.textContent).join('
-');
-              const m = src.match(/localStorage\.(?:get|set)Item\(\s*['"]([^'"]+)/);
-              return m ? m[1] : '';
+              const parts = [...document.querySelectorAll('script')].map(s => s.textContent);
+              const re = /localStorage\.(?:get|set)Item\(\s*['"]([^'"]+)/;
+              for (const src of parts) {
+                const m = (src || '').match(re);
+                if (m) return m[1];
+              }
+              return '';
             }""")
-        return found or "app_token"
+        # Empty when nothing was found, so the caller can tell "the app says nothing" from
+        # "the app says app_token". Returning a plausible default here made detection look
+        # authoritative when it had in fact failed.
+        return found or ""
     except Exception:  # noqa: BLE001
-        return "app_token"
+        return ""
 
 
-async def _xss_probe(page: Any, base_url: str, flow: dict[str, Any],
-                     report: WebCheckReport) -> None:
-    """Store a hostile record through the real API, then render it and see if it executed.
+def _unique_email(template: str) -> str:
+    """A fresh account per run.
 
-    This is the check that would have caught Arm B. It does not inspect source for
-    ``innerHTML`` — plenty of safe code uses it — it stores a payload and asks the browser
-    whether script ran.
+    The flow declares a fixed address, which works exactly once: every later run against the
+    same database gets 409 and the probe reports `not_run`. Since a build is normally graded
+    repeatedly, a fixed address means the hostile-input check is skipped nearly every time it
+    matters, while still appearing in the report as though it had been considered.
+    """
+    # Random rather than clock-derived: Windows' timer granularity is coarse enough that two
+    # consecutive time_ns() calls return the same value, which is exactly the collision this
+    # function exists to avoid.
+    stamp = secrets.token_hex(5)
+    local, _, domain = template.partition("@")
+    return f"{local}+{stamp}@{domain or 'probe.test'}"
+
+
+async def _setup_flow(page: Any, base_url: str, flow: dict[str, Any],
+                      report: WebCheckReport) -> str:
+    """Sign up, store a hostile record, and authenticate the browser.
+
+    Returns "" on success or the reason it could not be done. Split from the verdict so the
+    page checks in between run against a signed-in session.
     """
     try:
         signup = flow["signup"]          # {"path": "/api/signup", "body": {...}}
         create = flow["create"]          # {"path": "/api/trails", "body": {...}, "field": "name"}
         view = flow.get("view", "/dashboard")
-        token_key = flow.get("token_key") or await _detect_token_key(page, base_url, view)
+
+        # Detection wins over configuration, not the other way round. The docstring on
+        # _detect_token_key records that assuming a key is how this probe first produced a
+        # false pass, and taking `flow["token_key"]` in preference to detection walked
+        # straight back into it: against Arm B the configured `app_token` left the browser
+        # unauthenticated, the dashboard served its login page instead, and the run came back
+        # with "no console errors: pass" for a view whose JavaScript throws on every load.
+        # What the app's own served script says is evidence; what the flow says is a guess
+        # written before the app existed, so it is only the fallback.
+        detected = await _detect_token_key(page, base_url, view)
+        configured = flow.get("token_key") or ""
+        token_key = detected or configured or "app_token"
+        if configured and detected and configured != detected:
+            report.add("token key", "pass",
+                       f"the app stores its token as {detected!r}; the flow said "
+                       f"{configured!r}. Used the detected one.")
 
         result = await page.evaluate(
             """async (cfg) => {
@@ -299,14 +353,32 @@ async def _xss_probe(page: Any, base_url: str, flow: dict[str, Any],
               localStorage.setItem(cfg.tokenKey, token);
               return { ok:true };
             }""",
-            {"signupPath": f"{base_url}{signup['path']}", "signupBody": signup["body"],
+            {"signupPath": f"{base_url}{signup['path']}",
+             "signupBody": dict(signup["body"],
+                                email=_unique_email(signup["body"].get("email",
+                                                                      "probe@probe.test"))),
              "createPath": f"{base_url}{create['path']}", "createBody": create["body"],
              "tokenKey": token_key},
         )
-        if not result.get("ok"):
-            report.add("stored XSS probe", "not_run", result.get("why", "setup failed"))
-            return
+        return "" if result.get("ok") else str(result.get("why", "setup failed"))
+    except Exception as exc:  # noqa: BLE001
+        return f"{type(exc).__name__}: {exc}"
 
+
+async def _xss_verdict(page: Any, base_url: str, flow: dict[str, Any],
+                       report: WebCheckReport, setup_failure: str) -> None:
+    """Did the stored payload execute, and did the record render at all?
+
+    This is the check that would have caught Arm B. It does not inspect source for
+    ``innerHTML`` — plenty of safe code uses it — it stores a payload and asks the browser
+    whether script ran.
+    """
+    view = flow.get("view", "/dashboard")
+    if setup_failure:
+        report.add("stored XSS probe", "not_run", setup_failure)
+        report.add("records render in the view", "not_run", setup_failure)
+        return
+    try:
         await page.goto(f"{base_url}{view}", wait_until="networkidle")
         await page.wait_for_timeout(900)
         fired = await page.evaluate("() => !!window.__xss_fired")
@@ -317,6 +389,11 @@ async def _xss_probe(page: Any, base_url: str, flow: dict[str, Any],
                 "a record named with an <img onerror> payload EXECUTED when rendered — user "
                 "content is being written as markup instead of text. Escape it, or assign "
                 "textContent instead of innerHTML.")
+            # It executed, so it certainly rendered. Recorded rather than skipped, so every
+            # path through this function leaves both checks with a verdict - a check that is
+            # simply absent from the report is indistinguishable from one that passed.
+            report.add("records render in the view", "pass",
+                       "the stored record reached the page (it executed)")
             return
 
         # Not firing is only good news if the record actually rendered. If the view is
@@ -336,11 +413,26 @@ async def _xss_probe(page: Any, base_url: str, flow: dict[str, Any],
                 "the record was created through the API but nothing rendered on "
                 f"{view}, so escaping could not be verified. The view is not displaying "
                 "records at all — fix that first, then this check becomes meaningful.")
+            # Reported separately, and as a failure, because it *is* one. The build-off's
+            # local arm shipped a dashboard that read `data.trails` from an endpoint
+            # returning a bare array, so `.length` threw and the list stayed empty forever.
+            # Every check in the suite was satisfied by that page: no placeholder text, no
+            # unlabelled input, nothing to see because nothing rendered. An empty view is
+            # the most complete failure a CRUD app has and it was the one thing nothing
+            # looked for.
+            report.add(
+                "records render in the view", "fail",
+                f"a record was created through the API and {view} shows no sign of it. "
+                "Check what the list endpoint returns against what the page reads from it "
+                "— a bare array indexed as if it were an object is the usual cause.")
         else:
             report.add("stored XSS probe", "pass",
                        "hostile payload rendered inertly (escaped)")
+            report.add("records render in the view", "pass",
+                       "a record created through the API appears on the page")
     except Exception as exc:  # noqa: BLE001
         report.add("stored XSS probe", "not_run", f"{type(exc).__name__}: {exc}")
+        report.add("records render in the view", "not_run", f"{type(exc).__name__}: {exc}")
 
 
 # ---------------------------------------------------------------- entry point
