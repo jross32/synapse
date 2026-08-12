@@ -1,0 +1,247 @@
+{
+ "app": "arm-a-claude",
+ "totals": {
+  "categories": {
+   "spec_compliance": {
+    "points": 5.0,
+    "max": 5.0
+   },
+   "functionality": {
+    "points": 35.0,
+    "max": 35.0
+   },
+   "security": {
+    "points": 30.0,
+    "max": 30.0
+   },
+   "robustness": {
+    "points": 15.0,
+    "max": 15.0
+   },
+   "frontend": {
+    "points": 15.0,
+    "max": 15.0
+   },
+   "code_quality": {
+    "points": 5.0,
+    "max": 5.0
+   }
+  },
+  "total": 105.0,
+  "max": 105.0,
+  "percent": 100.0
+ },
+ "checks": [
+  {
+   "category": "spec_compliance",
+   "name": "app.py exists",
+   "points": 2,
+   "max": 2,
+   "detail": ""
+  },
+  {
+   "category": "spec_compliance",
+   "name": "starts with no extra setup",
+   "points": 3,
+   "max": 3,
+   "detail": ""
+  },
+  {
+   "category": "functionality",
+   "name": "GET /api/health",
+   "points": 3,
+   "max": 3,
+   "detail": "status 200"
+  },
+  {
+   "category": "functionality",
+   "name": "POST /api/signup returns token",
+   "points": 5,
+   "max": 5,
+   "detail": "status 201"
+  },
+  {
+   "category": "functionality",
+   "name": "duplicate signup refused",
+   "points": 4,
+   "max": 4,
+   "detail": "status 409"
+  },
+  {
+   "category": "functionality",
+   "name": "POST /api/login returns token",
+   "points": 5,
+   "max": 5,
+   "detail": "status 200"
+  },
+  {
+   "category": "functionality",
+   "name": "wrong password refused",
+   "points": 4,
+   "max": 4,
+   "detail": "status 401"
+  },
+  {
+   "category": "functionality",
+   "name": "GET /api/trails starts empty",
+   "points": 3,
+   "max": 3,
+   "detail": "status 200"
+  },
+  {
+   "category": "functionality",
+   "name": "POST /api/trails creates",
+   "points": 5,
+   "max": 5,
+   "detail": "status 201"
+  },
+  {
+   "category": "functionality",
+   "name": "created trail is listed",
+   "points": 3,
+   "max": 3,
+   "detail": "1 rows"
+  },
+  {
+   "category": "functionality",
+   "name": "DELETE /api/trails/{id}",
+   "points": 3,
+   "max": 3,
+   "detail": "status 200"
+  },
+  {
+   "category": "security",
+   "name": "trails require auth (401)",
+   "points": 8,
+   "max": 8,
+   "detail": "status 401"
+  },
+  {
+   "category": "security",
+   "name": "forged token rejected",
+   "points": 5,
+   "max": 5,
+   "detail": "status 401"
+  },
+  {
+   "category": "security",
+   "name": "users cannot read each other's trails",
+   "points": 7,
+   "max": 7,
+   "detail": "other user saw 0"
+  },
+  {
+   "category": "security",
+   "name": "cannot delete another user's trail",
+   "points": 5,
+   "max": 5,
+   "detail": "status 404"
+  },
+  {
+   "category": "security",
+   "name": "passwords not stored in plain text",
+   "points": 5,
+   "max": 5,
+   "detail": ""
+  },
+  {
+   "category": "robustness",
+   "name": "signup missing password",
+   "points": 2.5,
+   "max": 2.5,
+   "detail": "status 422"
+  },
+  {
+   "category": "robustness",
+   "name": "signup empty body",
+   "points": 2.5,
+   "max": 2.5,
+   "detail": "status 422"
+  },
+  {
+   "category": "robustness",
+   "name": "login missing fields",
+   "points": 2.5,
+   "max": 2.5,
+   "detail": "status 422"
+  },
+  {
+   "category": "robustness",
+   "name": "trail missing name",
+   "points": 2.5,
+   "max": 2.5,
+   "detail": "status 422"
+  },
+  {
+   "category": "robustness",
+   "name": "trail bad distance type",
+   "points": 2.5,
+   "max": 2.5,
+   "detail": "status 422"
+  },
+  {
+   "category": "robustness",
+   "name": "delete non-existent trail",
+   "points": 2.5,
+   "max": 2.5,
+   "detail": "status 404"
+  },
+  {
+   "category": "frontend",
+   "name": "all four pages served",
+   "points": 4,
+   "max": 4,
+   "detail": "4/4"
+  },
+  {
+   "category": "frontend",
+   "name": "user text is escaped (stored XSS)",
+   "points": 4,
+   "max": 4,
+   "detail": ""
+  },
+  {
+   "category": "frontend",
+   "name": "no placeholder values on screen",
+   "points": 3,
+   "max": 3,
+   "detail": ""
+  },
+  {
+   "category": "frontend",
+   "name": "every input has a label",
+   "points": 2,
+   "max": 2,
+   "detail": ""
+  },
+  {
+   "category": "frontend",
+   "name": "44px controls, fits 390px",
+   "points": 2,
+   "max": 2,
+   "detail": ""
+  },
+  {
+   "category": "code_quality",
+   "name": "reasonable size",
+   "points": 2,
+   "max": 2,
+   "detail": "457 lines of python"
+  },
+  {
+   "category": "code_quality",
+   "name": "uses a real hashing primitive",
+   "points": 2,
+   "max": 2,
+   "detail": ""
+  },
+  {
+   "category": "code_quality",
+   "name": "has docstrings",
+   "points": 1,
+   "max": 1,
+   "detail": ""
+  }
+ ],
+ "started": true
+}

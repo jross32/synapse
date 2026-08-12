@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.129] -- 2026-08-12
+
+### Fixed -- the rubric can now see the bugs it used to miss
+The frontend section awarded a perfect 15/15 to a build carrying a stored XSS hole and a
+dashboard that rendered nothing, because it only checked that pages were *served*. Serving a
+page proves the HTTP layer works and says nothing about what a person would see.
+
+`shared/render_checks.py` now drives a real browser: it stores a hostile payload through the
+API, reloads, and asks whether script executed; scans rendered text for values that leaked
+through a template; checks every input has a label; and checks tap targets and 390px fit.
+Being served is worth 4 of the 15 now, not all of it.
+
+**Both earlier arms have been re-scored and the numbers restated**, rather than quietly
+superseded:
+
+| | old rubric | strengthened rubric |
+|---|---|---|
+| Arm A (Claude only) | 100% | **100%** -- and its XSS check is a real pass: the payload rendered inertly |
+| Arm B (local models) | 100% | **94.3%** -- frontend 9/15 |
+
+Arm B loses those points for unlabelled inputs, and for an XSS check that could not be
+verified *because the dashboard never renders a record at all* -- which is the more serious
+of the two faults.
+
+When Playwright is unavailable every render check returns `skip`, never `pass`.
+
 ## [0.1.128] -- 2026-08-12
 
 ### Added -- build modes

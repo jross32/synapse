@@ -34,6 +34,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from render_checks import render_checks
+
 
 class Result:
     def __init__(self) -> None:
@@ -266,21 +268,31 @@ def score(app_dir: Path, port: int) -> tuple[Result, dict[str, Any]]:
                     f"status {st_c}" + (" (5xx = crash)" if st_c >= 500 else ""))
 
         # -- frontend ------------------------------------------------------------------
+        # Being served is worth only 4 of the 15 now. The original rubric gave full marks
+        # here to a build with a stored XSS hole and a dashboard that rendered nothing,
+        # because it never opened a browser - it was measuring HTTP, not the frontend.
         pages = {"/": ["sign", "log"], "/signup": ["email", "password"],
                  "/login": ["email", "password"], "/dashboard": []}
+        served_ok = 0
         for path, needles in pages.items():
             st_p, html = req("GET", f"{base}{path}")
             served = st_p == 200 and isinstance(html, str) and len(html) > 200
-            has = served and all(n in html.lower() for n in needles)
-            res.add("frontend", f"page {path} served",
-                    3 if has else (1.5 if served else 0), 3,
-                    f"status {st_p}, {len(html) if isinstance(html,str) else 0} bytes")
+            if served and all(n in html.lower() for n in needles):
+                served_ok += 1
+        res.add("frontend", "all four pages served", served_ok, 4, f"{served_ok}/4")
 
-        _, signup_html = req("GET", f"{base}/signup")
-        has_form = isinstance(signup_html, str) and "<form" in signup_html.lower() and \
-                   'type="password"' in signup_html.lower().replace("'", '"')
-        res.add("frontend", "signup has a real password field",
-                3 if has_form else 0, 3)
+        render = render_checks(base)
+        res.add("frontend", "user text is escaped (stored XSS)",
+                4 if render.get("xss") == "pass" else 0, 4, render.get("xss_detail", ""))
+        res.add("frontend", "no placeholder values on screen",
+                3 if render.get("placeholders") == "pass" else 0, 3,
+                render.get("placeholders_detail", ""))
+        res.add("frontend", "every input has a label",
+                2 if render.get("labels") == "pass" else 0, 2,
+                render.get("labels_detail", ""))
+        res.add("frontend", "44px controls, fits 390px",
+                2 if render.get("mobile") == "pass" else 0, 2,
+                render.get("mobile_detail", ""))
 
         # -- code quality ---------------------------------------------------------------
         py = list(app_dir.rglob("*.py"))
