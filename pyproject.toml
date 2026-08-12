@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse-daemon"
-version = "0.1.134"
+version = "0.1.135"
 description = "Synapse execution layer — FastAPI daemon that owns all managed processes. By The WhatIf Company."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -66,6 +66,12 @@ include = ["synapse_daemon*", "synapse_accounts*"]
 [tool.pytest.ini_options]
 testpaths = ["daemon/tests"]
 asyncio_mode = "auto"
+markers = [
+  # Serves a real app and drives a real browser. Minutes, not milliseconds - but these are
+  # the only tests that can prove a security check actually fires, so they run by default
+  # and are marked only so they can be deselected deliberately (`-m "not slow"`).
+  "slow: spins up a server and a browser",
+]
 
 [tool.ruff]
 line-length = 120

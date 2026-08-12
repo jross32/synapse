@@ -10,6 +10,24 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.135] - 2026-08-12
+
+### Added
+- `daemon/tests/test_webcheck_end_to_end.py`: the stored-XSS probe is now proven against a
+  real vulnerable app. Two FastAPI fixtures are served on real ports and driven by a real
+  browser, identical except for one word - whether user text reaches the DOM through
+  `innerHTML` or `textContent`. The probe must fail the first and pass the second.
+
+  This was the plan's first verification gate and it had never been run. The existing
+  `test_webcheck.py` covers the helpers - token-key detection, verdict arithmetic, email
+  uniqueness - none of which is evidence that the probe fires. That distinction has now cost
+  this project three separate bugs: a render check that graded the wrong page, acceptance
+  scenarios that sat in the test file and never executed, and an XSS probe that reported a
+  pass on a vulnerable app. **Testing that a check is wired is not testing that it works.**
+
+- A registered `slow` marker for tests that serve an app and drive a browser. They run by
+  default; the marker exists so they can be deselected deliberately rather than forgotten.
+
 ## [0.1.134] - 2026-08-12
 
 ### Fixed
