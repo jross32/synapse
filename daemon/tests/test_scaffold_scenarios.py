@@ -1,18 +1,24 @@
 """The contract says the door is the right shape; the scenario walks through it.
 
 Pinned from a real false pass. The first blueprint build reported three of four pieces as
-passing. All three were unusable:
+passing. Two of the three were unusable:
 
 * ``passwords.verify_password`` raised ``NameError: name 'hmac' is not defined`` on every
   call - the module's whole purpose, broken, graded a clean pass with zero repairs.
 * ``storage.create_user`` returned ``None`` and ``get_user_by_email`` returned a bare row
   tuple that did not even include the password hash, so its only caller could neither open
   a session nor check a password.
-* ``pages`` never linked the supplied UI kit, so the design assets the scaffold exists to
-  provide were silently not used.
 
-Every one of those modules matched its declared contract exactly. Signatures were never the
-thing that was wrong. These tests exist so that stays fixed.
+Both matched their declared contract exactly. Signatures were never the thing that was
+wrong. These tests exist so that stays fixed.
+
+``pages`` was also reported as unusable at first, and that was a mistake worth keeping in
+view: the check asserted the literal string ``"kit.css"`` appeared in the rendered HTML,
+while ``page()`` inlines the stylesheet instead of linking it. A correctly built page
+failed a checker that had only ever been tried against broken input. Hence
+``test_scenario_passes_the_repaired_module`` below - every scenario here is exercised in
+both directions, because a checker that rejects everything is as useless as one that
+accepts everything, and is much more convincing.
 """
 
 from __future__ import annotations
@@ -341,6 +347,48 @@ def test_declared_checks_the_runner_cannot_execute_are_reported(tmp_path):
         f"a declared web check vanished instead of reporting itself: {checks}")
     assert "assembled app" in checks["web"], checks["web"]
     assert checks.get("http", "").startswith("not_run"), checks
+
+
+def test_the_pages_scenario_accepts_a_page_built_from_the_supplied_partials(tmp_path):
+    """The correction, pinned: `page()` inlines the kit, it does not link `kit.css`.
+
+    The first version of this scenario asserted the string "kit.css" appeared in the
+    output, which condemned a page that had been built exactly as intended.
+    """
+    import shutil
+
+    from synapse_daemon.scaffold.partials import KIT_DIR
+
+    scaffold = Path(__file__).resolve().parents[1] / "synapse_daemon" / "scaffold"
+    (tmp_path / "ui_kit").mkdir()
+    shutil.copy(KIT_DIR / "kit.css", tmp_path / "ui_kit" / "kit.css")
+    shutil.copy(scaffold / "partials.py", tmp_path / "scaffold_partials.py")
+
+    (tmp_path / "pages.py").write_text(
+        "from scaffold_partials import field, page\n\n\n"
+        "def landing_page():\n    return page('T', '<div class=\"card\">hi</div>')\n\n\n"
+        "def signup_page():\n    return page('S', "
+        "field('email', 'Email address', kind='email', autocomplete='email')\n"
+        "        + field('password', 'Password', kind='password', "
+        "autocomplete='new-password'))\n\n\n"
+        "def login_page():\n    return page('L', "
+        "field('email', 'Email address', kind='email', autocomplete='email')\n"
+        "        + field('password', 'Password', kind='password', "
+        "autocomplete='current-password'))\n\n\n"
+        "def dashboard_page():\n    return page('D', '<ul id=\"rows\"></ul>')\n",
+        encoding="utf-8")
+
+    scenario = next(p.tests for p in _pieces() if p.name == "pages")
+    (tmp_path / "_s.py").write_text(f"from pages import *\n\n{scenario}\nprint('OK')\n",
+                                    encoding="utf-8")
+
+    import subprocess
+    import sys
+    proc = subprocess.run([sys.executable, "-B", "_s.py"], capture_output=True, text=True,
+                          timeout=120, cwd=str(tmp_path))
+    assert proc.returncode == 0, (
+        f"a page built from the supplied partials was rejected:\n"
+        f"{proc.stderr or proc.stdout}")
 
 
 def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):

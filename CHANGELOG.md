@@ -29,6 +29,16 @@ lower bound rather than a measurement.
   by construction. Measured: `storage` gave up after 2 of 10 allowed repairs having never
   reached its acceptance scenario. Identical repairs are now resampled at 0.4 then 0.8, and
   the stop reason states how many samples were drawn.
+
+  Measured afterwards, and worth recording because it did not go the way the fix assumed:
+  resampling did **not** rescue that run. Sampling is demonstrably live (the same model at
+  1.5 returns different text on repeated calls), yet the storage repair returned identical
+  ~3.8 KB output at 0, 0.4 and 0.8. A repair prompt that carries the whole current file and
+  asks for a corrected copy is dominated by copying, so its distribution stays peaked no
+  matter the temperature. The value delivered here is an honest stop reason - "identical
+  across 3 samples" is a claim that has been tested, where "the model stopped changing the
+  code" was an artifact. Getting a stuck repair unstuck needs a different *prompt*, not a
+  different temperature.
 - **Pieces were held to a contract they were never shown.** The storage spec described its
   tables and rules in prose and never listed the nine signatures a contract test asserted
   exactly, so every build opened by discovering the contract through failure - on two
@@ -61,8 +71,12 @@ lower bound rather than a measurement.
   could neither open a session nor verify a password.
 - `passwords` was graded a clean pass with zero repairs while `verify_password` raised
   `NameError: name 'hmac' is not defined` on every call.
-- `pages` never routed through `scaffold_partials.page()`, so the UI kit was silently
-  unused by the build it exists to style.
+- ~~`pages` never routed through `scaffold_partials.page()`, so the UI kit was silently
+  unused by the build it exists to style.~~ **Retracted in 0.1.131** — this was wrong.
+  The check behind it asserted the literal string `"kit.css"` appeared in the rendered
+  HTML, but `page()` *inlines* the stylesheet rather than linking it, so a correctly built
+  page failed. `pages` had been using `scaffold_partials` all along. Two of the three
+  passing pieces were unusable, not three.
 - Each piece wrote its test to a shared `_pipeline_test.py`, erasing the evidence for the
   piece before it; tests are now per-module and the deciding test is recorded on the
   outcome.

@@ -1,4 +1,17 @@
-# Run 1: three of four pieces passed, and none of them worked
+# Run 1: three of four pieces passed, and two of them did not work
+
+> **Correction (same day).** This file first said all three passing pieces were unusable,
+> and named `pages` as one of them. That was wrong, and it was wrong for exactly the reason
+> the rest of this document is about: the check that condemned `pages` asserted the string
+> `"kit.css"` appeared in the rendered HTML, but the supplied `page()` helper *inlines* the
+> stylesheet rather than linking it. So a page built correctly failed. When the assertion
+> was fixed to look for the kit's own tokens, run 1's `pages` passed — it had been using
+> `scaffold_partials` all along.
+>
+> A first draft of a checker produced a false failure, and I reported it before verifying
+> the checker in both directions. That is the same mistake as a false pass wearing different
+> clothes, and it is recorded here rather than quietly edited out.
+
 
 This directory is kept as evidence. It is the output of the first blueprint build, the one
 that reported:

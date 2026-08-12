@@ -1,0 +1,25 @@
+{
+ "passed": false,
+ "attempts": 2,
+ "seconds": 1078.2,
+ "stop_reason": "the model returned identical code across 3 samples, including 2 at raised temperature",
+ "distinct_fingerprints": 2,
+ "scenario_positions": [],
+ "monotonic_progress": true,
+ "trail": [
+  {
+   "attempt": 1,
+   "seconds": 245,
+   "fingerprint": "AssertionError: storage.init_db is missing. The contract requires: init_db(). Defined here:",
+   "scenario_line": -1,
+   "error": "Traceback (most recent call last):\n  File \"C:\\Users\\justi\\synapse\\benchmarks\\app-build\\probe-storage\\_test_storage.py\", line 6, in <module>\n    assert hasattr(m, 'init_db'), (\n           ^^^^^^^^^^^^^^^^^^^^^\nAssertionError: storage.init_db is missing. The contract requires: init_db(). Defined here:"
+  },
+  {
+   "attempt": 2,
+   "seconds": 443,
+   "fingerprint": "AssertionError: storage.create_user takes ['email', 'password'] but the contract requires ['email'",
+   "scenario_line": -1,
+   "error": "Traceback (most recent call last):\n  File \"C:\\Users\\justi\\synapse\\benchmarks\\app-build\\probe-storage\\_test_storage.py\", line 14, in <module>\n    assert _got_1 == _want_1, (\n           ^^^^^^^^^^^^^^^^^\nAssertionError: storage.create_user takes ['email', 'password'] but the contract requires ['email'"
+  }
+ ]
+}
