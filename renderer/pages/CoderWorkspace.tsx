@@ -183,8 +183,11 @@ function metadataString(source: Record<string, unknown> | null | undefined, key:
 
 function connectionStatus(
   option: RuntimeOption,
-  connections: ServiceConnection[]
+  connections: ServiceConnection[] | null
 ): { label: string; tone: string } {
+  if (connections === null) {
+    return { label: 'Checking...', tone: 'border-border text-muted-foreground' };
+  }
   const connection = connections.find((item) => item.provider === option.connectionProvider);
   if (!connection) return { label: 'Not detected', tone: 'border-border text-muted-foreground' };
   if (connection.status === 'connected' || connection.status === 'ready') {
@@ -219,7 +222,11 @@ export function CoderWorkspacePage({
   const [detail, setDetail] = useState<CoderThreadDetail | null>(null);
   const [context, setContext] = useState<CoderWorkspaceContext | null>(null);
   const [preferences, setPreferences] = useState<CoderWorkspacePreferences | null>(null);
-  const [connections, setConnections] = useState<ServiceConnection[]>([]);
+  // null until the probe returns. Detection shells out to check each CLI binary, so
+  // there is a real window where the answer is unknown - and reporting 'Not detected'
+  // during it tells the user their runtimes are missing when they are simply not
+  // measured yet. Painful on a phone, where that window is longest.
+  const [connections, setConnections] = useState<ServiceConnection[] | null>(null);
   const [mcpServers, setMcpServers] = useState<McpServerView[]>([]);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
@@ -940,6 +947,11 @@ export function CoderWorkspacePage({
                     <Button
                       type='button'
                       size='sm'
+                      // `sm` is 32px tall, under the 44px minimum tap target this project
+                      // sets for phones. Send is the one control that has to be hittable
+                      // first time when dispatching a run from a phone, so it grows on
+                      // small screens and keeps the compact size from `sm` upwards.
+                      className='h-11 sm:h-8'
                       disabled={busy === 'send' || !draft.trim() || projects.length === 0}
                       onClick={() => void handleSend()}
                     >
@@ -970,7 +982,7 @@ export function CoderWorkspacePage({
             contextTab={contextTab}
             availableTabs={availableTabs}
             preferences={preferences}
-            connections={connections}
+            connections={connections ?? []}
             mcpServers={mcpServers}
             busy={busy}
             onSelectTab={setContextTab}
@@ -1036,7 +1048,7 @@ export function CoderWorkspacePage({
           contextTab={contextTab}
           availableTabs={availableTabs}
           preferences={preferences}
-          connections={connections}
+          connections={connections ?? []}
           mcpServers={mcpServers}
           busy={busy}
           onSelectTab={setContextTab}
@@ -1385,7 +1397,7 @@ function RuntimePicker({
   onChange,
 }: {
   value: RuntimeId;
-  connections: ServiceConnection[];
+  connections: ServiceConnection[] | null;
   busy: boolean;
   onChange: (value: RuntimeId) => void;
 }): JSX.Element {

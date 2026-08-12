@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.124] -- 2026-08-11
+
+### Fixed -- driving a runtime from a phone
+- **The runtime picker reported "Not detected" for Claude, Codex and Copilot while it was
+  still checking.** Detection shells out to probe each CLI binary, so there is a real window
+  where the answer is unknown -- and the UI rendered "absent" for it. On a phone, where that
+  window is longest, it looks exactly like the runtimes are missing. Connections are now
+  tri-state (`null` = unknown) and the picker says "Checking..." until the probe returns.
+  Verified at 375px: all three now read "(Ready)".
+- **The Send button was 32px tall**, under the 44px minimum this project sets for tap targets,
+  and it is the one control that has to be hittable first time when dispatching a run from a
+  phone. Now 44px below `sm`, unchanged on desktop.
+
 ## [0.1.123] -- 2026-08-10
 
 ### Changed -- a headline finding corrected by better measurement
