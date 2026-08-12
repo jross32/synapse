@@ -250,6 +250,19 @@ async def build_blueprint(
             else "not_run: no scenario declared")
         outcome.verified = bool(piece.tests.strip()) and outcome.passed
 
+        # Kinds a piece may declare that this runner cannot yet execute. They were being
+        # dropped in silence, so `pages` and `api` finished their first build reporting
+        # `checks={}` - which reads as "nothing needed checking" and actually meant "the
+        # render-and-attack pass that exists specifically to catch stored XSS never ran".
+        # An unimplemented check has to be loud, because the whole point of declaring it was
+        # that somebody thought it mattered.
+        for kind in piece.checks:
+            if kind in (CheckKind.UNIT, CheckKind.CONTRACT):
+                continue
+            outcome.checks.setdefault(
+                kind.value,
+                f"not_run: the build runner does not execute {kind.value} checks yet")
+
         if not outcome.passed:
             outcome.escalated = True
             result.escalations.append(piece.name)

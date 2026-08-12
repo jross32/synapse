@@ -239,6 +239,35 @@ def test_a_piece_without_a_scenario_is_never_marked_verified(tmp_path):
     assert piece.checks["scenario"].startswith("not_run")
 
 
+def test_declared_checks_the_runner_cannot_execute_are_reported(tmp_path):
+    """A check nobody ran must say so. `checks={}` reads as "nothing to check"."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.blueprints import Blueprint, CheckKind, Piece
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    blueprint = Blueprint(
+        id="t", name="t", summary="t",
+        pieces=[Piece(name="thing", spec="anything", module="thing",
+                      checks=[CheckKind.UNIT, CheckKind.WEB, CheckKind.HTTP])])
+
+    def stub(spec: str, model: str = "") -> str:
+        if "Write a test for that code" in spec:
+            return "from thing import *\n\nassert noop() is None\nprint('OK')\n"
+        return "def noop():\n    pass\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        result = _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+    finally:
+        lp.generate_code = original
+
+    checks = result.pieces[0].checks
+    assert checks.get("web", "").startswith("not_run"), (
+        f"a declared web check vanished instead of reporting itself: {checks}")
+    assert checks.get("http", "").startswith("not_run"), checks
+
+
 def test_each_piece_keeps_its_own_test_file(tmp_path):
     """Two pieces in one workspace must not overwrite each other's evidence."""
     import synapse_daemon.local_pipeline as lp

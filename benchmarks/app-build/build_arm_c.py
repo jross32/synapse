@@ -18,12 +18,18 @@ async def main() -> None:
             print(f"  [{time.time()-started:6.0f}s] {t}: {e.get('piece')} "
                   f"{'ok' if e.get('passed') else ''}", flush=True)
         elif t == "repairing":
-            print(f"      repair {e.get('attempt')}: {str(e.get('error'))[:80]}", flush=True)
+            # The last line of a traceback is the assertion message, and the assertion
+            # messages are the entire point of the scenarios - truncating the head of the
+            # traceback threw away the diagnosis and kept the boilerplate.
+            err = str(e.get("error") or "").strip().splitlines()
+            tail = next((ln.strip() for ln in reversed(err) if ln.strip()), "")
+            print(f"      repair {e.get('attempt')}: {tail[:220]}", flush=True)
     result = await build_blueprint(bp, workspace=WS, coder_model="qwen2.5-coder:7b",
                                    max_repairs=10, on_event=log)
     print("\n" + result.summary())
     for p in result.pieces:
-        print(f"  {p.name:10s} {'PASS' if p.passed else 'ESCALATE':9s} repairs={p.repairs} "
+        mark = "VERIFIED" if p.verified else ("passed" if p.passed else "ESCALATE")
+        print(f"  {p.name:10s} {mark:9s} repairs={p.repairs} "
               f"{p.seconds:6.0f}s  checks={p.checks} {p.stop_reason[:60]}")
     (WS / "build_result.json").write_text(result.model_dump_json(indent=1), encoding="utf-8")
 
