@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.134] - 2026-08-12
+
+### Fixed
+- **Acceptance scenarios were never executing.** Scenarios call the module's functions by
+  bare name, the way a caller does. The only `from <module> import *` in the composed test
+  file was the one inside the *model's* generated test, which is appended after the
+  scenario - so every scenario died with `NameError: name 'init_db' is not defined` on its
+  first line, in every build since they were introduced in 0.1.130. Not one scenario
+  assertion had ever run.
+
+  The failure was convincing, which is why it survived three versions: it arrived as a real
+  Python error attached to a real repair attempt, and the loop reported the model as
+  "circling a problem it cannot diagnose". The model was diagnosing a problem in the test
+  harness.
+
+  `test_the_scenario_actually_executes_rather_than_merely_being_present` now asserts a
+  scenario assertion is reached, rather than asserting - as the previous test did - that the
+  scenario reached the file. It did reach the file. That was never the question.
+
 ## [0.1.133] - 2026-08-12
 
 ### Changed

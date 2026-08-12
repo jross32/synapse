@@ -200,8 +200,16 @@ async def run_pipeline(
     # the pipeline finished meant the model never saw the problem it could most easily fix -
     # and a module that satisfies its own generated test while exposing the wrong signature
     # to its callers is precisely how two pieces end up disagreeing.
+    #
+    # The star import has to lead. Blueprint scenarios call the module's functions by bare
+    # name, the way a caller does, and the only `from <module> import *` in the file used to
+    # be the one inside the *model's* test - appended after. So every scenario died with
+    # `NameError: name 'init_db' is not defined` on its first line, in every build, and the
+    # failure looked enough like a real one to be mistaken for the model circling a problem
+    # it could not diagnose. Not one scenario assertion had ever executed.
     if extra_test:
-        test_code = extra_test.rstrip() + "\n\n" + test_code
+        test_code = (f"from {module} import *  # noqa: F403 - scenarios call by bare name\n\n"
+                     + extra_test.rstrip() + "\n\n" + test_code)
 
     # Named after the module rather than a fixed `_pipeline_test.py`: several pieces share one
     # workspace, so a single name meant each piece silently erased the evidence for the one

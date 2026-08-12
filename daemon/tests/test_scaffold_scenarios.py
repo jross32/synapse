@@ -433,6 +433,47 @@ def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
     assert "init_db()" in draft, draft
 
 
+def test_the_scenario_actually_executes_rather_than_merely_being_present(tmp_path):
+    """Being in the file is not the same as running.
+
+    Scenarios call the module by bare name, as a caller does. The only star import in the
+    composed test file used to be the one inside the *model's* test, which is appended
+    after the scenario - so every scenario died with `NameError` on its first line, in
+    every build, and the failure was mistaken for the model circling a problem it could not
+    diagnose. Not one scenario assertion had ever executed.
+
+    The earlier `test_runner_feeds_the_scenario_into_the_repair_loop` asserted the scenario
+    reached the test file. It did. It just never ran. This asserts the thing that matters.
+    """
+    import synapse_daemon.local_pipeline as lp
+
+    def stub(spec: str, *a, **k) -> str:
+        if "Write a test for that code" in spec:
+            # The model's own test brings its own import, after the scenario.
+            return "from solution import *\n\nassert answer() == 7\nprint('OK')\n"
+        return "def answer():\n    return 7\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        # One repair, so the failure is recorded on an attempt and can be read back.
+        result = _run_async(run_pipeline(
+            "spec", workspace=tmp_path, max_repairs=1,
+            # Calls by bare name and fails loudly, so a scenario that runs cannot be
+            # confused with one that was skipped.
+            extra_test="assert answer() == 999, 'SCENARIO-DID-RUN'"))
+    finally:
+        lp.generate_code = original
+
+    assert not result.passed, "the scenario asserted something false and the build passed"
+    assert result.attempts, "no attempt was recorded, so nothing can be checked"
+    last = result.attempts[0].error
+    assert "SCENARIO-DID-RUN" in last, (
+        f"the scenario never executed - it failed before reaching its assertion:\n{last}")
+    assert "NameError" not in last, (
+        f"the scenario could not see the module it is testing:\n{last}")
+
+
 def test_the_test_prompt_gets_the_requirement_not_the_implementation_aids(tmp_path):
     """The codegen spec and the test spec want different things.
 
