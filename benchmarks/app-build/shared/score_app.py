@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import asyncio
 import socket
 import subprocess
 import sys
@@ -34,7 +35,60 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from render_checks import render_checks
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "daemon"))
+from synapse_daemon.scaffold import webcheck as webcheck_mod  # noqa: E402
+
+# The frozen spec's shape, so the hostile-input probe posts to a route that exists. A probe
+# aimed at the wrong endpoint creates nothing, and a probe that creates nothing proves
+# nothing while still appearing in the report as though it had run.
+TRAIL_FLOW = {
+    "signup": {"path": "/api/signup",
+               "body": {"email": "probe@probe.test", "password": "probe-password-123"}},
+    "create": {"path": "/api/trails",
+               "body": {"name": webcheck_mod.XSS_PAYLOAD, "distance_km": 1.0,
+                        "date": "2026-01-01"}},
+    "view": "/dashboard",
+}
+RENDERED_PAGES = ["/", "/signup", "/login", "/dashboard"]
+
+
+def render_checks(base: str) -> dict[str, str]:
+    """Aggregate the real webcheck into the handful of verdicts this rubric scores.
+
+    Previously this rubric used `render_checks.py`, a second implementation of the same
+    ideas. Two copies drifted, as two copies do: the scorer's had no notion of "the view
+    renders nothing", so the build-off's local arm - whose dashboard reads `data.trails`
+    from an endpoint returning a bare array and therefore renders an empty list forever -
+    lost no frontend points for it. One implementation, the tested one.
+    """
+    report = asyncio.run(webcheck_mod.check_app(base, pages=RENDERED_PAGES,
+                                                flow=TRAIL_FLOW))
+
+    def rollup(prefix: str) -> tuple[str, str]:
+        hits = [r for r in report.results if r.name.startswith(prefix)]
+        if not hits:
+            return "not_run", "the check did not run"
+        bad = [r for r in hits if r.status == "fail"]
+        if bad:
+            return "fail", "; ".join(f"{r.name}: {r.detail}" for r in bad[:2])
+        return ("pass", "") if all(r.status == "pass" for r in hits) else (
+            "not_run", "; ".join(r.detail for r in hits if r.status == "not_run")[:200])
+
+    named = {r.name: r for r in report.results}
+    out: dict[str, str] = {}
+    for key, source in (("xss", "stored XSS probe"),
+                        ("records", "records render in the view")):
+        hit = named.get(source)
+        out[key] = hit.status if hit else "not_run"
+        out[f"{key}_detail"] = hit.detail if hit else "the check did not run"
+    for key, prefix in (("placeholders", "no placeholder values"),
+                        ("labels", "inputs labelled"),
+                        ("mobile", "tap targets")):
+        out[key], out[f"{key}_detail"] = rollup(prefix)
+    scroll, scroll_detail = rollup("no horizontal scroll")
+    if scroll == "fail":
+        out["mobile"], out["mobile_detail"] = "fail", scroll_detail
+    return out
 
 
 class Result:
@@ -279,19 +333,25 @@ def score(app_dir: Path, port: int) -> tuple[Result, dict[str, Any]]:
             served = st_p == 200 and isinstance(html, str) and len(html) > 200
             if served and all(n in html.lower() for n in needles):
                 served_ok += 1
-        res.add("frontend", "all four pages served", served_ok, 4, f"{served_ok}/4")
+        res.add("frontend", "all four pages served", served_ok * 0.75, 3, f"{served_ok}/4")
 
         render = render_checks(base)
         res.add("frontend", "user text is escaped (stored XSS)",
                 4 if render.get("xss") == "pass" else 0, 4, render.get("xss_detail", ""))
+        # Worth as much as being served. An app whose list view never shows what the user
+        # just created is not partly working - and every other check on this page passes,
+        # because an empty page has nothing wrong with it to find.
+        res.add("frontend", "records render in the view",
+                3 if render.get("records") == "pass" else 0, 3,
+                render.get("records_detail", ""))
         res.add("frontend", "no placeholder values on screen",
-                3 if render.get("placeholders") == "pass" else 0, 3,
+                2 if render.get("placeholders") == "pass" else 0, 2,
                 render.get("placeholders_detail", ""))
         res.add("frontend", "every input has a label",
                 2 if render.get("labels") == "pass" else 0, 2,
                 render.get("labels_detail", ""))
         res.add("frontend", "44px controls, fits 390px",
-                2 if render.get("mobile") == "pass" else 0, 2,
+                1 if render.get("mobile") == "pass" else 0, 1,
                 render.get("mobile_detail", ""))
 
         # -- code quality ---------------------------------------------------------------
