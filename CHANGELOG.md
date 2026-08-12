@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.133] - 2026-08-12
+
+### Changed
+- `run_pipeline` takes a `requirement` separate from `spec`. The codegen spec accretes
+  implementation aids - the declared contract, every dependency's public interface, and an
+  entire worked exemplar page - and all of it was being handed to the test-writing prompt
+  too. None of it describes what the module must *do*, and a test prompt carrying a whole
+  exemplar HTML page invites the model to write about the exemplar. Callers that do not
+  separate the two are unaffected.
+
+### Fixed
+- `benchmarks/app-build/probe_storage_repairs.py` never called `.instantiate()`, so it fed
+  the model a spec still containing five literal `{{title_field}}`-style placeholders. Both
+  arms were equally affected, so the comparison was internally consistent, but it measured
+  the probe rather than the pipeline. Both arms are being re-run.
+
+### Added
+- `benchmarks/app-build/run_contract_ab.ps1`, which runs the two arms sequentially - two
+  7B generations at once on a 6 GB card would measure contention rather than prompts.
+
 ## [0.1.132] - 2026-08-12
 
 ### Changed

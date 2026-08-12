@@ -47,7 +47,10 @@ def scenario_position(error: str, scenario: str) -> int:
 
 
 async def main() -> None:
-    bp = get_blueprint("webapp-auth-crud")
+    # .instantiate() resolves the {{records}} / {{title_field}} placeholders. Without it the
+    # model is handed a spec containing literal `{{title_field}}` and asked to implement it,
+    # which measures the probe rather than the pipeline.
+    bp = get_blueprint("webapp-auth-crud").instantiate()
     piece = next(p for p in bp.pieces if p.name == "storage")
     WS.mkdir(parents=True, exist_ok=True)
     for stale in WS.glob("*.db"):

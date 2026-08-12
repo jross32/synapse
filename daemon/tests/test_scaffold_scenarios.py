@@ -433,6 +433,49 @@ def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
     assert "init_db()" in draft, draft
 
 
+def test_the_test_prompt_gets_the_requirement_not_the_implementation_aids(tmp_path):
+    """The codegen spec and the test spec want different things.
+
+    The codegen spec accretes an entire worked exemplar page, the declared contract and
+    every dependency's interface. None of that describes what the module must *do*, and a
+    test prompt carrying a whole exemplar page invites the model to write about the
+    exemplar.
+    """
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.blueprints import CheckKind, Piece
+    from synapse_daemon.scaffold.runner import build_blueprint
+    from synapse_daemon.blueprints import Blueprint
+
+    blueprint = Blueprint(
+        id="t", name="t", summary="t",
+        pieces=[Piece(name="store", spec="THE-REAL-REQUIREMENT", module="store",
+                      checks=[CheckKind.UNIT, CheckKind.CONTRACT],
+                      contract={"functions": [{"name": "init_db", "args": []}]})])
+
+    prompts: list[str] = []
+
+    def stub(spec: str, *a, **k) -> str:
+        prompts.append(spec)
+        if "Write a test for that code" in spec:
+            return "from store import *\n\nprint('OK')\n"
+        return "def init_db():\n    pass\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+    finally:
+        lp.generate_code = original
+
+    draft = prompts[0]
+    test_prompt = next(p for p in prompts if "Write a test for that code" in p)
+
+    assert "THE-REAL-REQUIREMENT" in test_prompt, "the test prompt lost the requirement"
+    assert "MUST expose exactly these" in draft, "the draft lost the contract"
+    assert "MUST expose exactly these" not in test_prompt, (
+        "the test prompt is still carrying the codegen scaffolding:\n" + test_prompt[:400])
+
+
 def test_identical_code_is_resampled_before_the_loop_gives_up(tmp_path):
     """Greedy decoding repeats itself by construction; that is not the model giving up.
 

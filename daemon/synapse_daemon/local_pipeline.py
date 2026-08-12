@@ -126,6 +126,7 @@ async def run_pipeline(
     on_event: Callable[[dict[str, Any]], None] | None = None,
     runner: Callable[[Path, Path], tuple[bool, str]] | None = None,
     extra_test: str = "",
+    requirement: str = "",
 ) -> PipelineResult:
     """Generate code for ``spec``, prove it runs, and repair it from real errors.
 
@@ -165,10 +166,16 @@ async def run_pipeline(
 
     # The test is written from the requirement, independently of the implementation, so it
     # encodes what was asked for rather than what the code happens to do.
+    #
+    # `requirement` rather than `spec`: the codegen spec accumulates implementation aids -
+    # the declared contract, the interfaces of every dependency, and an entire worked
+    # exemplar page - none of which describe what to *test*. A test prompt carrying a whole
+    # exemplar HTML page invites the model to write about the exemplar. Callers that do not
+    # separate the two get the old behaviour.
     emit("writing_test")
     module = Path(path).stem
     test_spec = (
-        f"{spec}\n\n"
+        f"{(requirement or spec).strip()}\n\n"
         f"Write a test for that code. It MUST begin with `from {module} import *` and test "
         f"the imported functions. Do NOT re-define or re-implement any of the functions in "
         f"the test file - import them. Assert the behaviour on representative inputs "

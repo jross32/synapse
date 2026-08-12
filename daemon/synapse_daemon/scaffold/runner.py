@@ -319,6 +319,9 @@ async def build_blueprint(
             coder_model=coder_model or "",
             max_repairs=max_repairs,
             extra_test=contract_test,
+            # Just the piece's own requirement for the test prompt - not the exemplar page
+            # or the dependency interfaces, which say how to build it, not what it must do.
+            requirement=piece.spec,
             on_event=lambda e, p=piece.name: emit("pipeline", piece=p, **e),
         )
 
