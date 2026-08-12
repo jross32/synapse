@@ -12,31 +12,81 @@
       "featured": true,
       "verified": true,
       "sort_rank": 10,
-      "tags": ["research", "dissent", "verdict", "decision", "ai-first"],
-      "recommended_case_modes": ["research", "hybrid", "challenge", "portfolio"],
-      "recommended_mission_profiles": ["repo-decision", "product-architecture", "challenge-pass"],
+      "tags": [
+        "research",
+        "dissent",
+        "verdict",
+        "decision",
+        "ai-first"
+      ],
+      "recommended_case_modes": [
+        "research",
+        "hybrid",
+        "challenge",
+        "portfolio"
+      ],
+      "recommended_mission_profiles": [
+        "repo-decision",
+        "product-architecture",
+        "challenge-pass"
+      ],
       "asset_refs": [
-        {"kind": "component", "id": "quality-default", "label": "Default quality gate", "summary": "Preserves reviewer and tester requirements."},
-        {"kind": "component", "id": "evidence-repo-first", "label": "Repo-first evidence", "summary": "Keeps repo-backed facts above looser web opinion."},
-        {"kind": "component", "id": "similarity-advisory", "label": "Advisory similarity", "summary": "Reports likeness without blocking the council."}
+        {
+          "kind": "component",
+          "id": "quality-default",
+          "label": "Default quality gate",
+          "summary": "Preserves reviewer and tester requirements."
+        },
+        {
+          "kind": "component",
+          "id": "evidence-repo-first",
+          "label": "Repo-first evidence",
+          "summary": "Keeps repo-backed facts above looser web opinion."
+        },
+        {
+          "kind": "component",
+          "id": "similarity-advisory",
+          "label": "Advisory similarity",
+          "summary": "Reports likeness without blocking the council."
+        }
       ],
       "overlap_report": [
-        {"bundle_id": "parallel-harvest-bakeoff", "similarity_percent": 34, "summary": "Both support comparison-heavy thinking, but this one is verdict-first rather than intake-first.", "complementary": true},
-        {"bundle_id": "repo-rescue-lab", "similarity_percent": 18, "summary": "Minimal overlap; rescue is execution/stabilization oriented.", "complementary": true}
+        {
+          "bundle_id": "parallel-harvest-bakeoff",
+          "similarity_percent": 34,
+          "summary": "Both support comparison-heavy thinking, but this one is verdict-first rather than intake-first.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "repo-rescue-lab",
+          "similarity_percent": 18,
+          "summary": "Minimal overlap; rescue is execution/stabilization oriented.",
+          "complementary": true
+        }
       ],
       "efficiency": {
         "quality_gain_summary": "Produces stronger minority reports and contradiction capture before a decision hardens.",
         "token_savings_summary": "Reduces repeated back-and-forth by giving the boss, witnesses, and skeptic explicit lanes up front.",
         "speed_gain_summary": "Cuts setup time for repo + docs + web triangulation.",
-        "best_for": ["architecture decisions", "tradeoff research", "adversarial review of plans"],
-        "caveats": ["This does not replace implementation packs when you intend to ship code after the verdict."]
+        "best_for": [
+          "architecture decisions",
+          "tradeoff research",
+          "adversarial review of plans"
+        ],
+        "caveats": [
+          "This does not replace implementation packs when you intend to ship code after the verdict."
+        ]
       },
       "roles": [
         {
           "id": "contract-prosecutor",
           "name": "Contract Prosecutor",
           "description": "Challenges whether a proposed direction violates repo or API contracts.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -49,7 +99,11 @@
           "id": "repo-witness",
           "name": "Repo Witness",
           "description": "Reads the repository as evidence and reports the current reality.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -62,7 +116,11 @@
           "id": "docs-witness",
           "name": "Docs Witness",
           "description": "Surfaces README, ADR, backlog, and record-level evidence.",
-          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "preferred_runtimes": [
+            "claude",
+            "copilot",
+            "codex"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -75,7 +133,11 @@
           "id": "open-web-witness",
           "name": "Open-Web Witness",
           "description": "Brings in official docs and attributed outside evidence when local context is not enough.",
-          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "preferred_runtimes": [
+            "claude",
+            "copilot",
+            "codex"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -88,7 +150,11 @@
           "id": "blast-radius-cartographer",
           "name": "Blast Radius Cartographer",
           "description": "Maps touched surfaces, contracts, tests, and likely regressions.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -103,7 +169,11 @@
           "id": "archivist",
           "name": "The Archivist",
           "blurb": "Treats facts, docs, and evidence quality as sacred.",
-          "traits": ["evidence", "methodical", "source-first"],
+          "traits": [
+            "evidence",
+            "methodical",
+            "source-first"
+          ],
           "prompt_preamble_md": "Protect the evidence trail, keep claims typed, and flag vague sourcing.",
           "voice": "measured",
           "sort_order": 55
@@ -112,7 +182,11 @@
           "id": "dissenter",
           "name": "The Dissenter",
           "blurb": "Protects the losing argument so the team does not collapse too early.",
-          "traits": ["adversarial", "sharp", "critical"],
+          "traits": [
+            "adversarial",
+            "sharp",
+            "critical"
+          ],
           "prompt_preamble_md": "Resist easy consensus and preserve the strongest credible alternative.",
           "voice": "direct",
           "sort_order": 56
@@ -121,7 +195,11 @@
           "id": "synthesist",
           "name": "The Synthesist",
           "blurb": "Weighs disagreement and lands the clearest synthesis.",
-          "traits": ["balanced", "clear", "decisive"],
+          "traits": [
+            "balanced",
+            "clear",
+            "decisive"
+          ],
           "prompt_preamble_md": "Reconcile strong opposing views without flattening the tradeoffs.",
           "voice": "steady",
           "sort_order": 57
@@ -138,9 +216,22 @@
           "visual_language": "notebook",
           "data_behavior": "local_first",
           "density_rule": "density-no-scroll",
-          "component_ids": ["nav-split-pane", "interaction-drawers", "visual-notebook", "quality-default", "density-no-scroll"],
-          "default_directives": {"generation_mode": "prototype", "recipe_selection_mode": "manual"},
-          "tags": ["research", "cockpit", "contradictions"],
+          "component_ids": [
+            "nav-split-pane",
+            "interaction-drawers",
+            "visual-notebook",
+            "quality-default",
+            "density-no-scroll"
+          ],
+          "default_directives": {
+            "generation_mode": "prototype",
+            "recipe_selection_mode": "manual"
+          },
+          "tags": [
+            "research",
+            "cockpit",
+            "contradictions"
+          ],
           "builtin": false
         }
       ],
@@ -152,7 +243,9 @@
           "url": null,
           "reuse_posture": "user_authorized",
           "provenance_summary": "Internal bundle note for contradiction-led technical research cases.",
-          "metadata": {"bundle_id": "deep-research-council"},
+          "metadata": {
+            "bundle_id": "deep-research-council"
+          },
           "notes_md": "Use this source when you want the council to rank repo-backed evidence above generic opinion and to preserve a minority report.",
           "builtin": false
         }
@@ -165,8 +258,14 @@
           "prompt": "Start a research or challenge case with typed evidence, a contradiction docket, and a required minority report. End with a verdict, blast radius, and handoff pack.",
           "icon": "brain-circuit",
           "category": "workflows",
-          "tags": ["research", "dissent", "verdict"],
-          "default_argv": ["codex"]
+          "tags": [
+            "research",
+            "dissent",
+            "verdict"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "Best when you need an AI to investigate before it edits. This bundle is intentionally decision-heavy, not implementation-heavy."
@@ -180,31 +279,81 @@
       "featured": true,
       "verified": true,
       "sort_rank": 15,
-      "tags": ["generate", "fullstack", "ux", "recipe", "factory"],
-      "recommended_case_modes": ["generate", "hybrid", "benchmark", "replicate"],
-      "recommended_mission_profiles": ["new-app-from-brief", "fullstack-crud-generator", "multi-candidate-bakeoff"],
+      "tags": [
+        "generate",
+        "fullstack",
+        "ux",
+        "recipe",
+        "factory"
+      ],
+      "recommended_case_modes": [
+        "generate",
+        "hybrid",
+        "benchmark",
+        "replicate"
+      ],
+      "recommended_mission_profiles": [
+        "new-app-from-brief",
+        "fullstack-crud-generator",
+        "multi-candidate-bakeoff"
+      ],
       "asset_refs": [
-        {"kind": "component", "id": "test-playwright-review", "label": "Playwright + reviewer pass", "summary": "Keeps browser verification in the loop."},
-        {"kind": "component", "id": "deploy-local-runner", "label": "Local runnable deployment", "summary": "Pushes the output toward real local runnability."},
-        {"kind": "component", "id": "tech-react-fastapi", "label": "React + FastAPI fullstack", "summary": "Useful baseline stack for local fullstack generation."}
+        {
+          "kind": "component",
+          "id": "test-playwright-review",
+          "label": "Playwright + reviewer pass",
+          "summary": "Keeps browser verification in the loop."
+        },
+        {
+          "kind": "component",
+          "id": "deploy-local-runner",
+          "label": "Local runnable deployment",
+          "summary": "Pushes the output toward real local runnability."
+        },
+        {
+          "kind": "component",
+          "id": "tech-react-fastapi",
+          "label": "React + FastAPI fullstack",
+          "summary": "Useful baseline stack for local fullstack generation."
+        }
       ],
       "overlap_report": [
-        {"bundle_id": "repo-rescue-lab", "similarity_percent": 26, "summary": "Some overlap in quality gates, but rescue is rehab-focused while this is net-new build focused.", "complementary": true},
-        {"bundle_id": "parallel-harvest-bakeoff", "similarity_percent": 42, "summary": "Both help candidate generation, but this one biases toward shipping an app, not harvesting references.", "complementary": true}
+        {
+          "bundle_id": "repo-rescue-lab",
+          "similarity_percent": 26,
+          "summary": "Some overlap in quality gates, but rescue is rehab-focused while this is net-new build focused.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "parallel-harvest-bakeoff",
+          "similarity_percent": 42,
+          "summary": "Both help candidate generation, but this one biases toward shipping an app, not harvesting references.",
+          "complementary": true
+        }
       ],
       "efficiency": {
         "quality_gain_summary": "Improves navigation and review discipline so generated apps feel less one-page and more deliberate.",
         "token_savings_summary": "Cuts repeated UI prompting by preloading recipe composition, UX stewardship, and reviewer/tester expectations.",
         "speed_gain_summary": "Good for fast prototype vs local fullstack branching and new-app bakeoffs.",
-        "best_for": ["new app generation", "template diversification", "fast fullstack scaffolds"],
-        "caveats": ["Still pair this with a research bundle when the core product direction is not settled yet."]
+        "best_for": [
+          "new app generation",
+          "template diversification",
+          "fast fullstack scaffolds"
+        ],
+        "caveats": [
+          "Still pair this with a research bundle when the core product direction is not settled yet."
+        ]
       },
       "roles": [
         {
           "id": "recipe-composer",
           "name": "Recipe Composer",
           "description": "Chooses the best recipe, packs, and component mix before code starts.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -217,7 +366,11 @@
           "id": "ux-steward",
           "name": "UX Steward",
           "description": "Guards movement, discoverability, and anti-scroll quality.",
-          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "preferred_runtimes": [
+            "claude",
+            "copilot",
+            "codex"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -230,7 +383,11 @@
           "id": "release-reviewer",
           "name": "Release Reviewer",
           "description": "Checks whether a generated app is actually fit to hand off.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -245,7 +402,11 @@
           "id": "operator",
           "name": "The Operator",
           "blurb": "Moves fast without losing control of the release path.",
-          "traits": ["shipping", "throughput", "stability"],
+          "traits": [
+            "shipping",
+            "throughput",
+            "stability"
+          ],
           "prompt_preamble_md": "Keep the build moving, but require run/test evidence before calling it done.",
           "voice": "focused",
           "sort_order": 58
@@ -262,9 +423,23 @@
           "visual_language": "premium_saas",
           "data_behavior": "fullstack_crud",
           "density_rule": "density-no-scroll",
-          "component_ids": ["nav-left-rail", "interaction-drawers", "visual-premium-saas", "quality-default", "test-playwright-review", "density-no-scroll"],
-          "default_directives": {"generation_mode": "local_fullstack", "recipe_selection_mode": "compare_top_n"},
-          "tags": ["generate", "fullstack", "board"],
+          "component_ids": [
+            "nav-left-rail",
+            "interaction-drawers",
+            "visual-premium-saas",
+            "quality-default",
+            "test-playwright-review",
+            "density-no-scroll"
+          ],
+          "default_directives": {
+            "generation_mode": "local_fullstack",
+            "recipe_selection_mode": "compare_top_n"
+          },
+          "tags": [
+            "generate",
+            "fullstack",
+            "board"
+          ],
           "builtin": false
         }
       ],
@@ -276,7 +451,9 @@
           "url": null,
           "reuse_posture": "user_authorized",
           "provenance_summary": "Internal notes for recipe-led build and review flows.",
-          "metadata": {"bundle_id": "fullstack-app-factory"},
+          "metadata": {
+            "bundle_id": "fullstack-app-factory"
+          },
           "notes_md": "Use this when the app should feel intentional, navigable, and ready for a reviewer/tester pass rather than just dumped on one page.",
           "builtin": false
         }
@@ -289,8 +466,14 @@
           "prompt": "Start a benchmark or generate case for a new app. Compare recipes, keep navigation and density explicit, and finish with a winner plus test/review summary.",
           "icon": "layers-3",
           "category": "workflows",
-          "tags": ["generate", "benchmark", "fullstack"],
-          "default_argv": ["codex"]
+          "tags": [
+            "generate",
+            "benchmark",
+            "fullstack"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "Designed to improve output quality for generated apps without forcing a rigid visual style."
@@ -304,31 +487,80 @@
       "featured": true,
       "verified": true,
       "sort_rank": 17,
-      "tags": ["generate", "saas", "listing-ops", "revenue", "monetization"],
-      "recommended_case_modes": ["generate", "hybrid", "benchmark"],
-      "recommended_mission_profiles": ["new-app-from-brief", "vertical-b2b-saas", "client-ops-revenue"],
+      "tags": [
+        "generate",
+        "saas",
+        "listing-ops",
+        "revenue",
+        "monetization"
+      ],
+      "recommended_case_modes": [
+        "generate",
+        "hybrid",
+        "benchmark"
+      ],
+      "recommended_mission_profiles": [
+        "new-app-from-brief",
+        "vertical-b2b-saas",
+        "client-ops-revenue"
+      ],
       "asset_refs": [
-        {"kind": "recipe", "id": "client-ops-revenue-board", "label": "Client Ops Revenue Board", "summary": "Keeps landing, portal, ops, templates, and billing seams together."},
-        {"kind": "source", "id": "fast-money-monetization-notes", "label": "Fast Money monetization notes", "summary": "Bundles the pricing/default-moat guidance behind the launcher."},
-        {"kind": "quick_action", "id": "fast-money-launch", "label": "Fast Money launch", "summary": "Kicks off the app-building run from a monetization-aware brief."}
+        {
+          "kind": "recipe",
+          "id": "client-ops-revenue-board",
+          "label": "Client Ops Revenue Board",
+          "summary": "Keeps landing, portal, ops, templates, and billing seams together."
+        },
+        {
+          "kind": "source",
+          "id": "fast-money-monetization-notes",
+          "label": "Fast Money monetization notes",
+          "summary": "Bundles the pricing/default-moat guidance behind the launcher."
+        },
+        {
+          "kind": "quick_action",
+          "id": "fast-money-launch",
+          "label": "Fast Money launch",
+          "summary": "Kicks off the app-building run from a monetization-aware brief."
+        }
       ],
       "overlap_report": [
-        {"bundle_id": "fullstack-app-factory", "similarity_percent": 46, "summary": "Both help create apps, but Fast Money is narrower and more business-model aware for listing-operations SaaS.", "complementary": true},
-        {"bundle_id": "deep-research-council", "similarity_percent": 24, "summary": "Useful together when the vertical needs research before the build hardens.", "complementary": true}
+        {
+          "bundle_id": "fullstack-app-factory",
+          "similarity_percent": 46,
+          "summary": "Both help create apps, but Fast Money is narrower and more business-model aware for listing-operations SaaS.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "deep-research-council",
+          "similarity_percent": 24,
+          "summary": "Useful together when the vertical needs research before the build hardens.",
+          "complementary": true
+        }
       ],
       "efficiency": {
         "quality_gain_summary": "Pushes the first pass toward a real sellable workflow SaaS instead of a thin generic AI wrapper.",
         "token_savings_summary": "Preloads roles, monetization guidance, and the expected surface area so the builder does not need the same framing every run.",
         "speed_gain_summary": "Shortens the path from idea to a runnable landing page, portal shell, ops console, template library, and billing-ready seam.",
-        "best_for": ["vertical B2B SaaS generation", "listing workflow products", "monetization-aware MVP scaffolds"],
-        "caveats": ["This bundle assumes the goal is a private/local-first sellable starter, not a generic internal dashboard."]
+        "best_for": [
+          "vertical B2B SaaS generation",
+          "listing workflow products",
+          "monetization-aware MVP scaffolds"
+        ],
+        "caveats": [
+          "This bundle assumes the goal is a private/local-first sellable starter, not a generic internal dashboard."
+        ]
       },
       "roles": [
         {
           "id": "revenue-architect",
           "name": "Revenue Architect",
           "description": "Shapes the product so the workflow, packaging, and moat support a sellable SaaS business.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "lead",
           "context_mode": "standard",
           "role_tier": "supervisor",
@@ -341,7 +573,11 @@
           "id": "client-ops-operator",
           "name": "Client Ops Operator",
           "description": "Keeps the seller portal, ops console, and draft-to-publish flow grounded in real operations.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -354,7 +590,11 @@
           "id": "billing-seam-planner",
           "name": "Billing Seam Planner",
           "description": "Turns pricing strategy into adapter seams, config placeholders, and implementation-ready billing notes.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -369,7 +609,11 @@
           "id": "revenue-operator",
           "name": "The Revenue Operator",
           "blurb": "Thinks like someone who has to ship the workflow and keep renewals healthy.",
-          "traits": ["commercial", "operational", "grounded"],
+          "traits": [
+            "commercial",
+            "operational",
+            "grounded"
+          ],
           "prompt_preamble_md": "Stay close to how revenue actually moves through the system. Favor clear packaging, visible handoffs, and operator-friendly workflows.",
           "voice": "focused",
           "sort_order": 60
@@ -386,9 +630,25 @@
           "visual_language": "premium_saas",
           "data_behavior": "fullstack_crud",
           "density_rule": "density-no-scroll",
-          "component_ids": ["nav-left-rail", "interaction-drawers", "visual-premium-saas", "quality-default", "deploy-local-runner", "density-no-scroll"],
-          "default_directives": {"generation_mode": "local_fullstack", "recipe_selection_mode": "manual", "deployment_posture": "private_local_first"},
-          "tags": ["generate", "listing-ops", "saas", "revenue"],
+          "component_ids": [
+            "nav-left-rail",
+            "interaction-drawers",
+            "visual-premium-saas",
+            "quality-default",
+            "deploy-local-runner",
+            "density-no-scroll"
+          ],
+          "default_directives": {
+            "generation_mode": "local_fullstack",
+            "recipe_selection_mode": "manual",
+            "deployment_posture": "private_local_first"
+          },
+          "tags": [
+            "generate",
+            "listing-ops",
+            "saas",
+            "revenue"
+          ],
           "builtin": false
         }
       ],
@@ -420,8 +680,15 @@
           "prompt": "Use Synapse context first if it is available. Create or reuse the target project, then build a private/local-first listing-operations SaaS with a landing page, pricing page, auth shell, seller portal, ops or admin console, and one core flow from source listing to channel draft to approval to publish to refresh or relist. Keep billing and auth as adapter seams with config placeholders, ship README plus architecture and monetization notes, include seed or demo data, and default the business model to a base subscription plus variable usage or overage for AI-heavy features.",
           "icon": "rocket",
           "category": "workflows",
-          "tags": ["generate", "saas", "listing-ops", "revenue"],
-          "default_argv": ["codex"]
+          "tags": [
+            "generate",
+            "saas",
+            "listing-ops",
+            "revenue"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "Best when the human wants Synapse to spin up something actually sellable quickly: the launcher makes the project, this bundle carries the revenue and listing-workflow framing, and the AI runtime deepens the app from there."
@@ -435,30 +702,74 @@
       "featured": true,
       "verified": true,
       "sort_rank": 20,
-      "tags": ["repair", "migrate", "audit", "stability", "regression"],
-      "recommended_case_modes": ["repair", "migrate", "audit"],
-      "recommended_mission_profiles": ["broken-repo-rescue", "stack-upgrade", "ux-hardening-pass"],
+      "tags": [
+        "repair",
+        "migrate",
+        "audit",
+        "stability",
+        "regression"
+      ],
+      "recommended_case_modes": [
+        "repair",
+        "migrate",
+        "audit"
+      ],
+      "recommended_mission_profiles": [
+        "broken-repo-rescue",
+        "stack-upgrade",
+        "ux-hardening-pass"
+      ],
       "asset_refs": [
-        {"kind": "component", "id": "quality-default", "label": "Default quality gate", "summary": "Reviewer/tester gates remain non-optional."},
-        {"kind": "component", "id": "deploy-local-runner", "label": "Local runnable deployment", "summary": "Keeps rescue work grounded in a runnable state."}
+        {
+          "kind": "component",
+          "id": "quality-default",
+          "label": "Default quality gate",
+          "summary": "Reviewer/tester gates remain non-optional."
+        },
+        {
+          "kind": "component",
+          "id": "deploy-local-runner",
+          "label": "Local runnable deployment",
+          "summary": "Keeps rescue work grounded in a runnable state."
+        }
       ],
       "overlap_report": [
-        {"bundle_id": "deep-research-council", "similarity_percent": 18, "summary": "Low overlap; this bundle assumes the repo already needs action, not only analysis.", "complementary": true},
-        {"bundle_id": "fullstack-app-factory", "similarity_percent": 26, "summary": "Some shared review discipline, but rescue focuses on recovery and migration ledgers.", "complementary": true}
+        {
+          "bundle_id": "deep-research-council",
+          "similarity_percent": 18,
+          "summary": "Low overlap; this bundle assumes the repo already needs action, not only analysis.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "fullstack-app-factory",
+          "similarity_percent": 26,
+          "summary": "Some shared review discipline, but rescue focuses on recovery and migration ledgers.",
+          "complementary": true
+        }
       ],
       "efficiency": {
         "quality_gain_summary": "Strengthens regression thinking, rollback notes, and stabilization reporting.",
         "token_savings_summary": "Reduces repeated prompts about tests, rollback, and migration notes by baking them into the workflow.",
         "speed_gain_summary": "Best for turning a messy repo into a clearer repair or migration lane quickly.",
-        "best_for": ["broken repos", "version upgrades", "stabilization passes"],
-        "caveats": ["Use a generation-focused bundle instead when the goal is creating something net-new."]
+        "best_for": [
+          "broken repos",
+          "version upgrades",
+          "stabilization passes"
+        ],
+        "caveats": [
+          "Use a generation-focused bundle instead when the goal is creating something net-new."
+        ]
       },
       "roles": [
         {
           "id": "repair-foreman",
           "name": "Repair Foreman",
           "description": "Owns repair sequencing and safe recovery order.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -471,7 +782,11 @@
           "id": "migration-steward",
           "name": "Migration Steward",
           "description": "Tracks compatibility notes, rollout order, and rollback plans.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -484,7 +799,11 @@
           "id": "regression-hunter",
           "name": "Regression Hunter",
           "description": "Looks for likely breakage after repairs or migrations.",
-          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "preferred_runtimes": [
+            "claude",
+            "copilot",
+            "codex"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -505,9 +824,22 @@
           "visual_language": "industrial",
           "data_behavior": "local_first",
           "density_rule": "density-no-scroll",
-          "component_ids": ["nav-command-palette", "interaction-keyboard-first", "visual-industrial", "quality-default", "density-no-scroll"],
-          "default_directives": {"generation_mode": "local_fullstack", "recipe_selection_mode": "manual"},
-          "tags": ["repair", "migrate", "console"],
+          "component_ids": [
+            "nav-command-palette",
+            "interaction-keyboard-first",
+            "visual-industrial",
+            "quality-default",
+            "density-no-scroll"
+          ],
+          "default_directives": {
+            "generation_mode": "local_fullstack",
+            "recipe_selection_mode": "manual"
+          },
+          "tags": [
+            "repair",
+            "migrate",
+            "console"
+          ],
           "builtin": false
         }
       ],
@@ -519,7 +851,9 @@
           "url": null,
           "reuse_posture": "user_authorized",
           "provenance_summary": "Internal checklist for repairs, migrations, and rollback-aware handoffs.",
-          "metadata": {"bundle_id": "repo-rescue-lab"},
+          "metadata": {
+            "bundle_id": "repo-rescue-lab"
+          },
           "notes_md": "Use this when you need a stabilization ledger, regression notes, or a rollback-oriented migration handoff.",
           "builtin": false
         }
@@ -532,8 +866,14 @@
           "prompt": "Start a repair or migrate case. Restore a runnable baseline, capture the ledger, list likely regressions, and end with rollback notes plus remaining risk.",
           "icon": "wrench",
           "category": "workflows",
-          "tags": ["repair", "migrate", "stability"],
-          "default_argv": ["codex"]
+          "tags": [
+            "repair",
+            "migrate",
+            "stability"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "Use this when the repo is already in distress or when the change surface is risky enough that rollback planning matters."
@@ -547,30 +887,76 @@
       "featured": false,
       "verified": true,
       "sort_rank": 30,
-      "tags": ["harvest", "benchmark", "portfolio", "replicate", "comparison"],
-      "recommended_case_modes": ["harvest", "benchmark", "portfolio", "replicate"],
-      "recommended_mission_profiles": ["recipe-library-intake", "multi-candidate-bakeoff", "portfolio-sweep", "inspired-clone"],
+      "tags": [
+        "harvest",
+        "benchmark",
+        "portfolio",
+        "replicate",
+        "comparison"
+      ],
+      "recommended_case_modes": [
+        "harvest",
+        "benchmark",
+        "portfolio",
+        "replicate"
+      ],
+      "recommended_mission_profiles": [
+        "recipe-library-intake",
+        "multi-candidate-bakeoff",
+        "portfolio-sweep",
+        "inspired-clone"
+      ],
       "asset_refs": [
-        {"kind": "component", "id": "workflow-bakeoff", "label": "Parallel bakeoff", "summary": "Starter workflow preset for comparisons."},
-        {"kind": "component", "id": "provenance-aware", "label": "Provenance aware", "summary": "Useful when source intake or replication matters."}
+        {
+          "kind": "component",
+          "id": "workflow-bakeoff",
+          "label": "Parallel bakeoff",
+          "summary": "Starter workflow preset for comparisons."
+        },
+        {
+          "kind": "component",
+          "id": "provenance-aware",
+          "label": "Provenance aware",
+          "summary": "Useful when source intake or replication matters."
+        }
       ],
       "overlap_report": [
-        {"bundle_id": "deep-research-council", "similarity_percent": 34, "summary": "Both compare options, but this bundle is intake/candidate heavy rather than verdict heavy.", "complementary": true},
-        {"bundle_id": "fullstack-app-factory", "similarity_percent": 42, "summary": "This overlaps most with generation bakeoffs, but it is broader and more source-aware.", "complementary": true}
+        {
+          "bundle_id": "deep-research-council",
+          "similarity_percent": 34,
+          "summary": "Both compare options, but this bundle is intake/candidate heavy rather than verdict heavy.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "fullstack-app-factory",
+          "similarity_percent": 42,
+          "summary": "This overlaps most with generation bakeoffs, but it is broader and more source-aware.",
+          "complementary": true
+        }
       ],
       "efficiency": {
         "quality_gain_summary": "Improves candidate comparison and provenance capture when inspiration or intake drives the build.",
         "token_savings_summary": "Lets the system reuse harvested patterns instead of rediscovering them every run.",
         "speed_gain_summary": "Best when several candidates or repos should be mapped quickly before deeper execution.",
-        "best_for": ["web/reference harvesting", "parallel candidate generation", "multi-repo sweeps"],
-        "caveats": ["Use with a write-capable child case for actual code changes in the primary repo."]
+        "best_for": [
+          "web/reference harvesting",
+          "parallel candidate generation",
+          "multi-repo sweeps"
+        ],
+        "caveats": [
+          "Use with a write-capable child case for actual code changes in the primary repo."
+        ]
       },
       "roles": [
         {
           "id": "source-curator",
           "name": "Source Curator",
           "description": "Turns captured references into reusable bundle or factory assets.",
-          "preferred_runtimes": ["claude", "copilot", "codex"],
+          "preferred_runtimes": [
+            "claude",
+            "copilot",
+            "codex"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -583,7 +969,11 @@
           "id": "benchmark-judge",
           "name": "Benchmark Judge",
           "description": "Ranks candidates across quality, time, token use, and evidence fit.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "lead",
           "context_mode": "standard",
           "role_tier": "supervisor",
@@ -596,7 +986,11 @@
           "id": "portfolio-architect",
           "name": "Portfolio Architect",
           "description": "Maps repo boundaries and sequences child cases for multi-repo work.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -611,7 +1005,11 @@
           "id": "scout",
           "name": "The Scout",
           "blurb": "Finds patterns quickly and reports what is reusable.",
-          "traits": ["exploratory", "comparative", "wide-angle"],
+          "traits": [
+            "exploratory",
+            "comparative",
+            "wide-angle"
+          ],
           "prompt_preamble_md": "Range wide, find reusable patterns fast, and classify them crisply.",
           "voice": "curious",
           "sort_order": 59
@@ -628,9 +1026,23 @@
           "visual_language": "editorial",
           "data_behavior": "synced_app",
           "density_rule": "density-no-scroll",
-          "component_ids": ["nav-split-pane", "interaction-bulk-edit", "visual-editorial", "provenance-aware", "similarity-advisory", "density-no-scroll"],
-          "default_directives": {"generation_mode": "prototype", "recipe_selection_mode": "compare_top_n"},
-          "tags": ["harvest", "benchmark", "portfolio"],
+          "component_ids": [
+            "nav-split-pane",
+            "interaction-bulk-edit",
+            "visual-editorial",
+            "provenance-aware",
+            "similarity-advisory",
+            "density-no-scroll"
+          ],
+          "default_directives": {
+            "generation_mode": "prototype",
+            "recipe_selection_mode": "compare_top_n"
+          },
+          "tags": [
+            "harvest",
+            "benchmark",
+            "portfolio"
+          ],
           "builtin": false
         }
       ],
@@ -642,7 +1054,9 @@
           "url": null,
           "reuse_posture": "user_authorized",
           "provenance_summary": "Internal note for promoting harvested references into reusable factory intelligence.",
-          "metadata": {"bundle_id": "parallel-harvest-bakeoff"},
+          "metadata": {
+            "bundle_id": "parallel-harvest-bakeoff"
+          },
           "notes_md": "Use this when a run should produce reusable recipes, packs, or source records instead of stopping at a one-off conclusion.",
           "builtin": false
         }
@@ -655,8 +1069,14 @@
           "prompt": "Start a harvest, benchmark, or portfolio case. Capture provenance, compare candidates explicitly, and promote reusable outputs when the evidence is strong enough.",
           "icon": "folder-search",
           "category": "workflows",
-          "tags": ["harvest", "benchmark", "portfolio"],
-          "default_argv": ["codex"]
+          "tags": [
+            "harvest",
+            "benchmark",
+            "portfolio"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "This bundle is strongest when the output should be reusable by future runs, not only consumed once."
@@ -670,32 +1090,89 @@
       "featured": false,
       "verified": true,
       "sort_rank": 32,
-      "tags": ["ux", "harvest", "self-improvement", "benchmark", "token-efficiency"],
-      "recommended_case_modes": ["harvest", "benchmark", "repair", "challenge"],
-      "recommended_mission_profiles": ["self-improve-synapse", "design-harvest", "ux-refresh", "token-efficient-review"],
+      "tags": [
+        "ux",
+        "harvest",
+        "self-improvement",
+        "benchmark",
+        "token-efficiency"
+      ],
+      "recommended_case_modes": [
+        "harvest",
+        "benchmark",
+        "repair",
+        "challenge"
+      ],
+      "recommended_mission_profiles": [
+        "self-improve-synapse",
+        "design-harvest",
+        "ux-refresh",
+        "token-efficient-review"
+      ],
       "asset_refs": [
-        {"kind": "component", "id": "provenance-aware", "label": "Provenance aware", "summary": "Keeps harvested reference work auditable and adaptation-conscious."},
-        {"kind": "component", "id": "similarity-advisory", "label": "Similarity advisory", "summary": "Reminds the loop to compare inspiration against originality before adoption."},
-        {"kind": "component", "id": "workflow-bakeoff", "label": "Workflow bakeoff", "summary": "Useful for benchmark-led comparison between cheaper and more exhaustive loops."}
+        {
+          "kind": "component",
+          "id": "provenance-aware",
+          "label": "Provenance aware",
+          "summary": "Keeps harvested reference work auditable and adaptation-conscious."
+        },
+        {
+          "kind": "component",
+          "id": "similarity-advisory",
+          "label": "Similarity advisory",
+          "summary": "Reminds the loop to compare inspiration against originality before adoption."
+        },
+        {
+          "kind": "component",
+          "id": "workflow-bakeoff",
+          "label": "Workflow bakeoff",
+          "summary": "Useful for benchmark-led comparison between cheaper and more exhaustive loops."
+        }
       ],
       "overlap_report": [
-        {"bundle_id": "parallel-harvest-bakeoff", "similarity_percent": 48, "summary": "Both care about harvest and comparison, but UX Lab is narrower and more self-improvement oriented.", "complementary": true},
-        {"bundle_id": "repo-rescue-lab", "similarity_percent": 22, "summary": "Both use review discipline, but UX Lab biases toward design/quality optimization instead of repo rescue.", "complementary": true},
-        {"bundle_id": "deep-research-council", "similarity_percent": 19, "summary": "Low overlap; this bundle is execution and review-loop oriented, not research-verdict oriented.", "complementary": true}
+        {
+          "bundle_id": "parallel-harvest-bakeoff",
+          "similarity_percent": 48,
+          "summary": "Both care about harvest and comparison, but UX Lab is narrower and more self-improvement oriented.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "repo-rescue-lab",
+          "similarity_percent": 22,
+          "summary": "Both use review discipline, but UX Lab biases toward design/quality optimization instead of repo rescue.",
+          "complementary": true
+        },
+        {
+          "bundle_id": "deep-research-council",
+          "similarity_percent": 19,
+          "summary": "Low overlap; this bundle is execution and review-loop oriented, not research-verdict oriented.",
+          "complementary": true
+        }
       ],
       "efficiency": {
         "quality_gain_summary": "Raises UX and implementation quality by inserting harvest, skeptic review, QA, and judge passes only when the evidence says they are worth it.",
         "token_savings_summary": "Starts with the cheapest targeted reviewer and escalates only when the task risk, benchmark, or judge result justifies a stronger pass.",
         "speed_gain_summary": "Shortens improvement loops by making provenance, review reasons, and benchmark comparison reusable defaults instead of repeated setup.",
-        "best_for": ["self-improvement runs", "design remix passes", "UX-heavy benchmarks", "review before rewrite"],
-        "caveats": ["This bundle is review-heavy; pair it with a generation bundle when the task is net-new product construction."]
+        "best_for": [
+          "self-improvement runs",
+          "design remix passes",
+          "UX-heavy benchmarks",
+          "review before rewrite"
+        ],
+        "caveats": [
+          "This bundle is review-heavy; pair it with a generation bundle when the task is net-new product construction."
+        ]
       },
       "roles": [
         {
           "id": "design-harvest-lead",
           "name": "Design Harvest Lead",
           "description": "Converts authorized references into project-ready briefs, components, and adaptation notes.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -708,7 +1185,11 @@
           "id": "skeptic-reviewer",
           "name": "Skeptic Reviewer",
           "description": "Pushes back on weak evidence, fragile UX decisions, and unnecessary escalation.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -721,7 +1202,11 @@
           "id": "qa-hunter",
           "name": "QA Hunter",
           "description": "Looks for regressions, broken states, and verification gaps before a self-improvement run claims success.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -734,7 +1219,11 @@
           "id": "token-steward",
           "name": "Token Steward",
           "description": "Decides whether the loop should stop, escalate, or compare more candidates based on risk versus spend.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "lead",
           "context_mode": "standard",
           "role_tier": "supervisor",
@@ -749,7 +1238,11 @@
           "id": "craft-director",
           "name": "The Craft Director",
           "blurb": "Protects polish, hierarchy, and visual intention.",
-          "traits": ["tasteful", "clear", "intentional"],
+          "traits": [
+            "tasteful",
+            "clear",
+            "intentional"
+          ],
           "prompt_preamble_md": "Push for stronger visual hierarchy and a more deliberate UX without drifting into generic UI.",
           "voice": "measured",
           "sort_order": 60
@@ -758,7 +1251,11 @@
           "id": "friction-hunter",
           "name": "The Friction Hunter",
           "blurb": "Treats every confusing click, dead end, or vague label as a bug.",
-          "traits": ["critical", "observant", "practical"],
+          "traits": [
+            "critical",
+            "observant",
+            "practical"
+          ],
           "prompt_preamble_md": "Find the places a human or AI operator would hesitate, misread, or waste effort.",
           "voice": "direct",
           "sort_order": 61
@@ -767,7 +1264,11 @@
           "id": "cost-keeper",
           "name": "The Cost Keeper",
           "blurb": "Optimizes for quality per token instead of prestige per pass.",
-          "traits": ["efficient", "strategic", "frugal"],
+          "traits": [
+            "efficient",
+            "strategic",
+            "frugal"
+          ],
           "prompt_preamble_md": "Favor targeted review and benchmarked escalation over expensive default second passes.",
           "voice": "steady",
           "sort_order": 62
@@ -781,7 +1282,9 @@
           "url": null,
           "reuse_posture": "user_authorized",
           "provenance_summary": "Bundle note for harvest-aware self-improvement and token-efficient review loops.",
-          "metadata": {"bundle_id": "synapse-ux-lab"},
+          "metadata": {
+            "bundle_id": "synapse-ux-lab"
+          },
           "notes_md": "Use this when the run should improve a real product surface, keep provenance explicit, and justify every escalation with evidence.",
           "builtin": false
         }
@@ -794,8 +1297,15 @@
           "prompt": "Start a Synapse UX Lab run. Capture the goal, gather evidence, prefer the cheapest targeted reviewer first, escalate only when the judge or benchmark rules require it, and end with a clear winner plus durable project memory updates.",
           "icon": "sparkles",
           "category": "workflows",
-          "tags": ["ux", "harvest", "benchmark", "token-efficiency"],
-          "default_argv": ["codex"]
+          "tags": [
+            "ux",
+            "harvest",
+            "benchmark",
+            "token-efficiency"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "This bundle is the reusable version of the Synapse self-improver + design-harvest loop: harvest references when useful, review intentionally, benchmark the tradeoffs, and keep the project memory current."
@@ -809,22 +1319,50 @@
       "featured": true,
       "verified": true,
       "sort_rank": 33,
-      "tags": ["qa", "bug-hunt", "ui-testing", "accessibility", "user-simulation", "token-efficiency"],
-      "recommended_case_modes": ["audit", "repair", "benchmark", "challenge"],
-      "recommended_mission_profiles": ["bug-hunt", "ux-audit", "a11y-audit", "token-efficient-review"],
+      "tags": [
+        "qa",
+        "bug-hunt",
+        "ui-testing",
+        "accessibility",
+        "user-simulation",
+        "token-efficiency"
+      ],
+      "recommended_case_modes": [
+        "audit",
+        "repair",
+        "benchmark",
+        "challenge"
+      ],
+      "recommended_mission_profiles": [
+        "bug-hunt",
+        "ux-audit",
+        "a11y-audit",
+        "token-efficient-review"
+      ],
       "efficiency": {
         "quality_gain_summary": "Finds more real, browser-proven UI/UX/accessibility bugs than a single pass by giving distinct user-simulation and edge-case lenses a real browser and one shared evidence surface.",
         "token_savings_summary": "Hunters run at minimal context with only the Playwright MCP; coordination roles get no MCP at all; findings are deduped once and filed in a single batched pass instead of every worker opening gates.",
         "speed_gain_summary": "Lane-separated hunters run in parallel on different surfaces, so coverage scales without workers re-testing the same thing.",
-        "best_for": ["pre-release UI/UX bug sweeps", "mobile vs desktop regression hunts", "accessibility audits", "token-efficient QA"],
-        "caveats": ["Hunters need a running app URL to drive; pair with a build bundle for net-new construction."]
+        "best_for": [
+          "pre-release UI/UX bug sweeps",
+          "mobile vs desktop regression hunts",
+          "accessibility audits",
+          "token-efficient QA"
+        ],
+        "caveats": [
+          "Hunters need a running app URL to drive; pair with a build bundle for net-new construction."
+        ]
       },
       "roles": [
         {
           "id": "qa-lead",
           "name": "QA Lead",
           "description": "Plans the smallest hunt that covers the risk, assigns each hunter a distinct surface + viewport, and owns the token budget and stop decision.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "lead",
           "context_mode": "standard",
           "role_tier": "supervisor",
@@ -838,7 +1376,11 @@
           "id": "triage-steward",
           "name": "Triage Steward",
           "description": "Dedupes raw hunter findings into a clean list of unique bugs before any gate is opened.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -852,7 +1394,11 @@
           "id": "bug-report-synthesist",
           "name": "Bug Report Synthesist",
           "description": "Files the deduped bugs as Quality OS evidence + gates in one batched pass, with severity and a clear repro.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -866,7 +1412,11 @@
           "id": "token-steward",
           "name": "Token Steward",
           "description": "Decides whether the loop should stop, escalate, or compare more candidates based on risk versus spend.",
-          "preferred_runtimes": ["claude", "codex", "copilot"],
+          "preferred_runtimes": [
+            "claude",
+            "codex",
+            "copilot"
+          ],
           "default_visibility": "lead",
           "context_mode": "standard",
           "role_tier": "supervisor",
@@ -880,7 +1430,9 @@
           "id": "user-simulator",
           "name": "User Simulator",
           "description": "Drives the running app as a real person for one assigned surface + viewport, screenshotting whatever breaks or confuses.",
-          "preferred_runtimes": ["claude"],
+          "preferred_runtimes": [
+            "claude"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -888,13 +1440,17 @@
           "prompt_preamble_md": "You are a real end-user, not a developer, on your assigned surface at your assigned viewport (mobile/tablet/desktop). Try to actually accomplish the task. When something breaks, is confusing, or does nothing, screenshot it and record it as a finding. Do not read the source to explain it away.",
           "enabled": true,
           "sort_order": 203,
-          "mcp_server_ids": ["playwright"]
+          "mcp_server_ids": [
+            "playwright"
+          ]
         },
         {
           "id": "edge-case-hunter",
           "name": "Edge Case Hunter",
           "description": "Attacks boundaries in a real browser: empty/huge/pasted/emoji inputs, double-submit, back-button, refresh mid-flow.",
-          "preferred_runtimes": ["claude"],
+          "preferred_runtimes": [
+            "claude"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -902,13 +1458,17 @@
           "prompt_preamble_md": "Push every input and control to its boundary: empty, huge, whitespace, emoji, pasted, negative, and duplicate submits; use the browser back button and refresh mid-flow. Screenshot every wrong or missing response.",
           "enabled": true,
           "sort_order": 204,
-          "mcp_server_ids": ["playwright"]
+          "mcp_server_ids": [
+            "playwright"
+          ]
         },
         {
           "id": "state-corruptor",
           "name": "State Corruptor",
           "description": "Forces bad state in a real browser: race double-clicks, slow/offline network, stale-tab actions, interrupted saves.",
-          "preferred_runtimes": ["claude"],
+          "preferred_runtimes": [
+            "claude"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -916,13 +1476,17 @@
           "prompt_preamble_md": "Try to corrupt application state: double- and triple-click actions, throttle or drop the network mid-request, act in a stale tab, and interrupt saves. Screenshot any inconsistent, duplicated, or lost data.",
           "enabled": true,
           "sort_order": 205,
-          "mcp_server_ids": ["playwright"]
+          "mcp_server_ids": [
+            "playwright"
+          ]
         },
         {
           "id": "ux-critic",
           "name": "UX Critic",
           "description": "Judges hierarchy, copy, spacing, and empty/loading/error states from real screenshots at each viewport.",
-          "preferred_runtimes": ["claude"],
+          "preferred_runtimes": [
+            "claude"
+          ],
           "default_visibility": "helper",
           "context_mode": "standard",
           "role_tier": "worker",
@@ -930,13 +1494,17 @@
           "prompt_preamble_md": "From real screenshots at your assigned viewport, critique visual hierarchy, copy clarity, spacing, and the empty/loading/error states. Flag anything that would make a real user hesitate, misread, or overflow the screen.",
           "enabled": true,
           "sort_order": 206,
-          "mcp_server_ids": ["playwright"]
+          "mcp_server_ids": [
+            "playwright"
+          ]
         },
         {
           "id": "a11y-auditor",
           "name": "Accessibility Auditor",
           "description": "Tests keyboard-only traversal, focus traps/escape, contrast, and landmarks/labels from the accessibility snapshot.",
-          "preferred_runtimes": ["claude"],
+          "preferred_runtimes": [
+            "claude"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -944,7 +1512,9 @@
           "prompt_preamble_md": "Traverse the surface with keyboard only: check focus order, visible focus, focus traps, and escape. From the accessibility snapshot, flag missing labels/landmarks and low contrast. Screenshot each failure.",
           "enabled": true,
           "sort_order": 207,
-          "mcp_server_ids": ["playwright"]
+          "mcp_server_ids": [
+            "playwright"
+          ]
         }
       ],
       "personalities": [
@@ -952,7 +1522,11 @@
           "id": "impatient-user",
           "name": "The Impatient User",
           "blurb": "Clicks fast, waits for nothing, abandons on the first snag.",
-          "traits": ["hasty", "demanding", "restless"],
+          "traits": [
+            "hasty",
+            "demanding",
+            "restless"
+          ],
           "prompt_preamble_md": "Move fast and expect instant feedback. If something is slow, ambiguous, or needs a second try, treat that as a bug.",
           "voice": "direct",
           "sort_order": 70
@@ -961,7 +1535,11 @@
           "id": "meticulous-tester",
           "name": "The Meticulous Tester",
           "blurb": "Reads every label and checks every state.",
-          "traits": ["thorough", "precise", "patient"],
+          "traits": [
+            "thorough",
+            "precise",
+            "patient"
+          ],
           "prompt_preamble_md": "Verify every field, message, and state transition. The smallest inconsistency is worth recording.",
           "voice": "measured",
           "sort_order": 71
@@ -970,7 +1548,11 @@
           "id": "distracted-user",
           "name": "The Distracted User",
           "blurb": "Switches tabs, comes back, half-finishes flows.",
-          "traits": ["scattered", "interrupt-prone", "realistic"],
+          "traits": [
+            "scattered",
+            "interrupt-prone",
+            "realistic"
+          ],
           "prompt_preamble_md": "Start flows, get interrupted, switch away, and come back later. Flag anything that loses your place, your data, or your session.",
           "voice": "casual",
           "sort_order": 72
@@ -979,7 +1561,11 @@
           "id": "adversarial-user",
           "name": "The Adversarial User",
           "blurb": "Actively tries to break and misuse the app.",
-          "traits": ["hostile", "creative", "probing"],
+          "traits": [
+            "hostile",
+            "creative",
+            "probing"
+          ],
           "prompt_preamble_md": "Assume the app can be broken and try to break it: unexpected inputs, out-of-order actions, and misuse of every control.",
           "voice": "direct"
         },
@@ -987,7 +1573,11 @@
           "id": "first-time-user",
           "name": "The First-Timer",
           "blurb": "Has never seen this app and reads nothing carefully.",
-          "traits": ["naive", "literal", "unassuming"],
+          "traits": [
+            "naive",
+            "literal",
+            "unassuming"
+          ],
           "prompt_preamble_md": "You have never used this before and skim instructions. Flag anything unclear, unlabeled, or that assumes knowledge you do not have.",
           "voice": "plain"
         },
@@ -995,7 +1585,11 @@
           "id": "power-user",
           "name": "The Power User",
           "blurb": "Keyboard shortcuts, deep links, many tabs.",
-          "traits": ["expert", "fast", "exploratory"],
+          "traits": [
+            "expert",
+            "fast",
+            "exploratory"
+          ],
           "prompt_preamble_md": "Use shortcuts, deep links, and multiple tabs. Flag anything that breaks under expert speed or parallel use.",
           "voice": "steady"
         },
@@ -1003,7 +1597,11 @@
           "id": "mobile-thumb",
           "name": "The Mobile Thumb",
           "blurb": "One thumb, small screen, no hover.",
-          "traits": ["touch-first", "cramped", "on-the-go"],
+          "traits": [
+            "touch-first",
+            "cramped",
+            "on-the-go"
+          ],
           "prompt_preamble_md": "You are on a phone using one thumb, with no hover. Flag tap targets that are too small, overlaps, and anything that needs hover to work.",
           "voice": "direct"
         },
@@ -1011,7 +1609,11 @@
           "id": "rage-clicker",
           "name": "The Rage Clicker",
           "blurb": "Clicks again when nothing happens.",
-          "traits": ["frustrated", "repetitive", "impatient"],
+          "traits": [
+            "frustrated",
+            "repetitive",
+            "impatient"
+          ],
           "prompt_preamble_md": "When a control seems unresponsive, click it again and again. Flag double-submits, duplicate actions, and missing loading feedback.",
           "voice": "blunt"
         },
@@ -1019,7 +1621,11 @@
           "id": "skim-reader",
           "name": "The Skim Reader",
           "blurb": "Reads headings only, never the fine print.",
-          "traits": ["fast-reading", "impatient", "surface-level"],
+          "traits": [
+            "fast-reading",
+            "impatient",
+            "surface-level"
+          ],
           "prompt_preamble_md": "Read only headings and buttons. Flag flows that only work if you read text most users would skip.",
           "voice": "casual"
         },
@@ -1027,7 +1633,11 @@
           "id": "form-abuser",
           "name": "The Form Abuser",
           "blurb": "Submits blank, wrong, and hostile form data.",
-          "traits": ["testing", "boundary-seeking", "relentless"],
+          "traits": [
+            "testing",
+            "boundary-seeking",
+            "relentless"
+          ],
           "prompt_preamble_md": "Submit forms blank, with wrong types, with too-long values, and with special characters. Flag anything that accepts bad data or falsely reports success.",
           "voice": "direct"
         },
@@ -1035,7 +1645,11 @@
           "id": "screen-reader-mimic",
           "name": "The Screen Reader Mimic",
           "blurb": "Navigates by labels and landmarks, not sight.",
-          "traits": ["non-visual", "structured", "label-driven"],
+          "traits": [
+            "non-visual",
+            "structured",
+            "label-driven"
+          ],
           "prompt_preamble_md": "Navigate as if you cannot see the screen, using only labels, roles, and landmarks. Flag unlabeled controls, wrong reading order, and missing announcements.",
           "voice": "measured"
         },
@@ -1043,7 +1657,11 @@
           "id": "slow-network",
           "name": "The Slow Network",
           "blurb": "Everything loads late or times out.",
-          "traits": ["degraded", "patient", "realistic"],
+          "traits": [
+            "degraded",
+            "patient",
+            "realistic"
+          ],
           "prompt_preamble_md": "Assume a slow or flaky connection. Flag missing loading states, actions that fire twice, and flows that break when a request is slow or fails.",
           "voice": "steady"
         }
@@ -1056,8 +1674,15 @@
           "prompt": "Start a QA & Bug-Hunt Squad run against the app URL you are given. As QA Lead, plan the smallest hunt covering the real risk, assign each hunter one surface + viewport, run them in parallel on separate lanes, then dedupe and file findings once as Quality OS evidence with screenshots. Prefer the cheapest coverage that still finds the real bugs.",
           "icon": "bug",
           "category": "workflows",
-          "tags": ["qa", "bug-hunt", "ui-testing", "accessibility"],
-          "default_argv": ["claude"]
+          "tags": [
+            "qa",
+            "bug-hunt",
+            "ui-testing",
+            "accessibility"
+          ],
+          "default_argv": [
+            "claude"
+          ]
         }
       ],
       "notes_md": "The reusable bug-finding team. Point it at a running app URL: user-simulation and edge-case hunters drive a real browser (Playwright) as mobile/desktop users, UX + accessibility critics judge from real screenshots, and a triage + synthesist pass files unique bugs as Quality OS evidence and gates. Browser roles carry only the Playwright MCP; coordination roles carry none — token-lean by design."
@@ -1071,9 +1696,27 @@
       "featured": true,
       "verified": true,
       "sort_rank": 8,
-      "tags": ["research", "source-code", "github", "web-scraper", "provenance", "benchmark", "skill-pack"],
-      "recommended_case_modes": ["research", "harvest", "benchmark", "challenge"],
-      "recommended_mission_profiles": ["source-discovery", "release-verification", "authorized-acquisition", "skill-benchmark"],
+      "tags": [
+        "research",
+        "source-code",
+        "github",
+        "web-scraper",
+        "provenance",
+        "benchmark",
+        "skill-pack"
+      ],
+      "recommended_case_modes": [
+        "research",
+        "harvest",
+        "benchmark",
+        "challenge"
+      ],
+      "recommended_mission_profiles": [
+        "source-discovery",
+        "release-verification",
+        "authorized-acquisition",
+        "skill-benchmark"
+      ],
       "asset_refs": [
         {
           "kind": "skill_pack",
@@ -1106,16 +1749,30 @@
         "quality_gain_summary": "Separates source, build, docs, and fallback records; provenance and permission gates can block a superficially attractive but unsafe result.",
         "token_savings_summary": "A deterministic planner, candidate ranker, single-pass project inspector, and early-stop contract remove repeated AI deliberation and redundant web calls.",
         "speed_gain_summary": "The 15-repeat offline inspection slice measured 5.08x faster warm-engine execution and 10.82x warm quality-adjusted throughput; the full internet/model 4x target remains gated.",
-        "best_for": ["latest release verification", "public or authorized private source discovery", "playable-build research", "repository provenance", "skill benchmarking"],
-        "caveats": ["Fresh-process CLI speed measured 1.45x, not 4x; the full seven-scenario internet/model workflow is still unproven, and unsafe or lower-quality attempts cannot win."]
+        "best_for": [
+          "latest release verification",
+          "public or authorized private source discovery",
+          "playable-build research",
+          "repository provenance",
+          "skill benchmarking"
+        ],
+        "caveats": [
+          "Fresh-process CLI speed measured 1.45x, not 4x; the full seven-scenario internet/model workflow is still unproven, and unsafe or lower-quality attempts cannot win."
+        ]
       },
-      "skills": ["super-internet-digger"],
+      "skills": [
+        "super-internet-digger"
+      ],
       "roles": [
         {
           "id": "source-provenance-researcher",
           "name": "Source Provenance Researcher",
           "description": "Finds primary source/release evidence and keeps source, build, web, docs, and mirrors as separate records.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -1123,13 +1780,19 @@
           "prompt_preamble_md": "Search official and canonical surfaces first. Every current-version, owner, license, and availability claim needs direct evidence. Stop when the evidence contract is complete.",
           "enabled": true,
           "sort_order": 208,
-          "mcp_server_ids": ["web-scraper"]
+          "mcp_server_ids": [
+            "web-scraper"
+          ]
         },
         {
           "id": "acquisition-guardian",
           "name": "Acquisition Guardian",
           "description": "Audits authorization, licensing, confirmation, credential handling, and supply-chain risk before retrieval or execution.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -1143,7 +1806,11 @@
           "id": "source-run-plan-inspector",
           "name": "Source Run-Plan Inspector",
           "description": "Inspects an acquired project once, identifies runtimes and locks, and proposes reproducible commands without executing them.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "helper",
           "context_mode": "minimal",
           "role_tier": "worker",
@@ -1157,7 +1824,11 @@
           "id": "skill-benchmark-judge",
           "name": "Skill Benchmark Judge",
           "description": "Runs same-model controlled comparisons and permits performance claims only when repeated measurements and safety gates support them.",
-          "preferred_runtimes": ["codex", "claude", "copilot"],
+          "preferred_runtimes": [
+            "codex",
+            "claude",
+            "copilot"
+          ],
           "default_visibility": "lead",
           "context_mode": "standard",
           "role_tier": "supervisor",
@@ -1173,7 +1844,11 @@
           "id": "evidence-hawk",
           "name": "The Evidence Hawk",
           "blurb": "Distrusts unsupported versions, mirrors, and performance claims.",
-          "traits": ["source-first", "skeptical", "precise"],
+          "traits": [
+            "source-first",
+            "skeptical",
+            "precise"
+          ],
           "prompt_preamble_md": "Ask which primary source proves every important claim. Reject convenient but weak provenance and any benchmark conclusion without comparable raw evidence.",
           "voice": "measured",
           "sort_order": 73
@@ -1190,9 +1865,23 @@
           "visual_language": "notebook",
           "data_behavior": "local_first",
           "density_rule": "density-no-scroll",
-          "component_ids": ["nav-split-pane", "interaction-drawers", "visual-notebook", "quality-default", "density-no-scroll"],
-          "default_directives": {"generation_mode": "prototype", "recipe_selection_mode": "manual"},
-          "tags": ["research", "provenance", "source", "benchmark"],
+          "component_ids": [
+            "nav-split-pane",
+            "interaction-drawers",
+            "visual-notebook",
+            "quality-default",
+            "density-no-scroll"
+          ],
+          "default_directives": {
+            "generation_mode": "prototype",
+            "recipe_selection_mode": "manual"
+          },
+          "tags": [
+            "research",
+            "provenance",
+            "source",
+            "benchmark"
+          ],
           "builtin": false
         }
       ],
@@ -1204,7 +1893,10 @@
           "url": null,
           "reuse_posture": "user_authorized",
           "provenance_summary": "Bundled workflow and benchmark rules for public and user-authorized source research.",
-          "metadata": {"bundle_id": "super-internet-digger", "skill_id": "super-internet-digger"},
+          "metadata": {
+            "bundle_id": "super-internet-digger",
+            "skill_id": "super-internet-digger"
+          },
           "notes_md": "Requires primary evidence, immutable version pins, separate discovery/acquisition/execution gates, and honest same-environment benchmark claims.",
           "builtin": false
         }
@@ -1217,8 +1909,15 @@
           "prompt": "Use the installed Synapse skill pack `super-internet-digger`. Read it from GET $SYNAPSE_API/ai-bundles/skills/super-internet-digger with X-Synapse-Token: $SYNAPSE_TOKEN, follow its permission gates and bounded parallel research loop, use direct tools even if Warden is available, and preserve the structured candidate/evidence artifacts. Do not download or execute until the relevant gate is explicitly authorized.",
           "icon": "search-code",
           "category": "workflows",
-          "tags": ["research", "source-code", "provenance", "web-scraper"],
-          "default_argv": ["codex"]
+          "tags": [
+            "research",
+            "source-code",
+            "provenance",
+            "web-scraper"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         },
         {
           "id": "benchmark-super-internet-digger",
@@ -1227,11 +1926,83 @@
           "prompt": "Run the installed `super-internet-digger-v2` benchmark through Synapse's /benchmarks API. Compare the current Codex skill and the installed Synapse skill with the same model, tools, network, prompt, and policy for at least five repeats per scenario. Preserve raw artifacts, keep failed attempts, apply the skill's benchmark rubric and critical safety gate, and publish only the claims the measured multipliers support. Treat 4x as a target, never an assumed result.",
           "icon": "gauge",
           "category": "benchmarks",
-          "tags": ["benchmark", "skill-lab", "quality", "speed", "tokens"],
-          "default_argv": ["codex"]
+          "tags": [
+            "benchmark",
+            "skill-lab",
+            "quality",
+            "speed",
+            "tokens"
+          ],
+          "default_argv": [
+            "codex"
+          ]
         }
       ],
       "notes_md": "This is the first Synapse-native portable skill pack and the template for improving other Codex skills. Installation includes the skill files and seeds a reusable benchmark spec; uninstall removes the skill package but intentionally keeps benchmark records/specs so historical evidence is not destroyed."
+    },
+    {
+      "id": "local-app-scaffold",
+      "name": "Local App Scaffold",
+      "publisher": "The WhatIf Company",
+      "version": "1.0.0",
+      "description": "Build whole apps from verified blueprints, with local models writing the pieces for free and machine checks deciding what passed. Ships the reviewed UI kit, the labelled-input partials, the acceptance scenarios and the render-level checks - so a generated app inherits accessibility and escaping instead of re-deriving them badly each time.",
+      "featured": true,
+      "verified": true,
+      "sort_rank": 20,
+      "tags": [
+        "blueprints",
+        "local-ai",
+        "codegen",
+        "scaffold",
+        "accessibility",
+        "token-efficiency"
+      ],
+      "recommended_case_modes": [
+        "build",
+        "benchmark"
+      ],
+      "recommended_mission_profiles": [
+        "build-an-app",
+        "token-efficient-build",
+        "local-first"
+      ],
+      "efficiency": {
+        "quality_gain_summary": "Generated apps inherit a reviewed stylesheet, partials that cannot emit an unlabelled input, and acceptance scenarios shaped like the real call site. Measured: the first build-off shipped a stored-XSS hole and a dashboard rendering 'undefined' while scoring full marks, because nothing rendered a page. Every guarantee now maps to a check that has been proven to fail the defect it exists for.",
+        "token_savings_summary": "Local inference is free and runs all night; a frontier model is invited in only when the local loop is genuinely stuck, and then receives a compact escalation packet - the requirement, the code, the real error - rather than a transcript. Stating a piece's contract up front cut its repairs from 10 to 3 (benchmarks/app-build/CONTRACT_AB.md).",
+        "speed_gain_summary": "Pieces build in dependency order and each verifies as it completes, so a failure surfaces on the piece that caused it rather than at assembly.",
+        "best_for": [
+          "starting a real app from a recipe rather than a blank file",
+          "work you want ground out overnight at zero token cost",
+          "any build where accessibility and escaping must be verified, not assumed"
+        ],
+        "caveats": [
+          "Needs Ollama running locally with a coder model pulled.",
+          "A 7B on a 6 GB card will not finish a large stateful module unaided - expect to write the hardest piece yourself from its escalation packet.",
+          "Read `verified`, not `passed`: `passed` means the model's own test went green."
+        ]
+      },
+      "skills": [],
+      "quick_actions": [
+        {
+          "id": "build-from-blueprint",
+          "name": "Build From Blueprint",
+          "description": "Build a working app from a verified recipe. Local models write the pieces for free and machine checks grade them; you are only asked for the parts a small model genuinely cannot do. Every blueprint states what it guarantees before you start.",
+          "icon": "blocks",
+          "category": "workflows",
+          "tags": [
+            "blueprints",
+            "local-ai",
+            "scaffold",
+            "codegen",
+            "free"
+          ],
+          "prompt": "You are building an app from a Synapse **blueprint** -- a verified recipe carrying pieces, contracts, acceptance scenarios, design assets and evidence that it works. The point is that local models do the writing for free and machine checks decide what passed, so you spend as few of your own tokens as possible.\n\nEnvironment: `$SYNAPSE_API` (e.g. http://127.0.0.1:7878/api/v1) and `$SYNAPSE_TOKEN`. Every call uses `-H \"X-Synapse-Token: $SYNAPSE_TOKEN\"`.\n\n1. SEE WHAT EXISTS. `GET $SYNAPSE_API/blueprints/summary` lists every blueprint with its `what_you_get`, `guarantees`, `stack` and `est_minutes`. Show the human the guarantees, not just the names -- that is what makes a blueprint worth using over writing it yourself.\n\n2. AGREE ON ONE, AND ON THE WORDS. Ask which blueprint, and what the app is actually about. A blueprint is domain-neutral: `webapp-auth-crud` builds a trail log, an expense tracker or a reading list from the same recipe, via its `vocabulary` ({record, records, Record, Records, title_field, amount_field}). Pass overrides in the build request rather than editing the blueprint.\n\n3. BUILD. `POST $SYNAPSE_API/blueprints/{id}/build` with `{workspace, vocabulary, coder_model, max_repairs}`. This runs locally and takes real time -- roughly 20-40 minutes per piece on a 6 GB card -- and costs you nothing while it runs. Do not poll it in a tight loop.\n\n4. READ THE RESULT HONESTLY. The response carries one `PieceOutcome` per piece. Read TWO fields, not one:\n   - `passed` -- its tests went green. Those tests were mostly written by the same model that wrote the code, so this means the model agrees with itself.\n   - `verified` -- the blueprint's own acceptance scenario ran and passed. That scenario was written independently, shaped like the real call site.\n   `checks` reports each declared check separately, including `not_run` and `deferred` -- a check that did not run is never reported as a pass. `web_checks` holds the render-level results for the assembled app, including the stored-XSS probe.\n\n5. FINISH WHAT ESCALATED. Any piece with `escalated: true` carries an `escalation_packet`: the requirement, the current code, the real error, and what was already tried. It is deliberately compact. Write that piece yourself from the packet -- that is the one place your tokens are worth spending. Match the declared contract exactly; the other pieces were written against it.\n\n6. PROVE IT RUNS. Start the app (`app.py`, default port 8099) and check the health endpoint, then open the pages. If `web_checks` reported a failure, fix it before telling the human it works -- those checks exist because an earlier build shipped a stored-XSS hole and a dashboard rendering \"undefined\" while scoring full marks.\n\n7. REPORT. Tell the human: which pieces were built locally and which you wrote, which checks ran and which did not, and where the app is running. If a guarantee in the blueprint is not actually met by this build, say so plainly rather than repeating the guarantee.\n\nRules: never report a piece as working on the strength of `passed` alone; never describe a `not_run` check as a pass; prefer letting the local loop grind (it is free) over stepping in early; and if the blueprint's scenario fails on something the model cannot fix, suspect the scenario before concluding the model is incapable -- that has been the cause more often than not.",
+          "default_argv": [
+            "claude"
+          ]
+        }
+      ],
+      "notes_md": "### What you actually get\n\nA blueprint is a verified recipe, not a template: pieces, contracts, acceptance scenarios, design assets, and evidence it works. `GET /api/v1/blueprints/summary` lists what each one guarantees before you commit to it.\n\n### Reading a build honestly\n\nEach piece reports `passed` **and** `verified`. `passed` means its tests went green, and those tests were mostly written by the model that wrote the code - so it means the model agrees with itself. `verified` means the blueprint's own scenario ran and passed. Checks that could not run report `not_run`, never a pass.\n\n### Where your tokens go\n\nInto the pieces that escalate. Everything else is free. If a scenario fails on something the model seemingly cannot fix, check the scenario first - on this project that has been the cause more often than the model has."
     }
   ]
 }

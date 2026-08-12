@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.140] - 2026-08-12
+
+### Added
+- `local-app-scaffold` is registered as an installable AI bundle, so the scaffold appears in
+  the marketplace where a human looking for "build me an app" would actually look, rather
+  than only over HTTP and in `/ai/context`.
+
+  Installed through the real API rather than declared done: `POST
+  /api/v1/ai-bundles/install/local-app-scaffold` returns 200, the bundle joins
+  `installed_ids`, and `build-from-blueprint.json` lands in the installed quick-actions
+  directory. The catalog is re-read live - no restart.
+
+  Its `caveats` say the things a marketplace description usually will not: a 7B on a 6 GB
+  card will not finish a large stateful module unaided, and `passed` means the model agrees
+  with itself - read `verified`.
+
+This completes Phase 9's registration: bundle, quick action, and the `/ai/context` entry
+that already carried `for_building_a_whole_app`.
+
 ## [0.1.139] - 2026-08-12
 
 ### Added
