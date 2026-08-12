@@ -9,6 +9,7 @@ models exist and what they are measured to be good at, then hand a job to
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -17,7 +18,8 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import local_chat, local_models, local_pipeline, local_router, ollama_client
+from . import (local_bench, local_chat, local_improve, local_models, local_pipeline,
+               local_router, ollama_client)
 from .errors import invalid
 from .local_agent import MAX_STEPS_DEFAULT, AgentRun, PermissionMode, run_agent
 
@@ -60,6 +62,17 @@ class DoRequest(BaseModel):
     path: str = "solution.py"
     max_repairs: int = 4
     allow_shell: bool = False
+
+
+class BenchRequest(BaseModel):
+    models: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+
+
+class ImproveRequest(BaseModel):
+    skills: list[str] = Field(default_factory=list)
+    variables: list[str] = Field(default_factory=list)
+    repeats: int = 3
 
 
 class CreateChatRequest(BaseModel):
@@ -208,6 +221,63 @@ def build_local_ai_router(storage: Any, data_dir: Path) -> APIRouter:
             task, workspace=ws, path=payload.path,
             max_repairs=max(0, min(payload.max_repairs, 20)),
             allow_shell=payload.allow_shell)
+
+    # ── benchmark ────────────────────────────────────────────────────────────────
+
+    @router.get("/bench")
+    async def bench_scorecard() -> dict[str, Any]:
+        """The latest measured scorecard for the models on this machine."""
+        return local_bench.latest_scorecard()
+
+    @router.get("/bench/history")
+    async def bench_history(skill: str = "", model: str = "", limit: int = 20) -> dict[str, Any]:
+        """Score over time. A regression after a model swap should be visible, not inferred."""
+        if skill:
+            return {"skill": skill, "points": local_bench.trend(skill, model, limit)}
+        return {"runs": local_bench.load_runs(limit)}
+
+    @router.get("/bench/skills")
+    async def bench_skills() -> dict[str, Any]:
+        """What is measured. Skill packs are JSON, so this list grows without code."""
+        packs = local_bench.load_skill_packs()
+        return {"skills": [{"skill": p.skill, "description": p.description,
+                            "checks": len(p.checks)} for p in packs.values()]}
+
+    @router.post("/bench/run")
+    async def bench_run(payload: BenchRequest) -> local_bench.BenchRun:
+        """Measure. Long-running by nature - every check is a real inference."""
+        models = payload.models or local_bench.installed_models()
+        if not models:
+            raise invalid("models", "No local models found. Is Ollama running?")
+        return await asyncio.to_thread(local_bench.run_bench, models, payload.skills or None)
+
+    # ── improver ─────────────────────────────────────────────────────────────────
+
+    @router.get("/improve")
+    async def improve_status() -> dict[str, Any]:
+        """What the improver has tried, and whether it has earned the right to act."""
+        return local_improve.status()
+
+    @router.post("/improve/run")
+    async def improve_run(payload: ImproveRequest) -> dict[str, Any]:
+        """One improvement pass over the harness. Free: every inference is local.
+
+        In shadow mode it records what it *would* change and changes nothing. Auto-promotion
+        unlocks only after its predictions hold up on held-out checks repeatedly.
+        """
+        decisions = await asyncio.to_thread(
+            local_improve.run_experiment, payload.skills or None,
+            payload.variables or None, payload.repeats)
+        return {"decisions": [d.model_dump() for d in decisions],
+                "status": local_improve.status()}
+
+    @router.post("/improve/rollback")
+    async def improve_rollback() -> dict[str, Any]:
+        """Undo the last promotion. Deliberately one call."""
+        previous = local_improve.rollback()
+        if previous is None:
+            raise invalid("history", "There is no earlier configuration to roll back to.")
+        return {"active_config": previous.model_dump()}
 
     # ── conversations ────────────────────────────────────────────────────────────
 

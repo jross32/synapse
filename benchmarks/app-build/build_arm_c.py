@@ -20,7 +20,7 @@ async def main() -> None:
         elif t == "repairing":
             print(f"      repair {e.get('attempt')}: {str(e.get('error'))[:80]}", flush=True)
     result = await build_blueprint(bp, workspace=WS, coder_model="qwen2.5-coder:7b",
-                                   max_repairs=4, on_event=log)
+                                   max_repairs=10, on_event=log)
     print("\n" + result.summary())
     for p in result.pieces:
         print(f"  {p.name:10s} {'PASS' if p.passed else 'ESCALATE':9s} repairs={p.repairs} "

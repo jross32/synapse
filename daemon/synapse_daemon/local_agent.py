@@ -237,7 +237,8 @@ class Workspace:
 DEFAULT_CODER_MODEL = "qwen2.5-coder:3b"
 
 
-def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 300.0) -> str:
+def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 900.0,
+                  num_ctx: int = 8192) -> str:
     """Ask a coding-tuned model to write code, with no tools involved.
 
     This exists because of a hard split measured on real runs: the coder-tuned models write
@@ -254,7 +255,11 @@ def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 
                       f"{spec}\n\nOutput ONLY the code in a single ```python block. "
                       f"No explanation before or after."}],
         "stream": False,
-        "options": {"temperature": 0, "num_ctx": 4096},
+        # num_ctx covers the prompt AND the generation. At 4096 a piece that receives an
+        # exemplar plus its dependencies' interfaces has no room left to emit a full module,
+        # which surfaces as a timeout rather than as an obvious "context exhausted" error -
+        # measured: the pages piece failed this way at 300s having produced nothing.
+        "options": {"temperature": 0, "num_ctx": num_ctx},
     }
     try:
         req = urllib.request.Request(

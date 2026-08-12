@@ -1,0 +1,200 @@
+{
+ "started": "2026-08-12T05:15:50",
+ "finished": "2026-08-12T05:45:58",
+ "host": {
+  "gpu": "NVIDIA GeForce GTX 1660 Ti with Max-Q Design",
+  "vram_gb": 6.0
+ },
+ "skills": [
+  "instruction_following",
+  "tool_calling"
+ ],
+ "models": [
+  {
+   "model": "qwen2.5:1.5b",
+   "skills": {
+    "instruction_following": {
+     "skill": "instruction_following",
+     "score": 0.7,
+     "unsupported": false,
+     "seconds": 1236.3,
+     "tokens_out": 45,
+     "results": [
+      {
+       "id": "exact_word",
+       "passed": true,
+       "seconds": 145.74,
+       "tokens_out": 2,
+       "unsupported": false,
+       "detail": "Paris"
+      },
+      {
+       "id": "no_punctuation",
+       "passed": true,
+       "seconds": 180.03,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "uppercase",
+       "passed": true,
+       "seconds": 18.0,
+       "tokens_out": 2,
+       "unsupported": false,
+       "detail": "READY"
+      },
+      {
+       "id": "json_only",
+       "passed": false,
+       "seconds": 180.02,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": "__ERROR__ TimeoutError"
+      },
+      {
+       "id": "exact_count",
+       "passed": true,
+       "seconds": 28.66,
+       "tokens_out": 6,
+       "unsupported": false,
+       "detail": "3 lines"
+      },
+      {
+       "id": "starts_with",
+       "passed": false,
+       "seconds": 180.0,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": "started with '__ERROR__ TimeoutError'"
+      },
+      {
+       "id": "avoid_word",
+       "passed": true,
+       "seconds": 22.93,
+       "tokens_out": 17,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "max_chars",
+       "passed": true,
+       "seconds": 180.01,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": "22 chars, limit 50"
+      },
+      {
+       "id": "numbered_two",
+       "passed": true,
+       "seconds": 120.89,
+       "tokens_out": 18,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "refuse_extra",
+       "passed": false,
+       "seconds": 180.02,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": "answered None, expected 144.0"
+      }
+     ]
+    },
+    "tool_calling": {
+     "skill": "tool_calling",
+     "score": 0.8,
+     "unsupported": false,
+     "seconds": 571.5700000000002,
+     "tokens_out": 220,
+     "results": [
+      {
+       "id": "weather_basic",
+       "passed": true,
+       "seconds": 18.35,
+       "tokens_out": 20,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "weather_with_unit",
+       "passed": true,
+       "seconds": 96.02,
+       "tokens_out": 27,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "search_pick",
+       "passed": false,
+       "seconds": 180.01,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": "called [], expected search_web"
+      },
+      {
+       "id": "email_all_args",
+       "passed": true,
+       "seconds": 43.04,
+       "tokens_out": 37,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "read_named_file",
+       "passed": false,
+       "seconds": 180.02,
+       "tokens_out": 0,
+       "unsupported": false,
+       "detail": "called [], expected read_file"
+      },
+      {
+       "id": "math_tool",
+       "passed": true,
+       "seconds": 45.32,
+       "tokens_out": 28,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "no_tool_needed",
+       "passed": true,
+       "seconds": 1.51,
+       "tokens_out": 10,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "pick_right_of_many",
+       "passed": true,
+       "seconds": 2.07,
+       "tokens_out": 21,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "no_invented_tools",
+       "passed": true,
+       "seconds": 3.44,
+       "tokens_out": 57,
+       "unsupported": false,
+       "detail": ""
+      },
+      {
+       "id": "weather_from_indirect_phrasing",
+       "passed": true,
+       "seconds": 1.79,
+       "tokens_out": 20,
+       "unsupported": false,
+       "detail": ""
+      }
+     ]
+    }
+   },
+   "total_score": 0.75,
+   "total_seconds": 1807.8700000000001,
+   "total_tokens_out": 265
+  }
+ ]
+}

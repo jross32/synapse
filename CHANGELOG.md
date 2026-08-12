@@ -10,6 +10,33 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.126] -- 2026-08-12
+
+### Added -- the improver: bounded search that earns its autonomy
+- **`local_improve.py`** searches the *harness*, never the model and never the source. It may
+  only choose among pre-registered options (which model holds a seat, context size, repair
+  budget, exemplar/contract injection, temperature) -- a test asserts every search value is
+  plain data, because anything executable would make this an agent rewriting the system
+  rather than a bounded search.
+- **Four gates before any promotion**: the gain must clear a measured noise floor (found by
+  repeating the *same* config, since a lucky run and a real improvement look identical without
+  it); no other skill may regress beyond a small epsilon; the win must hold on a slice of
+  checks it was never tuned against; and `active_config` is versioned so `rollback()` is one
+  call.
+- **Autonomy is earned.** It ships in shadow mode -- runs everything, changes nothing, records
+  what it *would* have promoted. Auto-promotion unlocks only after three consecutive
+  predictions hold up on held-out checks. If they never do, that is the finding and it stays a
+  proposal engine.
+- **Bench + improver REST**: `/local-ai/bench`, `/bench/history`, `/bench/skills`,
+  `/bench/run`, `/improve`, `/improve/run`, `/improve/rollback`.
+
+### Fixed
+- **`generate_code` ran at `num_ctx: 4096`**, but that window covers the prompt *and* the
+  generation. A piece receiving an exemplar plus its dependencies' interfaces had no room left
+  to emit a full module, which surfaced as a 300s timeout rather than an obvious
+  context-exhausted error -- the `pages` piece failed exactly this way, having produced
+  nothing. Now 8192, with a 900s ceiling.
+
 ## [0.1.125] -- 2026-08-12
 
 ### Added
