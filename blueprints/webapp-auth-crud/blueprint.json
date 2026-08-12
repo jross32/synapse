@@ -245,5 +245,13 @@
     "Records": "Records",
     "title_field": "title",
     "amount_field": "amount"
+  },
+  "guarantee_checks": {
+    "Passwords are hashed with PBKDF2 and are not recoverable from the database": "scenario:passwords",
+    "Every input has a label and every control is at least 44px tall": "webcheck:inputs labelled on /signup",
+    "User text is escaped, proven by storing a hostile payload and rendering it": "webcheck:stored XSS probe",
+    "Anonymous requests get 401 and malformed ones get 422, never a 500": "scenario:api",
+    "One account cannot read or delete another account's records": "scenario:storage",
+    "No horizontal scrolling at 390px": "webcheck:no horizontal scroll on /signup"
   }
 }

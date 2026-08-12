@@ -435,6 +435,53 @@ def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
     assert "init_db()" in draft, draft
 
 
+def test_every_guarantee_names_a_check_that_really_exists():
+    """`/ai/context` tells every connecting AI that guarantees map to checks. Make it so.
+
+    That claim shipped as prose and was false for a while: the `api` piece had no acceptance
+    scenario at all, and the stored-XSS probe had never been fired at a vulnerable page. A
+    promise that nothing verifies is precisely the failure this scaffold exists to prevent,
+    so the mapping is data and this asserts it is complete and points at real checks.
+
+    Check names are not accepted on faith. `scenario:<piece>` must name a piece that exists
+    and carries a scenario; `webcheck:<name>` must match a name `webcheck.py` actually
+    emits.
+    """
+    from synapse_daemon.blueprints import load_catalog
+    from synapse_daemon.scaffold import webcheck as webcheck_mod
+
+    webcheck_src = Path(webcheck_mod.__file__).read_text(encoding="utf-8")
+
+    problems: list[str] = []
+    for blueprint in load_catalog():
+        if blueprint.draft:
+            continue
+        pieces = {p.name: p for p in blueprint.instantiate().pieces}
+        for guarantee in blueprint.guarantees:
+            check = blueprint.guarantee_checks.get(guarantee)
+            if not check:
+                problems.append(f"{blueprint.id}: no check named for {guarantee!r}")
+                continue
+            kind, _, name = check.partition(":")
+            if kind == "scenario":
+                if name not in pieces:
+                    problems.append(f"{blueprint.id}: {check!r} names a piece that does "
+                                    f"not exist (have {sorted(pieces)})")
+                elif not pieces[name].tests.strip():
+                    problems.append(f"{blueprint.id}: {check!r} names a piece with no "
+                                    f"scenario, so the guarantee is unenforced")
+            elif kind == "webcheck":
+                # The name must appear as a literal in the module that emits it. A typo
+                # here would leave a guarantee pointing at a check that never reports.
+                stem = name.split(" on ")[0]
+                if f'"{stem}' not in webcheck_src and f"'{stem}" not in webcheck_src:
+                    problems.append(f"{blueprint.id}: webcheck never emits {stem!r}")
+            else:
+                problems.append(f"{blueprint.id}: {check!r} is not scenario:… or webcheck:…")
+
+    assert not problems, "guarantees that nothing enforces:\n  " + "\n  ".join(problems)
+
+
 def test_a_scenario_gives_the_same_verdict_when_run_again(tmp_path):
     """A scenario runs once per repair attempt. If it leaves state, attempt 2 fails free.
 

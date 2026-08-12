@@ -106,6 +106,20 @@ class Blueprint(BaseModel):
     guarantees: list[str] = Field(default_factory=list)
     """Promises the checks actually enforce. Not marketing - each maps to a check."""
 
+    guarantee_checks: dict[str, str] = Field(default_factory=dict)
+    """Which check enforces each guarantee: guarantee text -> check name.
+
+    The docstring above claimed each guarantee mapped to a real check, and `/ai/context`
+    repeats that claim to every AI that connects. It was an assertion, and for a while it
+    was false - the `api` piece had no acceptance scenario at all, the stored-XSS probe had
+    never been fired at a vulnerable page, and no scenario executed. A promise nothing
+    verifies is the exact failure this whole scaffold exists to prevent, so the mapping is
+    now data and a test asserts every guarantee appears in it.
+
+    Values name a check the system actually emits: ``scenario:<piece>`` for a blueprint
+    acceptance scenario, or ``webcheck:<check name>`` for a render-level check.
+    """
+
     tags: list[str] = Field(default_factory=list)
     stack: list[str] = Field(default_factory=list)
     est_minutes: int = 0

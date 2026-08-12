@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.139] - 2026-08-12
+
+### Added
+- `Blueprint.guarantee_checks`: which check enforces each guarantee, as data. The model's
+  docstring already claimed each guarantee mapped to a real check, and `/ai/context`
+  repeats that claim to every AI that connects. It was prose, and for a stretch it was
+  false - the `api` piece had no acceptance scenario at all, and the stored-XSS probe had
+  never been fired at a vulnerable page.
+
+  `test_every_guarantee_names_a_check_that_really_exists` now resolves each mapping:
+  `scenario:<piece>` must name a piece that exists *and* carries a scenario, and
+  `webcheck:<name>` must match a name `webcheck.py` actually emits. Verified to fail on a
+  missing mapping and on a check name that does not exist, and to pass when restored - a
+  test that cannot fail proves nothing.
+
+- `templates/quick-actions/build-from-blueprint.json`, matching the existing quick-action
+  shape. Picked up live by the daemon's tools watcher; 17 actions now.
+
+  Its instructions tell the operating AI to read `passed` **and** `verified` rather than
+  `passed` alone, to never describe a `not_run` check as a pass, and - given how this week
+  went - to suspect the scenario before concluding the model is incapable.
+
 ## [0.1.138] - 2026-08-12
 
 ### Added
