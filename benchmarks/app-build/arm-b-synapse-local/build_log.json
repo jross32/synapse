@@ -1,0 +1,55 @@
+{
+ "pieces": [
+  {
+   "name": "passwords",
+   "passed": false,
+   "repairs": 4,
+   "tokens_in": 3405,
+   "tokens_out": 2671,
+   "seconds": 433.7,
+   "chars": 1862
+  },
+  {
+   "name": "storage",
+   "passed": true,
+   "repairs": 0,
+   "tokens_in": 400,
+   "tokens_out": 1032,
+   "seconds": 211.7,
+   "chars": 4388
+  },
+  {
+   "name": "pages",
+   "passed": true,
+   "repairs": 0,
+   "tokens_in": 439,
+   "tokens_out": 1496,
+   "seconds": 307.4,
+   "chars": 6019
+  },
+  {
+   "name": "api",
+   "passed": false,
+   "repairs": 4,
+   "tokens_in": 7291,
+   "tokens_out": 4255,
+   "seconds": 1038.4,
+   "chars": 3731
+  }
+ ],
+ "tokens_in": 11535,
+ "tokens_out": 9454,
+ "escalations": [
+  {
+   "piece": "passwords",
+   "last_error": "Traceback (most recent call last):\n  File \"C:\\Users\\justi\\synapse\\benchmarks\\app-build\\arm-b-synapse-local\\_test_passwords.py\", line 6, in <module>\n    assert verify_password(\"correct horse battery\", h) is True\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+  },
+  {
+   "piece": "api",
+   "last_error": "ib\\site-packages\\fastapi\\routing.py\", line 328, in run_endpoint_function\n    return await dependant.call(**values)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\justi\\synapse\\benchmarks\\app-build\\arm-b-synapse-local\\api.py\", line 53, in signup\n    if await storage.user_exists(user.email):\n             ^^^^^^^^^^^^^^^^^^^\nAttributeError: module 'storage' has no attribute 'user_exists'\n"
+  }
+ ],
+ "started": "23:20:19",
+ "total_seconds": 1991.2,
+ "finished": "23:53:31"
+}

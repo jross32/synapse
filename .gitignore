@@ -90,3 +90,4 @@ ollamabuild/
 synapse.lnk
 icon-check.*
 icon-preview.*
+benchmarks/app-build/*/trailmark.db

@@ -1,0 +1,33 @@
+{
+ "pieces": [
+  {
+   "name": "passwords",
+   "passed": true,
+   "repairs": 1,
+   "tokens_in": 1154,
+   "tokens_out": 1178,
+   "seconds": 285.8,
+   "chars": 1916
+  },
+  {
+   "name": "api",
+   "passed": false,
+   "repairs": 4,
+   "tokens_in": 6135,
+   "tokens_out": 3020,
+   "seconds": 773.5,
+   "chars": 2645
+  }
+ ],
+ "tokens_in": 7289,
+ "tokens_out": 4198,
+ "escalations": [
+  {
+   "piece": "api",
+   "last_error": "Traceback (most recent call last):\n  File \"C:\\Users\\justi\\synapse\\benchmarks\\app-build\\arm-b-synapse-local\\_test_api.py\", line 19, in <module>\n    assert c.get(\"/api/trails\").status_code == 401, \"anonymous must be 401\"\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: anonymous must be 401\n"
+  }
+ ],
+ "started": "23:54:40",
+ "total_seconds": 1059.3,
+ "round": 2
+}

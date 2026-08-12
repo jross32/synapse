@@ -1,0 +1,28 @@
+{
+ "Arm A (Claude)": {
+  "total_bytes": 21171,
+  "<label> elements": 7,
+  "aria-label attrs": 1,
+  "autocomplete hints": 4,
+  "min-height >=44px rules": 12,
+  "focus styles": 4,
+  "media queries": 4,
+  "css bytes": 9824,
+  "client-side validation": 20,
+  "escapes user text (XSS)": true,
+  "signup has labels": true
+ },
+ "Arm B (local models)": {
+  "total_bytes": 5838,
+  "<label> elements": 0,
+  "aria-label attrs": 0,
+  "autocomplete hints": 0,
+  "min-height >=44px rules": 0,
+  "focus styles": 0,
+  "media queries": 0,
+  "css bytes": 1094,
+  "client-side validation": 4,
+  "escapes user text (XSS)": false,
+  "signup has labels": false
+ }
+}
