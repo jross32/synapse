@@ -116,6 +116,21 @@ class Blueprint(BaseModel):
     intentionally loose: a shared string is enough to make composition queryable, and a rigid
     ontology would be wrong before the tenth blueprint."""
 
+    vocabulary: dict[str, str] = Field(default_factory=dict)
+    """Domain nouns the recipe is written in terms of, e.g. ``{"record": "trail"}``.
+
+    A blueprint describes a *shape* - sign up, sign in, keep a list of things that belong to
+    you. The things have names, and hardcoding them makes the recipe single-use. Written as
+    ``{{record}}`` placeholders through the specs, contracts, scenarios and entrypoint, and
+    substituted at build time, so one blueprint builds a trail log or an expense tracker
+    without being edited.
+
+    This was not a hypothetical: `webapp-auth-crud` was written around ``record``/``title``/
+    ``amount`` while the benchmark it exists to be measured against froze a spec using
+    ``trail``/``name``/``distance_km``. The two builds could not be compared, and the
+    difference had nothing to do with the quality of either.
+    """
+
     pieces: list[Piece] = Field(default_factory=list)
     entrypoint: dict[str, Any] = Field(default_factory=dict)
     """How to run the assembled result, so the web checks have something to attack.
@@ -141,6 +156,39 @@ class Blueprint(BaseModel):
     source: str = "builtin"
     draft: bool = False
     """Distilled blueprints start as drafts: machine-derived, not yet human-approved."""
+
+    def instantiate(self, overrides: dict[str, str] | None = None) -> "Blueprint":
+        """A copy of this recipe rewritten in a particular domain's nouns.
+
+        Substitution is textual and total: every ``{{term}}`` anywhere in the pieces or the
+        entrypoint is replaced, so the spec a model reads, the contract it is held to, the
+        scenario that judges it and the flow that attacks the result all say the same word.
+        Rewriting only some of them is how a module and its caller come to disagree, which
+        is the failure this whole area exists to prevent.
+        """
+        terms = {**self.vocabulary, **(overrides or {})}
+        if not terms:
+            return self.model_copy(deep=True)
+
+        def sub(value: Any) -> Any:
+            if isinstance(value, str):
+                for key, word in terms.items():
+                    value = value.replace("{{" + key + "}}", word)
+                return value
+            if isinstance(value, list):
+                return [sub(v) for v in value]
+            if isinstance(value, dict):
+                return {sub(k): sub(v) for k, v in value.items()}
+            return value
+
+        clone = self.model_copy(deep=True)
+        clone.vocabulary = terms
+        clone.entrypoint = sub(clone.entrypoint)
+        for piece in clone.pieces:
+            piece.spec = sub(piece.spec)
+            piece.tests = sub(piece.tests)
+            piece.contract = sub(piece.contract)
+        return clone
 
     def satisfies(self, capability: str) -> bool:
         return capability in self.provides

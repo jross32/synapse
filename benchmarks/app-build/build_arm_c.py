@@ -9,6 +9,13 @@ from synapse_daemon.scaffold.runner import build_blueprint
 
 WS = Path(__file__).resolve().parent / "arm-c-blueprint"
 
+# The blueprint is written generically; the benchmark froze a spec about trails. Without
+# this, Arm C builds /api/records with {title, amount} while the scorer and Arms A and B
+# speak /api/trails with {name, distance_km} - and the comparison the whole exercise rests
+# on measures the difference between two vocabularies rather than two ways of building.
+TRAILS = {"record": "trail", "records": "trails", "Record": "Trail", "Records": "Trails",
+          "title_field": "name", "amount_field": "distance_km"}
+
 async def main() -> None:
     bp = get_blueprint("webapp-auth-crud")
     started = time.time()
@@ -25,7 +32,7 @@ async def main() -> None:
             tail = next((ln.strip() for ln in reversed(err) if ln.strip()), "")
             print(f"      repair {e.get('attempt')}: {tail[:220]}", flush=True)
     result = await build_blueprint(bp, workspace=WS, coder_model="qwen2.5-coder:7b",
-                                   max_repairs=10, on_event=log)
+                                   max_repairs=10, on_event=log, vocabulary=TRAILS)
     print("\n" + result.summary())
     for p in result.pieces:
         mark = "VERIFIED" if p.verified else ("passed" if p.passed else "ESCALATE")

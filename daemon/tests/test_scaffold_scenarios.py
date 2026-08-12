@@ -37,9 +37,15 @@ def _run_async(coro):
         loop.close()
 
 
+def _pieces() -> list:
+    """The blueprint as a build sees it: placeholders resolved to the default vocabulary."""
+    from synapse_daemon.blueprints import get_blueprint
+
+    return get_blueprint("webapp-auth-crud").instantiate().pieces
+
+
 def _scenario(name: str) -> str:
-    pieces = json.loads(BLUEPRINT.read_text(encoding="utf-8"))["pieces"]
-    return next(p["tests"] for p in pieces if p["name"] == name)
+    return next(p.tests for p in _pieces() if p.name == name)
 
 
 def _run_scenario(tmp_path: Path, module: str, source: str) -> tuple[bool, str]:
@@ -146,8 +152,7 @@ def test_scenario_catches_correct_signatures_with_unusable_returns(tmp_path):
     from synapse_daemon.scaffold import contracts as contracts_mod
 
     (tmp_path / "storage.py").write_text(STORAGE_STUB, encoding="utf-8")
-    declared = json.loads(BLUEPRINT.read_text(encoding="utf-8"))["pieces"]
-    spec = next(p for p in declared if p["name"] == "storage")["contract"]
+    spec = next(p for p in _pieces() if p.name == "storage").contract
     expected = contracts_mod.ModuleContract(
         module="storage",
         functions=[contracts_mod.FunctionSpec(name=f["name"], args=f.get("args", []))
@@ -192,6 +197,42 @@ def test_runner_feeds_the_scenario_into_the_repair_loop(tmp_path):
     assert "scenario reached the loop" in seen.get("test", ""), (
         "the blueprint's scenario never reached the test the pipeline runs, so a piece "
         "could pass the build while failing the only check that models its caller")
+
+
+TRAILS = {"record": "trail", "records": "trails", "Record": "Trail", "Records": "Trails",
+          "title_field": "name", "amount_field": "distance_km"}
+
+
+def test_one_blueprint_builds_more_than_one_domain():
+    """The recipe is a shape; the nouns are an argument to it."""
+    from synapse_daemon.blueprints import get_blueprint
+
+    generic = get_blueprint("webapp-auth-crud")
+    trails = generic.instantiate(TRAILS)
+
+    assert trails.entrypoint["flow"]["create"]["path"] == "/api/trails"
+    assert "name" in trails.entrypoint["flow"]["create"]["body"]
+    assert "distance_km" in trails.entrypoint["flow"]["create"]["body"]
+
+    storage = next(p for p in trails.pieces if p.name == "storage")
+    add = next(f for f in storage.contract["functions"] if f["name"] == "add_record")
+    assert add["args"] == ["user_id", "name", "distance_km", "date"], (
+        "the contract still names the generic fields, so the module and the flow that "
+        "attacks it would disagree")
+    assert '_rows[0]["name"]' in storage.tests, "the scenario was not rewritten with it"
+
+    # Substitution has to be total. A placeholder left anywhere means one artefact is
+    # speaking a different language from the rest, which is the whole failure mode.
+    import json as _json
+    assert "{{" not in _json.dumps(trails.model_dump()), "an unsubstituted placeholder"
+
+
+def test_instantiating_with_nothing_keeps_the_default_vocabulary():
+    from synapse_daemon.blueprints import get_blueprint
+
+    default = get_blueprint("webapp-auth-crud").instantiate()
+    assert default.entrypoint["flow"]["create"]["path"] == "/api/records"
+    assert "title" in default.entrypoint["flow"]["create"]["body"]
 
 
 def test_summary_separates_passing_from_independently_verified():

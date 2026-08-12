@@ -233,6 +233,7 @@ async def build_blueprint(
     coder_model: str = "",
     max_repairs: int = 10,
     on_event: Callable[[dict[str, Any]], None] | None = None,
+    vocabulary: dict[str, str] | None = None,
 ) -> BuildResult:
     """Build every piece, in dependency order, verifying as it goes.
 
@@ -242,6 +243,10 @@ async def build_blueprint(
     budget ran out. The recurring-error guard stops a stuck loop long before this ceiling, so
     a generous budget costs nothing when it is not needed.
     """
+    # Rewritten into this build's domain nouns before anything reads it, so the spec, the
+    # contract, the scenario and the flow that attacks the result all say the same word.
+    blueprint = blueprint.instantiate(vocabulary)
+
     ws = Path(workspace).resolve()
     ws.mkdir(parents=True, exist_ok=True)
     _install_assets(ws)
