@@ -1,0 +1,210 @@
+{
+ "id": "webapp-auth-crud",
+ "name": "Web app with accounts and records",
+ "kind": "web-app",
+ "summary": "A running web app: landing page, sign up, log in, and a private dashboard where each account keeps its own records. One file to run, no build step.",
+ "what_you_get": [
+  "Four working pages: landing, sign up, log in, dashboard",
+  "Accounts with hashed passwords and real session tokens",
+  "Records that belong to one account and are invisible to every other",
+  "A REST API underneath, so the same data is reachable programmatically"
+ ],
+ "guarantees": [
+  "Passwords are hashed with PBKDF2 and are not recoverable from the database",
+  "Every input has a label and every control is at least 44px tall",
+  "User text is escaped, proven by storing a hostile payload and rendering it",
+  "Anonymous requests get 401 and malformed ones get 422, never a 500",
+  "One account cannot read or delete another account's records",
+  "No horizontal scrolling at 390px"
+ ],
+ "tags": [
+  "auth",
+  "crud",
+  "sqlite",
+  "fastapi",
+  "starter"
+ ],
+ "stack": [
+  "python",
+  "fastapi",
+  "sqlite",
+  "vanilla-js"
+ ],
+ "est_minutes": 25,
+ "provides": [
+  "http-api",
+  "user-identity",
+  "session-auth",
+  "sqlite-store",
+  "web-ui"
+ ],
+ "requires": [],
+ "pieces": [
+  {
+   "name": "passwords",
+   "spec": "Write a module with exactly two functions and no framework imports:\n    hash_password(password: str) -> str\n    verify_password(password: str, stored: str) -> bool\n\nUse hashlib.pbkdf2_hmac with sha256, 200000 iterations, and a random 16-byte salt from the\nsecrets module. hash_password returns ONE string containing the algorithm name, the iteration\ncount, the salt as hex and the digest as hex, separated by '$'.\n\nverify_password must split that string into EXACTLY the same number of parts that\nhash_password produced. If the two disagree, split() raises, your except clause returns False,\nand every single verification fails including correct passwords. Count them.\n\nCompare with hmac.compare_digest. Return False (never raise) for malformed, empty or None\ninput.",
+   "module": "passwords",
+   "contract": {
+    "functions": [
+     {
+      "name": "hash_password",
+      "args": [
+       "password"
+      ]
+     },
+     {
+      "name": "verify_password",
+      "args": [
+       "password",
+       "stored"
+      ]
+     }
+    ]
+   },
+   "tests": "",
+   "checks": [
+    "unit",
+    "contract"
+   ],
+   "depends_on": [],
+   "suggested_skill": "coding"
+  },
+  {
+   "name": "storage",
+   "spec": "Write a storage module using only sqlite3, secrets, hashlib and time.\n\nTables:\n    users(id, email unique, password_hash, created_at)\n    sessions(token_hash primary key, user_id, created_at)\n    records(id, user_id, title, amount, date, created_at)\n\ncreate_session returns a random secrets.token_urlsafe token and stores ONLY its sha256 hash,\nso a leaked database does not hand over live sessions.\n\nlist_records and delete_record MUST filter by user_id inside the SQL statement, so one account\ncan never see or delete another account's rows.\n\ncreate_user raises ValueError if the email already exists.\n\nadd_record and list_records return dicts whose keys are exactly: id, title, amount, date. The\nfrontend reads those exact names; any other spelling renders as \"undefined\" on screen.\n\nEvery function opens and closes its own connection.",
+   "module": "storage",
+   "contract": {
+    "functions": [
+     {
+      "name": "init_db",
+      "args": []
+     },
+     {
+      "name": "create_user",
+      "args": [
+       "email",
+       "password_hash"
+      ]
+     },
+     {
+      "name": "get_user_by_email",
+      "args": [
+       "email"
+      ]
+     },
+     {
+      "name": "create_session",
+      "args": [
+       "user_id"
+      ]
+     },
+     {
+      "name": "user_id_for_token",
+      "args": [
+       "token"
+      ]
+     },
+     {
+      "name": "delete_session",
+      "args": [
+       "token"
+      ]
+     },
+     {
+      "name": "add_record",
+      "args": [
+       "user_id",
+       "title",
+       "amount",
+       "date"
+      ]
+     },
+     {
+      "name": "list_records",
+      "args": [
+       "user_id"
+      ]
+     },
+     {
+      "name": "delete_record",
+      "args": [
+       "record_id",
+       "user_id"
+      ]
+     }
+    ]
+   },
+   "tests": "",
+   "checks": [
+    "unit",
+    "contract"
+   ],
+   "depends_on": [
+    "passwords"
+   ],
+   "suggested_skill": "coding"
+  },
+  {
+   "name": "pages",
+   "spec": "Write a module returning four complete HTML documents:\n    landing_page(), signup_page(), login_page(), dashboard_page()\n\nIMPORTANT - import the house UI kit and use it. Do NOT write your own CSS:\n    from scaffold_partials import (page, field, button, link_button, message_slot,\n                                   empty_state, card, auth_fetch_helper)\n\nBuild each page with page(title, body, script=...). Build every input with\nfield(name, label, kind=..., autocomplete=...) so it is labelled. Use button() for actions and\nmessage_slot() for errors.\n\nsignup_page and login_page post JSON to /api/signup and /api/login, store the returned token\nwith setToken(), then go to /dashboard.\n\ndashboard_page loads GET /api/records, renders each with a Delete button, posts new ones to\nPOST /api/records, and deletes via DELETE /api/records/{id}. Include auth_fetch_helper() in\nits script so the Authorization header is set for you.\n\nWhen rendering a record you MUST pass its text through escapeHtml(), which is already defined\non every page. Writing user text into innerHTML unescaped is a stored cross-site-scripting\nhole, and the checks will catch it.",
+   "module": "pages",
+   "contract": {
+    "functions": [
+     {
+      "name": "landing_page",
+      "args": []
+     },
+     {
+      "name": "signup_page",
+      "args": []
+     },
+     {
+      "name": "login_page",
+      "args": []
+     },
+     {
+      "name": "dashboard_page",
+      "args": []
+     }
+    ]
+   },
+   "tests": "",
+   "checks": [
+    "unit",
+    "web"
+   ],
+   "depends_on": [],
+   "suggested_skill": "coding"
+  },
+  {
+   "name": "api",
+   "spec": "Write a FastAPI module defining `app` that imports the modules that already\nexist:\n    from passwords import hash_password, verify_password\n    import storage\n    import pages\n\nRoutes:\n    GET    /api/health          -> {\"status\": \"ok\"}\n    POST   /api/signup          -> 409 if the email exists, else 201 with {\"token\": ...}\n    POST   /api/login           -> 401 on bad credentials, else {\"token\": ...}\n    POST   /api/logout          -> {\"ok\": true}\n    GET    /api/records         -> the caller's records\n    POST   /api/records         -> creates one, 201\n    DELETE /api/records/{id}    -> 404 if it is not the caller's\n    GET    /, /signup, /login, /dashboard -> HTMLResponse(pages.<name>_page())\n\nUse pydantic models for request bodies so malformed input returns 422, never 500.\n\nAUTHENTICATION - this is the part that is easy to get wrong. Write your own function that\ntakes `request: Request`, reads the Authorization header, and resolves the bearer token with\nstorage.user_id_for_token, raising HTTPException(401) when it is absent or unknown. Then use\nDepends(your_function).\n\nDo NOT pass a storage function directly to Depends. FastAPI inspects the signature and would\ntreat its `token` parameter as a QUERY parameter, so anonymous callers get 422 instead of 401\nand the auth check never runs.",
+   "module": "api",
+   "contract": {},
+   "tests": "",
+   "checks": [
+    "unit",
+    "http",
+    "web"
+   ],
+   "depends_on": [
+    "passwords",
+    "storage",
+    "pages"
+   ],
+   "suggested_skill": "coding"
+  }
+ ],
+ "assets": {
+  "ui_kit": "scaffold/ui_kit/kit.css",
+  "partials": "scaffold/partials.py"
+ },
+ "preview": [],
+ "score": null,
+ "provenance": {
+  "authored": "2026-08-12",
+  "basis": "benchmarks/app-build/SPEC.md"
+ },
+ "source": "builtin",
+ "draft": false
+}

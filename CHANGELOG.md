@@ -10,6 +10,27 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.124] -- 2026-08-12
+
+### Added -- blueprints as a Synapse primitive
+- **`blueprints.py`** -- a blueprint is a verified recipe: pieces, contracts, checks, assets,
+  and the score it actually achieved last time it ran. `kind` is open from the start
+  (`web-app`, `backend`, `data`, `animation`, `library`, `integration`, `infra`, `agent`) and
+  what differs between kinds is only which *checks* apply -- and checks are data, so a new kind
+  needs no new code.
+- **Composition, not memory.** Each blueprint declares what it `provides` and `requires`, so
+  "which of these fit together" is a query rather than something a human recalls.
+  `compatible_with` answers it in both directions; `resolve_stack` assembles a set and reports
+  unmet requirements instead of silently dropping them.
+- **`scaffold/runner.py`** -- executes a blueprint piece by piece in dependency order, giving
+  each piece its contract, the *real* interfaces of the modules it imports (read off the files
+  that exist, not assumed), the UI kit, and a worked exemplar. Contract checks run even when
+  the unit test passed, because a module can satisfy its own test and still expose the wrong
+  signature to callers.
+- **`routes_blueprints.py`** -- list, filter, inspect, check compatibility, resolve a stack,
+  register a new one, and build. Blueprints are data, so growing the library needs no code.
+- **First blueprint: `webapp-auth-crud`**, authored as data with six enforced guarantees.
+
 ## [0.1.123] -- 2026-08-12
 
 ### Added -- the generation scaffold (phases 1-4)

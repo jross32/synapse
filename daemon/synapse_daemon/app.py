@@ -60,6 +60,7 @@ from .routes_discovery import build_discovery_router
 from .routes_projects import build_projects_router
 from .routes_project_records import build_project_records_router
 from .routes_assistant import build_assistant_router
+from .routes_blueprints import build_blueprints_router
 from .routes_local_ai import build_local_ai_router
 from .routes_models import build_models_router
 from .model_market import ModelPullManager
@@ -385,6 +386,7 @@ def build_app(
     # ── Local AI: hardware profile, measured model strengths, agent runs ───────────
     app.include_router(
         build_local_ai_router(storage, storage.data_dir),
+        build_blueprints_router(storage, storage.data_dir),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
