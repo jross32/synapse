@@ -10,6 +10,20 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.136] - 2026-08-12
+
+### Added
+- Every accessibility and layout check is now proven against the defect it exists to catch,
+  not just the XSS probe. One fixture carries them all - inputs with no `<label for>` and no
+  `aria-label`, 20px-tall controls, a literal `undefined km`, and a 2000px element at a
+  390px viewport - and each check must fail its own defect while passing the well-built
+  fixture in the same suite.
+
+  Every one of those defects passed Arm B of the build-off. That is how a page with no
+  labels, no focus ring, no tap-target rule and a visible `undefined km` scored full marks
+  on the frontend. The checks were written afterwards; this is the part that shows they
+  bite.
+
 ## [0.1.135] - 2026-08-12
 
 ### Added

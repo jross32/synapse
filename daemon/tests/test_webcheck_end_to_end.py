@@ -85,11 +85,13 @@ async def listing():
 
 
 PAGE = """<!doctype html>
-<html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>button, a {{ min-height: 44px; display: inline-block; }}</style></head>
+<html><head>__VIEWPORT__
+<style>__BTNCSS__</style></head>
 <body>
-  <label for="email">Email address</label><input id="email" name="email" type="email">
-  <label for="password">Password</label><input id="password" name="password" type="password">
+  __LABELS__
+  <button>Go</button>
+  __OVERFLOW__
+  __PLACEHOLDER__
   <ul id="rows"></ul>
   <script>
     fetch('/api/trails').then(r => r.json()).then(rows => {{
@@ -150,10 +152,44 @@ def _wait_for_health(base: str, deadline: float) -> bool:
     return False
 
 
-def _serve(tmp_path: Path, sink: str):
+# The page varies along one axis at a time, so a verdict can only be caused by the defect
+# under test. WELL_BUILT is what the UI kit produces; DEFECTIVE is each of the things the
+# accessibility and layout checks exist to catch.
+WELL_BUILT = {
+    "__VIEWPORT__": '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    "__BTNCSS__": "button, a { min-height: 44px; display: inline-block; }",
+    "__LABELS__": ('<label for="email">Email address</label>'
+                   '<input id="email" name="email" type="email">\n'
+                   '  <label for="password">Password</label>'
+                   '<input id="password" name="password" type="password">'),
+    "__OVERFLOW__": "",
+    "__PLACEHOLDER__": "",
+}
+
+DEFECTIVE = {
+    "__VIEWPORT__": '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    # 20px tall: a real tap target on a phone is 44.
+    "__BTNCSS__": "button, a { height: 20px; min-height: 0; display: inline-block; }",
+    # Inputs with no <label for> and no aria-label - invisible to a screen reader.
+    "__LABELS__": ('<input id="email" name="email" type="email">\n'
+                   '  <input id="password" name="password" type="password">'),
+    "__OVERFLOW__": '<div style="width: 2000px; height: 8px;"></div>',
+    # The literal string a template prints when it reads a field that does not exist.
+    "__PLACEHOLDER__": "<p>Distance: undefined km</p>",
+}
+
+
+def _render(sink: str, variant: dict[str, str]) -> str:
+    src = APP_TEMPLATE.replace("__SINK__", sink)
+    for token, value in variant.items():
+        src = src.replace(token, value)
+    return src
+
+
+def _serve(tmp_path: Path, sink: str, variant: dict[str, str] | None = None):
     """Write the app with the chosen DOM sink, serve it, return (base_url, process)."""
-    app_file = tmp_path / f"app_{sink}.py"
-    app_file.write_text(APP_TEMPLATE.replace("__SINK__", sink), encoding="utf-8")
+    app_file = tmp_path / f"app_{sink}_{'defective' if variant is DEFECTIVE else 'ok'}.py"
+    app_file.write_text(_render(sink, variant or WELL_BUILT), encoding="utf-8")
     port = _free_port()
     proc = subprocess.Popen([sys.executable, "-B", app_file.name, "--port", str(port)],
                             cwd=str(tmp_path), stdout=subprocess.PIPE,
@@ -216,3 +252,38 @@ def test_the_xss_probe_passes_the_same_app_with_textcontent(tmp_path):
         f"the XSS probe would not pass a correctly-escaping app - it said {verdict!r}. "
         f"A check that fails everything is as useless as one that passes everything. "
         f"Full report: {report.summary()}")
+
+    # Same run, no extra server: the well-built fixture is also the positive control for
+    # every accessibility and layout check, which the defective fixture below inverts.
+    for name in ("inputs labelled on /signup", "tap targets >=44px on /signup",
+                 "no placeholder values on /dashboard", "no horizontal scroll on /signup"):
+        assert _verdict(report, name) == "pass", (
+            f"{name!r} failed a correctly-built page: {report.summary()}")
+
+
+@pytest.mark.slow
+def test_every_accessibility_and_layout_check_fails_the_defect_it_exists_to_catch(tmp_path):
+    """One fixture carrying every defect, asserted check by check.
+
+    Each of these passed Arm B of the build-off, which is how a page with no labels, no
+    focus ring, no tap-target rule and a literal "undefined km" scored full marks on the
+    frontend. The checks were added afterwards; this is the part that proves they bite.
+    """
+    base, proc = _serve(tmp_path, "textContent", DEFECTIVE)
+    try:
+        report = _check(base)
+    finally:
+        proc.kill()
+
+    expected_failures = {
+        "inputs labelled on /signup": "inputs with no <label for> and no aria-label",
+        "tap targets >=44px on /signup": "20px-tall controls",
+        "no placeholder values on /dashboard": 'a literal "undefined km" in the page',
+        "no horizontal scroll on /signup": "a 2000px-wide element at a 390px viewport",
+    }
+    survived = {name: _verdict(report, name) for name in expected_failures
+                if _verdict(report, name) != "fail"}
+    assert not survived, (
+        "these checks did not catch the defect they exist for: "
+        + "; ".join(f"{n} ({expected_failures[n]}) -> {v}" for n, v in survived.items())
+        + f"\nFull report: {report.summary()}")
