@@ -116,23 +116,34 @@ def contract_test_source(module: str, expected: ModuleContract) -> str:
     Emitted as a file the pipeline runs like any other acceptance test, so contract drift
     produces the same kind of actionable failure as a wrong return value.
     """
-    checks = []
-    for fn in expected.functions:
-        checks.append(
-            f"assert hasattr(m, {fn.name!r}), "
-            f"'{module}.{fn.name} is missing; the contract requires {fn.signature()}'")
+    lines: list[str] = []
+    for i, fn in enumerate(expected.functions):
+        want_var = f"_want_{i}"
+        # Build the expected arg list as a variable rather than interpolating a repr inside a
+        # quoted message: nesting quotes inside quotes produces a file that will not parse,
+        # which fails the whole piece for a reason that has nothing to do with the model.
+        lines.append(f"{want_var} = {fn.args!r}")
+        lines.append(
+            f"assert hasattr(m, {fn.name!r}), (\n"
+            f"    {module + '.' + fn.name!r} + ' is missing. The contract requires: '\n"
+            f"    + {fn.signature()!r} + '. Defined here: ' + str([n for n in dir(m) "
+            f"if not n.startswith('_')]))")
         if fn.args:
-            checks.append(
-                f"assert list(inspect.signature(m.{fn.name}).parameters)[:{len(fn.args)}] == {fn.args!r}, \\\n"
-                f"    '{module}.{fn.name} parameters are ' + str(list(inspect.signature(m.{fn.name}).parameters)) + \\\n"
-                f"    ' but the contract requires {fn.args!r}'")
+            lines.append(
+                f"_got_{i} = list(inspect.signature(m.{fn.name}).parameters)[:{len(fn.args)}]\n"
+                f"assert _got_{i} == {want_var}, (\n"
+                f"    {module + '.' + fn.name!r} + ' takes ' + str(_got_{i})\n"
+                f"    + ' but the contract requires ' + str({want_var})\n"
+                f"    + '. Callers were written against the contract, so rename the "
+                f"parameters to match exactly - including their order.')")
     for const in expected.constants:
-        checks.append(f"assert hasattr(m, {const!r}), '{module} must define {const}'")
+        lines.append(
+            f"assert hasattr(m, {const!r}), {module + ' must define ' + const!r}")
 
-    body = "\n".join(checks)
+    body = "\n".join(lines)
     return f"""import inspect
+
 import {module} as m
 
 {body}
-print('OK')
 """

@@ -1,0 +1,66 @@
+{
+ "skill": "reasoning",
+ "description": "10 machine-verified checks",
+ "checks": [
+  {
+   "id": "apples",
+   "prompt": "I have 5 apples, eat 2, then buy 4 more. How many now? Answer with only the number.",
+   "kind": "text",
+   "expect_final_number": 7
+  },
+  {
+   "id": "older",
+   "prompt": "Tom is older than Ann. Ann is older than Sue. Who is youngest? One word.",
+   "kind": "text",
+   "expect_regex": "\\bsue\\b"
+  },
+  {
+   "id": "cheaper",
+   "prompt": "A shirt is $20 after a 50% discount. What was the original price? Number only.",
+   "kind": "text",
+   "expect_final_number": 40
+  },
+  {
+   "id": "odd_one",
+   "prompt": "Which does not belong: dog, cat, hammer, horse? One word.",
+   "kind": "text",
+   "expect_regex": "\\bhammer\\b"
+  },
+  {
+   "id": "days",
+   "prompt": "If today is Friday, what day is it in 10 days? One word.",
+   "kind": "text",
+   "expect_regex": "\\bmonday\\b"
+  },
+  {
+   "id": "remainder",
+   "prompt": "What is the remainder when 47 is divided by 5? Number only.",
+   "kind": "text",
+   "expect_final_number": 2
+  },
+  {
+   "id": "sequence",
+   "prompt": "Next number in 2, 4, 8, 16, ...? Number only.",
+   "kind": "text",
+   "expect_final_number": 32
+  },
+  {
+   "id": "negation",
+   "prompt": "If all bloops are razzies and no razzies are lazzies, can a bloop be a lazzie? Answer yes or no.",
+   "kind": "text",
+   "expect_regex": "^\\s*no\\b"
+  },
+  {
+   "id": "units",
+   "prompt": "A car travels 120 km in 2 hours. What is its speed in km/h? Number only.",
+   "kind": "text",
+   "expect_final_number": 60
+  },
+  {
+   "id": "counting",
+   "prompt": "How many times does the letter 'r' appear in 'strawberry'? Number only.",
+   "kind": "text",
+   "expect_final_number": 3
+  }
+ ]
+}

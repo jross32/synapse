@@ -134,10 +134,17 @@ async def build_blueprint(
     *,
     workspace: str | Path,
     coder_model: str = "",
-    max_repairs: int = 4,
+    max_repairs: int = 10,
     on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> BuildResult:
-    """Build every piece, in dependency order, verifying as it goes."""
+    """Build every piece, in dependency order, verifying as it goes.
+
+    ``max_repairs`` defaults high because every attempt is local and therefore free, and the
+    contract assertions converge: measured on this blueprint, the storage piece went from
+    three correct signatures to six across four repairs and was still improving when the
+    budget ran out. The recurring-error guard stops a stuck loop long before this ceiling, so
+    a generous budget costs nothing when it is not needed.
+    """
     ws = Path(workspace).resolve()
     ws.mkdir(parents=True, exist_ok=True)
     _install_assets(ws)
@@ -156,12 +163,20 @@ async def build_blueprint(
 
         full_spec = piece.spec + _dependency_context(piece, ws) + _asset_context(piece)
 
+        # Turn the declared contract into assertions that run inside the repair loop, so a
+        # wrong signature is fixed locally and free rather than escalated.
+        expected = _contract_from_piece(piece)
+        contract_test = ""
+        if expected is not None and CheckKind.CONTRACT in piece.checks:
+            contract_test = contracts_mod.contract_test_source(module, expected)
+
         pipeline = await run_pipeline(
             full_spec,
             workspace=ws,
             path=f"{module}.py",
             coder_model=coder_model or "",
             max_repairs=max_repairs,
+            extra_test=contract_test,
             on_event=lambda e, p=piece.name: emit("pipeline", piece=p, **e),
         )
 

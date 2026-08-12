@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.125] -- 2026-08-12
+
+### Added
+- **`local_bench.py`** -- the scorecard as a module the app can run, not a script to remember.
+  Skill packs are **JSON**, so measuring a new capability is a file rather than a code change,
+  and every run is kept so `trend()` can show a regression instead of implying one.
+- **Contract assertions now run inside the repair loop.** Previously the contract was checked
+  after the pipeline finished, so the model never saw the one problem it could most easily
+  fix. Measured on the first blueprint build: the storage piece went from **3 of 9 correct
+  signatures to 6**, repairing `create_session(email->user_id)`,
+  `create_user(password->password_hash)` and adding two functions it had omitted.
+- Repair budget raised to 10. Local attempts are free, the contract assertions converge, and
+  the recurring-error guard stops a genuinely stuck loop long before the ceiling.
+
+### Fixed
+- **The first JSON conversion silently dropped 27% of the benchmark.** 16 of 60 checks could
+  not be expressed declaratively and were left out, which would have made the bench quietly
+  measure less than it claimed. The expectation vocabulary was extended instead
+  (`expect_tool_args`, `expect_only_known_tools`, `expect_max_chars`, `expect_line_count`,
+  `expect_starts_with`, `expect_absent_chars`, `expect_absent_regex`) and all 60 restored.
+- Generated contract tests nested quotes inside quotes and produced a file that would not
+  parse, failing the piece for a reason unrelated to the model's work.
+
 ## [0.1.124] -- 2026-08-12
 
 ### Added -- blueprints as a Synapse primitive

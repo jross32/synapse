@@ -97,6 +97,7 @@ async def run_pipeline(
     write_test: bool = True,
     on_event: Callable[[dict[str, Any]], None] | None = None,
     runner: Callable[[Path, Path], tuple[bool, str]] | None = None,
+    extra_test: str = "",
 ) -> PipelineResult:
     """Generate code for ``spec``, prove it runs, and repair it from real errors.
 
@@ -158,6 +159,14 @@ async def run_pipeline(
                      + "\n".join(line for line in test_code.splitlines()
                                  if not line.startswith(("def ", "import ", "from ")))
                      + "\nprint('OK')\n")
+
+    # Contract assertions run *first* in the same file, so a signature mismatch fails the
+    # loop and gets repaired locally like any other error. Checking the contract only after
+    # the pipeline finished meant the model never saw the problem it could most easily fix -
+    # and a module that satisfies its own generated test while exposing the wrong signature
+    # to its callers is precisely how two pieces end up disagreeing.
+    if extra_test:
+        test_code = extra_test.rstrip() + "\n\n" + test_code
 
     test_file = ws / "_pipeline_test.py"
     test_file.write_text(test_code, encoding="utf-8")

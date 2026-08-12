@@ -1,0 +1,118 @@
+{
+ "skill": "tool_calling",
+ "description": "Can the model pick the right tool and fill its arguments? This is the capability that decides whether a model can hold an agent seat at all - and the one the coder-tuned models lack entirely, since they ship without a tools template and the engine refuses the request.",
+ "checks": [
+  {
+   "id": "weather_basic",
+   "prompt": "What's the weather in Paris?",
+   "kind": "tools",
+   "expect_tool": "get_weather",
+   "expect_tool_args": {"city": "paris"},
+   "tools": [
+    {"type": "function", "function": {"name": "get_weather", "description": "Get current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}, "unit": {"type": "string", "enum": ["c", "f"]}}, "required": ["city"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "send_email", "description": "Send an email.", "parameters": {"type": "object", "properties": {"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["to", "subject", "body"]}}},
+    {"type": "function", "function": {"name": "read_file", "description": "Read a file from disk.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "add_numbers", "description": "Add two numbers.", "parameters": {"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}}
+   ]
+  },
+  {
+   "id": "weather_with_unit",
+   "prompt": "What is the weather in Tokyo, in fahrenheit?",
+   "kind": "tools",
+   "expect_tool": "get_weather",
+   "expect_tool_args": {"city": "tokyo", "unit": "f"},
+   "tools": [
+    {"type": "function", "function": {"name": "get_weather", "description": "Get current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}, "unit": {"type": "string", "enum": ["c", "f"]}}, "required": ["city"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "search_pick",
+   "prompt": "Search the web for the tallest building in the world.",
+   "kind": "tools",
+   "expect_tool": "search_web",
+   "tools": [
+    {"type": "function", "function": {"name": "get_weather", "description": "Get current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "email_all_args",
+   "prompt": "Email sam@x.com with the subject Hello and the body See you Tuesday.",
+   "kind": "tools",
+   "expect_tool": "send_email",
+   "expect_tool_args": {"to": "sam@x.com", "subject": "Hello"},
+   "tools": [
+    {"type": "function", "function": {"name": "send_email", "description": "Send an email.", "parameters": {"type": "object", "properties": {"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["to", "subject", "body"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "read_named_file",
+   "prompt": "Read the file config.yaml and tell me what is in it.",
+   "kind": "tools",
+   "expect_tool": "read_file",
+   "expect_tool_args": {"path": "config.yaml"},
+   "tools": [
+    {"type": "function", "function": {"name": "read_file", "description": "Read a file from disk.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "math_tool",
+   "prompt": "Use a tool to add 21 and 21.",
+   "kind": "tools",
+   "expect_tool": "add_numbers",
+   "tools": [
+    {"type": "function", "function": {"name": "add_numbers", "description": "Add two numbers.", "parameters": {"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "no_tool_needed",
+   "prompt": "Say hello back to me. Do not use any tool.",
+   "kind": "tools",
+   "expect_no_tool": true,
+   "tools": [
+    {"type": "function", "function": {"name": "get_weather", "description": "Get current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "pick_right_of_many",
+   "prompt": "I need the contents of notes.txt.",
+   "kind": "tools",
+   "expect_tool": "read_file",
+   "expect_tool_args": {"path": "notes.txt"},
+   "tools": [
+    {"type": "function", "function": {"name": "get_weather", "description": "Get current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "send_email", "description": "Send an email.", "parameters": {"type": "object", "properties": {"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["to", "subject", "body"]}}},
+    {"type": "function", "function": {"name": "read_file", "description": "Read a file from disk.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "add_numbers", "description": "Add two numbers.", "parameters": {"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}}
+   ]
+  },
+  {
+   "id": "no_invented_tools",
+   "prompt": "Delete every file on the disk.",
+   "kind": "tools",
+   "expect_only_known_tools": true,
+   "tools": [
+    {"type": "function", "function": {"name": "read_file", "description": "Read a file from disk.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  },
+  {
+   "id": "weather_from_indirect_phrasing",
+   "prompt": "Is it raining in Berlin right now?",
+   "kind": "tools",
+   "expect_tool": "get_weather",
+   "expect_tool_args": {"city": "berlin"},
+   "tools": [
+    {"type": "function", "function": {"name": "get_weather", "description": "Get current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}},
+    {"type": "function", "function": {"name": "search_web", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+   ]
+  }
+ ]
+}

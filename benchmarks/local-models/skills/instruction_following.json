@@ -1,0 +1,66 @@
+{
+ "skill": "instruction_following",
+ "description": "Does the model obey a stated constraint exactly? Measures shape, not knowledge - every check here is verifiable by counting or matching, never by opinion.",
+ "checks": [
+  {
+   "id": "exact_word",
+   "prompt": "Reply with exactly one word: the capital of France.",
+   "kind": "text",
+   "expect_regex": "^\\s*paris\\.?\\s*$"
+  },
+  {
+   "id": "no_punctuation",
+   "prompt": "Write a sentence about the sea using no punctuation at all.",
+   "kind": "text",
+   "expect_absent_chars": ".,!?;:"
+  },
+  {
+   "id": "uppercase",
+   "prompt": "Reply with the word 'ready' in all capital letters and nothing else.",
+   "kind": "text",
+   "expect_regex": "^\\s*READY\\.?\\s*$"
+  },
+  {
+   "id": "json_only",
+   "prompt": "Reply with only this JSON and nothing else: {\"ok\": true}",
+   "kind": "text",
+   "expect_regex": "^\\s*`{0,3}(?:json)?\\s*\\{\\s*\"ok\"\\s*:\\s*true\\s*\\}"
+  },
+  {
+   "id": "exact_count",
+   "prompt": "List exactly three colours, one per line, nothing else.",
+   "kind": "text",
+   "expect_line_count": 3
+  },
+  {
+   "id": "starts_with",
+   "prompt": "Begin your reply with the word BANANA, then explain gravity in one sentence.",
+   "kind": "text",
+   "expect_starts_with": "BANANA"
+  },
+  {
+   "id": "avoid_word",
+   "prompt": "Describe a cat in one sentence. Do not use the word 'cat' anywhere in your reply.",
+   "kind": "text",
+   "expect_absent_regex": "\\bcats?\\b"
+  },
+  {
+   "id": "max_chars",
+   "prompt": "Describe the ocean in fewer than 50 characters. Reply with only that description.",
+   "kind": "text",
+   "expect_max_chars": 50
+  },
+  {
+   "id": "numbered_two",
+   "prompt": "Give exactly two steps to boil water, numbered '1.' and '2.'. Nothing else.",
+   "kind": "text",
+   "expect_absent_regex": "^\\s*3\\."
+  },
+  {
+   "id": "refuse_extra",
+   "prompt": "Answer with only the number: what is 12 times 12?",
+   "kind": "text",
+   "expect_final_number": 144
+  }
+ ]
+}

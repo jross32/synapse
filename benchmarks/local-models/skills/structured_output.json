@@ -1,0 +1,66 @@
+{
+ "skill": "structured_output",
+ "description": "Extracting and shaping data into a form a program can consume.",
+ "checks": [
+  {
+   "id": "json_person",
+   "prompt": "Return JSON only: {\"name\": ..., \"age\": ...} for \"Maya Patel is 34 years old.\"",
+   "kind": "text",
+   "expect_regex": "\"name\"[^}]*maya"
+  },
+  {
+   "id": "extract_email",
+   "prompt": "Extract only the email address from: 'Contact bob.smith@acme.co.uk today.' Reply with just the address.",
+   "kind": "text",
+   "expect_regex": "bob\\.smith@acme\\.co\\.uk"
+  },
+  {
+   "id": "extract_number",
+   "prompt": "Extract only the total from: 'Subtotal 12.50, tax 2.50, total 15.00'. Reply with just the number.",
+   "kind": "text",
+   "expect_final_number": 15.0
+  },
+  {
+   "id": "key_value",
+   "prompt": "Return exactly 'status=ok' and nothing else.",
+   "kind": "text",
+   "expect_regex": "^\\s*status=ok\\s*$"
+  },
+  {
+   "id": "date_iso",
+   "prompt": "Convert 'March 3, 2024' to ISO format YYYY-MM-DD. Reply with just the date.",
+   "kind": "text",
+   "expect_regex": "2024-03-03"
+  },
+  {
+   "id": "bool_json",
+   "prompt": "Is 10 greater than 4? Return only JSON: {\"answer\": true} or {\"answer\": false}",
+   "kind": "text",
+   "expect_regex": "\"answer\"\\s*:\\s*true"
+  },
+  {
+   "id": "split_names",
+   "prompt": "From 'Dr. Jane Q. Doe', return only the surname.",
+   "kind": "text",
+   "expect_regex": "^\\s*doe\\.?\\s*$"
+  },
+  {
+   "id": "json_list",
+   "kind": "text",
+   "prompt": "Return JSON only: a list of the three largest planets as strings.",
+   "expect_regex": "^\\s*`{0,3}(?:json)?\\s*\\["
+  },
+  {
+   "id": "csv_row",
+   "kind": "text",
+   "prompt": "Convert to one CSV row with no header: name Ada, role engineer, city Rome.",
+   "expect_regex": "Ada\\s*,\\s*engineer\\s*,\\s*Rome"
+  },
+  {
+   "id": "json_nested",
+   "kind": "text",
+   "prompt": "Return JSON only: {\"user\": {\"id\": 7, \"tags\": [\"a\",\"b\"]}}",
+   "expect_regex": "\"tags\"\\s*:\\s*\\[\\s*\"a\"\\s*,\\s*\"b\"\\s*\\]"
+  }
+ ]
+}

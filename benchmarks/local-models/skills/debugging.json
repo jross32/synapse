@@ -1,0 +1,66 @@
+{
+ "skill": "debugging",
+ "description": "10 machine-verified checks",
+ "checks": [
+  {
+   "id": "fix_off_by_one",
+   "prompt": "This function should return the last element but raises IndexError. Fix it:\n```python\ndef last(xs):\n    return xs[len(xs)]\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import last\nassert last([1,2,3])==3"
+  },
+  {
+   "id": "fix_mutable_default",
+   "prompt": "This accumulates across calls, which is wrong. Fix it:\n```python\ndef add(item, bucket=[]):\n    bucket.append(item)\n    return bucket\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import add\nassert add(1)==[1]\nassert add(2)==[2], 'default must not persist'"
+  },
+  {
+   "id": "fix_int_div",
+   "prompt": "average([1,2]) should be 1.5 but returns 1. Fix it:\n```python\ndef average(xs):\n    return sum(xs) // len(xs)\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import average\nassert average([1,2])==1.5"
+  },
+  {
+   "id": "fix_shadowing",
+   "prompt": "This raises TypeError. Fix it:\n```python\ndef total(list):\n    return list(sum(list))\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import total\nassert total([1,2,3])==6"
+  },
+  {
+   "id": "fix_key_error",
+   "prompt": "count_letters should not raise KeyError. Fix it:\n```python\ndef count_letters(s):\n    d={}\n    for c in s:\n        d[c]+=1\n    return d\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import count_letters\nassert count_letters('aab')=={'a':2,'b':1}"
+  },
+  {
+   "id": "fix_infinite_loop",
+   "prompt": "This never terminates. Fix it so it counts down to 0 and returns the count of steps:\n```python\ndef countdown(n):\n    steps=0\n    while n > 0:\n        steps+=1\n    return steps\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import countdown\nassert countdown(3)==3\nassert countdown(0)==0"
+  },
+  {
+   "id": "fix_string_compare",
+   "prompt": "This should be case-insensitive. Fix it:\n```python\ndef same(a,b):\n    return a==b\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import same\nassert same('Hello','hello')\nassert not same('a','b')"
+  },
+  {
+   "id": "fix_none_return",
+   "prompt": "sorted_copy should return a new sorted list, but returns None. Fix it:\n```python\ndef sorted_copy(xs):\n    return xs.sort()\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import sorted_copy\nxs=[3,1,2]\nassert sorted_copy(xs)==[1,2,3]\nassert xs==[3,1,2], 'must not mutate input'"
+  },
+  {
+   "id": "fix_range_bounds",
+   "prompt": "This should include both endpoints. Fix it:\n```python\ndef inclusive(a,b):\n    return list(range(a,b))\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import inclusive\nassert inclusive(1,3)==[1,2,3]"
+  },
+  {
+   "id": "fix_zero_div",
+   "prompt": "safe_ratio should return 0.0 instead of raising when b is 0. Fix it:\n```python\ndef safe_ratio(a,b):\n    return a/b\n```\n\nOutput only the code in one ```python block.",
+   "kind": "code",
+   "asserts": "from s import safe_ratio\nassert safe_ratio(1,0)==0.0\nassert safe_ratio(3,2)==1.5"
+  }
+ ]
+}
