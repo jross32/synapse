@@ -10,6 +10,33 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.138] - 2026-08-12
+
+### Added
+- `benchmarks/app-build/CONTRACT_AB.md`: the measured result of stating a piece's contract
+  before it writes anything, rather than enforcing it afterwards.
+
+  | | Contract withheld | Contract stated |
+  |---|---|---|
+  | Repair attempts | 10 (budget exhausted) | 3 |
+  | Distinct failures | 9 | 2 |
+  | Wall clock | 3269 s | 1974 s |
+
+  Reproduced across two independent runs with the same ratios. The withheld arm spent its
+  first six repairs discovering its own interface one function at a time - `init_db`
+  missing, `create_user` args, `get_user_by_email` missing, `create_session` args,
+  `user_id_for_token` missing, `delete_session` missing - at roughly 200 seconds each.
+
+  It did not make the piece pass. It converted wasted repairs into useful ones: the budget
+  is now spent on behaviour instead of signatures.
+
+### Changed
+- The storage scenario's `get_user_by_email` guard excluded tuples and then indexed what it
+  got, so a bare int walked past it and surfaced as
+  `TypeError: 'int' object is not subscriptable` - the shape of the failure, never the shape
+  that was wanted. It now asks for the field and, on any failure, names what came back and
+  what a caller needs. Checked against all four wrong shapes seen in real builds.
+
 ## [0.1.137] - 2026-08-12
 
 ### Fixed
