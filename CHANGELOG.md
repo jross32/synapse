@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.132] - 2026-08-12
+
+### Changed
+- A repair that cannot escape itself is now asked to **start over from the requirement**,
+  with the failure quoted but the current code withheld, as the last thing tried before
+  escalating.
+
+  This follows directly from a measurement that contradicted the previous version's
+  assumption. Raising temperature was supposed to unstick a repeating repair; it did not.
+  `qwen2.5-coder:7b` demonstrably varies its output at 0.8 and 1.5 on open prompts, yet the
+  `storage` repair returned byte-identical ~3.8 KB at 0, 0.4 and 0.8. The reason is the
+  prompt shape: a repair hands the model the entire current file and asks for a corrected
+  copy, so most of the output is copying and the distribution stays peaked however hot the
+  sampler runs. Temperature cannot fix a prompt problem. Removing the thing being copied
+  can.
+
+  `RepairAttempt` records `started_over`, so how often this fires is measurable rather than
+  assumed - which matters, because a rewrite discards whatever the current attempt already
+  had right, and that trade needs watching.
+
 ## [0.1.131] - 2026-08-12
 
 Three of these are measurement bugs rather than feature work. Each one made a local model

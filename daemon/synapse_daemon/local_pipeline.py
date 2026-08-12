@@ -45,6 +45,8 @@ class RepairAttempt(BaseModel):
     changed: bool = False
     resamples: int = 0
     """How many extra samples this repair needed before the model wrote anything new."""
+    started_over: bool = False
+    """Whether the loop fell back to asking for a fresh implementation."""
     seconds: float = 0.0
 
 
@@ -263,12 +265,35 @@ async def run_pipeline(
             fixed = await asyncio.to_thread(generate_code, repair_spec, coder_model,
                                             900.0, 8192, temperature)
 
+        # Temperature turned out not to be enough, and the reason is instructive: a repair
+        # prompt hands the model the entire current file and asks for a corrected copy, so
+        # most of the output is copying. That distribution stays peaked however hot the
+        # sampler runs - measured on `storage`, byte-identical ~3.8 KB at 0, 0.4 and 0.8,
+        # on a model that demonstrably does vary its output at those temperatures.
+        #
+        # So stop showing it the thing it keeps copying. This asks for a fresh
+        # implementation from the requirement and the failure, with the dead end named but
+        # not pasted in. It is the last thing tried before escalating, because a rewrite
+        # discards whatever the current attempt already had right.
+        started_over = False
+        if fixed == result.code and not fixed.startswith("ERROR:"):
+            started_over = True
+            emit("starting_over", attempt=attempt + 1)
+            fixed = await asyncio.to_thread(
+                generate_code,
+                f"Write code satisfying this requirement:\n{spec}\n\n"
+                f"A previous attempt failed with:\n```\n{error}\n```\n\n"
+                "Do not reproduce that attempt - write the module fresh, and make sure the "
+                "failure above cannot happen. Output only the code.",
+                coder_model, 900.0, 8192, RESAMPLE_TEMPERATURES[-1])
+
         changed = bool(fixed) and not fixed.startswith("ERROR:") and fixed != result.code
         if changed:
             target.write_text(fixed, encoding="utf-8")
             result.code = fixed
         result.attempts.append(RepairAttempt(attempt=attempt + 1, error=error[:600],
                                              changed=changed, resamples=resamples,
+                                             started_over=started_over,
                                              seconds=round(time.time() - t0, 1)))
         # Two distinct ways of being stuck, reported distinctly because they suggest
         # different fixes. Identical code is checked first: when the model repeats itself the
@@ -276,8 +301,9 @@ async def run_pipeline(
         # cause, while "the same error came back" would be the symptom.
         if not changed:
             result.stop_reason = (
-                f"the model returned identical code across {resamples + 1} samples, "
-                f"including {resamples} at raised temperature")
+                f"the model returned identical code across {resamples + 2} samples - "
+                f"{resamples} at raised temperature and one asked to start over from the "
+                f"requirement alone")
             break
         if error_repeated:
             # It produced *different* code and still hit the same failure - it is circling a

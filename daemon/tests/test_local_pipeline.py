@@ -130,12 +130,13 @@ async def test_gives_up_when_the_model_stops_changing_anything(tmp_path, monkeyp
         "Write add(a, b).", workspace=tmp_path, max_repairs=10,
         runner=_fake_runner([(False, "AssertionError")] * 11))
 
-    assert "identical code across 3 samples" in result.stop_reason
-    # [initial draft, first repair, then one call per resample] - all at temperature 0
-    # except the resamples, which is the whole point.
+    assert "identical code across 4 samples" in result.stop_reason
+    # [initial draft, first repair, one call per resample, then the start-over rewrite] -
+    # temperature 0 for the first two, which is the model's best guess, raised thereafter.
     assert temperatures[:2] == [0.0, 0.0], (
         f"the draft and the first repair should be the model's best guess: {temperatures}")
-    assert temperatures[2:] == list(local_pipeline.RESAMPLE_TEMPERATURES), (
+    assert temperatures[2:] == [*local_pipeline.RESAMPLE_TEMPERATURES,
+                                local_pipeline.RESAMPLE_TEMPERATURES[-1]], (
         f"the sampler was never turned up before giving up: {temperatures}")
     assert len(result.attempts) < 10, "should give up early, not burn every attempt"
     assert result.needs_escalation

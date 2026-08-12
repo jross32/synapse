@@ -473,7 +473,7 @@ def test_identical_code_is_resampled_before_the_loop_gives_up(tmp_path):
 
 
 def test_giving_up_says_how_many_samples_were_drawn(tmp_path):
-    """A model that repeats itself at three temperatures really has run out."""
+    """A model that repeats itself at every temperature and on a rewrite has run out."""
     import synapse_daemon.local_pipeline as lp
 
     def stub(spec: str, model: str = "", timeout: float = 900.0, num_ctx: int = 8192,
@@ -490,8 +490,48 @@ def test_giving_up_says_how_many_samples_were_drawn(tmp_path):
         lp.generate_code = original
 
     assert not result.passed
-    assert "identical code across 3 samples" in result.stop_reason, result.stop_reason
+    assert "identical code across 4 samples" in result.stop_reason, result.stop_reason
     assert result.attempts[0].resamples == len(lp.RESAMPLE_TEMPERATURES)
+    assert result.attempts[0].started_over
+
+
+def test_a_stuck_repair_is_asked_to_start_over_without_the_code_to_copy(tmp_path):
+    """Raising temperature cannot unstick a prompt whose output is mostly copying.
+
+    Measured on `storage`: byte-identical ~3.8 KB output at 0, 0.4 and 0.8, from a model
+    that demonstrably does vary at those temperatures on other prompts. The repair prompt
+    hands over the whole current file and asks for a corrected copy, so the distribution
+    stays peaked. The last resort removes the thing being copied.
+    """
+    import synapse_daemon.local_pipeline as lp
+
+    prompts: list[str] = []
+
+    def stub(spec: str, model: str = "", timeout: float = 900.0, num_ctx: int = 8192,
+             temperature: float = 0.0) -> str:
+        if "Write a test for that code" in spec:
+            return "from solution import *\n\nassert broken() == 1\nprint('OK')\n"
+        prompts.append(spec)
+        # Identical however hot it gets - only a differently-shaped prompt escapes.
+        if "write the module fresh" in spec:
+            return "def broken():\n    return 1\n"
+        return "def broken():\n    return 0\n"
+
+    original = lp.generate_code
+    lp.generate_code = stub
+    try:
+        result = _run_async(run_pipeline("spec", workspace=tmp_path, max_repairs=2))
+    finally:
+        lp.generate_code = original
+
+    rewrite = [p for p in prompts if "write the module fresh" in p]
+    assert rewrite, "the loop never tried a differently-shaped prompt"
+    assert "Current code:" not in rewrite[0], (
+        "the start-over prompt still pastes in the code the model keeps copying")
+    assert "A previous attempt failed with" in rewrite[0], (
+        "the start-over prompt dropped the failure, so the model can repeat the mistake")
+    assert result.passed, f"the rewrite fixed it but the loop did not use it: {result.stop_reason}"
+    assert result.attempts[0].started_over
 
 
 def test_a_repair_is_never_graded_against_cached_bytecode(tmp_path):
