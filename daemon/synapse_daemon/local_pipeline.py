@@ -82,11 +82,34 @@ def error_fingerprint(error: str) -> str:
     lines = [ln.strip() for ln in (error or "").strip().splitlines() if ln.strip()]
     if not lines:
         return ""
-    for line in reversed(lines):
-        if re.match(r"^[A-Za-z_.]*(Error|Exception)\b", line):
-            # Strip the parts that vary run to run so the same fault compares equal.
-            return re.sub(r"line \d+|0x[0-9a-fA-F]+|['\"][^'\"]*[/\\][^'\"]*['\"]", "", line)[:300]
-    return lines[-1][:300]
+
+    exception = ""
+    index = len(lines)
+    for i in range(len(lines) - 1, -1, -1):
+        if re.match(r"^[A-Za-z_.]*(Error|Exception)\b", lines[i]):
+            exception, index = lines[i], i
+            break
+    if not exception:
+        return lines[-1][:300]
+
+    # A bare `AssertionError` says nothing about *which* assertion. Plain asserts without a
+    # message are exactly what a small model writes, so every one of its failures used to
+    # fingerprint identically - and the loop, seeing "the same error again", declared the
+    # model to be circling a problem it could not diagnose and stopped it early. Measured:
+    # four consecutive runs of the storage piece stopped that way after 5-8 of 10 allowed
+    # repairs, each having reached a *different* assertion.
+    #
+    # So when the exception carries no detail, fall back to the statement that raised it -
+    # the last source line the traceback quoted.
+    if ":" not in exception:
+        for line in reversed(lines[:index]):
+            if line.startswith("File "):
+                continue
+            exception = f"{exception} at: {line}"
+            break
+
+    # Strip the parts that vary run to run so the same fault compares equal.
+    return re.sub(r"line \d+|0x[0-9a-fA-F]+|['\"][^'\"]*[/\\][^'\"]*['\"]", "", exception)[:300]
 
 
 def _ensure_the_test_runs(test_code: str, emit: Callable[..., None]) -> str:

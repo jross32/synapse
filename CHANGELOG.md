@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.143] - 2026-08-12
+
+### Corrected
+- **The storage pass is 1 in 5, not 1 in 1.** Four repeat runs of the identical
+  configuration all failed. The previous entry's result stands as an existence proof - a 7B
+  *can* produce a correct nine-function stateful module - but any claim of reliability built
+  on the single pass was overstated, and had already been made.
+
+### Fixed
+- **A bare `AssertionError` fingerprinted as every other bare `AssertionError`.** All four
+  failing runs stopped on the repeated-error guard after 5-8 of 10 allowed repairs, each
+  having reached a *different* assertion. `error_fingerprint` returned only the exception
+  type, so unrelated failures compared equal and the loop concluded the model was circling.
+
+  This was a regression introduced by 0.1.141. Making generated tests actually execute meant
+  the model's own message-less `assert x == 1` lines started running - and colliding. The
+  fix that removed a false pass created a false stop.
+
+  Fingerprints now fall back to the statement that raised when the exception carries no
+  detail of its own, while still ignoring line numbers so the same assertion at a shifted
+  line is still the same failure.
+
+- The probe reported those runs as "PROGRESSING - ran out of budget" when the guard had cut
+  them off well short of it. It now distinguishes the two, because they call for opposite
+  responses.
+
 ## [0.1.142] - 2026-08-12
 
 ### The storage piece passed

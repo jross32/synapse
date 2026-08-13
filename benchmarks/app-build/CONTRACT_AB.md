@@ -113,7 +113,41 @@ a lower bound rather than a measurement.
   found by running one deliberately small thing and reading what came back, and none of
   them by reading code.
 
-## An honest note on what these numbers are
+## Then it passed 1 time in 5
+
+The obvious follow-up — repeat the identical run and report a rate rather than an existence
+proof — was run immediately. Four more times:
+
+```
+run 1: passed=False  8 repairs   run 3: passed=False  7 repairs
+run 2: passed=False  5 repairs   run 4: passed=False  8 repairs
+```
+
+**0 of 4.** With the original success, that is **1 pass in 5 runs of the same
+configuration.** A 7B on a 6 GB card can produce a correct nine-function stateful module.
+It does not do so reliably, and any claim built on the single pass was overstated. This
+section exists because that claim had already been made.
+
+### Why the four failed, which is not what the summary said
+
+All four stopped on the **repeated-error guard**, after 5–8 of 10 allowed repairs — none
+ran out of budget, though the probe's verdict line said they had. Their fingerprints:
+
+```
+a different fix produced the same error, so the model is circling …: AssertionError
+```
+
+A bare `AssertionError`. `error_fingerprint` returned only the exception type, so two
+entirely unrelated assertion failures compared equal and the loop concluded the model was
+going in circles. Each run had in fact reached a *different* assertion.
+
+Worse, this was a regression **introduced by the previous fix**. Making generated tests
+actually execute (0.1.141) meant the model's own message-less `assert x == 1` lines started
+running — and colliding. The fix that removed one false pass created a false *stop*.
+
+Fingerprints now fall back to the statement that raised, when the exception carries no
+detail of its own. Whether that restores the pass rate is the next measurement, and it is
+not assumed here.
 
 The 10-vs-3 comparison isolates one variable cleanly. The pass does not: it arrived after
 five changes, only one of which was contract injection, so it is evidence that the *stack*
@@ -121,6 +155,12 @@ works and not a measurement of any single part. Attributing the pass to teachabl
 alone would be exactly the over-claiming this document exists to avoid.
 
 `storage` is also one piece, on one blueprint, on one model, and local models are noisy.
-A single pass is a proof of possibility, not a rate. What would make it a rate is running
-it several times and reporting how often it passes — which is cheap, since it is free, and
-is the obvious next measurement.
+A single pass is a proof of possibility, not a rate — which the 1-in-5 section above bears
+out, and which is why it was worth two hours of free compute to check rather than to
+assert.
+
+The pattern across this whole document is worth naming, because it recurred four times in
+one day: **the encouraging result arrived first and the correction arrived only because
+someone went looking.** A pass, a ratio, a verdict line — each looked conclusive, and each
+needed a repeat run, a re-read of the raw log, or an independent re-verification before it
+meant what it appeared to mean.

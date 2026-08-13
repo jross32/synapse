@@ -519,6 +519,46 @@ def test_a_scenario_gives_the_same_verdict_when_run_again(tmp_path):
         f"so it leaves state behind:\n{verdicts[failed[0]][1]}")
 
 
+def test_two_different_bare_assertions_are_not_the_same_failure():
+    """A bare `AssertionError` says nothing about *which* assertion.
+
+    Plain asserts with no message are exactly what a small model writes, so every one of
+    its failures fingerprinted identically. The loop, seeing "the same error again",
+    declared the model to be circling a problem it could not diagnose and stopped it early.
+
+    Measured: four consecutive storage runs stopped that way after 5-8 of 10 allowed
+    repairs, each having reached a *different* assertion. The regression was introduced by
+    the fix that made generated tests actually execute - their message-less assertions
+    started running, and started colliding.
+    """
+    from synapse_daemon.local_pipeline import error_fingerprint
+
+    first = ('Traceback (most recent call last):\n'
+             '  File "_test_storage.py", line 190, in test_storage\n'
+             '    assert get_user_by_email("a@b.io") is not None\n'
+             'AssertionError')
+    second = ('Traceback (most recent call last):\n'
+              '  File "_test_storage.py", line 205, in test_storage\n'
+              '    assert user_id == 1\n'
+              'AssertionError')
+
+    assert error_fingerprint(first) != error_fingerprint(second), (
+        "two unrelated assertion failures still read as the same error, so the loop will "
+        "stop a model that is making progress")
+
+    # The same failure at a different line is still the same failure: line numbers move
+    # when the model edits the file above them, and treating that as progress would defeat
+    # the guard entirely.
+    moved = second.replace("line 205", "line 311")
+    assert error_fingerprint(second) == error_fingerprint(moved), (
+        "the same assertion at a shifted line number now reads as a new failure")
+
+    # And an exception that already carries detail keeps using it.
+    detailed = ('Traceback (most recent call last):\n'
+                'ValueError: Email already exists')
+    assert error_fingerprint(detailed) == "ValueError: Email already exists"
+
+
 def test_a_generated_test_that_only_defines_a_function_is_made_to_run():
     """The mechanism behind the worst false pass this project has produced.
 

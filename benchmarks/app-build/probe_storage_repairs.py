@@ -119,6 +119,12 @@ async def main() -> None:
     # a summary that never consults the one field that settles the question.
     if result.passed:
         verdict = f"PASSED - every scenario assertion, after {len(trail)} repairs"
+    elif "circling" in result.stop_reason:
+        # Distinguished from budget exhaustion because it is a different problem and used
+        # to be reported as the same one: these runs stopped after 5-8 of 10 allowed
+        # repairs, and calling that "ran out of budget" hid that the guard cut them off.
+        verdict = (f"STOPPED EARLY by the repeated-error guard after {len(trail)} of "
+                   f"{10} allowed repairs - check the fingerprints are really equal")
     elif positions and not prints["monotonic_progress"]:
         verdict = "THRASHING - it went backwards"
     elif len(set(positions)) <= 1:
