@@ -16,14 +16,15 @@ because two 7B generations at once would measure contention rather than prompts.
 | `baseline` | 9 functions | off | **is the gate** | **0/4** | 2310 s |
 | `both` | 9 functions | on | advisory | **0/4** | 594 s |
 | `deepseek` | 9 functions | on | advisory | **0/4** | 732 s |
-| `split-plain` | 3 × 3 functions | off | **is the gate** | **0/2** † | 3132 s |
+| `split-plain` | 3 × 3 functions | off | **is the gate** | **0/4** | 3132 s |
 | **`split`** | **3 × 3 functions** | **on** | **advisory** | **4/4** | **244 s** |
 
-† `split-plain` is **two runs** so far, not four — the remaining two are still going at
-~52 minutes each. All four of its pieces failed on both runs, against 12/12 passing across
-the `split` arm, which is a wide enough gap to report. It is written as `0/2` rather than
-rounded up to `0/4`, because a number nobody measured is the thing this whole benchmark
-keeps getting caught by. This line will be updated when the arm finishes.
+All five arms are complete: four runs each, **441 minutes** of local inference in total.
+
+`split-plain` was written up as `0/2` while its last two runs were still going, rather than
+rounded to the `0/4` it was plainly heading for. It did land on `0/4` — every piece failing
+on every run — but it was measured before it was written, which is the only order that means
+anything in a document like this one.
 
 ## The finding is a conjunction, not a winner
 
@@ -31,9 +32,9 @@ The first four arms all fail. Only the last passes, and it is the only one that 
 **small pieces** with **the model's own test demoted to advisory**.
 
 - Splitting alone does not work. `split-plain` is the split blueprint with the other
-  switches off, and every piece failed on both runs measured so far — the arm exists precisely
-  because "split passed 4/4" would otherwise have been a claim about three changes at once,
-  and it would have been the wrong claim.
+  switches off: **0/4**, with all four pieces failing on all four runs. The arm exists
+  precisely because "split passed 4/4" would otherwise have been a claim about three changes
+  at once, and it would have been the wrong claim.
 - The switches alone do not work either. `both` is the monolith with both switches on: 0/4.
 
 So the honest statement is: **on this piece, with this model, small pieces and an advisory

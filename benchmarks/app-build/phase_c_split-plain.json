@@ -88,6 +88,88 @@
      "stop_reason": "the model returned identical code across 4 samples - 2 at raised temperature and one asked to start over from the requirement alone"
     }
    ]
+  },
+  {
+   "variant": "split-plain",
+   "seconds": 2654.3,
+   "passed": false,
+   "whole_app_passed": false,
+   "assembly_note": "only the storage pieces are built here, so the assembled-app check cannot pass and is not what this measures",
+   "pieces": [
+    {
+     "name": "store_users",
+     "passed": false,
+     "verified": false,
+     "repairs": 2,
+     "seconds": 683.7,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    },
+    {
+     "name": "store_sessions",
+     "passed": false,
+     "verified": false,
+     "repairs": 2,
+     "seconds": 784.0,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: tuple indices must be integers or slices, not str"
+    },
+    {
+     "name": "store_records",
+     "passed": false,
+     "verified": false,
+     "repairs": 3,
+     "seconds": 1186.2,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: AssertionError at: ^^^^^^^^^^^^^^^^^"
+    },
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 1,
+     "seconds": 0.2,
+     "stop_reason": "the model returned identical code across 4 samples - 2 at raised temperature and one asked to start over from the requirement alone"
+    }
+   ]
+  },
+  {
+   "variant": "split-plain",
+   "seconds": 3220.5,
+   "passed": false,
+   "whole_app_passed": false,
+   "assembly_note": "only the storage pieces are built here, so the assembled-app check cannot pass and is not what this measures",
+   "pieces": [
+    {
+     "name": "store_users",
+     "passed": false,
+     "verified": false,
+     "repairs": 2,
+     "seconds": 553.5,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    },
+    {
+     "name": "store_sessions",
+     "passed": false,
+     "verified": false,
+     "repairs": 2,
+     "seconds": 786.0,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: tuple indices must be integers or slices, not str"
+    },
+    {
+     "name": "store_records",
+     "passed": false,
+     "verified": false,
+     "repairs": 5,
+     "seconds": 1880.6,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: AssertionError at: ^^^^^^^^^^^^^^^^^"
+    },
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 1,
+     "seconds": 0.2,
+     "stop_reason": "the model returned identical code across 4 samples - 2 at raised temperature and one asked to start over from the requirement alone"
+    }
+   ]
   }
  ]
 }

@@ -22,7 +22,7 @@ not a winner:
 | baseline | 9 functions | off | is the gate | 0/4 | 2310 s |
 | both | 9 functions | on | advisory | 0/4 | 594 s |
 | deepseek | 9 functions | on | advisory | 0/4 | 732 s |
-| split-plain | 3 x 3 | off | is the gate | 0/2 (running) | 3132 s |
+| split-plain | 3 x 3 | off | is the gate | 0/4 | 3132 s |
 | **split** | **3 x 3** | **on** | **advisory** | **4/4** | **244 s** |
 
 Splitting alone does not work and the switches alone do not work. Only small pieces *and* an
@@ -32,6 +32,12 @@ four times out of four - 9.5x faster than the baseline into the bargain.
 split-plain exists because "splitting works" would otherwise have been a claim about three
 changes at once, and it would have been the wrong claim. Its pieces failed on the model's own
 test - TypeError: tuple indices must be integers - not on the blueprint's.
+
+All five arms complete: four runs each, 441 minutes of local inference. `split-plain` was
+published as 0/2 while its last two runs were still going, rather than rounded to the 0/4 it
+was plainly heading for. It did land on 0/4, but it was measured before it was written -
+which is the only order that means anything in a benchmark this one keeps catching itself
+out on.
 
 deepseek-coder:6.7b is slower and no more reliable. Selectable, not promoted.
 
