@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.147] - 2026-08-14
+
+### Fixed
+- **The contract checker could not see a re-export**, so it rejected every facade.
+  `public_interface` read `def` statements off the AST, and a facade exposes its interface
+  through `from store_users import create_user` instead. The split-storage build was
+  reported as *"storage.py does not define `create_user(email, password_hash)`. It defines:
+  ['init_db']"* while being entirely correct.
+
+  This was the only thing standing in front of the best result of the Phase C sweep.
+  Re-exported names now count as exposed, and their argument comparison is skipped rather
+  than failed - the signature lives in the other file, and the generated contract test
+  already checks it at runtime via `inspect.signature`, which resolves through the
+  re-export. A name that is neither defined nor imported is still caught, and a wrong
+  signature on a real `def` is still caught.
+
+- `test_every_guarantee_names_a_check_that_really_exists` did not know about
+  `acceptance`, which 0.1.146 introduced. A guarantee mapped to it must now have an
+  acceptance script to be mapped to.
+
+- The Phase C batch reported a run as failed when only its *storage* pieces were built -
+  the assembled-app check cannot pass on a deliberate subset, since `app.py` imports an
+  `api` that was never generated. It now judges the pieces it built and records the
+  whole-app verdict separately, rather than quietly using whichever number was convenient.
+
 ## [0.1.146] - 2026-08-14
 
 Phase D: a second blueprint, of a shape sharing nothing with the first. It found three real

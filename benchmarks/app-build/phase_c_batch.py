@@ -41,6 +41,10 @@ VARIANTS: dict[str, dict] = {
     # Same two switches, but the nine-function module split into three of three.
     "split": dict(blueprint="webapp-auth-crud-split", targeted_repair=True,
                   advisory_model_test=True, model="qwen2.5-coder:7b"),
+    # The split with the other two switches OFF, so its contribution can be separated from
+    # theirs. Without this, "split passed 4/4" is a claim about three changes at once.
+    "split-plain": dict(blueprint="webapp-auth-crud-split", targeted_repair=False,
+                        advisory_model_test=False, model="qwen2.5-coder:7b"),
     # A different model of the same size class, never tried on this task.
     "deepseek": dict(blueprint="webapp-auth-crud", targeted_repair=True,
                      advisory_model_test=True, model="deepseek-coder:6.7b"),
@@ -65,10 +69,19 @@ async def one_run(variant: str, cfg: dict, ws: Path) -> dict:
         targeted_repair=cfg["targeted_repair"],
         advisory_model_test=cfg["advisory_model_test"],
     )
+    # Judged on the pieces this actually built. `result.passed` also requires the assembled
+    # app to start, and this deliberately builds a subset - so `app.py` imports an `api`
+    # that was never generated and the whole-app check fails for a reason that has nothing
+    # to do with what is being measured. Reported here rather than silently using the
+    # convenient number.
+    pieces_passed = bool(result.pieces) and all(p.passed for p in result.pieces)
     return {
         "variant": variant,
         "seconds": round(time.time() - started, 1),
-        "passed": result.passed,
+        "passed": pieces_passed,
+        "whole_app_passed": result.passed,
+        "assembly_note": ("only the storage pieces are built here, so the assembled-app "
+                          "check cannot pass and is not what this measures"),
         "pieces": [{"name": p.name, "passed": p.passed, "verified": p.verified,
                     "repairs": p.repairs, "seconds": p.seconds,
                     "stop_reason": p.stop_reason[:160]} for p in result.pieces],

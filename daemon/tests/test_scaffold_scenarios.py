@@ -632,6 +632,12 @@ def test_every_guarantee_names_a_check_that_really_exists():
                 elif not pieces[name].tests.strip():
                     problems.append(f"{blueprint.id}: {check!r} names a piece with no "
                                     f"scenario, so the guarantee is unenforced")
+            elif check == "acceptance":
+                # Enforced by the blueprint's end-to-end script, which must exist. Web
+                # blueprints get this from webcheck; everything else needs it declared.
+                if not blueprint.acceptance.strip():
+                    problems.append(f"{blueprint.id}: {guarantee!r} is mapped to the "
+                                    f"acceptance script, but there isn't one")
             elif kind == "webcheck":
                 # The name must appear as a literal in the module that emits it. A typo
                 # here would leave a guarantee pointing at a check that never reports.
