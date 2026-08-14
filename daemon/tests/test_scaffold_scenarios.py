@@ -31,6 +31,14 @@ import pytest
 
 from synapse_daemon.blueprints import CheckKind, Piece
 from synapse_daemon.local_pipeline import run_pipeline
+from synapse_daemon.coder_runtimes import CoderRuntime
+
+LOCAL_ONLY = (CoderRuntime.LOCAL,)
+"""These cases stub the local generator and assert on what it was asked.
+
+The ladder defaults to the paid runtimes, so without pinning this they would
+shell out to the real Claude CLI - spending credit to test a prompt string.
+"""
 
 BLUEPRINT = (Path(__file__).resolve().parents[2] / "blueprints" / "webapp-auth-crud"
              / "blueprint.json")
@@ -280,14 +288,22 @@ def test_summary_separates_passing_from_independently_verified():
 
     result = BuildResult(
         blueprint_id="webapp-auth-crud", workspace="/tmp",
-        pieces=[PieceOutcome(name="passwords", passed=True, verified=True),
-                PieceOutcome(name="storage", passed=True, verified=False),
-                PieceOutcome(name="pages", passed=True, verified=False)])
+        pieces=[PieceOutcome(name="passwords", passed=True, verified=True,
+                             runtime="claude"),
+                PieceOutcome(name="storage", passed=True, verified=False, runtime="local",
+                             attempts_to_first_success=4),
+                PieceOutcome(name="pages", passed=True, verified=False, runtime="local")])
 
     text = result.summary()
-    assert "3/3 pieces built locally, 1 independently verified" in text
+    assert "3/3 pieces built" in text
+    assert "1 independently verified" in text
     assert "NOT independently verified: storage, pages" in text, (
         f"the summary hid which pieces had no independent check:\n{text}")
+    # A build spans tiers; claiming local authorship for work Claude did misprices the run.
+    assert "1x claude" in text and "2x local" in text, (
+        f"the summary did not say which tiers wrote the app:\n{text}")
+    assert "attempts to first success: storage 4" in text, (
+        f"the honest cost of the free tier was omitted:\n{text}")
 
 
 def test_a_piece_without_a_scenario_is_never_marked_verified(tmp_path):
@@ -308,7 +324,7 @@ def test_a_piece_without_a_scenario_is_never_marked_verified(tmp_path):
     original = lp.generate_code
     lp.generate_code = stub
     try:
-        result = _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+        result = _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0, ladder=LOCAL_ONLY))
     finally:
         lp.generate_code = original
 
@@ -338,7 +354,7 @@ def test_declared_checks_the_runner_cannot_execute_are_reported(tmp_path):
     original = lp.generate_code
     lp.generate_code = stub
     try:
-        result = _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+        result = _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0, ladder=LOCAL_ONLY))
     finally:
         lp.generate_code = original
 
@@ -425,7 +441,7 @@ def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
     original = lp.generate_code
     lp.generate_code = stub
     try:
-        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0, ladder=LOCAL_ONLY))
     finally:
         lp.generate_code = original
 
@@ -433,6 +449,152 @@ def test_the_piece_is_shown_the_contract_it_will_be_held_to(tmp_path):
     assert "create_user(email, password_hash)" in draft, (
         f"the piece was held to a contract it was never shown:\n{draft}")
     assert "init_db()" in draft, draft
+
+
+def _one_piece_blueprint():
+    from synapse_daemon.blueprints import Blueprint
+
+    return Blueprint(id="t", name="t", summary="t",
+                     pieces=[Piece(name="thing", spec="make a thing", module="thing",
+                                   checks=[CheckKind.UNIT])])
+
+
+def _stub_generator(source: str):
+    def stub(spec: str, *a, **k) -> str:
+        if "Write a test for that code" in spec:
+            return "from thing import *\n\nassert value() == 1\nprint('OK')\n"
+        return source
+    return stub
+
+
+def test_the_runtime_that_wrote_each_piece_is_recorded(tmp_path, monkeypatch):
+    """A build routinely spans tiers, so provenance belongs on the piece, not the build."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    monkeypatch.setattr(lp, "generate_code", _stub_generator("def value():\n    return 1\n"))
+    result = _run_async(build_blueprint(_one_piece_blueprint(), workspace=tmp_path,
+                                        max_repairs=0, ladder=LOCAL_ONLY))
+
+    piece = result.pieces[0]
+    assert piece.passed, piece.stop_reason
+    assert piece.runtime == "local"
+    assert piece.attempts_to_first_success == 1
+
+
+def test_an_exhausted_runtime_drops_one_rung_and_costs_no_attempt(tmp_path, monkeypatch):
+    """Running out of credit says nothing about whether the piece is buildable."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon import coder_runtimes as cr
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    cr.clear_exhausted()
+    monkeypatch.setattr(cr, "available", lambda runtime: True)
+    monkeypatch.setattr(lp, "generate_code", _stub_generator("def value():\n    return 1\n"))
+
+    def fake_write_module(runtime, prompt, **kwargs):
+        # Claude is out of room; anything below it would work, but the local stub is what
+        # this build should end up on.
+        return cr.RuntimeResult(runtime=runtime.value,
+                                exhausted="Error: usage limit reached")
+
+    monkeypatch.setattr(cr, "write_module", fake_write_module)
+
+    result = _run_async(build_blueprint(
+        _one_piece_blueprint(), workspace=tmp_path, max_repairs=0,
+        ladder=(cr.CoderRuntime.CLAUDE, cr.CoderRuntime.LOCAL), max_attempts=1))
+
+    piece = result.pieces[0]
+    assert piece.passed, piece.stop_reason
+    assert piece.runtime == "local", "the build did not fall past the exhausted tier"
+    assert piece.attempts_to_first_success == 1, (
+        "running out of credit consumed one of the piece's attempts")
+    assert any("out of room" in note for note in result.notes), result.notes
+    cr.clear_exhausted()
+
+
+def test_overnight_mode_retries_until_it_passes(tmp_path, monkeypatch):
+    """The free tier passes about one run in five. Retrying is what makes that usable."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    calls = {"n": 0}
+
+    def flaky(spec: str, *a, **k) -> str:
+        if "Write a test for that code" in spec:
+            return "from thing import *\n\nassert value() == 1\nprint('OK')\n"
+        calls["n"] += 1
+        # Wrong twice, right on the third attempt.
+        return ("def value():\n    return 1\n" if calls["n"] >= 3
+                else "def value():\n    return 0\n")
+
+    monkeypatch.setattr(lp, "generate_code", flaky)
+    result = _run_async(build_blueprint(_one_piece_blueprint(), workspace=tmp_path,
+                                        max_repairs=0, ladder=LOCAL_ONLY, max_attempts=5))
+
+    piece = result.pieces[0]
+    assert piece.passed, piece.stop_reason
+    assert piece.attempts_to_first_success == 3, (
+        f"attempts-to-first-success is the headline number for this tier, got "
+        f"{piece.attempts_to_first_success}")
+
+
+def test_a_retry_starts_from_a_clean_workspace(tmp_path, monkeypatch):
+    """Bytecode, databases and the previous module have each faked a failure before."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    seen: list[bool] = []
+
+    def watcher(spec: str, *a, **k) -> str:
+        if "Write a test for that code" in spec:
+            return "from thing import *\n\nassert value() == 1\nprint('OK')\n"
+        # Record whether last attempt's leftovers are still lying around.
+        seen.append((tmp_path / "leftover.db").exists())
+        (tmp_path / "leftover.db").write_text("stale", encoding="utf-8")
+        return "def value():\n    return 0\n" if len(seen) < 2 else "def value():\n    return 1\n"
+
+    monkeypatch.setattr(lp, "generate_code", watcher)
+    _run_async(build_blueprint(_one_piece_blueprint(), workspace=tmp_path, max_repairs=0,
+                               ladder=LOCAL_ONLY, max_attempts=3))
+
+    assert seen[1:] and not any(seen[1:]), (
+        "a retry inherited the previous attempt's database, which has already caused "
+        "failures no model could fix")
+
+
+def test_resampling_is_off_for_a_runtime_with_no_sampler_to_turn_up(tmp_path, monkeypatch):
+    """The resample ladder answers greedy determinism. A billed CLI has neither."""
+    import synapse_daemon.local_pipeline as lp
+
+    calls = {"n": 0}
+
+    def always_identical(spec: str, *a, **k) -> str:
+        if "Write a test for that code" in spec:
+            return "from solution import *\n\nassert value() == 1\nprint('OK')\n"
+        calls["n"] += 1
+        return "def value():\n    return 0\n"
+
+    monkeypatch.setattr(lp, "generate_code", always_identical)
+    result = _run_async(run_pipeline("spec", workspace=tmp_path, max_repairs=1,
+                                     resample=False))
+
+    assert not result.passed
+    assert result.attempts[0].resamples == 0, "a billed runtime was re-asked at temperature"
+    assert not result.attempts[0].started_over
+    # One draft plus one repair. With resampling on this would be four billed calls.
+    assert calls["n"] == 2, f"unexpected number of generation calls: {calls['n']}"
+
+
+def test_a_paid_runtime_gets_a_smaller_repair_budget_than_the_free_one():
+    """Every repair on a paid tier is a fresh billed session; on local it is free time."""
+    from synapse_daemon.scaffold.runner import PAID_REPAIR_BUDGET, _repair_budget
+
+    assert _repair_budget("local", 10) == 10, "the free tier should keep its budget"
+    assert _repair_budget("claude", 10) == PAID_REPAIR_BUDGET
+    assert _repair_budget("codex", 10) == PAID_REPAIR_BUDGET
+    # A caller asking for less than the cap still gets what it asked for.
+    assert _repair_budget("claude", 1) == 1
 
 
 def test_every_guarantee_names_a_check_that_really_exists():
@@ -690,7 +852,7 @@ def test_the_test_prompt_gets_the_requirement_not_the_implementation_aids(tmp_pa
     original = lp.generate_code
     lp.generate_code = stub
     try:
-        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0))
+        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0, ladder=LOCAL_ONLY))
     finally:
         lp.generate_code = original
 

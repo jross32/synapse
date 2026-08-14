@@ -201,6 +201,8 @@ async def run_pipeline(
     runner: Callable[[Path, Path], tuple[bool, str]] | None = None,
     extra_test: str = "",
     requirement: str = "",
+    generate: Callable[..., str] | None = None,
+    resample: bool = True,
 ) -> PipelineResult:
     """Generate code for ``spec``, prove it runs, and repair it from real errors.
 
@@ -211,6 +213,17 @@ async def run_pipeline(
     # Injectable so the orchestration can be tested without spawning anything: the logic
     # worth protecting is the generate/test/repair/escalate sequence, not subprocess itself.
     execute = runner or _run
+
+    # Which model or CLI actually writes the code is the *only* thing that differs between
+    # tiers of the runtime ladder. Everything downstream - the contract assertions, the
+    # blueprint scenario, the repair loop, the honesty about what was verified - is worth
+    # exactly as much when Claude wrote the piece as when a 7B did, so it is shared rather
+    # than reimplemented per runtime. `generate` defaults to the local coder because that is
+    # the tier this loop was built for.
+    def _default_generate(*args, **kwargs):
+        return generate_code(*args, **kwargs)
+
+    write_code = generate or _default_generate
     ws = Path(workspace).resolve()
     ws.mkdir(parents=True, exist_ok=True)
     target = ws / path
@@ -222,7 +235,7 @@ async def run_pipeline(
             on_event({"type": kind, **rest})
 
     emit("generating", model=coder_model)
-    code = await asyncio.to_thread(generate_code, spec, coder_model)
+    code = await asyncio.to_thread(write_code, spec, coder_model)
     if code.startswith("ERROR:"):
         result.stop_reason = code
         result.total_seconds = round(time.time() - started, 1)
@@ -256,7 +269,7 @@ async def run_pipeline(
         f"including edge cases. Use plain asserts, no test framework. Print 'OK' on the last "
         f"line. Output only the test code."
     )
-    test_code = await asyncio.to_thread(generate_code, test_spec, coder_model)
+    test_code = await asyncio.to_thread(write_code, test_spec, coder_model)
 
     # Verify the test actually imports the module. Left to itself the model happily pastes a
     # copy of the implementation into the test file and asserts against *that*, so the test
@@ -338,7 +351,7 @@ async def run_pipeline(
             "Fix the code so it satisfies the requirement and the tests pass. "
             "Output only the corrected code."
         )
-        fixed = await asyncio.to_thread(generate_code, repair_spec, coder_model)
+        fixed = await asyncio.to_thread(write_code, repair_spec, coder_model)
 
         # Greedy decoding is deterministic, so an unchanged answer to a near-identical
         # prompt is what the sampler is *for*, not evidence the model is out of ideas.
@@ -347,13 +360,17 @@ async def run_pipeline(
         # eight attempts early on the strength of a property of temperature 0. Drawing a
         # different sample costs local time, which is free, and is the one thing that can
         # break the tie.
+        # Only for a sampler that can actually be turned up. An agentic CLI is already
+        # nondeterministic, has no temperature to raise, and bills for every call - so the
+        # resample and start-over ladder below would spend real money re-asking a question
+        # whose premise (greedy decoding repeats itself) does not apply to it.
         resamples = 0
-        while (fixed == result.code and not fixed.startswith("ERROR:")
+        while (resample and fixed == result.code and not fixed.startswith("ERROR:")
                and resamples < len(RESAMPLE_TEMPERATURES)):
             temperature = RESAMPLE_TEMPERATURES[resamples]
             resamples += 1
             emit("resampling", attempt=attempt + 1, temperature=temperature)
-            fixed = await asyncio.to_thread(generate_code, repair_spec, coder_model,
+            fixed = await asyncio.to_thread(write_code, repair_spec, coder_model,
                                             900.0, 8192, temperature)
 
         # Temperature turned out not to be enough, and the reason is instructive: a repair
@@ -367,11 +384,11 @@ async def run_pipeline(
         # not pasted in. It is the last thing tried before escalating, because a rewrite
         # discards whatever the current attempt already had right.
         started_over = False
-        if fixed == result.code and not fixed.startswith("ERROR:"):
+        if resample and fixed == result.code and not fixed.startswith("ERROR:"):
             started_over = True
             emit("starting_over", attempt=attempt + 1)
             fixed = await asyncio.to_thread(
-                generate_code,
+                write_code,
                 f"Write code satisfying this requirement:\n{spec}\n\n"
                 f"A previous attempt failed with:\n```\n{error}\n```\n\n"
                 "Do not reproduce that attempt - write the module fresh, and make sure the "

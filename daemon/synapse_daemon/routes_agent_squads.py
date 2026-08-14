@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 
 from . import activity as activity_module
 from . import agent_squads as squads
+from . import coder_runtimes
 from . import coordination
 from . import mcp_servers as mcp_servers_module
 from . import personalities as personalities_module
@@ -95,113 +96,30 @@ def _automatic_worker_argv(
 ) -> list[str]:
     """Translate one task-scoped automatic launch into each supported CLI.
 
-    Interactive remains the default. Callers must opt into this path and name
-    the authority boundary; the resulting process immediately executes the
-    daemon-authored role prompt instead of opening an idle TUI.
-    """
+    Interactive remains the default. Callers must opt into this path and name the authority
+    boundary; the resulting process immediately executes the daemon-authored role prompt
+    instead of opening an idle TUI.
 
+    The per-CLI flags now live in ``coder_runtimes`` because the blueprint builder needs the
+    same translation to drive a runtime headlessly. Each of those flags was learned from a
+    real failure - a worker that sat forever on an interactive prompt, or one that refused
+    to file its own findings - and two copies of that knowledge is one too many.
+    """
     prompt = (
         f"Read the complete instructions in {prompt_file}, perform that work now, "
         "and finish by POSTing an explicit handoff to the Synapse work-item handoff endpoint. "
         "Do not wait for more user input."
     )
-    executable, *runtime_args = argv
-    if runtime == "claude":
-        permission_args = {
-            # `plan` is structurally wrong for a headless worker: its entire purpose
-            # is to withhold action until a human approves a plan, but this worker's
-            # contract is to act -- it must POST its handoff before exiting. Observed
-            # in a real post-work council: one reviewer completed its whole review and
-            # then refused to file it, so the finding survived only in a transcript,
-            # and a second produced nothing before its deadline. `auto` is the
-            # non-interactive path (already proven for WORKSPACE below); read-only
-            # intent is carried by denying the file-mutating tools instead of by a
-            # mode that also denies reporting.
-            #
-            # Note the asymmetry with Codex below: `--sandbox read-only` is a real
-            # OS-level sandbox, whereas Claude has no equivalent flag, so Claude's
-            # OBSERVE is a policy boundary rather than a sandbox. Bash stays available
-            # precisely because the reporting contract is an outbound HTTP POST.
-            squads.AgentExecutionAuthority.OBSERVE: [
-                "--permission-mode",
-                "auto",
-                "--disallowedTools",
-                _CLAUDE_OBSERVE_DENIED_TOOLS,
-            ],
-            # Claude's `auto` mode is the non-interactive, policy-aware path:
-            # it can use an attached MCP when Claude judges the call allowed,
-            # while `acceptEdits` still opens an interactive MCP prompt and can
-            # strand a headless worker indefinitely.
-            squads.AgentExecutionAuthority.WORKSPACE: ["--permission-mode", "auto"],
-            squads.AgentExecutionAuthority.FULL: ["--dangerously-skip-permissions"],
-        }[authority]
-        return [
-            executable,
-            *runtime_args,
-            "--strict-mcp-config",
-            *permission_args,
-            "--print",
-            prompt,
-        ]
-    if runtime == "codex":
-        permission_args = {
-            squads.AgentExecutionAuthority.OBSERVE: ["--sandbox", "read-only"],
-            squads.AgentExecutionAuthority.WORKSPACE: ["--sandbox", "workspace-write"],
-            squads.AgentExecutionAuthority.FULL: [
-                "--dangerously-bypass-approvals-and-sandbox",
-                "--ignore-rules",
-            ],
-        }[authority]
-        return [
-            executable,
-            "exec",
-            "--ignore-user-config",
-            "--skip-git-repo-check",
-            "--color",
-            "never",
-            *permission_args,
-            *runtime_args,
-            prompt,
-        ]
-    if runtime == "copilot":
-        permission_args = {
-            squads.AgentExecutionAuthority.OBSERVE: ["--deny-tool=write", "--deny-tool=shell"],
-            squads.AgentExecutionAuthority.WORKSPACE: ["--allow-all-tools"],
-            squads.AgentExecutionAuthority.FULL: ["--allow-all"],
-        }[authority]
-        return [
-            executable,
-            *runtime_args,
-            "--disable-builtin-mcps",
-            "--no-ask-user",
-            *permission_args,
-            "--prompt",
-            prompt,
-        ]
-    if runtime == "gemini":
-        # Gemini's --approval-mode maps cleanly onto our authority levels, so unlike
-        # Claude (where OBSERVE is only a policy boundary) this is an enforced mode:
-        #   plan      -> read-only, the CLI refuses mutating tools
-        #   auto_edit -> auto-approves edit tools but still gates shell
-        #   yolo      -> auto-approves everything
-        # -p/--prompt is its headless flag; without it the CLI opens interactively and
-        # a spawned worker would sit forever waiting for a human.
-        permission_args = {
-            squads.AgentExecutionAuthority.OBSERVE: ["--approval-mode", "plan"],
-            squads.AgentExecutionAuthority.WORKSPACE: ["--approval-mode", "auto_edit"],
-            squads.AgentExecutionAuthority.FULL: ["--approval-mode", "yolo"],
-        }[authority]
-        return [
-            executable,
-            *runtime_args,
-            *permission_args,
-            "--prompt",
-            prompt,
-        ]
-    raise invalid(
-        "agent_work_item",
-        "Automatic execution is supported only for Claude, Codex, GitHub Copilot, and Gemini workers.",
-    )
+    try:
+        return coder_runtimes.headless_argv(
+            argv, runtime=runtime, authority=authority, prompt=prompt
+        )
+    except ValueError:
+        raise invalid(
+            "agent_work_item",
+            "Automatic execution is supported only for Claude, Codex, GitHub Copilot, "
+            "and Gemini workers.",
+        )
 
 
 class WorkerTimeoutRegistry:

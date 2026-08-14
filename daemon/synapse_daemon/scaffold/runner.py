@@ -34,6 +34,7 @@ from typing import Any, Callable
 from pydantic import BaseModel, Field
 
 from .. import blueprints as bp_mod
+from .. import coder_runtimes
 from ..blueprints import Blueprint, CheckKind, Piece
 from ..local_pipeline import run_pipeline
 from . import contracts as contracts_mod
@@ -63,6 +64,22 @@ class PieceOutcome(BaseModel):
     stop_reason: str = ""
     checks: dict[str, str] = Field(default_factory=dict)
     escalation_packet: str = ""
+    runtime: str = ""
+    """Which tier of the ladder actually wrote this piece.
+
+    Recorded per piece rather than per build because a single build routinely spans tiers:
+    a paid runtime runs out of room halfway through and the rest falls to the free one. A
+    build-level label would quietly attribute the whole app to whoever started it.
+    """
+    ladder_note: str = ""
+    """What was skipped to get there, and why - e.g. "after claude (out of room)"."""
+    attempts_to_first_success: int = 0
+    """How many independent attempts this piece needed. 0 if it never succeeded.
+
+    The honest unit for the free tier. Its per-attempt pass rate is roughly 1 in 5, which
+    makes a single attempt close to useless and an overnight batch perfectly serviceable -
+    but only if the cost is reported as attempts rather than as a pass rate.
+    """
     test_source: str = ""
     """The test that actually decided this piece's verdict.
 
@@ -91,9 +108,24 @@ class BuildResult(BaseModel):
         verified = sum(1 for p in self.pieces if p.verified)
         # Both numbers, always. Reporting only the first is how "3/4 pieces built locally"
         # came to mean three modules that could not be imported and used.
-        line = (f"{ok}/{len(self.pieces)} pieces built locally, {verified} independently "
+        #
+        # And no longer "locally": a build spans tiers, so the tiers that actually wrote it
+        # are named. A summary claiming local authorship for work Claude did would misprice
+        # the whole run.
+        by_tier: dict[str, int] = {}
+        for piece in self.pieces:
+            if piece.runtime:
+                by_tier[piece.runtime] = by_tier.get(piece.runtime, 0) + 1
+        written_by = (" via " + ", ".join(f"{n}x {t}" for t, n in sorted(by_tier.items()))
+                      if by_tier else "")
+        line = (f"{ok}/{len(self.pieces)} pieces built{written_by}, {verified} independently "
                 f"verified, {len(self.escalations)} escalation(s), "
                 f"{self.local_tokens} local tokens, {self.seconds:.0f}s")
+        retried = [p for p in self.pieces if p.attempts_to_first_success > 1]
+        if retried:
+            line += ("\n  attempts to first success: "
+                     + ", ".join(f"{p.name} {p.attempts_to_first_success}"
+                                 for p in retried))
         unverified = [p.name for p in self.pieces if p.passed and not p.verified]
         if unverified:
             line += (f"\n  NOT independently verified: {', '.join(unverified)} - these "
@@ -254,6 +286,63 @@ def _asset_context(piece: Piece) -> str:
             + example.read_text(encoding="utf-8") + "\n```")
 
 
+PAID_REPAIR_BUDGET = 3
+"""Repair attempts allowed on a runtime that costs money.
+
+The default budget of 10 was sized for free inference, where the only cost of another go is
+time nobody is waiting on. On a paid tier every repair is a fresh billed session, and a
+runtime that has failed three times with the piece, the contract, the scenario and the real
+error in front of it is not usually one more attempt from success - it is a piece that wants
+a human. Local keeps the generous budget precisely because it is free.
+"""
+
+
+def _repair_budget(runtime: str, requested: int) -> int:
+    if runtime == coder_runtimes.CoderRuntime.LOCAL.value:
+        return requested
+    return min(requested, PAID_REPAIR_BUDGET)
+
+
+def _reset_attempt(workspace: Path, module: str) -> None:
+    """Leave nothing behind that could fail the next attempt for the previous one's reasons.
+
+    All three of these have already caused a failure the model could not have fixed: cached
+    bytecode graded a repair against the previous attempt's code, a leftover SQLite file made
+    every run after the first fail on a duplicate email, and a leftover module let a scenario
+    pass against code the current attempt never wrote.
+    """
+    shutil.rmtree(workspace / "__pycache__", ignore_errors=True)
+    for pattern in ("*.db", "*.sqlite", "*.sqlite3"):
+        for stale in workspace.glob(pattern):
+            stale.unlink(missing_ok=True)
+    (workspace / f"{module}.py").unlink(missing_ok=True)
+
+
+def _generator_for(runtime: str, workspace: Path, path: str) -> Callable[..., str] | None:
+    """A `generate` callable for one rung of the ladder, or None for the local one.
+
+    The paid runtimes are agents with filesystem access, so they are asked to write the
+    file and it is read back off disk; the local models return source directly. Everything
+    after this point - contract assertions, the blueprint scenario, the repair loop - is
+    identical regardless of which wrote it, which is the entire reason the ladder is cheap.
+    """
+    if runtime == coder_runtimes.CoderRuntime.LOCAL.value:
+        return None
+
+    tier = coder_runtimes.CoderRuntime(runtime)
+
+    def generate(spec: str, model: str = "", *args: Any, **kwargs: Any) -> str:
+        result = coder_runtimes.write_module(tier, spec, workspace=workspace, path=path)
+        if result.exhausted:
+            # Raised rather than returned: an exhausted tier is not a bad answer to be
+            # repaired, it is a tier that must stop being used. build_blueprint catches
+            # this and drops a rung.
+            raise coder_runtimes.RuntimeExhausted(tier, result.exhausted)
+        return result.source if result.ok else f"ERROR: {result.error}"
+
+    return generate
+
+
 async def build_blueprint(
     blueprint: Blueprint,
     *,
@@ -262,6 +351,8 @@ async def build_blueprint(
     max_repairs: int = 10,
     on_event: Callable[[dict[str, Any]], None] | None = None,
     vocabulary: dict[str, str] | None = None,
+    ladder: tuple[coder_runtimes.CoderRuntime, ...] = coder_runtimes.DEFAULT_LADDER,
+    max_attempts: int = 1,
 ) -> BuildResult:
     """Build every piece, in dependency order, verifying as it goes.
 
@@ -312,18 +403,65 @@ async def build_blueprint(
             contract_test = (contract_test.rstrip() + "\n\n" + piece.tests.strip()
                              if contract_test else piece.tests.strip())
 
-        pipeline = await run_pipeline(
-            full_spec,
-            workspace=ws,
-            path=f"{module}.py",
-            coder_model=coder_model or "",
-            max_repairs=max_repairs,
-            extra_test=contract_test,
-            # Just the piece's own requirement for the test prompt - not the exemplar page
-            # or the dependency interfaces, which say how to build it, not what it must do.
-            requirement=piece.spec,
-            on_event=lambda e, p=piece.name: emit("pipeline", piece=p, **e),
-        )
+        # One attempt per pass through, repeated only while the piece is still failing.
+        # `max_attempts > 1` is the overnight shape: the free tier passes roughly one run in
+        # five, which is a poor interactive tool and a perfectly good batch one, but only
+        # because a fresh attempt costs nothing but time nobody is waiting on.
+        pipeline = None
+        decision = None
+        attempt = 0
+        while attempt < max(1, max_attempts):
+            attempt += 1
+            decision = coder_runtimes.pick(ladder)
+            if not decision.chosen:
+                break
+            try:
+                pipeline = await run_pipeline(
+                    full_spec,
+                    workspace=ws,
+                    path=f"{module}.py",
+                    coder_model=coder_model or "",
+                    max_repairs=_repair_budget(decision.chosen, max_repairs),
+                    extra_test=contract_test,
+                    # Just the piece's own requirement for the test prompt - not the exemplar
+                    # page or the dependency interfaces, which say how to build it rather
+                    # than what it must do.
+                    requirement=piece.spec,
+                    generate=_generator_for(decision.chosen, ws, f"{module}.py"),
+                    resample=decision.chosen == coder_runtimes.CoderRuntime.LOCAL.value,
+                    on_event=lambda e, p=piece.name: emit("pipeline", piece=p, **e),
+                )
+            except coder_runtimes.RuntimeExhausted as exc:
+                # Drop a rung and try this same piece again. The attempt is not counted:
+                # running out of credit says nothing about whether the piece is buildable.
+                coder_runtimes.mark_exhausted(exc.runtime)
+                emit("runtime_exhausted", piece=piece.name, runtime=exc.runtime.value,
+                     detail=exc.detail)
+                result.notes.append(f"{exc.runtime.value} ran out of room: {exc.detail}")
+                attempt -= 1
+                continue
+
+            if pipeline.passed:
+                break
+            if attempt < max(1, max_attempts):
+                emit("retrying_piece", piece=piece.name, attempt=attempt,
+                     reason=pipeline.stop_reason)
+                # A fresh attempt has to be genuinely fresh: leftover bytecode, a leftover
+                # database and a leftover module have each already produced a failure that
+                # belonged to the harness rather than to the model.
+                _reset_attempt(ws, module)
+
+        if pipeline is None:
+            outcome = PieceOutcome(
+                name=piece.name, seconds=round(time.time() - piece_started, 1),
+                stop_reason=(decision.describe() if decision else "no runtime available"),
+                escalated=True)
+            outcome.runtime = ""
+            outcome.ladder_note = decision.describe() if decision else ""
+            result.pieces.append(outcome)
+            result.escalations.append(piece.name)
+            emit("piece_finished", piece=piece.name, passed=False)
+            continue
 
         outcome = PieceOutcome(
             name=piece.name,
@@ -333,6 +471,9 @@ async def build_blueprint(
             stop_reason=pipeline.stop_reason,
             escalation_packet=pipeline.escalation_packet,
             test_source=pipeline.test_code,
+            runtime=decision.chosen,
+            ladder_note=decision.describe(),
+            attempts_to_first_success=attempt if pipeline.passed else 0,
         )
 
         # Contract check runs even when the unit test passed: a module can satisfy a

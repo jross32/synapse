@@ -10,6 +10,73 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.144] - 2026-08-13
+
+### Added — the runtime ladder
+
+A build now uses the best coding runtime available and falls to the free one only when
+forced:
+
+```
+claude  ->  codex  ->  copilot  ->  local
+```
+
+This inverts the previous design, which was local-first and escalated upward to save tokens.
+Two days of measurement showed local models cost more than they save when used as the
+default; they belong at the bottom of the ladder, for overnight work nobody is waiting on.
+
+- `daemon/synapse_daemon/coder_runtimes.py` (new): one place that knows how to invoke each
+  CLI headlessly, and whether it can be used right now. The per-CLI flags are **lifted from
+  `routes_agent_squads`, not rewritten** - each was learned from a real failure (a worker
+  that sat forever on an interactive prompt, one that refused to file its findings), and
+  that module now calls this one. 118 lines of duplicated flag logic removed.
+- `PieceOutcome.runtime` and `.ladder_note` record which tier wrote each piece and what was
+  skipped to get there. Per piece, not per build: a build routinely spans tiers when a paid
+  runtime runs out of room halfway through, and a build-level label would attribute the
+  whole app to whoever started it.
+- `run_pipeline` takes an injectable `generate`. Contract assertions, the blueprint
+  scenario, the repair loop and the honesty about what was verified are worth exactly as
+  much when Claude wrote the piece as when a 7B did, so they are shared rather than
+  reimplemented per runtime. This is what makes the ladder cheap.
+
+### Added — overnight mode
+
+- `build_blueprint(max_attempts=N)` retries a failing piece from a clean slate and reports
+  `attempts_to_first_success`. The free tier passes roughly one run in five, which is a poor
+  interactive tool and a perfectly good batch one - but only if the cost is reported as
+  attempts rather than as a pass rate.
+- Each retry clears `__pycache__`, every `*.db`, and the previous module. All three have
+  already caused a failure that belonged to the harness rather than to the model.
+
+### Changed
+- `POST /blueprints/{id}/build` takes `runtimes` (the ladder, best first) and
+  `max_attempts` (overnight retries, capped at 20 so a typo cannot spend a whole night).
+- That endpoint no longer refuses to start unless Ollama is installed and running. That was
+  right when every build was local; a build routed to Claude has no use for Ollama, and
+  gating it that way made a paid runtime depend on the free one being present. Ollama is
+  now checked only when the build could actually reach the local tier.
+- `BuildResult.summary()` names the tiers that wrote the app ("via 1x claude, 2x local")
+  instead of claiming everything was "built locally", and reports attempts-to-first-success
+  for any piece that needed more than one.
+- The `/ai/context` playbook told every connecting AI to grind locally and escalate upward.
+  It now states the ladder and why it was inverted.
+- `max_repairs` is capped at 3 on paid tiers (`PAID_REPAIR_BUDGET`) and left generous on
+  local. The budget of 10 was sized for free inference; on a paid tier each repair is a
+  fresh billed session.
+
+### Documented
+- `docs/adr/0035-coding-runtime-ladder.md` — the decision, the measurements behind it, and
+  the fact that it reverses the previous one.
+
+### Exhaustion detection, deliberately reluctant
+
+`looks_exhausted` only inspects stderr of a **failed** invocation, and skips traceback
+lines. A build prompt can legitimately ask a model to *write* rate-limiting code, and a
+crash inside a function called `rate_limit` would otherwise demote a paid runtime to the
+free tier for an hour with nothing announcing it. The patterns match English phrasing
+("rate limit") and not identifiers ("rate_limit"); `429` is ignored after "line " and before
+"tests passed". Nine cases pin the false-positive direction, which is the expensive one.
+
 ## [0.1.143] - 2026-08-12
 
 ### Corrected

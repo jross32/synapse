@@ -15,6 +15,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from . import blueprints as bp_mod
+from . import coder_runtimes
 from . import ollama_client
 from .blueprints import Blueprint
 from .errors import invalid
@@ -25,6 +26,18 @@ class BuildRequest(BaseModel):
     workspace: str | None = None
     model: str = ""
     max_repairs: int = 4
+    runtimes: list[str] = Field(default_factory=list)
+    """Which coding runtimes to use, best first. Empty means the default ladder.
+
+    e.g. `["claude", "codex", "local"]`, or `["local"]` to force the free tier.
+    """
+    max_attempts: int = 1
+    """Retry a failing piece from a clean slate this many times.
+
+    Leave at 1 for interactive builds. Overnight, raise it: the local tier passes a large
+    stateful module about one run in five, and a fresh attempt costs only time nobody is
+    waiting on.
+    """
 
 
 class RegisterRequest(BaseModel):
@@ -88,24 +101,47 @@ def build_blueprints_router(storage: Any, data_dir: Path) -> APIRouter:
 
     @router.post("/{blueprint_id}/build", response_model=runner_mod.BuildResult)
     async def build(blueprint_id: str, payload: BuildRequest) -> runner_mod.BuildResult:
-        """Build it with local models, verifying each piece as it goes.
+        """Build it with the best available runtime, verifying each piece as it goes.
 
-        Long-running by nature: every repair is a local inference, which is free but slow.
-        Pieces that cannot be finished locally come back with a self-contained
-        `escalation_packet` rather than a half-built file and a claim of success.
+        Each piece is written by the highest rung of the ladder that still has room -
+        `claude -> codex -> copilot -> local` by default - and every piece records which one
+        wrote it. Long-running by nature, especially once it reaches the local tier, where a
+        single repair is a local inference: free, and slow.
+
+        Pieces nothing can finish come back with a self-contained `escalation_packet` rather
+        than a half-built file and a claim of success.
         """
         bp = bp_mod.get_blueprint(blueprint_id)
         if bp is None:
             raise invalid("blueprint_id", f"No blueprint called {blueprint_id!r}.")
-        if not ollama_client.is_installed():
-            raise invalid("model", "Ollama isn't installed, so local models can't run.")
-        if not await ollama_client.server_up():
-            raise invalid("model", "The Ollama server isn't running. Start it first.")
+
+        try:
+            ladder = (tuple(coder_runtimes.CoderRuntime(name) for name in payload.runtimes)
+                      if payload.runtimes else coder_runtimes.DEFAULT_LADDER)
+        except ValueError as exc:
+            raise invalid("runtimes", f"Unknown runtime: {exc}")
+
+        # Ollama is only required when the build could actually reach the local tier. A
+        # build routed to Claude has no use for it, and refusing to start without it would
+        # make a paid runtime depend on a free one being installed.
+        if coder_runtimes.CoderRuntime.LOCAL in ladder:
+            reachable = [r for r in ladder if r is not coder_runtimes.CoderRuntime.LOCAL
+                         and coder_runtimes.available(r)]
+            if not reachable:
+                if not ollama_client.is_installed():
+                    raise invalid("model", "No coding runtime is available: nothing above "
+                                           "the local tier is installed, and neither is "
+                                           "Ollama.")
+                if not await ollama_client.server_up():
+                    raise invalid("model", "The build would fall to the local tier, but the "
+                                           "Ollama server isn't running. Start it first.")
 
         ws = Path(payload.workspace).resolve() if payload.workspace else (
             default_root / blueprint_id)
         return await runner_mod.build_blueprint(
             bp, workspace=ws, coder_model=payload.model,
-            max_repairs=max(0, min(payload.max_repairs, 20)))
+            max_repairs=max(0, min(payload.max_repairs, 20)),
+            ladder=ladder,
+            max_attempts=max(1, min(payload.max_attempts, 20)))
 
     return router

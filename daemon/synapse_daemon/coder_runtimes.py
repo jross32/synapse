@@ -1,0 +1,357 @@
+"""One place that knows how to run a coding CLI headlessly, and whether it can be run now.
+
+Synapse can reach several coding runtimes: the Claude, Codex, Copilot and Gemini CLIs, and
+the local Ollama models. They are not interchangeable in quality or in price, and the order
+that matters to the person paying is:
+
+    claude -> codex -> copilot -> local
+
+Paid runtimes first while their credits last; the local models are the tier you fall to when
+everything above is exhausted, and they are suited to overnight work rather than to waiting
+on. This module answers the two questions a build needs: *which tier can I use right now*,
+and *how do I actually invoke it without a human in the loop*.
+
+The headless invocations here were already proven in `routes_agent_squads`, which spawns
+automatic workers with them. They are lifted rather than rewritten, and that module now
+calls this one, so a flag learned the hard way is not learned twice.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import time
+from enum import Enum
+from pathlib import Path
+
+from pydantic import BaseModel, Field
+
+from .agent_squads import AgentExecutionAuthority
+from .runtime_resolution import resolve_command
+
+
+class CoderRuntime(str, Enum):
+    CLAUDE = "claude"
+    CODEX = "codex"
+    COPILOT = "copilot"
+    GEMINI = "gemini"
+    LOCAL = "local"
+
+
+DEFAULT_LADDER: tuple[CoderRuntime, ...] = (
+    CoderRuntime.CLAUDE,
+    CoderRuntime.CODEX,
+    CoderRuntime.COPILOT,
+    CoderRuntime.LOCAL,
+)
+"""Best first, free last.
+
+Gemini is omitted from the default rather than removed: it is supported by
+``headless_argv`` and can be put in a ladder explicitly, but it is not part of the paid
+rotation this machine actually has credits on.
+"""
+
+
+class RuntimeExhausted(RuntimeError):
+    """This tier is out of room. Not a bad answer - a tier that must stop being used.
+
+    Distinguished from an ordinary failure because the responses are opposite: a bad answer
+    is worth repairing on the same runtime, while an exhausted account will refuse every
+    subsequent call identically until its window resets.
+    """
+
+    def __init__(self, runtime: "CoderRuntime", detail: str) -> None:
+        super().__init__(f"{runtime.value} is out of room: {detail}")
+        self.runtime = runtime
+        self.detail = detail
+
+
+CLAUDE_OBSERVE_DENIED_TOOLS = "Write Edit NotebookEdit"
+"""Space separated, which is the form the squad workers have actually been running with.
+
+Claude has no read-only sandbox flag, so unlike Codex's `--sandbox read-only` this is a
+policy boundary rather than an enforced one.
+"""
+
+
+def headless_argv(
+    argv: list[str],
+    *,
+    runtime: str,
+    authority: AgentExecutionAuthority,
+    prompt: str,
+) -> list[str]:
+    """Translate one headless launch into each supported CLI.
+
+    Interactive is every one of these CLIs' default. Each branch below names the flag that
+    makes it execute a prompt and exit, plus the flags that bound what it may touch.
+    """
+    executable, *runtime_args = argv
+    if runtime == CoderRuntime.CLAUDE.value:
+        permission_args = {
+            # `plan` is structurally wrong for a headless worker: its purpose is to withhold
+            # action until a human approves, and nobody is there to approve. `auto` is the
+            # non-interactive path; read-only intent is carried by denying the mutating
+            # tools rather than by a mode that also denies finishing.
+            AgentExecutionAuthority.OBSERVE: [
+                "--permission-mode", "auto",
+                "--disallowedTools", CLAUDE_OBSERVE_DENIED_TOOLS,
+            ],
+            AgentExecutionAuthority.WORKSPACE: ["--permission-mode", "auto"],
+            AgentExecutionAuthority.FULL: ["--dangerously-skip-permissions"],
+        }[authority]
+        return [executable, *runtime_args, "--strict-mcp-config", *permission_args,
+                "--print", prompt]
+
+    if runtime == CoderRuntime.CODEX.value:
+        permission_args = {
+            AgentExecutionAuthority.OBSERVE: ["--sandbox", "read-only"],
+            AgentExecutionAuthority.WORKSPACE: ["--sandbox", "workspace-write"],
+            AgentExecutionAuthority.FULL: [
+                "--dangerously-bypass-approvals-and-sandbox", "--ignore-rules",
+            ],
+        }[authority]
+        return [executable, "exec", "--ignore-user-config", "--skip-git-repo-check",
+                "--color", "never", *permission_args, *runtime_args, prompt]
+
+    if runtime == CoderRuntime.COPILOT.value:
+        permission_args = {
+            AgentExecutionAuthority.OBSERVE: ["--deny-tool=write", "--deny-tool=shell"],
+            AgentExecutionAuthority.WORKSPACE: ["--allow-all-tools"],
+            AgentExecutionAuthority.FULL: ["--allow-all"],
+        }[authority]
+        return [executable, *runtime_args, "--disable-builtin-mcps", "--no-ask-user",
+                *permission_args, "--prompt", prompt]
+
+    if runtime == CoderRuntime.GEMINI.value:
+        permission_args = {
+            AgentExecutionAuthority.OBSERVE: ["--approval-mode", "plan"],
+            AgentExecutionAuthority.WORKSPACE: ["--approval-mode", "auto_edit"],
+            AgentExecutionAuthority.FULL: ["--approval-mode", "yolo"],
+        }[authority]
+        return [executable, *runtime_args, *permission_args, "--prompt", prompt]
+
+    raise ValueError(f"no headless invocation known for runtime {runtime!r}")
+
+
+# Phrases a CLI emits when the account is out of room, not when the code is wrong.
+EXHAUSTION_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.I) for p in (
+        r"\busage limit reached\b",
+        # Space or hyphen only. A CLI reporting a limit writes English ("rate limit"); an
+        # underscore means it is an identifier, and `KeyError: rate_limit` in a crashing
+        # build would otherwise demote the runtime for an hour.
+        r"\brate[ -]?limit(ed|s)?\b",
+        r"\bquota (exceeded|exhausted)\b",
+        r"\binsufficient[_ ]quota\b",
+        r"\bout of (credits?|tokens?)\b",
+        r"\bcredit balance is too low\b",
+        r"\btoo many requests\b",
+        # Not "line 429" and not "429 tests passed" - only a status code being reported.
+        r"(?<!line )\b(http[ /]?)?429\b(?!\s*(tests|files|lines|ms|s\b))",
+        r"\bplease (try again|upgrade)\b.*\blimit\b",
+        r"\bbilling\b.*\b(required|issue)\b",
+    )
+)
+
+
+def looks_exhausted(stderr: str, returncode: int) -> str:
+    """The line proving this runtime is out of room, or "" if it is not.
+
+    Only consulted on a **failed** invocation. A build prompt can legitimately ask a model
+    to *write* rate-limiting code, and its transcript would then be full of these phrases -
+    scanning successful output would demote a perfectly healthy paid runtime to the free
+    tier and quietly cost quality for the rest of the day. A false exhaustion is the
+    expensive direction here, so the check is deliberately narrow.
+    """
+    if returncode == 0:
+        return ""
+    for line in (stderr or "").splitlines():
+        # Skip anything that is part of a Python traceback the runtime happened to print.
+        # A build that crashes inside a function called `rate_limit` would otherwise be read
+        # as the account being out of credit, and the tier would be demoted for an hour on
+        # the strength of a variable name.
+        if line.startswith((" ", "\t")) or "Traceback" in line or 'File "' in line:
+            continue
+        for pattern in EXHAUSTION_PATTERNS:
+            if pattern.search(line):
+                return line.strip()[:300]
+    return ""
+
+
+class RuntimeResult(BaseModel):
+    runtime: str
+    ok: bool = False
+    source: str = ""
+    error: str = ""
+    exhausted: str = ""
+    """The matched line when the runtime reported being out of room. Empty otherwise."""
+    renamed_from: str = ""
+    """Set when the runtime wrote the module under a name of its own choosing.
+
+    Kept rather than hidden: it is the difference between "the agent did the work" and "the
+    harness quietly moved a file", and if it starts happening on every run that is a prompt
+    problem worth seeing.
+    """
+    seconds: float = 0.0
+
+
+def available(runtime: CoderRuntime) -> bool:
+    """Whether this runtime's binary can be found at all.
+
+    Being installed is not the same as having credit. Exhaustion is discovered by running
+    it, because no CLI reports remaining quota without being asked to do work.
+    """
+    if runtime is CoderRuntime.LOCAL:
+        return True  # ollama reachability is the local pipeline's own concern
+    return resolve_command(runtime.value) is not None
+
+
+def write_module(
+    runtime: CoderRuntime,
+    prompt: str,
+    *,
+    workspace: Path,
+    path: str,
+    timeout: float = 900.0,
+    authority: AgentExecutionAuthority = AgentExecutionAuthority.WORKSPACE,
+) -> RuntimeResult:
+    """Have a CLI runtime write one module, and return what it wrote.
+
+    These runtimes are agents with filesystem access, so they are asked to *write the file*
+    rather than to print source to stdout - printing invites prose, fences and commentary
+    around the code, and every one of them writes files natively. The file is then read back
+    from disk, which also means an agent that claims success without writing anything is
+    caught rather than believed.
+    """
+    started = time.time()
+    result = RuntimeResult(runtime=runtime.value)
+    binary = resolve_command(runtime.value)
+    if not binary:
+        result.error = f"{runtime.value} is not installed on this host"
+        return result
+
+    target = Path(workspace) / path
+    before = target.read_text(encoding="utf-8") if target.exists() else None
+    existing = {p.name for p in Path(workspace).glob("*.py")}
+
+    # The filename leads. Measured: asked to "write the result to `slug.py`" with the
+    # instruction trailing the requirement, Claude wrote `slugify.py` - named after the
+    # function, ignoring the path. It exited 0 having done good work in the wrong place.
+    argv = headless_argv([binary], runtime=runtime.value, authority=authority,
+                         prompt=f"Create exactly one file, named `{path}`, in the current "
+                                f"directory. Do not create any other file, and do not "
+                                f"choose a different name.\n\n{prompt}")
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
+                              cwd=str(workspace))
+    except subprocess.TimeoutExpired:
+        result.error = f"{runtime.value} did not finish within {timeout:g}s"
+        result.seconds = round(time.time() - started, 1)
+        return result
+    except Exception as exc:  # noqa: BLE001
+        result.error = f"{type(exc).__name__}: {exc}"
+        result.seconds = round(time.time() - started, 1)
+        return result
+
+    result.seconds = round(time.time() - started, 1)
+    result.exhausted = looks_exhausted(proc.stderr or "", proc.returncode)
+    if result.exhausted:
+        result.error = f"{runtime.value} is out of room: {result.exhausted}"
+        return result
+
+    if not target.exists():
+        # An agent that did the work under a name of its own choosing has not failed, it has
+        # misfiled. Adopt the file when there is exactly one new module and no ambiguity
+        # about which it is; anything else is reported rather than guessed at.
+        created = [p for p in Path(workspace).glob("*.py") if p.name not in existing]
+        if len(created) == 1:
+            created[0].replace(target)
+            result.renamed_from = created[0].name
+        else:
+            result.error = (
+                f"{runtime.value} exited {proc.returncode} without writing {path}"
+                + (f" (it created {sorted(p.name for p in created)})" if created else "")
+                + f". {(proc.stderr or proc.stdout or '')[-300:]}")
+            return result
+
+    source = target.read_text(encoding="utf-8")
+    if before is not None and source == before:
+        result.error = f"{runtime.value} left {path} unchanged"
+        return result
+
+    result.ok = True
+    result.source = source
+    return result
+
+
+_EXHAUSTED_UNTIL: dict[str, float] = {}
+"""Runtime -> monotonic deadline before which it is not worth asking again.
+
+In memory rather than persisted: a restart should re-probe rather than inherit a stale
+belief that a tier is dead. Being wrong in that direction costs one failed call; being wrong
+the other way costs every build until someone notices.
+"""
+
+DEFAULT_COOLDOWN_SECONDS = 60 * 60
+"""One hour. Long enough not to hammer an exhausted account, short enough that a limit which
+resets on a rolling window is picked up the same session."""
+
+
+def mark_exhausted(runtime: CoderRuntime, *, seconds: float = DEFAULT_COOLDOWN_SECONDS) -> None:
+    _EXHAUSTED_UNTIL[runtime.value] = time.monotonic() + seconds
+
+
+def clear_exhausted(runtime: CoderRuntime | None = None) -> None:
+    if runtime is None:
+        _EXHAUSTED_UNTIL.clear()
+    else:
+        _EXHAUSTED_UNTIL.pop(runtime.value, None)
+
+
+def cooling_down(runtime: CoderRuntime) -> float:
+    """Seconds left on this runtime's cooldown, 0 if it is usable."""
+    deadline = _EXHAUSTED_UNTIL.get(runtime.value)
+    if deadline is None:
+        return 0.0
+    left = deadline - time.monotonic()
+    if left <= 0:
+        _EXHAUSTED_UNTIL.pop(runtime.value, None)
+        return 0.0
+    return left
+
+
+def pick(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER) -> LadderDecision:
+    """The best runtime usable right now, and why the ones above it were passed over."""
+    decision = LadderDecision()
+    for runtime in ladder:
+        left = cooling_down(runtime)
+        if left:
+            decision.skipped.append(runtime.value)
+            decision.reasons[runtime.value] = f"out of room, retrying in {left / 60:.0f}m"
+            continue
+        if not available(runtime):
+            decision.skipped.append(runtime.value)
+            decision.reasons[runtime.value] = "not installed"
+            continue
+        decision.chosen = runtime.value
+        return decision
+    return decision
+
+
+class LadderDecision(BaseModel):
+    """Which runtime a piece was built with, and what was skipped to get there."""
+
+    chosen: str = ""
+    skipped: list[str] = Field(default_factory=list)
+    reasons: dict[str, str] = Field(default_factory=dict)
+
+    def describe(self) -> str:
+        if not self.chosen:
+            return "no runtime available: " + "; ".join(
+                f"{k}: {v}" for k, v in self.reasons.items())
+        if not self.skipped:
+            return f"built with {self.chosen}"
+        return (f"built with {self.chosen}, after "
+                + ", ".join(f"{r} ({self.reasons.get(r, 'unavailable')})"
+                            for r in self.skipped))

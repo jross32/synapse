@@ -358,8 +358,20 @@ def recommend_for_roles(hw: HardwareProfile | None = None,
 PLAYBOOK: dict[str, Any] = {
     "summary": (
         "Local models run through Ollama at http://127.0.0.1:11434 and cost zero API "
-        "tokens. They are slow but free and can run unattended, so the right instinct is: "
-        "let them grind, and spend your own tokens only on what they cannot finish."
+        "tokens. They are slow but free and can run unattended. They are the BOTTOM rung of "
+        "the coding ladder, not the default: use the best runtime you have credit for, and "
+        "fall to these when it runs out or when the work can be left running overnight."
+    ),
+    "where_local_models_sit": (
+        "The ladder is claude -> codex -> copilot -> local, best first and free last. An "
+        "earlier version of this playbook had it the other way round - grind locally, "
+        "escalate upward - on the theory that it saved tokens. Measured over two days it did "
+        "not: the local tier passes a nine-function stateful module about one run in five, "
+        "so as an interactive default it costs more supervision than it saves in tokens. "
+        "One run in five is perfectly good overnight, where a fresh attempt costs only time "
+        "nobody is waiting on, and the honest unit is attempts-to-first-success rather than "
+        "a pass rate. Blueprint builds pick their tier automatically; "
+        "POST /api/v1/blueprints/{id}/build records which one wrote each piece."
     ),
     "the_one_rule": (
         "Match the model to the seat, and never put a 1-2B model in charge of anything. "
