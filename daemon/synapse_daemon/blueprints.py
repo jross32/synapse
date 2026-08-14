@@ -69,6 +69,15 @@ class Piece(BaseModel):
     name: str
     spec: str
     module: str = ""
+    source: str = ""
+    """Fixed source, written verbatim instead of generated.
+
+    For the parts of a build that have one correct answer and no judgement in them - a
+    facade that re-exports three modules, a package `__init__`, a config file. Asking a
+    model to write those spends a generation and introduces a failure mode to buy nothing.
+    A fixed piece is still checked like any other: its contract and scenario run exactly the
+    same, because "we wrote it" has never been a reason to trust code here.
+    """
     contract: dict[str, Any] = Field(default_factory=dict)
     tests: str = ""
     checks: list[CheckKind] = Field(default_factory=lambda: [CheckKind.UNIT])

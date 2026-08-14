@@ -1,0 +1,373 @@
+{
+  "id": "webapp-auth-crud-split",
+  "name": "Web app with accounts and records (split storage)",
+  "kind": "web-app",
+  "summary": "A running web app: landing page, sign up, log in, and a private dashboard where each account keeps its own records. One file to run, no build step. Storage is split into three focused modules behind a facade, to test whether smaller pieces build more reliably.",
+  "what_you_get": [
+    "Four working pages: landing, sign up, log in, dashboard",
+    "Accounts with hashed passwords and real session tokens",
+    "Records that belong to one account and are invisible to every other",
+    "A REST API underneath, so the same data is reachable programmatically"
+  ],
+  "guarantees": [
+    "Passwords are hashed with PBKDF2 and are not recoverable from the database",
+    "Every input has a label and every control is at least 44px tall",
+    "User text is escaped, proven by storing a hostile payload and rendering it",
+    "Anonymous requests get 401 and malformed ones get 422, never a 500",
+    "One account cannot read or delete another account's records",
+    "No horizontal scrolling at 390px"
+  ],
+  "tags": [
+    "auth",
+    "crud",
+    "sqlite",
+    "fastapi",
+    "starter"
+  ],
+  "stack": [
+    "python",
+    "fastapi",
+    "sqlite",
+    "vanilla-js"
+  ],
+  "est_minutes": 25,
+  "provides": [
+    "http-api",
+    "user-identity",
+    "session-auth",
+    "sqlite-store",
+    "web-ui"
+  ],
+  "requires": [],
+  "pieces": [
+    {
+      "name": "passwords",
+      "spec": "Write a module with exactly two functions and no framework imports:\n    hash_password(password: str) -> str\n    verify_password(password: str, stored: str) -> bool\n\nUse hashlib.pbkdf2_hmac with sha256, 200000 iterations, and a random 16-byte salt from the\nsecrets module. hash_password returns ONE string containing the algorithm name, the iteration\ncount, the salt as hex and the digest as hex, separated by '$'.\n\nverify_password must split that string into EXACTLY the same number of parts that\nhash_password produced. If the two disagree, split() raises, your except clause returns False,\nand every single verification fails including correct passwords. Count them.\n\nCompare with hmac.compare_digest. Return False (never raise) for malformed, empty or None\ninput.",
+      "module": "passwords",
+      "contract": {
+        "functions": [
+          {
+            "name": "hash_password",
+            "args": [
+              "password"
+            ]
+          },
+          {
+            "name": "verify_password",
+            "args": [
+              "password",
+              "stored"
+            ]
+          }
+        ]
+      },
+      "tests": "# --- blueprint scenario: exercised the way api.py actually calls it -------------\n_h = hash_password(\"correct horse battery\")\nassert isinstance(_h, str) and _h, (\n    \"hash_password must RETURN the stored string. Got %r. api.py does \"\n    \"storage.create_user(email, hash_password(pw)) - it stores the return value.\" % (_h,))\nassert \"correct horse battery\" not in _h, (\n    \"hash_password returned something containing the plaintext password: %r. \"\n    \"Hash it, do not encode it.\" % (_h,))\nassert hash_password(\"correct horse battery\") != _h, (\n    \"hash_password returned the same string twice for the same password, so it is \"\n    \"unsalted. Generate a fresh random salt per call and store it inside the result.\")\nassert verify_password(\"correct horse battery\", _h) is True, (\n    \"verify_password(password, stored) must return True for the right password. \"\n    \"Note the argument order: plaintext first, stored hash second.\")\nassert verify_password(\"wrong password\", _h) is False, (\n    \"verify_password must return False - not None, not raise - for a wrong password.\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "store_users",
+      "module": "store_users",
+      "spec": "Use only sqlite3, secrets, hashlib and time. Every function opens and closes its own connection to the SAME database file, `app.db`, in the current directory. Use `sqlite3.Row` and return dicts, never raw row tuples.\n\nWrite the accounts half of the storage layer.\n\nTable: users(id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at)\n\ninit_users() creates the table if it does not exist.\ncreate_user(email, password_hash) returns the new user's id as an int, and raises ValueError if the email already exists.\nget_user_by_email(email) returns a dict with keys id, email and password_hash, or None. The login route reads user['password_hash'], so that column must be selected.",
+      "contract": {
+        "functions": [
+          {
+            "name": "init_users",
+            "args": []
+          },
+          {
+            "name": "create_user",
+            "args": [
+              "email",
+              "password_hash"
+            ]
+          },
+          {
+            "name": "get_user_by_email",
+            "args": [
+              "email"
+            ]
+          }
+        ]
+      },
+      "tests": "import glob as _glob\nimport os as _os\nfor _f in _glob.glob(\"*.db\") + _glob.glob(\"*.sqlite\") + _glob.glob(\"*.sqlite3\"):\n    try:\n        _os.remove(_f)\n    except OSError:\n        pass\ninit_users()\n\n_uid = create_user(\"scenario@test.io\", \"hashed-value-here\")\nassert _uid is not None, (\n    \"create_user must RETURN the new user's id. It returned None, so its caller has \"\n    \"nothing to open a session with: api.py does create_session(create_user(e, h)).\")\nassert isinstance(_uid, int), (\n    \"create_user must return the id itself as an int, not %r.\" % (_uid,))\n\ntry:\n    create_user(\"scenario@test.io\", \"other-hash\")\n    raise AssertionError(\n        \"create_user must raise ValueError on a duplicate email. It returned normally, \"\n        \"so two accounts can share one address.\")\nexcept ValueError:\n    pass\n\n_user = get_user_by_email(\"scenario@test.io\")\nassert _user is not None, \"get_user_by_email must find a user that was just created.\"\ntry:\n    _hash = _user[\"password_hash\"]\n    _got_id = _user[\"id\"]\nexcept (TypeError, KeyError, IndexError):\n    raise AssertionError(\n        \"get_user_by_email returned %r, which is a %s. It must return a dict the caller \"\n        \"can read by name: {'id': ..., 'email': ..., 'password_hash': ...}. The login \"\n        \"route reads user['password_hash'], so a row tuple or a bare id cannot work.\"\n        % (_user, type(_user).__name__))\nassert _hash == \"hashed-value-here\", (\n    \"get_user_by_email returned password_hash=%r, but the stored value was \"\n    \"'hashed-value-here'. SELECT the real column.\" % (_hash,))\nassert int(_got_id) == int(_uid), \"get_user_by_email returned a different id.\"\nassert get_user_by_email(\"nobody@test.io\") is None, (\n    \"get_user_by_email must return None for an unknown email, not raise and not [].\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "store_sessions",
+      "module": "store_sessions",
+      "spec": "Use only sqlite3, secrets, hashlib and time. Every function opens and closes its own connection to the SAME database file, `app.db`, in the current directory. Use `sqlite3.Row` and return dicts, never raw row tuples.\n\nWrite the sessions half of the storage layer.\n\nTable: sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at)\n\ninit_sessions() creates the table if it does not exist.\ncreate_session(user_id) returns a fresh secrets.token_urlsafe token as a string and stores ONLY its sha256 hash, so a leaked database does not hand over live sessions.\nuser_id_for_token(token) returns the user's id as an int, or None for an unknown token - that is how the API answers 401 instead of crashing.\ndelete_session(token) invalidates it, so logging out actually logs out.",
+      "contract": {
+        "functions": [
+          {
+            "name": "init_sessions",
+            "args": []
+          },
+          {
+            "name": "create_session",
+            "args": [
+              "user_id"
+            ]
+          },
+          {
+            "name": "user_id_for_token",
+            "args": [
+              "token"
+            ]
+          },
+          {
+            "name": "delete_session",
+            "args": [
+              "token"
+            ]
+          }
+        ]
+      },
+      "tests": "import glob as _glob\nimport os as _os\nfor _f in _glob.glob(\"*.db\") + _glob.glob(\"*.sqlite\") + _glob.glob(\"*.sqlite3\"):\n    try:\n        _os.remove(_f)\n    except OSError:\n        pass\ninit_sessions()\n\n_tok = create_session(7)\nassert isinstance(_tok, str) and len(_tok) >= 16, (\n    \"create_session must return the session token as a string of at least 16 characters. \"\n    \"Got %r.\" % (_tok,))\nassert _tok != create_session(7), (\n    \"create_session returned the same token twice, so every session is guessable from any \"\n    \"other. Use secrets.token_urlsafe.\")\n\n_got = user_id_for_token(_tok)\nassert _got is not None, \"user_id_for_token must resolve a live token.\"\nassert int(_got) == 7, (\n    \"user_id_for_token must return the user's id itself as an int, not a row tuple. \"\n    \"Got %r.\" % (_got,))\nassert user_id_for_token(\"not-a-real-token\") is None, (\n    \"user_id_for_token must return None for an unknown token - that is how the API \"\n    \"answers 401 instead of crashing.\")\n\ndelete_session(_tok)\nassert user_id_for_token(_tok) is None, (\n    \"delete_session must invalidate the token - logging out has to actually log out.\")\n\n# The guarantee is that a leaked database does not hand over live sessions, so the check\n# is what the table actually contains, not what the module says it does.\nimport sqlite3 as _sqlite3\n_live = create_session(8)\n_conn = _sqlite3.connect(\"app.db\")\n_stored = str(_conn.execute(\"SELECT * FROM sessions\").fetchall())\n_conn.close()\nassert _live not in _stored, (\n    \"the raw token is sitting in the sessions table, so anyone who reads the database can \"\n    \"use it as a live session. Store ONLY its sha256 hash and hash the incoming token when \"\n    \"looking it up.\")\nassert user_id_for_token(_live) == 8, (\n    \"storing the hash broke the lookup - hash the incoming token the same way before \"\n    \"comparing.\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "store_records",
+      "module": "store_records",
+      "spec": "Use only sqlite3, secrets, hashlib and time. Every function opens and closes its own connection to the SAME database file, `app.db`, in the current directory. Use `sqlite3.Row` and return dicts, never raw row tuples.\n\nWrite the {{records}} half of the storage layer.\n\nTable: {{records}}(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, {{title_field}}, {{amount_field}}, date, created_at)\n\ninit_records() creates the table if it does not exist.\nadd_record(user_id, {{title_field}}, {{amount_field}}, date) returns the created row as a dict whose keys are exactly id, {{title_field}}, {{amount_field}} and date. The frontend reads those exact names; any other spelling renders as \"undefined\" on screen.\nlist_records(user_id) returns a list of those dicts.\ndelete_record(record_id, user_id) returns True when it deleted something and False when it did not, so the API can answer 404.\n\nlist_records and delete_record MUST filter by user_id inside the SQL, so one account can never see or delete another account's rows.",
+      "contract": {
+        "functions": [
+          {
+            "name": "init_records",
+            "args": []
+          },
+          {
+            "name": "add_record",
+            "args": [
+              "user_id",
+              "{{title_field}}",
+              "{{amount_field}}",
+              "date"
+            ]
+          },
+          {
+            "name": "list_records",
+            "args": [
+              "user_id"
+            ]
+          },
+          {
+            "name": "delete_record",
+            "args": [
+              "record_id",
+              "user_id"
+            ]
+          }
+        ]
+      },
+      "tests": "import glob as _glob\nimport os as _os\nfor _f in _glob.glob(\"*.db\") + _glob.glob(\"*.sqlite\") + _glob.glob(\"*.sqlite3\"):\n    try:\n        _os.remove(_f)\n    except OSError:\n        pass\ninit_records()\n\n_rec = add_record(1, \"Sunrise loop\", 12.5, \"2026-01-01\")\nassert isinstance(_rec, dict) and \"id\" in _rec, (\n    \"add_record must return the created record as a dict including its new 'id'. \"\n    \"Got %r.\" % (_rec,))\n\n_rows = list_records(1)\nassert isinstance(_rows, list) and len(_rows) == 1, (\n    \"list_records must return a list of the user's records. Got %r.\" % (_rows,))\ntry:\n    _missing = [_k for _k in (\"id\", \"title\", \"amount\", \"date\") if _k not in _rows[0]]\nexcept TypeError:\n    raise AssertionError(\n        \"list_records returned %r, whose items are %s. Each item must be a dict with the \"\n        \"keys id, title, amount and date - the dashboard renders fields by name, and any \"\n        \"other shape shows up as 'undefined' on the page.\"\n        % (_rows, type(_rows[0]).__name__))\nassert not _missing, (\n    \"each record is missing %r. The dashboard renders these by name, so a missing key \"\n    \"shows as 'undefined' on screen. Got keys %r.\" % (_missing, sorted(_rows[0])))\nassert _rows[0][\"title\"] == \"Sunrise loop\", \"list_records returned the wrong title.\"\n\nassert list_records(2) == [], (\n    \"list_records returned another account's rows. Filter by user_id inside the SQL.\")\nassert delete_record(int(_rows[0][\"id\"]), 2) in (False, 0, None), (\n    \"delete_record must not delete another account's record.\")\nassert list_records(1) != [], (\n    \"delete_record deleted a record belonging to a different user - it is filtering on \"\n    \"record id only. Filter on BOTH record_id and user_id.\")\n\nassert delete_record(int(_rows[0][\"id\"]), 1) in (True, 1), (\n    \"delete_record must return True when it deleted something, so the API can answer 404 \"\n    \"when it did not.\")\nassert list_records(1) == [], \"delete_record did not actually delete the record.\"\nassert delete_record(9999, 1) in (False, 0), (\n    \"delete_record must return False for a record that does not exist.\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "storage",
+      "module": "storage",
+      "spec": "Re-export the three storage modules. Fixed source; not generated.",
+      "source": "\"\"\"The storage interface api.py imports, assembled from three focused modules.\n\nFixed rather than generated: re-exporting three modules has one correct answer and no\njudgement in it, so a generation spent here would only add a way to fail.\n\"\"\"\nfrom store_records import add_record, delete_record, init_records, list_records\nfrom store_sessions import (create_session, delete_session, init_sessions,\n                            user_id_for_token)\nfrom store_users import create_user, get_user_by_email, init_users\n\n__all__ = [\n    \"init_db\", \"create_user\", \"get_user_by_email\", \"create_session\",\n    \"user_id_for_token\", \"delete_session\", \"add_record\", \"list_records\", \"delete_record\",\n]\n\n\ndef init_db():\n    \"\"\"Create every table. The three modules share one database file.\"\"\"\n    init_users()\n    init_sessions()\n    init_records()\n",
+      "contract": {
+        "functions": [
+          {
+            "name": "init_db",
+            "args": []
+          },
+          {
+            "name": "create_user",
+            "args": [
+              "email",
+              "password_hash"
+            ]
+          },
+          {
+            "name": "get_user_by_email",
+            "args": [
+              "email"
+            ]
+          },
+          {
+            "name": "create_session",
+            "args": [
+              "user_id"
+            ]
+          },
+          {
+            "name": "user_id_for_token",
+            "args": [
+              "token"
+            ]
+          },
+          {
+            "name": "delete_session",
+            "args": [
+              "token"
+            ]
+          },
+          {
+            "name": "add_record",
+            "args": [
+              "user_id",
+              "{{title_field}}",
+              "{{amount_field}}",
+              "date"
+            ]
+          },
+          {
+            "name": "list_records",
+            "args": [
+              "user_id"
+            ]
+          },
+          {
+            "name": "delete_record",
+            "args": [
+              "record_id",
+              "user_id"
+            ]
+          }
+        ]
+      },
+      "tests": "# --- blueprint scenario: exercised the way api.py actually calls it -------------\n# Every assertion below mirrors one real call site. A module can define all nine\n# signatures correctly and still be unusable, which is exactly what happened before\n# this scenario existed.\nimport glob as _glob\nimport os as _os\n# Whatever the module decided to call its database, not three guesses at it. Leftover rows\n# make every attempt after the first fail on a duplicate email, which no amount of fixing\n# the module can cure.\nfor _f in _glob.glob(\"*.db\") + _glob.glob(\"*.sqlite\") + _glob.glob(\"*.sqlite3\"):\n    try:\n        _os.remove(_f)\n    except OSError:\n        pass\ninit_db()\n\n_uid = create_user(\"scenario@test.io\", \"hashed-value-here\")\nassert _uid is not None, (\n    \"create_user must RETURN the new user's id. It returned None, so its caller has \"\n    \"nothing to open a session with: api.py does create_session(create_user(e, h)).\")\nassert isinstance(_uid, int), (\n    \"create_user must return the id itself as an int, not %r.\" % (_uid,))\n\ntry:\n    create_user(\"scenario@test.io\", \"hashed-value-here\")\n    raise AssertionError(\n        \"create_user must raise ValueError on a duplicate email. It returned normally, \"\n        \"so two accounts can share one address.\")\nexcept ValueError:\n    pass\n\n_user = get_user_by_email(\"scenario@test.io\")\nassert _user is not None, \"get_user_by_email must find a user that was just created.\"\n# Ask for the field rather than guessing which wrong shapes to exclude. A guard listing\n# the bad types lets every unlisted one through as a bare TypeError, which tells the model\n# what broke and never what was wanted.\ntry:\n    _hash = _user[\"password_hash\"]\n    _got_id = _user[\"id\"]\nexcept (TypeError, KeyError, IndexError):\n    raise AssertionError(\n        \"get_user_by_email returned %r, which is a %s. It must return a dict the caller \"\n        \"can read by name: {'id': ..., 'email': ..., 'password_hash': ...}. The login \"\n        \"route reads user['password_hash'] to check the password, so a row tuple or a \"\n        \"bare id cannot work. Use sqlite3.Row and dict(row), and SELECT the hash column.\"\n        % (_user, type(_user).__name__))\nassert _hash == \"hashed-value-here\", (\n    \"get_user_by_email returned password_hash=%r but the stored value was \"\n    \"'hashed-value-here'. SELECT the real column.\" % (_hash,))\nassert int(_got_id) == int(_uid), (\n    \"get_user_by_email returned id=%r but create_user returned %r.\" % (_got_id, _uid))\nassert get_user_by_email(\"nobody@test.io\") is None, (\n    \"get_user_by_email must return None for an unknown email, not raise and not [].\")\n\n_tok = create_session(int(_uid))\nassert isinstance(_tok, str) and len(_tok) >= 16, (\n    \"create_session must return the session token as a string of at least 16 \"\n    \"characters. Got %r.\" % (_tok,))\nassert user_id_for_token(_tok) is not None, \"user_id_for_token must resolve a live token.\"\nassert int(user_id_for_token(_tok)) == int(_uid), (\n    \"user_id_for_token must return the user's id itself (an int), not a row tuple. \"\n    \"Got %r.\" % (user_id_for_token(_tok),))\nassert user_id_for_token(\"not-a-real-token\") is None, (\n    \"user_id_for_token must return None for an unknown token - that is how the API \"\n    \"answers 401 instead of crashing.\")\n\n_rec = add_record(int(_uid), \"Sunrise loop\", 12.5, \"2026-01-01\")\nassert isinstance(_rec, dict) and \"id\" in _rec, (\n    \"add_record must return the created {{record}} as a dict including its new 'id'. \"\n    \"Got %r.\" % (_rec,))\n_rows = list_records(int(_uid))\nassert isinstance(_rows, list) and len(_rows) == 1, (\n    \"list_records must return a list of the user's {{records}}. Got %r.\" % (_rows,))\nassert isinstance(_rows[0], dict), (\n    \"list_records must return dicts, not row tuples - the page renders fields by name. \"\n    \"Got %r.\" % (_rows[0],))\nfor _k in (\"id\", \"{{title_field}}\", \"{{amount_field}}\", \"date\"):\n    assert _k in _rows[0], (\n        \"each {{record}} needs the key %r so the dashboard can render it. Got keys %r\"\n        % (_k, sorted(_rows[0])))\nassert _rows[0][\"{{title_field}}\"] == \"Sunrise loop\", \"list_records returned the wrong {{title_field}}.\"\n\n_other = create_user(\"intruder@test.io\", \"x\")\nassert list_records(int(_other)) == [], (\n    \"list_records must only return the {{records}} belonging to the user id it is given. \"\n    \"A second user could see the first user's data.\")\nassert delete_record(int(_rows[0][\"id\"]), int(_other)) in (False, 0, None), (\n    \"delete_record must not delete another user's {{record}}.\")\nassert list_records(int(_uid)) != [], (\n    \"delete_record deleted a {{record}} belonging to a different user - it is filtering on \"\n    \"{{record}} id only. Filter on BOTH record_id and user_id.\")\n\nassert delete_record(int(_rows[0][\"id\"]), int(_uid)) in (True, 1), (\n    \"delete_record must return True when it deleted something, so the API can answer \"\n    \"404 when it did not.\")\nassert list_records(int(_uid)) == [], \"delete_record did not actually delete the {{record}}.\"\nassert delete_record(9999, int(_uid)) in (False, 0), (\n    \"delete_record must return False for a {{record}} that does not exist.\")\n\ndelete_session(_tok)\nassert user_id_for_token(_tok) is None, (\n    \"delete_session must invalidate the token - logging out has to actually log out.\")",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [
+        "store_users",
+        "store_sessions",
+        "store_records"
+      ],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "pages",
+      "spec": "Write a module returning four complete HTML documents:\n    landing_page(), signup_page(), login_page(), dashboard_page()\n\nIMPORTANT - import the house UI kit and use it. Do NOT write your own CSS:\n    from scaffold_partials import (page, field, button, link_button, message_slot,\n                                   empty_state, card, auth_fetch_helper)\n\nBuild each page with page({{title_field}}, body, script=...). Build every input with\nfield(name, label, kind=..., autocomplete=...) so it is labelled. Use button() for actions and\nmessage_slot() for errors.\n\nsignup_page and login_page post JSON to /api/signup and /api/login, store the returned token\nwith setToken(), then go to /dashboard.\n\ndashboard_page loads GET /api/{{records}}, renders each with a Delete button, posts new ones to\nPOST /api/{{records}}, and deletes via DELETE /api/{{records}}/{id}. Include auth_fetch_helper() in\nits script so the Authorization header is set for you.\n\nWhen rendering a {{record}} you MUST pass its text through escapeHtml(), which is already defined\non every page. Writing user text into innerHTML unescaped is a stored cross-site-scripting\nhole, and the checks will catch it.",
+      "module": "pages",
+      "contract": {
+        "functions": [
+          {
+            "name": "landing_page",
+            "args": []
+          },
+          {
+            "name": "signup_page",
+            "args": []
+          },
+          {
+            "name": "login_page",
+            "args": []
+          },
+          {
+            "name": "dashboard_page",
+            "args": []
+          }
+        ]
+      },
+      "tests": "# --- blueprint scenario: what the browser will actually be served ---------------\nfor _name, _fn in ((\"landing\", landing_page), (\"signup\", signup_page),\n                   (\"login\", login_page), (\"dashboard\", dashboard_page)):\n    _html = _fn()\n    assert isinstance(_html, str) and len(_html) > 200, (\n        \"%s_page() must return the full HTML document as a string. Got %r\"\n        % (_name, type(_html)))\n    _low = _html.lower()\n    assert \"<!doctype html\" in _low, (\n        \"%s_page() is missing its doctype - browsers fall into quirks mode without it.\"\n        % _name)\n    assert \"viewport\" in _low, (\n        \"%s_page() has no viewport meta tag, so it renders desktop-width on a phone.\"\n        % _name)\n    # The supplied page() helper inlines the kit, so the kit's own tokens are the proof\n    # it was used. Do not write CSS by hand - build the page with scaffold_partials.page().\n    assert \"--tap\" in _html and \"--accent\" in _html, (\n        \"%s_page() did not go through scaffold_partials.page(), so it is missing the \"\n        \"house stylesheet. Import it and return page({{title_field}}, body) - the kit is what \"\n        \"supplies focus rings, 44px tap targets and AA contrast.\" % _name)\n    assert \"undefined\" not in _low, (\n        \"%s_page() contains a literal 'undefined' placeholder.\" % _name)\n\nfor _name, _fn in ((\"signup\", signup_page), (\"login\", login_page)):\n    _html = _fn().lower()\n    assert _html.count(\"<label\") >= 2, (\n        \"%s_page() needs a <label for=...> on every input. Use the supplied field() \"\n        \"helper, which cannot emit an input without one.\" % _name)\n    assert 'type=\"password\"' in _html, (\n        '%s_page() must use type=\"password\" for the password field.' % _name)\n    assert \"autocomplete\" in _html, (\n        \"%s_page() should set autocomplete on its fields so password managers work.\"\n        % _name)",
+      "checks": [
+        "unit",
+        "web"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "api",
+      "spec": "Write a FastAPI module defining `app` that imports the modules that already\nexist:\n    from passwords import hash_password, verify_password\n    import storage\n    import pages\n\nRoutes:\n    GET    /api/health          -> {\"status\": \"ok\"}\n    POST   /api/signup          -> 409 if the email exists, else 201 with {\"token\": ...}\n    POST   /api/login           -> 401 on bad credentials, else {\"token\": ...}\n    POST   /api/logout          -> {\"ok\": true}\n    GET    /api/{{records}}         -> the caller's {{records}}\n    POST   /api/{{records}}         -> creates one, 201\n    DELETE /api/{{records}}/{id}    -> 404 if it is not the caller's\n    GET    /, /signup, /login, /dashboard -> HTMLResponse(pages.<name>_page())\n\nUse pydantic models for request bodies so malformed input returns 422, never 500.\n\nAUTHENTICATION - this is the part that is easy to get wrong. Write your own function that\ntakes `request: Request`, reads the Authorization header, and resolves the bearer token with\nstorage.user_id_for_token, raising HTTPException(401) when it is absent or unknown. Then use\nDepends(your_function).\n\nDo NOT pass a storage function directly to Depends. FastAPI inspects the signature and would\ntreat its `token` parameter as a QUERY parameter, so anonymous callers get 422 instead of 401\nand the auth check never runs.",
+      "module": "api",
+      "contract": {},
+      "tests": "# --- blueprint scenario: the API as a client actually meets it -----------------\n# Driven through TestClient rather than by reading the source, because every failure\n# this is guarding against looked correct in the source.\nimport glob as _glob\nimport os as _os\n\nfrom fastapi.testclient import TestClient as _TestClient\n\n# See the storage scenario: delete whatever database the module actually created, not a\n# guessed list of names, or state survives between attempts and fails them for free.\nfor _f in _glob.glob(\"*.db\") + _glob.glob(\"*.sqlite\") + _glob.glob(\"*.sqlite3\"):\n    try:\n        _os.remove(_f)\n    except OSError:\n        pass\nimport storage as _storage\n_storage.init_db()\n\n_c = _TestClient(app)\n\n_r = _c.get(\"/api/health\")\nassert _r.status_code == 200, \"GET /api/health must return 200, got %d\" % _r.status_code\nassert _r.json().get(\"status\") == \"ok\", 'GET /api/health must return {\"status\": \"ok\"}'\n\n# The failure that escalated this piece twice. Handing a storage function straight to\n# Depends() makes FastAPI read its `token` parameter as a QUERY parameter, so an anonymous\n# caller is told a query field is missing (422) and the auth check never runs at all.\n_r = _c.get(\"/api/{{records}}\")\nassert _r.status_code == 401, (\n    \"an anonymous GET /api/{{records}} must return 401, got %d. If this is 422, a storage \"\n    \"function was passed straight to Depends() - write your own dependency that takes \"\n    \"`request: Request`, reads the Authorization header itself, and raises \"\n    \"HTTPException(401).\" % _r.status_code)\n\n_r = _c.post(\"/api/signup\", json={\"email\": \"a@test.io\", \"password\": \"password-one\"})\nassert _r.status_code == 201, (\n    \"POST /api/signup must return 201 on success, got %d: %s\"\n    % (_r.status_code, _r.text[:200]))\n_tok_a = _r.json().get(\"token\")\nassert isinstance(_tok_a, str) and _tok_a, \"POST /api/signup must return {'token': ...}\"\n\n_r = _c.post(\"/api/signup\", json={\"email\": \"a@test.io\", \"password\": \"password-one\"})\nassert _r.status_code == 409, (\n    \"signing up with an email that already exists must return 409, got %d\" % _r.status_code)\n\n_r = _c.post(\"/api/login\", json={\"email\": \"a@test.io\", \"password\": \"wrong-password\"})\nassert _r.status_code == 401, (\n    \"POST /api/login with a bad password must return 401, got %d\" % _r.status_code)\n_r = _c.post(\"/api/login\", json={\"email\": \"a@test.io\", \"password\": \"password-one\"})\nassert _r.status_code == 200 and _r.json().get(\"token\"), (\n    \"POST /api/login with correct credentials must return a token, got %d: %s\"\n    % (_r.status_code, _r.text[:200]))\n\n_h_a = {\"Authorization\": \"Bearer \" + _tok_a}\n_r = _c.post(\"/api/{{records}}\", json={\"{{title_field}}\": \"First\", \"{{amount_field}}\": 12.5,\n                                       \"date\": \"2026-01-01\"}, headers=_h_a)\nassert _r.status_code == 201, (\n    \"POST /api/{{records}} must return 201, got %d: %s\" % (_r.status_code, _r.text[:200]))\n\n_r = _c.get(\"/api/{{records}}\", headers=_h_a)\nassert _r.status_code == 200, \"GET /api/{{records}} must return 200 for a signed-in caller\"\n_rows = _r.json()\nassert isinstance(_rows, list) and len(_rows) == 1, (\n    \"GET /api/{{records}} must return a list of the caller's {{records}}, got %r\" % (_rows,))\nassert _rows[0].get(\"{{title_field}}\") == \"First\", (\n    \"each item needs its {{title_field}} so the page can render it, got %r\" % (_rows[0],))\n_rid = _rows[0].get(\"id\")\nassert _rid is not None, \"each item needs an 'id' so it can be deleted, got %r\" % (_rows[0],)\n\n# A second account must be completely blind to the first.\n_r = _c.post(\"/api/signup\", json={\"email\": \"b@test.io\", \"password\": \"password-two\"})\n_h_b = {\"Authorization\": \"Bearer \" + _r.json()[\"token\"]}\nassert _c.get(\"/api/{{records}}\", headers=_h_b).json() == [], (\n    \"a new account can see another account's {{records}} - filter every query by the \"\n    \"caller's user id.\")\nassert _c.delete(\"/api/{{records}}/%s\" % _rid, headers=_h_b).status_code == 404, (\n    \"deleting another account's record must return 404, not delete it.\")\nassert len(_c.get(\"/api/{{records}}\", headers=_h_a).json()) == 1, (\n    \"another account's DELETE actually removed the record.\")\n\nassert _c.get(\"/api/{{records}}\", headers={\"Authorization\": \"Bearer not-a-token\"}\n              ).status_code == 401, \"an unknown bearer token must be refused with 401.\"\n\n_r = _c.post(\"/api/{{records}}\", json={\"{{title_field}}\": 5}, headers=_h_a)\nassert _r.status_code == 422, (\n    \"a malformed body must return 422, got %d. Use a pydantic model for the request body \"\n    \"so validation happens before your handler runs.\" % _r.status_code)\n\nassert _c.delete(\"/api/{{records}}/%s\" % _rid, headers=_h_a).status_code == 200, (\n    \"deleting your own record must succeed.\")\nassert _c.get(\"/api/{{records}}\", headers=_h_a).json() == [], \"the record was not deleted.\"\nassert _c.delete(\"/api/{{records}}/%s\" % _rid, headers=_h_a).status_code == 404, (\n    \"deleting a record that no longer exists must return 404.\")\n\nassert _c.post(\"/api/logout\", headers=_h_a).status_code == 200, \"POST /api/logout must work.\"\nassert _c.get(\"/api/{{records}}\", headers=_h_a).status_code == 401, (\n    \"the token still works after logout - /api/logout must delete the session.\")\n\nfor _path in (\"/\", \"/signup\", \"/login\", \"/dashboard\"):\n    _r = _c.get(_path)\n    assert _r.status_code == 200, \"GET %s must return 200, got %d\" % (_path, _r.status_code)\n    assert \"text/html\" in _r.headers.get(\"content-type\", \"\"), (\n        \"GET %s must be served as HTML - return HTMLResponse(pages.<name>_page()), and \"\n        \"declare response_class=HTMLResponse.\" % _path)\n    assert \"<!doctype html\" in _r.text.lower(), (\n        \"GET %s did not return a full HTML document.\" % _path)",
+      "checks": [
+        "unit",
+        "http",
+        "web"
+      ],
+      "depends_on": [
+        "passwords",
+        "storage",
+        "pages"
+      ],
+      "suggested_skill": "coding"
+    }
+  ],
+  "assets": {
+    "ui_kit": "scaffold/ui_kit/kit.css",
+    "partials": "scaffold/partials.py"
+  },
+  "preview": [],
+  "score": null,
+  "provenance": {
+    "authored": "2026-08-12",
+    "basis": "webapp-auth-crud, storage split three ways"
+  },
+  "source": "builtin",
+  "draft": false,
+  "entrypoint": {
+    "source": "\"\"\"Entry point: wires the built pieces together and serves them.\"\"\"\nfrom __future__ import annotations\n\nimport argparse\n\nimport storage\nfrom api import app\n\n\ndef main() -> None:\n    ap = argparse.ArgumentParser(description=\"Run the app.\")\n    ap.add_argument(\"--port\", type=int, default=8099)\n    ap.add_argument(\"--host\", default=\"127.0.0.1\")\n    args = ap.parse_args()\n    storage.init_db()\n    import uvicorn\n    uvicorn.run(app, host=args.host, port=args.port, log_level=\"warning\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "path": "app.py",
+    "port": 8099,
+    "health": "/api/health",
+    "pages": [
+      "/",
+      "/signup",
+      "/login",
+      "/dashboard"
+    ],
+    "flow": {
+      "token_key": "app_token",
+      "signup": {
+        "path": "/api/signup",
+        "body": {
+          "email": "probe-xss@probe.test",
+          "password": "probe-password-123"
+        }
+      },
+      "create": {
+        "path": "/api/{{records}}",
+        "body": {
+          "{{title_field}}": "<img src=x onerror=\"window.__xss_fired=1\">",
+          "{{amount_field}}": 1.0,
+          "date": "2026-01-01"
+        }
+      },
+      "view": "/dashboard"
+    }
+  },
+  "vocabulary": {
+    "record": "record",
+    "records": "records",
+    "Record": "Record",
+    "Records": "Records",
+    "title_field": "title",
+    "amount_field": "amount"
+  },
+  "guarantee_checks": {
+    "Passwords are hashed with PBKDF2 and are not recoverable from the database": "scenario:passwords",
+    "Every input has a label and every control is at least 44px tall": "webcheck:inputs labelled on /signup",
+    "User text is escaped, proven by storing a hostile payload and rendering it": "webcheck:stored XSS probe",
+    "Anonymous requests get 401 and malformed ones get 422, never a 500": "scenario:api",
+    "One account cannot read or delete another account's records": "scenario:storage",
+    "No horizontal scrolling at 390px": "webcheck:no horizontal scroll on /signup"
+  }
+}

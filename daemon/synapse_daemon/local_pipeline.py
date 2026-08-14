@@ -112,6 +112,69 @@ def error_fingerprint(error: str) -> str:
     return re.sub(r"line \d+|0x[0-9a-fA-F]+|['\"][^'\"]*[/\\][^'\"]*['\"]", "", exception)[:300]
 
 
+def public_functions(source: str) -> dict[str, tuple[int, int]]:
+    """Top-level function names in ``source``, mapped to their (start, end) line numbers."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return {}
+    out: dict[str, tuple[int, int]] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            start = min([node.lineno] + [d.lineno for d in node.decorator_list])
+            out[node.name] = (start, node.end_lineno or node.lineno)
+    return out
+
+
+def failing_function(error: str, known: dict[str, tuple[int, int]]) -> str:
+    """Which declared function this failure is about, or "" if it cannot be pinned down.
+
+    Read from the traceback frame first - `in create_user` is unambiguous - and otherwise
+    from the assertion text, which the blueprint scenarios deliberately phrase as
+    "create_user must RETURN the new user's id". Names are matched against what the module
+    actually defines, so a stray word in a message cannot invent a target.
+    """
+    if not known:
+        return ""
+    for line in reversed((error or "").splitlines()):
+        match = re.search(r"^\s*File .*, line \d+, in (\w+)", line)
+        if match and match.group(1) in known:
+            return match.group(1)
+    mentioned = [name for name in known if re.search(rf"\b{re.escape(name)}\b", error or "")]
+    # Exactly one, or it is a guess. Repairing the wrong function is worse than repairing
+    # the whole file, because it looks targeted.
+    return mentioned[0] if len(mentioned) == 1 else ""
+
+
+def splice_function(source: str, name: str, replacement: str) -> str:
+    """Swap one function definition into ``source``, leaving every other line untouched.
+
+    This is the whole point of a targeted repair. Measured on the storage piece, scenario
+    positions ran `[18, 21, 18]`: the model fixed `create_user`, advanced, then broke it
+    again, because a repair rewrites the entire file to change one function. Splicing makes
+    that regression structurally impossible rather than merely discouraged.
+
+    Returns "" when the replacement cannot be applied, so the caller falls back to a
+    whole-file repair rather than writing something it has not understood.
+    """
+    here = public_functions(source)
+    if name not in here:
+        return ""
+    incoming = public_functions(replacement)
+    if name not in incoming:
+        return ""
+
+    new_lines = replacement.splitlines()[incoming[name][0] - 1:incoming[name][1]]
+    old_start, old_end = here[name]
+    lines = source.splitlines()
+    spliced = "\n".join(lines[:old_start - 1] + new_lines + lines[old_end:]) + "\n"
+    try:
+        ast.parse(spliced)
+    except SyntaxError:
+        return ""
+    return spliced
+
+
 def _ensure_the_test_runs(test_code: str, emit: Callable[..., None]) -> str:
     """Call the test functions the model defined but never invoked.
 
@@ -162,6 +225,34 @@ def _ensure_the_test_runs(test_code: str, emit: Callable[..., None]) -> str:
             + "".join(f"{name}()\n" for name in callable_now))
 
 
+async def _write_model_test(write_code: Callable[..., str], requirement: str, module: str,
+                            coder_model: str, emit: Callable[..., None]) -> str:
+    """Ask the model for a test of its own code, and make sure it is one.
+
+    Two things it does left to itself, both of which manufacture confidence: paste a copy of
+    the implementation into the test file and assert against *that*, and define a test
+    function it never calls.
+    """
+    test_spec = (
+        f"{requirement.strip()}\n\n"
+        f"Write a test for that code. It MUST begin with `from {module} import *` and test "
+        f"the imported functions. Do NOT re-define or re-implement any of the functions in "
+        f"the test file - import them. Assert the behaviour on representative inputs "
+        f"including edge cases. Use plain asserts, no test framework. Print 'OK' on the last "
+        f"line. Output only the test code."
+    )
+    test_code = await asyncio.to_thread(write_code, test_spec, coder_model)
+
+    if f"from {module} import" not in test_code and f"import {module}" not in test_code:
+        emit("test_rejected", reason="the generated test did not import the module")
+        test_code = (f"from {module} import *\n\n"
+                     + "\n".join(line for line in test_code.splitlines()
+                                 if not line.startswith(("def ", "import ", "from ")))
+                     + "\nprint('OK')\n")
+
+    return _ensure_the_test_runs(test_code, emit)
+
+
 def _run(path: Path, cwd: Path, timeout: float = 45.0) -> tuple[bool, str]:
     # Python decides a cached .pyc is current by comparing the source's mtime *in whole
     # seconds* and its size. A repair very often rewrites the module with the same byte
@@ -203,6 +294,8 @@ async def run_pipeline(
     requirement: str = "",
     generate: Callable[..., str] | None = None,
     resample: bool = True,
+    targeted: bool = True,
+    advisory_model_test: bool = False,
 ) -> PipelineResult:
     """Generate code for ``spec``, prove it runs, and repair it from real errors.
 
@@ -259,30 +352,20 @@ async def run_pipeline(
     # exemplar page - none of which describe what to *test*. A test prompt carrying a whole
     # exemplar HTML page invites the model to write about the exemplar. Callers that do not
     # separate the two get the old behaviour.
-    emit("writing_test")
     module = Path(path).stem
-    test_spec = (
-        f"{(requirement or spec).strip()}\n\n"
-        f"Write a test for that code. It MUST begin with `from {module} import *` and test "
-        f"the imported functions. Do NOT re-define or re-implement any of the functions in "
-        f"the test file - import them. Assert the behaviour on representative inputs "
-        f"including edge cases. Use plain asserts, no test framework. Print 'OK' on the last "
-        f"line. Output only the test code."
-    )
-    test_code = await asyncio.to_thread(write_code, test_spec, coder_model)
 
-    # Verify the test actually imports the module. Left to itself the model happily pastes a
-    # copy of the implementation into the test file and asserts against *that*, so the test
-    # passes while proving nothing about the code being shipped. A test that does not import
-    # what it claims to test is worse than no test, because it manufactures confidence.
-    if f"from {module} import" not in test_code and f"import {module}" not in test_code:
-        emit("test_rejected", reason="the generated test did not import the module")
-        test_code = (f"from {module} import *\n\n"
-                     + "\n".join(line for line in test_code.splitlines()
-                                 if not line.startswith(("def ", "import ", "from ")))
-                     + "\nprint('OK')\n")
-
-    test_code = _ensure_the_test_runs(test_code, emit)
+    # When the blueprint brought its own acceptance scenario, the model's test is a second
+    # opinion rather than the gate - and a frequently wrong one. Measured: it asserted
+    # `user_id == 1`, true only of a fresh database, and its message-less `assert x == y`
+    # lines collided into a single fingerprint that stopped a progressing loop eight repairs
+    # early. Dropping it also saves a whole generation per piece.
+    if advisory_model_test and extra_test.strip():
+        emit("model_test_skipped", reason="the blueprint scenario is the gate")
+        test_code = "print('OK')\n"
+    else:
+        emit("writing_test")
+        test_code = await _write_model_test(
+            write_code, requirement or spec, module, coder_model, emit)
 
     # Contract assertions run *first* in the same file, so a signature mismatch fails the
     # loop and gets repaired locally like any other error. Checking the contract only after
@@ -344,6 +427,9 @@ async def run_pipeline(
         seen_errors.add(fingerprint)
 
         emit("repairing", attempt=attempt + 1, error=error[:300])
+
+        # Always defined: the resample and start-over paths below re-ask this same question,
+        # and a targeted repair that does not apply falls back to it.
         repair_spec = (
             f"This code was written to satisfy the following requirement:\n{spec}\n\n"
             f"Current code:\n```python\n{result.code}\n```\n\n"
@@ -351,7 +437,32 @@ async def run_pipeline(
             "Fix the code so it satisfies the requirement and the tests pass. "
             "Output only the corrected code."
         )
-        fixed = await asyncio.to_thread(write_code, repair_spec, coder_model)
+
+        # Ask for one function when the failure names one. A whole-file rewrite is how a
+        # model fixes `create_user` and breaks `get_user_by_email` in the same breath.
+        target_fn = failing_function(error, public_functions(result.code)) if targeted else ""
+        spliced = ""
+        if target_fn:
+            emit("targeted_repair", attempt=attempt + 1, function=target_fn)
+            piece_spec = (
+                f"This module was written to satisfy:\n{spec}\n\n"
+                f"Here is the whole module for context:\n```python\n{result.code}\n```\n\n"
+                f"Running the tests produced:\n```\n{error}\n```\n\n"
+                f"Rewrite ONLY the function `{target_fn}` so this failure cannot happen. "
+                f"Output that one function and nothing else - no imports, no other "
+                f"functions, no explanation. Everything else in the module is already "
+                f"correct and must not change."
+            )
+            candidate = await asyncio.to_thread(write_code, piece_spec, coder_model)
+            if candidate and not candidate.startswith("ERROR:"):
+                spliced = splice_function(result.code, target_fn, candidate)
+            if not spliced:
+                emit("targeted_repair_fell_back", attempt=attempt + 1, function=target_fn)
+
+        if spliced:
+            fixed = spliced
+        else:
+            fixed = await asyncio.to_thread(write_code, repair_spec, coder_model)
 
         # Greedy decoding is deterministic, so an unchanged answer to a near-identical
         # prompt is what the sampler is *for*, not evidence the model is out of ideas.

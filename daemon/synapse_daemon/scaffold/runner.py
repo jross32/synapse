@@ -318,7 +318,8 @@ def _reset_attempt(workspace: Path, module: str) -> None:
     (workspace / f"{module}.py").unlink(missing_ok=True)
 
 
-def _generator_for(runtime: str, workspace: Path, path: str) -> Callable[..., str] | None:
+def _generator_for(runtime: str, workspace: Path, path: str,
+                   fixed: str = "") -> Callable[..., str] | None:
     """A `generate` callable for one rung of the ladder, or None for the local one.
 
     The paid runtimes are agents with filesystem access, so they are asked to write the
@@ -326,6 +327,11 @@ def _generator_for(runtime: str, workspace: Path, path: str) -> Callable[..., st
     after this point - contract assertions, the blueprint scenario, the repair loop - is
     identical regardless of which wrote it, which is the entire reason the ladder is cheap.
     """
+    if fixed.strip():
+        # Hand the loop the fixed source instead of asking anyone for it. It still gets
+        # tested; it just never gets rewritten, including by a repair.
+        return lambda spec, model="", *a, **k: fixed
+
     if runtime == coder_runtimes.CoderRuntime.LOCAL.value:
         return None
 
@@ -353,6 +359,8 @@ async def build_blueprint(
     vocabulary: dict[str, str] | None = None,
     ladder: tuple[coder_runtimes.CoderRuntime, ...] = coder_runtimes.DEFAULT_LADDER,
     max_attempts: int = 1,
+    targeted_repair: bool = True,
+    advisory_model_test: bool = True,
 ) -> BuildResult:
     """Build every piece, in dependency order, verifying as it goes.
 
@@ -403,6 +411,13 @@ async def build_blueprint(
             contract_test = (contract_test.rstrip() + "\n\n" + piece.tests.strip()
                              if contract_test else piece.tests.strip())
 
+        # A fixed piece is written, not generated - but it is still checked. Skipping the
+        # checks because "we wrote it" would be the same reasoning that let three unusable
+        # modules through on the first build.
+        if piece.source.strip():
+            (ws / f"{module}.py").write_text(piece.source, encoding="utf-8")
+            emit("piece_written", piece=piece.name, fixed=True)
+
         # One attempt per pass through, repeated only while the piece is still failing.
         # `max_attempts > 1` is the overnight shape: the free tier passes roughly one run in
         # five, which is a poor interactive tool and a perfectly good batch one, but only
@@ -427,8 +442,11 @@ async def build_blueprint(
                     # page or the dependency interfaces, which say how to build it rather
                     # than what it must do.
                     requirement=piece.spec,
-                    generate=_generator_for(decision.chosen, ws, f"{module}.py"),
+                    generate=_generator_for(decision.chosen, ws, f"{module}.py",
+                                            fixed=piece.source),
                     resample=decision.chosen == coder_runtimes.CoderRuntime.LOCAL.value,
+                    targeted=targeted_repair,
+                    advisory_model_test=advisory_model_test,
                     on_event=lambda e, p=piece.name: emit("pipeline", piece=p, **e),
                 )
             except coder_runtimes.RuntimeExhausted as exc:

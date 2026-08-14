@@ -852,7 +852,10 @@ def test_the_test_prompt_gets_the_requirement_not_the_implementation_aids(tmp_pa
     original = lp.generate_code
     lp.generate_code = stub
     try:
-        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0, ladder=LOCAL_ONLY))
+        # advisory_model_test off: this case is about what the test-writing prompt
+        # contains, which only exists when the model is asked for a test at all.
+        _run_async(build_blueprint(blueprint, workspace=tmp_path, max_repairs=0,
+                                   ladder=LOCAL_ONLY, advisory_model_test=False))
     finally:
         lp.generate_code = original
 

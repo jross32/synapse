@@ -10,6 +10,40 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.145] - 2026-08-14
+
+Phase C of the scaffold plan: the four changes aimed at the local tier's reliability, each
+built as a **switch** rather than a rewrite, so one code version produces every arm of the
+measurement. Editing source between arms is how a comparison quietly stops being one.
+
+### Added
+- **Targeted repair.** When a failure names a function, the model is asked to rewrite *only*
+  that function and the result is spliced into the existing file by line range. The measured
+  failure mode is regression, not incapacity: building `storage`, the scenario positions ran
+  `[18, 21, 18]` - `create_user` fixed, next assertion reached, `create_user` broken again -
+  because a repair prompt asks for the whole module back. Splicing makes that structurally
+  impossible. Falls back to a whole-file repair when the function cannot be pinned down
+  unambiguously, because repairing the wrong function is worse than repairing the file: it
+  looks targeted.
+- **`Piece.source`** — fixed source, written verbatim instead of generated, for the parts of
+  a build with one correct answer and no judgement in them. Still checked exactly like any
+  other piece; "we wrote it" has never been a reason to trust code here.
+- **`blueprints/webapp-auth-crud-split/`** — the same app with `storage` split into three
+  modules of three functions behind a fixed facade, so `api.py` is unchanged. The original
+  plan's thesis was "shrink what they get to invent"; this applies it one level deeper.
+  Each new piece carries its own scenario, verified in both directions, with the negative
+  cases checked to fail *for the right assertion* - two of them initially did not.
+- **`benchmarks/app-build/phase_c_batch.py`** — the gate. Six named variants, reporting
+  attempts-to-first-success rather than a per-attempt pass rate.
+
+### Changed
+- The model's own generated test is **advisory** when the blueprint supplies a scenario. It
+  asserted `user_id == 1` (true only of a fresh database), and its message-less assertions
+  collided into a single fingerprint that stopped a progressing loop eight repairs early.
+  Skipping it also saves a whole generation per piece.
+
+Whether any of this actually helps is a measurement, not a claim, and it is running.
+
 ## [0.1.144] - 2026-08-13
 
 ### Added — the runtime ladder
