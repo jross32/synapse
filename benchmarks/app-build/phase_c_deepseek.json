@@ -1,0 +1,71 @@
+{
+ "variant": "deepseek",
+ "config": {
+  "blueprint": "webapp-auth-crud",
+  "targeted_repair": true,
+  "advisory_model_test": true,
+  "model": "deepseek-coder:6.7b"
+ },
+ "runs": [
+  {
+   "variant": "deepseek",
+   "seconds": 745.8,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 3,
+     "seconds": 745.6,
+     "stop_reason": "storage.py does not define `init_db()`. It defines: ['create_user']"
+    }
+   ]
+  },
+  {
+   "variant": "deepseek",
+   "seconds": 732.0,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 3,
+     "seconds": 731.9,
+     "stop_reason": "storage.py does not define `init_db()`. It defines: ['create_user']"
+    }
+   ]
+  },
+  {
+   "variant": "deepseek",
+   "seconds": 709.5,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 3,
+     "seconds": 709.4,
+     "stop_reason": "storage.py does not define `init_db()`. It defines: ['create_user']"
+    }
+   ]
+  },
+  {
+   "variant": "deepseek",
+   "seconds": 714.8,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 3,
+     "seconds": 714.6,
+     "stop_reason": "storage.py does not define `init_db()`. It defines: ['create_user']"
+    }
+   ]
+  }
+ ]
+}

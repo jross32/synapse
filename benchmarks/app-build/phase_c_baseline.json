@@ -1,0 +1,71 @@
+{
+ "variant": "baseline",
+ "config": {
+  "blueprint": "webapp-auth-crud",
+  "targeted_repair": false,
+  "advisory_model_test": false,
+  "model": "qwen2.5-coder:7b"
+ },
+ "runs": [
+  {
+   "variant": "baseline",
+   "seconds": 1914.9,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 5,
+     "seconds": 1914.6,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    }
+   ]
+  },
+  {
+   "variant": "baseline",
+   "seconds": 2309.5,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 6,
+     "seconds": 2308.7,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    }
+   ]
+  },
+  {
+   "variant": "baseline",
+   "seconds": 2051.2,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 5,
+     "seconds": 2050.7,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: AssertionError: create_user must RETURN the new user's id. It re"
+    }
+   ]
+  },
+  {
+   "variant": "baseline",
+   "seconds": 2538.5,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 6,
+     "seconds": 2538.2,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: sqlite3.OperationalError: database is locked"
+    }
+   ]
+  }
+ ]
+}

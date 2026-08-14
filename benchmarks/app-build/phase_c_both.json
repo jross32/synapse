@@ -1,0 +1,71 @@
+{
+ "variant": "both",
+ "config": {
+  "blueprint": "webapp-auth-crud",
+  "targeted_repair": true,
+  "advisory_model_test": true,
+  "model": "qwen2.5-coder:7b"
+ },
+ "runs": [
+  {
+   "variant": "both",
+   "seconds": 578.7,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 4,
+     "seconds": 578.4,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    }
+   ]
+  },
+  {
+   "variant": "both",
+   "seconds": 545.1,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 4,
+     "seconds": 544.9,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    }
+   ]
+  },
+  {
+   "variant": "both",
+   "seconds": 593.5,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 4,
+     "seconds": 593.1,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    }
+   ]
+  },
+  {
+   "variant": "both",
+   "seconds": 650.3,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "storage",
+     "passed": false,
+     "verified": false,
+     "repairs": 4,
+     "seconds": 649.4,
+     "stop_reason": "a different fix produced the same error, so the model is circling a problem it cannot diagnose: TypeError: cannot convert dictionary update sequence element #0 "
+    }
+   ]
+  }
+ ]
+}

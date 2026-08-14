@@ -1,0 +1,167 @@
+{
+ "variant": "split",
+ "config": {
+  "blueprint": "webapp-auth-crud-split",
+  "targeted_repair": true,
+  "advisory_model_test": true,
+  "model": "qwen2.5-coder:7b"
+ },
+ "runs": [
+  {
+   "variant": "split",
+   "seconds": 242.3,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "store_users",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 78.7,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_sessions",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 71.8,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_records",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 91.1,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "storage",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 0.4,
+     "stop_reason": "tests passed"
+    }
+   ]
+  },
+  {
+   "variant": "split",
+   "seconds": 240.3,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "store_users",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 60.6,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_sessions",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 80.7,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_records",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 98.3,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "storage",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 0.4,
+     "stop_reason": "tests passed"
+    }
+   ]
+  },
+  {
+   "variant": "split",
+   "seconds": 243.6,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "store_users",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 62.0,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_sessions",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 81.6,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_records",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 99.4,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "storage",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 0.4,
+     "stop_reason": "tests passed"
+    }
+   ]
+  },
+  {
+   "variant": "split",
+   "seconds": 246.0,
+   "passed": false,
+   "pieces": [
+    {
+     "name": "store_users",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 62.9,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_sessions",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 82.9,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "store_records",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 99.4,
+     "stop_reason": "tests passed"
+    },
+    {
+     "name": "storage",
+     "passed": true,
+     "verified": true,
+     "repairs": 0,
+     "seconds": 0.4,
+     "stop_reason": "tests passed"
+    }
+   ]
+  }
+ ]
+}
