@@ -235,13 +235,29 @@ def write_module(
     before = target.read_text(encoding="utf-8") if target.exists() else None
     existing = {p.name for p in Path(workspace).glob("*.py")}
 
-    # The filename leads. Measured: asked to "write the result to `slug.py`" with the
-    # instruction trailing the requirement, Claude wrote `slugify.py` - named after the
-    # function, ignoring the path. It exited 0 having done good work in the wrong place.
-    argv = headless_argv([binary], runtime=runtime.value, authority=authority,
-                         prompt=f"Create exactly one file, named `{path}`, in the current "
-                                f"directory. Do not create any other file, and do not "
-                                f"choose a different name.\n\n{prompt}")
+    # The requirement goes in a FILE and the argument stays one line.
+    #
+    # `claude` resolves to `claude.CMD` on Windows, and cmd.exe treats a newline inside an
+    # argument as a command separator - so a multi-line prompt arrives truncated at the
+    # first line. Proven directly: a .cmd echoing its first argument printed
+    # `GOT:[LINE-ONE]` and dropped the rest. Every multi-line prompt sent this way reached
+    # the model as its opening sentence and nothing else, which produced modules built from
+    # the *filename* alone: asked for a CSV summariser in `summary.py`, Claude wrote a file
+    # containing `# summary.py`.
+    #
+    # This is the pattern `routes_agent_squads` already uses for exactly the same reason.
+    brief = Path(workspace) / f".synapse-brief-{Path(path).stem}.md"
+    brief.write_text(
+        f"# Write `{path}`\n\n"
+        f"Create exactly one file, named `{path}`, in this directory. Do not create any "
+        f"other file and do not choose a different name.\n\n{prompt}\n",
+        encoding="utf-8")
+
+    argv = headless_argv(
+        [binary], runtime=runtime.value, authority=authority,
+        prompt=(f"Read the complete instructions in {brief} and carry them out now. "
+                f"Write exactly one file, named {path}, in that same directory. "
+                f"Do not ask any questions and do not wait for further input."))
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
                               cwd=str(workspace))
@@ -264,6 +280,7 @@ def write_module(
         # An agent that did the work under a name of its own choosing has not failed, it has
         # misfiled. Adopt the file when there is exactly one new module and no ambiguity
         # about which it is; anything else is reported rather than guessed at.
+        brief.unlink(missing_ok=True)
         created = [p for p in Path(workspace).glob("*.py") if p.name not in existing]
         if len(created) == 1:
             created[0].replace(target)
@@ -275,6 +292,7 @@ def write_module(
                 + f". {(proc.stderr or proc.stdout or '')[-300:]}")
             return result
 
+    brief.unlink(missing_ok=True)
     source = target.read_text(encoding="utf-8")
     if before is not None and source == before:
         result.error = f"{runtime.value} left {path} unchanged"

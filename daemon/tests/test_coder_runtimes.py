@@ -159,6 +159,77 @@ def test_exhaustion_during_a_write_is_surfaced_not_swallowed(tmp_path, monkeypat
     assert "usage limit reached" in result.exhausted
 
 
+def test_the_prompt_argument_is_a_single_line(tmp_path, monkeypatch):
+    """`claude` is `claude.CMD`, and cmd.exe ends an argument at the first newline.
+
+    Proven directly with a .cmd echoing its first argument: given "LINE-ONE\\nLINE-TWO" it
+    printed `GOT:[LINE-ONE]`. So a multi-line prompt reached the model as its opening
+    sentence and nothing else, and the modules that came back were built from the *filename*
+    alone - asked for a CSV summariser in `summary.py`, Claude returned a file containing
+    `# summary.py`.
+
+    The requirement goes in a file; the argument stays one line. No stub-based test could
+    have caught this, because a stub never crosses a .CMD boundary.
+    """
+    monkeypatch.setattr(cr, "resolve_command", lambda name: "fake-cli")
+    seen: dict = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        (tmp_path / "thing.py").write_text("x = 1\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cr.write_module(cr.CoderRuntime.CLAUDE,
+                    "Line one of the spec.\nLine two, which must not be lost.\n\nLine three.",
+                    workspace=tmp_path, path="thing.py")
+
+    for arg in seen["argv"]:
+        assert "\n" not in arg, (
+            f"an argument contains a newline, so everything after it is lost when the "
+            f"runtime is a .CMD: {arg!r}")
+
+
+def test_the_full_requirement_reaches_the_runtime_through_the_brief(tmp_path, monkeypatch):
+    """Single-line is only safe if the detail actually survives somewhere."""
+    monkeypatch.setattr(cr, "resolve_command", lambda name: "fake-cli")
+    briefs: list[str] = []
+
+    def fake_run(argv, **kwargs):
+        # The runtime would read the file named in its prompt; do that here. The prompt has
+        # to actually name it, so assert that rather than just globbing blindly.
+        for candidate in tmp_path.glob("*.md"):
+            assert str(candidate) in argv[-1], (
+                f"a brief was written but the prompt does not point at it:\n{argv[-1]}")
+            briefs.append(candidate.read_text(encoding="utf-8"))
+        (tmp_path / "thing.py").write_text("x = 1\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cr.write_module(cr.CoderRuntime.CLAUDE,
+                    "Line one of the spec.\nLine two, which must not be lost.",
+                    workspace=tmp_path, path="thing.py")
+
+    assert briefs, "the prompt named no readable brief, so the requirement went nowhere"
+    assert "Line two, which must not be lost." in briefs[0]
+    assert "thing.py" in briefs[0]
+
+
+def test_the_brief_does_not_outlive_the_call(tmp_path, monkeypatch):
+    """A stray .md in the workspace would end up shipped with the app."""
+    monkeypatch.setattr(cr, "resolve_command", lambda name: "fake-cli")
+
+    def fake_run(argv, **kwargs):
+        (tmp_path / "thing.py").write_text("x = 1\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cr.write_module(cr.CoderRuntime.CLAUDE, "spec", workspace=tmp_path, path="thing.py")
+
+    assert not list(tmp_path.glob("*.md")), (
+        f"the brief was left behind: {[p.name for p in tmp_path.glob('*.md')]}")
+
+
 def test_a_module_written_under_the_agents_own_name_is_adopted(tmp_path, monkeypatch):
     """Measured against the real CLI: asked for `slug.py`, Claude wrote `slugify.py`.
 
@@ -199,13 +270,17 @@ def test_several_new_modules_are_reported_rather_than_guessed_between(tmp_path, 
     assert "helpers.py" in result.error and "slugify.py" in result.error
 
 
-def test_the_requested_filename_leads_the_prompt(tmp_path, monkeypatch):
-    """The instruction trailing the requirement is what got ignored in the real run."""
+def test_the_filename_leads_the_brief(tmp_path, monkeypatch):
+    """Asked for `slug.py` with the naming instruction last, Claude wrote `slugify.py`.
+
+    The filename still has to lead - but it leads the *brief* now, not the argument, since
+    the argument cannot carry more than one line.
+    """
     monkeypatch.setattr(cr, "resolve_command", lambda name: "fake-cli")
-    seen: dict[str, str] = {}
+    captured: list[str] = []
 
     def fake_run(argv, **kwargs):
-        seen["prompt"] = argv[-1]
+        captured.extend(p.read_text(encoding="utf-8") for p in tmp_path.glob("*.md"))
         (tmp_path / "slug.py").write_text("x = 1\n", encoding="utf-8")
         return subprocess.CompletedProcess(argv, 0, "", "")
 
@@ -213,9 +288,10 @@ def test_the_requested_filename_leads_the_prompt(tmp_path, monkeypatch):
     cr.write_module(cr.CoderRuntime.CLAUDE, "REQUIREMENT-TEXT", workspace=tmp_path,
                     path="slug.py")
 
-    prompt = seen["prompt"]
-    assert prompt.index("slug.py") < prompt.index("REQUIREMENT-TEXT"), (
-        f"the filename must lead, or it gets ignored:\n{prompt[:200]}")
+    assert captured, "no brief was written"
+    brief = captured[0]
+    assert brief.index("slug.py") < brief.index("REQUIREMENT-TEXT"), (
+        f"the filename must lead the brief, or it gets ignored:\n{brief[:200]}")
 
 
 def test_an_unchanged_file_is_not_counted_as_written(tmp_path, monkeypatch):

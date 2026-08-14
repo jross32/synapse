@@ -10,6 +10,56 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.146] - 2026-08-14
+
+Phase D: a second blueprint, of a shape sharing nothing with the first. It found three real
+holes, which is what a second example is for.
+
+### The result
+
+`cli-csv-report` built through the ladder: **3/3 pieces, all independently verified, 204
+seconds, 1 repair.** Every piece written by `claude`. The equivalent local-tier piece takes
+~1800 seconds and passes about one run in five.
+
+The tool works: `1,200.50` and `$99.50` total to `1300.00`, `(25)` reads as `-25.00`, bad
+rows are reported with their line numbers while the run continues, and exit codes are 0 / 1
+/ 2 as specified.
+
+### Fixed — three holes a second blueprint exposed
+
+- **Multi-line prompts were being truncated at the first line.** `claude` resolves to
+  `claude.CMD`, and cmd.exe ends an argument at a newline. Proven directly: a `.cmd` echoing
+  its first argument printed `GOT:[LINE-ONE]` and dropped the rest. Every spec reached the
+  model as its opening sentence, so modules came back built from the *filename* alone -
+  asked for a CSV summariser in `summary.py`, Claude returned a file containing
+  `# summary.py`. The requirement now goes in a brief file and the argument stays one line,
+  which is what `routes_agent_squads` has always done.
+
+  This also retires an earlier claim: the "successful" slugify verification was Claude
+  inferring the function from the filename, not following the spec. It was luck wearing the
+  costume of a passing test.
+
+- **The entrypoint was only written as a side effect of the web checks.** A blueprint with
+  no web surface was never assembled, so the CLI build reported "3/3 pieces built, 3
+  independently verified" with no runnable program in the workspace. Verified pieces are not
+  a delivered app.
+
+- **Nothing checked the seams between pieces.** Every piece passed its own scenario while
+  the assembled tool exited 1 on its own example: `cli` called `parse_amount` for validation,
+  discarded the parsed value, and handed the raw string to a `summary` module doing its own
+  `float()`. This is the `distance` / `distance_km` failure in new clothes - contracts catch
+  signature drift, nothing caught data-shape drift across a seam.
+
+### Added
+- **`Blueprint.acceptance`** — a script run against the assembled app once every piece is
+  built. Web blueprints got this from `webcheck`; everything else had nothing.
+- **`_smoke_entrypoint`** — does the assembled program start at all. Fails on a traceback
+  and deliberately *not* on a non-zero exit, because argparse raises `SystemExit` for
+  `--help` and failing that would be the check inventing a requirement the blueprint never
+  stated. A false failure costs exactly as much trust as a false pass.
+- The `cli` piece's own scenario now uses formatted amounts, so the seam bug is caught
+  *inside* the repair loop where it is fixed for free, rather than only reported afterwards.
+
 ## [0.1.145] - 2026-08-14
 
 Phase C of the scaffold plan: the four changes aimed at the local tier's reliability, each

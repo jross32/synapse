@@ -115,6 +115,24 @@ class Blueprint(BaseModel):
     guarantees: list[str] = Field(default_factory=list)
     """Promises the checks actually enforce. Not marketing - each maps to a check."""
 
+    acceptance: str = ""
+    """A script run against the **assembled** app once every piece is built.
+
+    Piece scenarios verify pieces. They do not verify the seams between them, and a seam is
+    where this project's two worst integration bugs both lived: one module returning
+    `distance_km` while its caller read `distance`, and - measured on the CLI blueprint -
+    `cli` calling `parse_amount` for validation only, discarding the parsed value, and
+    handing the raw string to a `summary` module that did its own `float()`. Every piece
+    passed its own scenario. The assembled tool could not read "1,200.50".
+
+    Web blueprints get this from `webcheck`, which renders and attacks the running app.
+    Everything else had nothing, so a CLI blueprint could report "3/3 pieces built, 3
+    independently verified" while shipping a program that exited 1 on its own example.
+
+    Runs in the workspace with the entrypoint present. Non-zero exit means the app does not
+    work, however well its parts did.
+    """
+
     guarantee_checks: dict[str, str] = Field(default_factory=dict)
     """Which check enforces each guarantee: guarantee text -> check name.
 

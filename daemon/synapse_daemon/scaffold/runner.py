@@ -162,6 +162,57 @@ def _wait_for_health(url: str, deadline: float) -> bool:
     return False
 
 
+def _run_acceptance(ws: Path, source: str) -> str:
+    """Run the blueprint's end-to-end script against the assembled app."""
+    shutil.rmtree(ws / "__pycache__", ignore_errors=True)
+    script = ws / "_acceptance.py"
+    script.write_text(source, encoding="utf-8")
+    try:
+        proc = subprocess.run([sys.executable, "-B", script.name], capture_output=True,
+                              text=True, timeout=180, cwd=str(ws),
+                              env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+    except Exception as exc:  # noqa: BLE001 -- a broken probe must not read as a pass
+        return f"not_run: {type(exc).__name__}: {exc}"
+    finally:
+        script.unlink(missing_ok=True)
+
+    if proc.returncode == 0:
+        return "pass"
+    output = (proc.stderr or proc.stdout or "").strip()
+    tail = [ln for ln in output.splitlines() if ln.strip()][-1:] if output else []
+    return f"fail: {' '.join(tail)[:280]}"
+
+
+def _smoke_entrypoint(ws: Path, entry_path: str) -> str:
+    """Does the assembled program start at all?
+
+    `--help` is the one argument every CLI answers without doing anything, so it exercises
+    the whole import graph and none of the behaviour. A traceback here means the pieces do
+    not fit together, however well each one passed on its own.
+    """
+    shutil.rmtree(ws / "__pycache__", ignore_errors=True)
+    try:
+        proc = subprocess.run([sys.executable, "-B", entry_path, "--help"],
+                              capture_output=True, text=True, timeout=60, cwd=str(ws),
+                              env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+    except Exception as exc:  # noqa: BLE001 -- a broken probe must not read as a pass
+        return f"not_run: {type(exc).__name__}: {exc}"
+
+    output = (proc.stderr or "") + (proc.stdout or "")
+    # A traceback is the signal. The exit code is not: argparse raises SystemExit for
+    # `--help`, and a tool that maps every SystemExit to a usage error exits non-zero having
+    # started perfectly well. Failing on that would be this check inventing a requirement
+    # the blueprint never stated - a false failure, which costs exactly as much trust as a
+    # false pass.
+    if "Traceback" in output:
+        tail = [ln for ln in output.strip().splitlines() if ln.strip()][-1:]
+        return f"fail: the assembled program raised on startup - {' '.join(tail)[:200]}"
+    if not output.strip() and proc.returncode != 0:
+        return (f"fail: `{entry_path} --help` exited {proc.returncode} and printed nothing, "
+                f"so the program did not start")
+    return "pass"
+
+
 async def _run_web_checks(blueprint: Blueprint, ws: Path,
                           result: BuildResult) -> dict[str, str]:
     """Assemble the app, serve it, render it and attack it.
@@ -177,6 +228,7 @@ async def _run_web_checks(blueprint: Blueprint, ws: Path,
     entry = blueprint.entrypoint
     if not entry.get("source"):
         return {"web": "not_run: the blueprint declares no entrypoint to serve"}
+    # Already written by the caller; kept here so this stays usable on its own.
 
     path = ws / entry.get("path", "app.py")
     path.write_text(entry["source"], encoding="utf-8")
@@ -543,6 +595,32 @@ async def build_blueprint(
 
         result.pieces.append(outcome)
         emit("piece_finished", piece=piece.name, passed=outcome.passed)
+
+    # Assemble the app. This used to happen only as a side effect of the web checks, so a
+    # blueprint with no web checks was never assembled at all: the CLI blueprint reported
+    # "3/3 pieces built, 3 independently verified" and had no runnable program in the
+    # workspace, because nothing had written its entrypoint. Verified pieces are not a
+    # delivered app.
+    entry = blueprint.entrypoint
+    if entry.get("source"):
+        entry_path = entry.get("path", "app.py")
+        (ws / entry_path).write_text(entry["source"], encoding="utf-8")
+        result.notes.append(f"entrypoint written to {entry_path}")
+
+        # Prove the assembled program at least starts. Every piece can pass its own scenario
+        # while the whole fails to import - a missing dependency, a name the facade does not
+        # re-export - and nothing else here would notice, because every other check looks at
+        # one piece at a time or needs a web server.
+        if not any(CheckKind.WEB in p.checks or CheckKind.HTTP in p.checks
+                   for p in blueprint.pieces):
+            result.web_checks["assembled"] = _smoke_entrypoint(ws, entry_path)
+
+    # The end-to-end gate. Piece scenarios verify pieces; this verifies the seams between
+    # them, which is where both of this project's worst integration bugs lived.
+    if blueprint.acceptance.strip():
+        emit("acceptance_started")
+        result.web_checks["acceptance"] = _run_acceptance(ws, blueprint.acceptance)
+        emit("acceptance_finished", verdict=result.web_checks["acceptance"])
 
     # Web checks run once, against the assembled application, because that is the only place
     # a rendered page exists. Attempted even when a piece escalated: a build that is 3/4 done

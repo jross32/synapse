@@ -1,0 +1,142 @@
+/* Synapse UI kit — the house style for generated apps.
+ *
+ * This file exists so a model never has to invent CSS. In the build-off the local model
+ * produced 1,094 bytes of ad-hoc CSS and the result looked like an unstyled browser default:
+ * blue underlined links, no labels, no focus ring, no tap targets, no breakpoint. None of
+ * that was a capability problem — it was asked to design, which is not what it is good at.
+ *
+ * Everything here is deliberate and checked once, so every app that references it inherits:
+ *   - 44px minimum touch targets (the phone-usability floor)
+ *   - a visible focus ring on every interactive element (keyboard users)
+ *   - AA contrast on text and controls
+ *   - a real empty/error/success vocabulary, so generated pages have somewhere to put state
+ *
+ * Colours are CSS variables, so a brand palette can replace the theme without touching
+ * component rules.
+ */
+
+:root {
+  /* Neutrals — a dark scale with enough steps to build depth without inventing greys. */
+  --bg: #0f1210;
+  --surface: #171b18;
+  --surface-2: #1e231f;
+  --line: #2a302c;
+  --ink: #e8eae8;
+  --ink-dim: #9aa39c;
+
+  /* One accent, plus states. More than one accent is how generated UIs start looking noisy. */
+  --accent: #6fcf87;
+  --accent-ink: #08120c;
+  --danger: #e0736b;
+  --danger-bg: rgba(224, 115, 107, 0.12);
+  --ok: #6fcf87;
+  --ok-bg: rgba(111, 207, 135, 0.12);
+
+  --radius: 12px;
+  --radius-sm: 9px;
+  --tap: 44px;            /* never go below this on an interactive element */
+  --gap: 16px;
+  --maxw: 560px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Focus is never removed, only restyled. Removing it is the single most common a11y
+ * regression in generated code. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 24px 18px 64px; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; font-size: 19px; letter-spacing: -0.02em; }
+.brand em { color: var(--accent); font-style: normal; }
+
+h1 { font-size: 27px; line-height: 1.2; letter-spacing: -0.02em; margin: 26px 0 10px; }
+h2 { font-size: 20px; margin: 26px 0 10px; }
+.lede { color: var(--ink-dim); margin: 0 0 24px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 20px;
+}
+.card + .card { margin-top: var(--gap); }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > * { flex: 1 1 150px; }
+
+/* ---------------------------------------------------------------- forms */
+
+/* .field wraps a label+input pair. The label is required by the partial that emits this,
+ * so a generated form cannot ship without one. */
+.field { display: block; margin-bottom: 14px; min-width: 0; }
+.field > label {
+  display: block; font-size: 14px; color: var(--ink-dim); margin-bottom: 6px;
+}
+.field > input, .field > select, .field > textarea {
+  width: 100%; min-height: var(--tap); padding: 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--ink); font-size: 16px; /* 16px avoids iOS zoom */
+}
+.field > input::placeholder { color: var(--ink-dim); opacity: 0.7; }
+.field-hint { font-size: 13px; color: var(--ink-dim); margin-top: 6px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--tap); min-width: var(--tap); padding: 12px 18px;
+  border: 0; border-radius: var(--radius-sm);
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 16px; font-weight: 650; cursor: pointer; text-decoration: none;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--line); }
+.btn-block { width: 100%; }
+
+/* ---------------------------------------------------------------- state */
+
+/* Hidden until given a variant class, so a page always has somewhere to put an error and
+ * never renders an empty box. */
+.msg { display: none; margin-top: 14px; padding: 11px 12px;
+       border-radius: var(--radius-sm); font-size: 14px; }
+.msg.err { display: block; background: var(--danger-bg);
+           border: 1px solid rgba(224, 115, 107, 0.4); color: #ffb3ad; }
+.msg.ok  { display: block; background: var(--ok-bg);
+           border: 1px solid rgba(111, 207, 135, 0.4); color: var(--ok); }
+
+.empty { color: var(--ink-dim); text-align: center; padding: 32px 12px; }
+
+.list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--line); min-width: 0;
+}
+.list-row:last-child { border-bottom: 0; }
+.list-row h3 { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.list-row small { color: var(--ink-dim); }
+
+a { color: var(--accent); }
+
+/* ---------------------------------------------------------------- responsive
+ * One breakpoint on purpose. Generated apps do not need a six-tier system, and each extra
+ * tier is another thing to get wrong. */
+@media (min-width: 700px) {
+  h1 { font-size: 34px; }
+  .wrap { padding-top: 32px; }
+}

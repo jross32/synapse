@@ -1,0 +1,154 @@
+{
+  "id": "cli-csv-report",
+  "name": "Command-line CSV report",
+  "kind": "library",
+  "summary": "A real command line tool: reads a CSV from a file or standard input, rejects bad rows with line numbers instead of dropping them, groups and totals the rest, and prints a table or JSON. Standard library only, one file to run.",
+  "what_you_get": [
+    "A tool that runs from a file or a pipe",
+    "Bad rows reported with their line number, never silently dropped",
+    "Grouped totals, means and a top-N, as a table or as JSON",
+    "Exit codes a script can branch on, and no traceback ever shown to a user"
+  ],
+  "guarantees": [
+    "Exit 0 on success, 1 on bad input or usage, 2 when the file does not exist",
+    "A traceback never reaches the user",
+    "Every rejected row is reported with its line number in the file",
+    "Reads standard input when no file is given",
+    "One bad row does not fail the whole run",
+    "Formatted amounts survive the whole pipeline, not just the parser"
+  ],
+  "guarantee_checks": {
+    "Exit 0 on success, 1 on bad input or usage, 2 when the file does not exist": "scenario:cli",
+    "A traceback never reaches the user": "scenario:cli",
+    "Every rejected row is reported with its line number in the file": "scenario:reader",
+    "Reads standard input when no file is given": "scenario:cli",
+    "One bad row does not fail the whole run": "scenario:cli",
+    "Formatted amounts survive the whole pipeline, not just the parser": "acceptance"
+  },
+  "tags": [
+    "cli",
+    "csv",
+    "reporting",
+    "stdlib",
+    "starter"
+  ],
+  "stack": [
+    "python",
+    "stdlib"
+  ],
+  "est_minutes": 15,
+  "provides": [
+    "cli-tool",
+    "csv-ingest",
+    "tabular-report"
+  ],
+  "requires": [],
+  "assets": {},
+  "preview": [],
+  "score": null,
+  "provenance": {
+    "authored": "2026-08-14",
+    "basis": "Phase D - a shape sharing nothing with webapp-auth-crud"
+  },
+  "source": "builtin",
+  "draft": false,
+  "vocabulary": {},
+  "entrypoint": {
+    "path": "report.py",
+    "source": "\"\"\"Entry point: the CLI, runnable as `python report.py --help`.\"\"\"\nimport sys\n\nfrom cli import main\n\nif __name__ == \"__main__\":\n    sys.exit(main(sys.argv[1:]))\n"
+  },
+  "pieces": [
+    {
+      "name": "reader",
+      "module": "reader",
+      "spec": "Use only the standard library. Every function is importable and pure enough to test directly - no work at import time, no reading sys.argv outside the CLI piece.\n\nWrite the input half of a CSV reporting tool.\n\nread_rows(text, required) parses CSV text and returns (rows, problems).\n  - rows is a list of dicts keyed by the header names.\n  - problems is a list of human-readable strings, one per rejected row, each naming the\n    1-based LINE NUMBER in the file and what was wrong, e.g.\n    \"line 4: missing column 'amount'\". A row missing any name in `required`, or with an\n    empty value for one, is rejected rather than silently dropped or silently kept.\n  - An empty input returns ([], []) rather than raising.\n  - The header line counts as line 1, so the first data row is line 2.\n\nparse_amount(value) turns a string into a float, accepting \"1,234.50\", \" 12 \", \"$4.20\" and\n\"(5)\" for negative five. It raises ValueError with a message naming the offending value for\nanything it cannot read. It never returns None.",
+      "contract": {
+        "functions": [
+          {
+            "name": "read_rows",
+            "args": [
+              "text",
+              "required"
+            ]
+          },
+          {
+            "name": "parse_amount",
+            "args": [
+              "value"
+            ]
+          }
+        ]
+      },
+      "tests": "_rows, _problems = read_rows(\"name,amount\\nalice,10\\nbob,20\\n\", [\"name\", \"amount\"])\nassert isinstance(_rows, list) and len(_rows) == 2, (\n    \"read_rows must return (rows, problems) with one dict per good row. Got %r\" % (_rows,))\ntry:\n    _first = _rows[0][\"name\"]\nexcept (TypeError, KeyError, IndexError):\n    raise AssertionError(\n        \"read_rows returned %r, whose items are %s. Rows must be dicts keyed by the header \"\n        \"names, so the caller can read row['name'].\" % (_rows, type(_rows[0]).__name__))\nassert _first == \"alice\", \"read_rows kept the wrong value for the first row: %r\" % (_first,)\nassert _problems == [], \"a clean file produced problems: %r\" % (_problems,)\n\n_rows, _problems = read_rows(\"name,amount\\nalice,10\\n,20\\nbob,\\n\", [\"name\", \"amount\"])\nassert len(_rows) == 1, (\n    \"rows with a missing required value must be rejected, not kept. Got %r\" % (_rows,))\nassert len(_problems) == 2, (\n    \"each rejected row needs its own problem line. Got %r\" % (_problems,))\n_joined = \" \".join(_problems)\nassert \"3\" in _joined and \"4\" in _joined, (\n    \"a problem must name the 1-based line number in the file so the user can find the row. \"\n    \"The header is line 1, so these are lines 3 and 4. Got %r\" % (_problems,))\n\nassert read_rows(\"\", [\"name\"]) == ([], []), (\n    \"empty input must return ([], []) rather than raising: got %r\" % (read_rows(\"\", [\"name\"]),))\n\nfor _text, _want in ((\"1,234.50\", 1234.5), (\" 12 \", 12.0), (\"$4.20\", 4.2), (\"(5)\", -5.0),\n                     (\"0\", 0.0)):\n    _got = parse_amount(_text)\n    assert _got is not None, (\n        \"parse_amount(%r) returned None. It must return a float or raise ValueError - \"\n        \"None makes every caller check for it.\" % (_text,))\n    assert abs(float(_got) - _want) < 1e-9, (\n        \"parse_amount(%r) returned %r, expected %r\" % (_text, _got, _want))\n\ntry:\n    parse_amount(\"not a number\")\n    raise AssertionError(\n        \"parse_amount must raise ValueError on input it cannot read, not return a default.\")\nexcept ValueError as _exc:\n    assert \"not a number\" in str(_exc), (\n        \"the ValueError must name the offending value so the user can find it. Got %r\"\n        % (str(_exc),))",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "summary",
+      "module": "summary",
+      "spec": "Use only the standard library. Every function is importable and pure enough to test directly - no work at import time, no reading sys.argv outside the CLI piece.\n\nWrite the aggregation half of a CSV reporting tool.\n\nsummarize(rows, group_by, amount_field) returns a list of dicts, one per distinct value of\ngroup_by, each with the keys: group, count, total, mean. total and mean are floats, and mean\nis 0.0 for an empty group rather than a division error. The list is sorted by total,\ndescending, so the largest group is first.\n\ntop_n(summaries, n) returns the first n entries, and every entry when n exceeds the length\nor is <= 0.\n\nformat_table(summaries) renders them as a plain-text table with a header row and aligned\ncolumns, returning a single string with no trailing blank line. It returns\n\"no rows\" for an empty list rather than an empty string or a bare header.",
+      "contract": {
+        "functions": [
+          {
+            "name": "summarize",
+            "args": [
+              "rows",
+              "group_by",
+              "amount_field"
+            ]
+          },
+          {
+            "name": "top_n",
+            "args": [
+              "summaries",
+              "n"
+            ]
+          },
+          {
+            "name": "format_table",
+            "args": [
+              "summaries"
+            ]
+          }
+        ]
+      },
+      "tests": "_rows = [{\"team\": \"a\", \"amount\": 10.0}, {\"team\": \"a\", \"amount\": 5.0},\n         {\"team\": \"b\", \"amount\": 20.0}]\n_s = summarize(_rows, \"team\", \"amount\")\nassert isinstance(_s, list) and len(_s) == 2, (\n    \"summarize must return one entry per distinct group. Got %r\" % (_s,))\ntry:\n    _keys = set(_s[0])\nexcept TypeError:\n    raise AssertionError(\n        \"summarize returned %r, whose items are %s. Each must be a dict with keys group, \"\n        \"count, total and mean.\" % (_s, type(_s[0]).__name__))\nassert {\"group\", \"count\", \"total\", \"mean\"} <= _keys, (\n    \"each summary needs the keys group, count, total and mean. Got %r\" % (sorted(_keys),))\nassert _s[0][\"group\"] == \"b\", (\n    \"summaries must be sorted by total descending, so the largest group is first. Got %r\"\n    % ([e[\"group\"] for e in _s],))\n_a = next(e for e in _s if e[\"group\"] == \"a\")\nassert _a[\"count\"] == 2 and abs(_a[\"total\"] - 15.0) < 1e-9, (\n    \"group 'a' should be count=2 total=15.0, got %r\" % (_a,))\nassert abs(_a[\"mean\"] - 7.5) < 1e-9, \"mean must be total/count, got %r\" % (_a[\"mean\"],)\n\nassert summarize([], \"team\", \"amount\") == [], (\n    \"summarize([]) must return [] rather than raising.\")\n\nassert len(top_n(_s, 1)) == 1\nassert len(top_n(_s, 99)) == len(_s), \"top_n must not fail when n exceeds the length.\"\nassert len(top_n(_s, 0)) == len(_s), (\n    \"top_n with n <= 0 means no limit; returning nothing hides the whole report.\")\n\n_table = format_table(_s)\nassert isinstance(_table, str) and _table, \"format_table must return a string.\"\nassert \"b\" in _table and \"a\" in _table, \"every group must appear in the table.\"\nassert not _table.endswith(\"\\n\\n\"), \"format_table must not end with a blank line.\"\nassert format_table([]) == \"no rows\", (\n    'format_table([]) must return \"no rows\", not an empty string or a bare header. Got %r'\n    % (format_table([]),))",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [],
+      "suggested_skill": "coding"
+    },
+    {
+      "name": "cli",
+      "module": "cli",
+      "spec": "Use only the standard library. Every function is importable and pure enough to test directly - no work at import time, no reading sys.argv outside the CLI piece.\n\nWrite the command line entry point, importing the modules that exist:\n    from reader import read_rows, parse_amount\n    from summary import format_table, summarize, top_n\n\nExpose main(argv) taking a list of arguments and RETURNING an exit code - do not call\nsys.exit inside main, so it can be tested directly. Use argparse.\n\n    usage: report [FILE] --group-by COLUMN --amount COLUMN [--top N] [--json]\n\n  - FILE omitted or \"-\" reads from standard input.\n  - Exit code 0 on success, 1 on a usage or input error, 2 when the file does not exist.\n  - --json prints the summaries as JSON instead of the table.\n  - Rejected rows are reported to STDERR, one per line, and do not stop the run; the report\n    is still produced from the rows that were readable. If EVERY row was rejected, that is\n    an input error.\n  - A missing --group-by or --amount is a usage error.\n  - Never let a traceback reach the user. Catch what you raise and print a single line\n    naming what was wrong.\n\nAlso expose a `if __name__ == \"__main__\":` block that calls sys.exit(main(sys.argv[1:])).",
+      "contract": {
+        "functions": [
+          {
+            "name": "main",
+            "args": [
+              "argv"
+            ]
+          }
+        ]
+      },
+      "tests": "import io as _io\nimport json as _json\nimport os as _os\nimport sys as _sys\n\n# Formatted on purpose. Plain integers hide the seam this exists to check: parse_amount\n# can handle \"1,200.50\" perfectly while main() never passes the parsed value on.\n_CSV = 'team,amount\\na,\"1,200.50\"\\nb,300\\na,$99.50\\n'\n_A_TOTAL = 1300.0\n\n\ndef _run(args, stdin_text=\"\"):\n    \"\"\"Call main() and capture what a user would see.\"\"\"\n    _out, _err = _io.StringIO(), _io.StringIO()\n    _old = _sys.stdout, _sys.stderr, _sys.stdin\n    _sys.stdout, _sys.stderr, _sys.stdin = _out, _err, _io.StringIO(stdin_text)\n    try:\n        _code = main(args)\n    except SystemExit as _exc:\n        raise AssertionError(\n            \"main() called sys.exit instead of returning an exit code (%r). Return the \"\n            \"code so main can be tested directly.\" % (_exc.code,))\n    finally:\n        _sys.stdout, _sys.stderr, _sys.stdin = _old\n    return _code, _out.getvalue(), _err.getvalue()\n\n\nwith open(\"_in.csv\", \"w\", encoding=\"utf-8\") as _fh:\n    _fh.write(_CSV)\n\n_code, _out, _err = _run([\"_in.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert _code == 0, \"a good run must exit 0, got %r. stderr: %s\" % (_code, _err[:200])\nassert \"a\" in _out and \"b\" in _out, \"the report must reach stdout. Got %r\" % (_out[:200],)\n\n_code, _out, _err = _run([\"-\", \"--group-by\", \"team\", \"--amount\", \"amount\"], _CSV)\nassert _code == 0, \"reading from stdin must work, got %r. stderr: %s\" % (_code, _err[:200])\nassert \"a\" in _out, \"the stdin report must reach stdout.\"\n\n_code, _out, _err = _run([\"_in.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\", \"--json\"])\nassert _code == 0, \"--json must exit 0, got %r\" % (_code,)\ntry:\n    _parsed = _json.loads(_out)\nexcept Exception:\n    raise AssertionError(\"--json must print valid JSON to stdout. Got %r\" % (_out[:200],))\nassert isinstance(_parsed, list) and _parsed and \"group\" in _parsed[0], (\n    \"--json must print the summaries. Got %r\" % (_parsed,))\n\n# The parsed value has to travel, not just be validated. alpha is 1,200.50 + $99.50.\n_code, _out, _err = _run([\"_in.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\", \"--json\"])\nassert _code == 0, (\n    \"formatted amounts must survive the whole run, not only the parser. Parse with \"\n    \"parse_amount and pass the PARSED value on - do not validate and then hand the raw \"\n    \"string to the summariser. exit=%r stderr=%s\" % (_code, _err[:300]))\n_by_group = {_row[\"group\"]: _row for _row in _json.loads(_out)}\nassert abs(_by_group[\"a\"][\"total\"] - _A_TOTAL) < 0.01, (\n    \"group 'a' should total %.2f from '1,200.50' and '$99.50'. Got %r - the formatted \"\n    \"amounts reached the summariser unparsed.\" % (_A_TOTAL, _by_group[\"a\"][\"total\"]))\n\n_code, _out, _err = _run([\"_no_such_file.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert _code == 2, \"a missing file must exit 2, got %r\" % (_code,)\nassert \"Traceback\" not in _err, (\n    \"a traceback reached the user:\\n%s\" % (_err[:400],))\nassert _err.strip(), \"a missing file must say so on stderr.\"\n\n_code, _out, _err = _run([\"_in.csv\", \"--amount\", \"amount\"])\nassert _code == 1, \"a missing --group-by is a usage error and must exit 1, got %r\" % (_code,)\nassert \"Traceback\" not in _err, \"a traceback reached the user:\\n%s\" % (_err[:400],)\n\nwith open(\"_bad.csv\", \"w\", encoding=\"utf-8\") as _fh:\n    _fh.write(\"team,amount\\na,10\\n,20\\n\")\n_code, _out, _err = _run([\"_bad.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert _code == 0, (\n    \"one bad row must not fail the run - the report is still produced from the rows that \"\n    \"were readable. Got exit %r\" % (_code,))\nassert _err.strip(), \"rejected rows must be reported on stderr, not silently dropped.\"\nassert \"a\" in _out, \"the good rows must still be reported.\"\n\n# An amount that cannot be read is the likeliest source of a traceback, so it is the case\n# worth being explicit about: report it and carry on, do not crash.\nwith open(\"_junk.csv\", \"w\", encoding=\"utf-8\") as _fh:\n    _fh.write(\"team,amount\\na,10\\nb,not-a-number\\n\")\n_code, _out, _err = _run([\"_junk.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert \"Traceback\" not in _err, (\n    \"an unreadable amount let a traceback reach the user. Catch the ValueError that \"\n    \"parse_amount raises and print one line naming the bad value:\\n%s\" % (_err[:400],))\nassert _code == 0, (\n    \"one unreadable amount must not fail the whole run - the other rows are still \"\n    \"reportable. Got exit %r\" % (_code,))\nassert \"not-a-number\" in _err, (\n    \"the unreadable value must be named on stderr so the user can find it. Got %r\"\n    % (_err[:200],))\nassert \"a\" in _out, \"the readable rows must still be reported.\"\n\nwith open(\"_allbad.csv\", \"w\", encoding=\"utf-8\") as _fh:\n    _fh.write(\"team,amount\\n,10\\n,20\\n\")\n_code, _out, _err = _run([\"_allbad.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert _code == 1, (\n    \"if EVERY row was rejected there is nothing to report, which is an input error: \"\n    \"expected exit 1, got %r\" % (_code,))\n\nfor _f in (\"_in.csv\", \"_bad.csv\", \"_allbad.csv\", \"_junk.csv\"):\n    try:\n        _os.remove(_f)\n    except OSError:\n        pass",
+      "checks": [
+        "unit",
+        "contract"
+      ],
+      "depends_on": [
+        "reader",
+        "summary"
+      ],
+      "suggested_skill": "coding"
+    }
+  ],
+  "acceptance": "\"\"\"End to end, through the real entrypoint, as a user runs it.\"\"\"\nimport json\nimport subprocess\nimport sys\nfrom pathlib import Path\n\nHERE = Path(__file__).resolve().parent\nENTRY = \"report.py\"\n\n# Deliberately the awkward values. Plain integers hide the seam this exists to check: a\n# piece can parse \"1,200.50\" perfectly while the assembled tool never asks it to.\nCSV = (\n    \"team,amount\\n\"\n    'alpha,\"1,200.50\"\\n'\n    \"beta,300\\n\"\n    \"alpha,$99.50\\n\"\n    \"gamma,(25)\\n\"\n    \",50\\n\"\n    \"delta,not-a-number\\n\"\n)\n(HERE / \"sample.csv\").write_text(CSV, encoding=\"utf-8\")\n\n\ndef run(args, stdin_text=None):\n    return subprocess.run([sys.executable, \"-B\", ENTRY, *args], capture_output=True,\n                          text=True, timeout=60, cwd=str(HERE), input=stdin_text)\n\n\nproc = run([\"sample.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert \"Traceback\" not in (proc.stderr or \"\"), (\n    \"a traceback reached the user:\\n\" + proc.stderr[-500:])\nassert proc.returncode == 0, (\n    \"the tool failed on its own example. Formatted amounts like '1,200.50', '$99.50' and \"\n    \"'(25)' must survive the whole pipeline - parse them with parse_amount and pass the \"\n    \"PARSED value on, do not validate and then hand the raw string to the summariser.\\n\"\n    \"exit=%d\\nstderr: %s\" % (proc.returncode, (proc.stderr or \"\")[-400:]))\n\nout = proc.stdout\nassert \"alpha\" in out and \"beta\" in out, (\n    \"the report is missing groups that were readable:\\n%s\" % out[:400])\n\n# alpha is 1200.50 + 99.50 = 1300.00, which only comes out right if the formatted values\n# were actually parsed rather than coerced or dropped.\nproc = run([\"sample.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\", \"--json\"])\nassert proc.returncode == 0, \"--json failed: %s\" % (proc.stderr or \"\")[-300:]\nsummaries = json.loads(proc.stdout)\nby_group = {row[\"group\"]: row for row in summaries}\nassert abs(by_group[\"alpha\"][\"total\"] - 1300.0) < 0.01, (\n    \"alpha should total 1300.00 from '1,200.50' and '$99.50'. Got %r - the formatted \"\n    \"amounts were not parsed on the way through.\"\n    % (by_group[\"alpha\"][\"total\"],))\nassert abs(by_group[\"gamma\"][\"total\"] + 25.0) < 0.01, (\n    \"'(25)' means negative twenty-five, so gamma should total -25.00. Got %r.\"\n    % (by_group[\"gamma\"][\"total\"],))\nassert by_group[\"alpha\"][\"count\"] == 2, (\n    \"alpha has two readable rows, got %r\" % (by_group[\"alpha\"][\"count\"],))\n\n# The bad rows are reported and skipped, not fatal and not silent.\nassert \"6\" in (proc.stderr or \"\"), (\n    \"the row with a missing team is on line 6 and must be reported with its line number. \"\n    \"stderr was: %r\" % ((proc.stderr or \"\")[:300],))\nassert \"not-a-number\" in (proc.stderr or \"\"), (\n    \"the unreadable amount must be named on stderr. Got %r\" % ((proc.stderr or \"\")[:300],))\n\n# Same data through a pipe.\npiped = run([\"--group-by\", \"team\", \"--amount\", \"amount\", \"--json\"], stdin_text=CSV)\nassert piped.returncode == 0, \"reading from stdin failed: %s\" % (piped.stderr or \"\")[-300:]\nassert json.loads(piped.stdout) == summaries, (\n    \"the report differs between a file and a pipe.\")\n\nmissing = run([\"nope.csv\", \"--group-by\", \"team\", \"--amount\", \"amount\"])\nassert missing.returncode == 2, (\n    \"a missing file must exit 2, got %d\" % missing.returncode)\nassert \"Traceback\" not in (missing.stderr or \"\"), \"a traceback reached the user.\"\n\nprint(\"acceptance OK\")\n"
+}
