@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.151] - 2026-08-15
+
+### Added
+- **Per-rung model and effort control.** RuntimeProfile (model, effort, max_budget_usd,
+  max_credits) rendered into each vendor's own flag vocabulary:
+
+  | rung | model | effort | ceiling |
+  |---|---|---|---|
+  | claude | --model | --effort {low..max} | --max-budget-usd |
+  | codex | -m | -c model_reasoning_effort= (max/xhigh collapse to high) | - |
+  | copilot | --model | none - not faked | --max-ai-credits |
+  | gemini | -m | none | - |
+
+  Two defaults were quietly costing us. **Codex runs at 
+easoning effort: low** unless
+  told otherwise - its own header prints it - so the default profile asks for medium.
+  **Gemini free allowance is per-model**: Flash ~1,500 requests/day against Pro's 25-50, so
+  the default profile names a Flash model rather than letting a rung burn the tier by
+  accident.
+
+- **
+untime_usage.parse_usage**, reporting what one run consumed per rung. Gemini -o json
+  is now always on, since it is the only way to get that rung's token counts back.
+
+  Written by **Gemini** rather than by hand: free tier, idle, and exactly the shape Phase C
+  showed works - small, contract-shaped, checkable against samples that already existed.
+  105 seconds, stdlib only, and it passed all 8 tests first time, including the two cases
+  most likely to be wrong: gemini prints warning lines before its JSON, and 1,200.50 must
+  parse as 1200.50 rather than 1.
+
 ## [0.1.150] - 2026-08-15
 
 ### Added

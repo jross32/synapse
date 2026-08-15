@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 import subprocess
 import time
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -86,12 +87,58 @@ policy boundary rather than an enforced one.
 """
 
 
+@dataclass(frozen=True)
+class RuntimeProfile:
+    """How hard a rung should try, and what it may spend doing it.
+
+    Every one of these CLIs picks a default when told nothing, and the defaults are not
+    what a build wants:
+
+    * **codex** runs at ``reasoning effort: low`` unless told otherwise - measured, its own
+      header prints it. A build was getting the cheapest thinking available by accident.
+    * **gemini** free allowance is per-model and lopsided: Flash and Flash-Lite get ~1,500
+      requests/day while Pro gets 25-50 and is largely behind billing since May 2026. Left
+      to a default, a Gemini rung can exhaust the tier in an afternoon.
+
+    So the profile is explicit, per rung, rather than inherited from whatever each vendor
+    happens to prefer this month.
+    """
+
+    model: str = ""
+    effort: str = ""
+    """low | medium | high | xhigh | max, mapped onto whatever each CLI calls it."""
+    max_budget_usd: float | None = None
+    max_credits: int | None = None
+
+
+# Effort names differ per vendor. Claude takes all five; codex takes three, so the two
+# highest collapse onto `high` rather than being dropped silently - asking for `max` and
+# getting the default would be the worst outcome.
+_CODEX_EFFORT = {"low": "low", "medium": "medium", "high": "high",
+                 "xhigh": "high", "max": "high"}
+
+DEFAULT_PROFILES: dict[CoderRuntime, RuntimeProfile] = {
+    # Flash by name, because the free allowance depends on it. The CLI resolves the family
+    # forward on its own - asking for `gemini-2.5-flash` was served by `gemini-3.5-flash`.
+    CoderRuntime.GEMINI: RuntimeProfile(model="gemini-2.5-flash"),
+    # Writing a module to a contract is not a task to think about as little as possible.
+    CoderRuntime.CODEX: RuntimeProfile(effort="medium"),
+}
+
+
+def profile_for(runtime: CoderRuntime,
+                override: RuntimeProfile | None = None) -> RuntimeProfile:
+    """The profile a rung runs under: the caller's if given, else this rung's default."""
+    return override or DEFAULT_PROFILES.get(runtime, RuntimeProfile())
+
+
 def headless_argv(
     argv: list[str],
     *,
     runtime: str,
     authority: AgentExecutionAuthority,
     prompt: str,
+    profile: RuntimeProfile | None = None,
 ) -> list[str]:
     """Translate one headless launch into each supported CLI.
 
@@ -99,6 +146,7 @@ def headless_argv(
     makes it execute a prompt and exit, plus the flags that bound what it may touch.
     """
     executable, *runtime_args = argv
+    profile = profile or DEFAULT_PROFILES.get(CoderRuntime(runtime), RuntimeProfile())
     if runtime == CoderRuntime.CLAUDE.value:
         permission_args = {
             # `plan` is structurally wrong for a headless worker: its purpose is to withhold
@@ -112,8 +160,17 @@ def headless_argv(
             AgentExecutionAuthority.WORKSPACE: ["--permission-mode", "auto"],
             AgentExecutionAuthority.FULL: ["--dangerously-skip-permissions"],
         }[authority]
+        tuning: list[str] = []
+        if profile.model:
+            tuning += ["--model", profile.model]
+        if profile.effort:
+            tuning += ["--effort", profile.effort]
+        if profile.max_budget_usd is not None:
+            # A ceiling the CLI enforces itself, so a runaway loop cannot outspend it even
+            # if our own accounting is wrong.
+            tuning += ["--max-budget-usd", str(profile.max_budget_usd)]
         return [executable, *runtime_args, "--strict-mcp-config", *permission_args,
-                "--print", prompt]
+                *tuning, "--print", prompt]
 
     if runtime == CoderRuntime.CODEX.value:
         permission_args = {
@@ -137,8 +194,15 @@ def headless_argv(
         # The cost of dropping it is that the user's ~/.codex config applies. That is the
         # better trade: a flag that quietly disables the sandbox the caller asked for is
         # worse than a config the user chose on purpose.
+        tuning = []
+        if profile.model:
+            tuning += ["-m", profile.model]
+        if profile.effort:
+            # Verified against codex's own header, which prints `reasoning effort:` on every
+            # run: default `low`, and `-c model_reasoning_effort="high"` moves it to `high`.
+            tuning += ["-c", f'model_reasoning_effort="{_CODEX_EFFORT[profile.effort]}"']
         return [executable, "exec", "--skip-git-repo-check",
-                "--color", "never", *permission_args, *runtime_args, prompt]
+                "--color", "never", *permission_args, *tuning, *runtime_args, prompt]
 
     if runtime == CoderRuntime.COPILOT.value:
         permission_args = {
@@ -146,8 +210,16 @@ def headless_argv(
             AgentExecutionAuthority.WORKSPACE: ["--allow-all-tools"],
             AgentExecutionAuthority.FULL: ["--allow-all"],
         }[authority]
+        tuning = []
+        if profile.model:
+            tuning += ["--model", profile.model]
+        if profile.max_credits is not None:
+            tuning += ["--max-ai-credits", str(profile.max_credits)]
+        # Copilot exposes no effort control; asking for one is silently ignored rather than
+        # faked, because a profile that claims to have raised effort and did not is worse
+        # than one that never claimed it.
         return [executable, *runtime_args, "--disable-builtin-mcps", "--no-ask-user",
-                *permission_args, "--prompt", prompt]
+                *permission_args, *tuning, "--prompt", prompt]
 
     if runtime == CoderRuntime.GEMINI.value:
         permission_args = {
@@ -155,7 +227,11 @@ def headless_argv(
             AgentExecutionAuthority.WORKSPACE: ["--approval-mode", "auto_edit"],
             AgentExecutionAuthority.FULL: ["--approval-mode", "yolo"],
         }[authority]
-        return [executable, *runtime_args, *permission_args, "--prompt", prompt]
+        tuning = ["-m", profile.model] if profile.model else []
+        # `-o json` always: it is the only way to get this rung's token counts back, and the
+        # response text is still there under `response`.
+        return [executable, *runtime_args, *permission_args, *tuning,
+                "-o", "json", "--prompt", prompt]
 
     raise ValueError(f"no headless invocation known for runtime {runtime!r}")
 
