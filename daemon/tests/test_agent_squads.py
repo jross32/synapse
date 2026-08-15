@@ -414,7 +414,12 @@ def test_copilot_work_item_launch_injects_session_only_mcp_config(
     ("runtime", "authority", "expected"),
     [
         ("claude", agent_squads.AgentExecutionAuthority.WORKSPACE, ["--print", "--strict-mcp-config"]),
-        ("codex", agent_squads.AgentExecutionAuthority.WORKSPACE, ["exec", "--ignore-user-config"]),
+        # `--ignore-user-config` was removed in 0.1.149: it silently overrides
+        # `--sandbox workspace-write` back to read-only, so codex refused every patch and
+        # exited 0 - every squad worker on this runtime had been unable to write a file.
+        # The sandbox flag is what WORKSPACE authority actually means here, so assert that.
+        ("codex", agent_squads.AgentExecutionAuthority.WORKSPACE,
+         ["exec", "--sandbox", "workspace-write"]),
         ("copilot", agent_squads.AgentExecutionAuthority.WORKSPACE, ["--prompt", "--no-ask-user"]),
     ],
 )

@@ -22,12 +22,16 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from . import runtime_ledger, runtime_usage
 from .agent_squads import AgentExecutionAuthority
+from .runtime_paths import repo_root
 from .runtime_resolution import resolve_command
 
 
@@ -251,6 +255,11 @@ EXHAUSTION_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         # tier read as a hard failure - the one thing the ladder exists to tell apart.
         r"\bexceeded your\b.*\b(quota|limit|allowance)\b",
         r"\b(monthly|daily|weekly) (quota|limit|allowance)\b.*\bexceed",
+        # Gemini's wording, caught the first time its free tier ran dry: "You have exhausted
+        # your daily quota on this model." Three vendors now, three different sentences for
+        # the same fact - which is why this list is phrase-shaped rather than vendor-shaped,
+        # and why each new one gets added only after being seen in the wild.
+        r"\bexhausted your\b.*\b(quota|limit|allowance)\b",
         r"\binsufficient[_ ]quota\b",
         r"\bout of (credits?|tokens?)\b",
         r"\bcredit balance is too low\b",
@@ -302,6 +311,13 @@ class RuntimeResult(BaseModel):
     problem worth seeing.
     """
     seconds: float = 0.0
+    usage: dict[str, Any] = Field(default_factory=dict)
+    """What this call consumed, as the runtime itself reported it.
+
+    Recorded on every call, success or failure, because a failed call still spends. Without
+    it the only signal that a paid rung is running out is the moment it stops working, and
+    by then the build is already blocked.
+    """
 
 
 def available(runtime: CoderRuntime) -> bool:
@@ -379,7 +395,16 @@ def write_module(
         return result
 
     result.seconds = round(time.time() - started, 1)
-    result.exhausted = looks_exhausted(proc.stderr or "", proc.returncode)
+    # Read before any early return: a call that failed, or that reported being out of room,
+    # still consumed whatever it consumed getting there.
+    result.usage = runtime_usage.parse_usage(
+        runtime.value, (proc.stdout or "") + "\n" + (proc.stderr or "")).__dict__.copy()
+
+    result.exhausted = looks_exhausted(
+        (proc.stderr or "") + "\n" + (proc.stdout or ""), proc.returncode)
+    # stdout as well as stderr: gemini reports "You have exhausted your daily quota on this
+    # model" inside its JSON result on stdout, not on stderr. Reading only stderr would have
+    # let an empty tier look like an ordinary failure.
     if result.exhausted:
         result.error = f"{runtime.value} is out of room: {result.exhausted}"
         return result
@@ -409,6 +434,104 @@ def write_module(
     result.ok = True
     result.source = source
     return result
+
+
+def record_call(result: RuntimeResult, *, path: Path | None = None) -> None:
+    """Add one runtime call to the spend ledger.
+
+    Separate from ``write_module`` so a caller decides whether a run counts - a probe or a
+    test should not move the numbers a planner reads. Failures are recorded too: a call that
+    errored still spent whatever it spent getting there.
+
+    Never raises. A ledger that can break a build is worse than no ledger.
+    """
+    try:
+        usage = result.usage or {}
+        runtime_ledger.record(
+            runtime_ledger.Entry(
+                at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                runtime=result.runtime,
+                model=str(usage.get("model", "")),
+                ok=result.ok,
+                seconds=result.seconds,
+                input_tokens=int(usage.get("input_tokens", 0) or 0),
+                output_tokens=int(usage.get("output_tokens", 0) or 0),
+                total_tokens=int(usage.get("total_tokens", 0) or 0),
+                cost_usd=float(usage.get("cost_usd", 0.0) or 0.0),
+                credits=float(usage.get("credits", 0.0) or 0.0),
+                requests=int(usage.get("requests", 0) or 0),
+                exhausted=result.exhausted,
+            ),
+            path=path or default_ledger_path(),
+        )
+    except Exception:  # noqa: BLE001 -- accounting must never take a build down
+        pass
+
+
+def default_ledger_path() -> Path:
+    return repo_root() / "data" / "runtime-ledger.jsonl"
+
+
+class RungStatus(BaseModel):
+    runtime: str
+    installed: bool = False
+    usable_now: bool = False
+    cooling_down_seconds: float = 0.0
+    calls_today: int = 0
+    cost_usd_today: float = 0.0
+    tokens_today: int = 0
+    requests_today: int = 0
+    last_exhausted_at: str = ""
+    note: str = ""
+
+
+def preflight(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER,
+              *, path: Path | None = None) -> list[RungStatus]:
+    """What each rung can do right now, and what it has already spent today.
+
+    The reactive half of this - noticing a tier is empty - only fires *after* a call has
+    failed, and by then the build is blocked. Worse, the runtimes at the top of the ladder
+    are the ones that would otherwise be driving the build, so discovering their exhaustion
+    late is the expensive way to find out.
+
+    This reads the ledger instead, so a long build can be planned against what is left
+    rather than started hopefully.
+    """
+    today = runtime_ledger.today_utc()
+    ledger_path = path or default_ledger_path()
+    try:
+        totals = runtime_ledger.rollup(ledger_path, since=today)
+    except Exception:  # noqa: BLE001
+        totals = {}
+
+    out: list[RungStatus] = []
+    for runtime in ladder:
+        cooldown = cooling_down(runtime)
+        spent = totals.get(runtime.value)
+        installed = runtime is CoderRuntime.LOCAL or bool(resolve_command(runtime.value))
+        status = RungStatus(
+            runtime=runtime.value,
+            installed=installed,
+            usable_now=installed and cooldown <= 0,
+            cooling_down_seconds=round(cooldown, 1),
+            calls_today=spent.calls if spent else 0,
+            cost_usd_today=round(spent.cost_usd, 4) if spent else 0.0,
+            tokens_today=spent.total_tokens if spent else 0,
+            requests_today=spent.requests if spent else 0,
+            last_exhausted_at=spent.last_exhausted_at if spent else "",
+        )
+        if not installed:
+            status.note = "not installed on this host"
+        elif cooldown > 0:
+            status.note = f"reported out of room; retrying in {cooldown / 60:.0f} min"
+        elif runtime is CoderRuntime.GEMINI:
+            # Stated because the number is small and the failure is silent: the free tier is
+            # per-model and Flash is the generous one.
+            status.note = "free tier is per-model; Flash ~1,500 req/day, Pro 25-50"
+        elif runtime is CoderRuntime.LOCAL:
+            status.note = "free and unlimited, but overnight work - roughly 1 pass in 5"
+        out.append(status)
+    return out
 
 
 _EXHAUSTED_UNTIL: dict[str, float] = {}

@@ -10,6 +10,37 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.152] - 2026-08-15
+
+### Added
+- **A spend ledger and a preflight**, so a long build is planned against what is left rather
+  than started hopefully. RuntimeResult.usage is captured on every call - success or
+  failure, because a failed call still spends - appended to an append-only JSONL by
+  
+ecord_call, and rolled up per rung by preflight.
+
+  The reactive half only fires *after* a call fails, and the rungs that fail first are the
+  ones that would have been driving the build.
+
+  
+untime_ledger.py was delegated to Gemini, like the usage parser: 96 seconds, stdlib
+  only, 7/7 tests first time - including that a half-written last line costs one entry
+  rather than the whole history.
+
+### Fixed
+- **Gemini reports exhaustion on stdout, inside its JSON**, not on stderr:
+  "You have exhausted your daily quota on this model". looks_exhausted read only stderr,
+  so an empty tier looked like an ordinary failure. Both streams are read now.
+
+  Third vendor, third wording: copilot says "exceeded your monthly quota", gemini says
+  "exhausted your daily quota", and the original patterns wanted "quota exceeded" in that
+  order and matched neither.
+
+- The squad test still asserted codex's old argv containing --ignore-user-config. That
+  flag was removed in 0.1.149 because it silently disabled the sandbox - meaning every squad
+  worker on codex had been unable to write a file. The expectation now asserts what
+  WORKSPACE authority means there: --sandbox workspace-write.
+
 ## [0.1.151] - 2026-08-15
 
 ### Added

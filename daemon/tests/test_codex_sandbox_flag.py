@@ -75,6 +75,18 @@ def test_copilots_real_quota_message_reads_as_exhaustion():
     assert looks_exhausted(real, 1), "a real quota message did not read as exhaustion"
 
 
+def test_geminis_real_daily_quota_message_reads_as_exhaustion():
+    """Verbatim from the run where gemini's free tier ran dry mid-session.
+
+    Third vendor, third wording for the same fact: copilot says "exceeded your monthly
+    quota", gemini says "exhausted your daily quota on this model". Neither matched the
+    original patterns, which expected "quota exceeded" in that order.
+    """
+    from synapse_daemon.coder_runtimes import looks_exhausted
+
+    assert looks_exhausted("You have exhausted your daily quota on this model.", 1)
+
+
 @pytest.mark.parametrize("text,returncode", [
     # Exit 0 is a success; scanning it would demote a healthy paid runtime for the day.
     ("You have exceeded your monthly quota", 0),
