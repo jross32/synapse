@@ -1,0 +1,122 @@
+[
+ {
+  "runtime": "codex",
+  "effort": "low",
+  "piece": "reader",
+  "passed": false,
+  "verified": false,
+  "error": "TypeError: write_module() got an unexpected keyword argument 'profile'"
+ },
+ {
+  "runtime": "codex",
+  "effort": "medium",
+  "piece": "reader",
+  "passed": false,
+  "verified": false,
+  "error": "TypeError: write_module() got an unexpected keyword argument 'profile'"
+ },
+ {
+  "runtime": "codex",
+  "effort": "high",
+  "piece": "reader",
+  "passed": false,
+  "verified": false,
+  "error": "TypeError: write_module() got an unexpected keyword argument 'profile'"
+ },
+ {
+  "runtime": "codex",
+  "effort": "low",
+  "piece": "reader",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 108.0,
+  "cost_usd": 0.0,
+  "total_tokens": 52631,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "medium",
+  "piece": "reader",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 100.2,
+  "cost_usd": 0.0,
+  "total_tokens": 25099,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "high",
+  "piece": "reader",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 152.0,
+  "cost_usd": 0.0,
+  "total_tokens": 30342,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "low",
+  "piece": "summary",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 62.5,
+  "cost_usd": 0.0,
+  "total_tokens": 21268,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "medium",
+  "piece": "summary",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 81.9,
+  "cost_usd": 0.0,
+  "total_tokens": 42734,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "high",
+  "piece": "summary",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 88.7,
+  "cost_usd": 0.0,
+  "total_tokens": 26366,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "low",
+  "piece": "storage",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 88.8,
+  "cost_usd": 0.0,
+  "total_tokens": 44275,
+  "stop_reason": "tests passed"
+ },
+ {
+  "runtime": "codex",
+  "effort": "high",
+  "piece": "storage",
+  "passed": true,
+  "verified": true,
+  "repairs": 0,
+  "seconds": 168.3,
+  "cost_usd": 0.0,
+  "total_tokens": 58673,
+  "stop_reason": "tests passed"
+ }
+]

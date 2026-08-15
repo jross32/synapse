@@ -404,6 +404,39 @@ PLAYBOOK: dict[str, Any] = {
             "which has failed four times with the same error is not one attempt away."
         ),
     },
+    "for_delegating_work_instead_of_doing_it_yourself": {
+        "read_first": "DELEGATION.md in the repo root - measured, dated, and re-runnable.",
+        "default": (
+            "codex at effort=low. Measured 2026-08-15: eight builds across three real "
+            "blueprint pieces at three effort levels ALL verified with zero repairs, "
+            "including a nine-function storage module the local tier never once finished in "
+            "441 minutes. Higher effort bought nothing measurable and cost real time (high "
+            "averaged 136s against low's 86s)."
+        ),
+        "what_delegates_well": (
+            "One module, a handful of functions, signatures stated up front, and an "
+            "acceptance scenario written from the caller's side that the delegate never "
+            "sees. Withholding the contract cost 10 repairs against 3. Nine coupled "
+            "functions defeated the local tier entirely; three did not."
+        ),
+        "what_does_not": (
+            "Work where the contract is the thing being decided - writing the spec costs "
+            "about as much as writing the code, and you cannot check what you did not "
+            "specify. Also surgical edits inside a large file."
+        ),
+        "read_the_result_honestly": (
+            "`passed` means the model agrees with itself: most of those tests were written "
+            "by the model that wrote the code. `verified` means the blueprint's own scenario "
+            "ran and passed. If a scenario fails on something the model seemingly cannot "
+            "fix, suspect the scenario first - on this project that has been the cause more "
+            "often than the model has."
+        ),
+        "check_what_is_left_first": (
+            "coder_runtimes.preflight() reports each rung's spend today and whether it is "
+            "cooling down. Reactive exhaustion only fires after a call has failed, and the "
+            "rung that fails first is the one that was driving the build."
+        ),
+    },
     "for_building_a_whole_app": {
         "do": "GET /api/v1/blueprints, then POST /api/v1/blueprints/{id}/build",
         "why": (

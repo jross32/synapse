@@ -125,8 +125,23 @@ DEFAULT_PROFILES: dict[CoderRuntime, RuntimeProfile] = {
     # Flash by name, because the free allowance depends on it. The CLI resolves the family
     # forward on its own - asking for `gemini-2.5-flash` was served by `gemini-3.5-flash`.
     CoderRuntime.GEMINI: RuntimeProfile(model="gemini-2.5-flash"),
-    # Writing a module to a contract is not a task to think about as little as possible.
-    CoderRuntime.CODEX: RuntimeProfile(effort="medium"),
+    # `low`, on measurement, reversing the guess this line originally carried.
+    #
+    # 0.1.151 set `medium` on the reasoning that writing a module to a contract is not a task
+    # to think about as little as possible. That was an assumption, and the benchmark
+    # disagrees with it: 8 builds across three pieces and three effort levels ALL verified
+    # with zero repairs, including the nine-function `storage` monolith - the piece the local
+    # tier never once finished in 441 minutes of trying. codex:low did it in 89 seconds.
+    #
+    # Effort bought nothing measurable in quality and cost real time: high averaged 136 s
+    # against low's 86 s, and token counts did not order by effort at all - low was cheapest
+    # on one piece, dearest on another, so run-to-run variance dominates the difference.
+    #
+    # The reason low is enough is structural rather than lucky: these pieces arrive with a
+    # declared contract and an acceptance scenario, so the model is filling in a shape rather
+    # than deciding what the shape should be. Raise it for work that has to *design*
+    # something, and let the loop escalate when low genuinely fails.
+    CoderRuntime.CODEX: RuntimeProfile(effort="low"),
 }
 
 
@@ -339,6 +354,7 @@ def write_module(
     path: str,
     timeout: float = 900.0,
     authority: AgentExecutionAuthority = AgentExecutionAuthority.WORKSPACE,
+    profile: RuntimeProfile | None = None,
 ) -> RuntimeResult:
     """Have a CLI runtime write one module, and return what it wrote.
 
@@ -379,6 +395,7 @@ def write_module(
 
     argv = headless_argv(
         [binary], runtime=runtime.value, authority=authority,
+        profile=profile_for(runtime, profile),
         prompt=(f"Read the complete instructions in {brief} and carry them out now. "
                 f"Write exactly one file, named {path}, in that same directory. "
                 f"Do not ask any questions and do not wait for further input."))

@@ -45,6 +45,13 @@ SCAFFOLD_DIR = Path(__file__).parent
 
 class PieceOutcome(BaseModel):
     name: str
+    usage: dict[str, Any] = Field(default_factory=dict)
+    """What the runtime reported spending on this piece, as it reported it.
+
+    Per piece rather than per build, because that is the grain a routing decision is made
+    at: "which rung should write a storage module" is a different question from "what did
+    this app cost".
+    """
     passed: bool = False
     verified: bool = False
     """Whether a check the *model did not write* actually ran and passed.
@@ -371,7 +378,9 @@ def _reset_attempt(workspace: Path, module: str) -> None:
 
 
 def _generator_for(runtime: str, workspace: Path, path: str,
-                   fixed: str = "") -> Callable[..., str] | None:
+                   fixed: str = "",
+                   profile: coder_runtimes.RuntimeProfile | None = None,
+                   usage_sink: dict[str, Any] | None = None) -> Callable[..., str] | None:
     """A `generate` callable for one rung of the ladder, or None for the local one.
 
     The paid runtimes are agents with filesystem access, so they are asked to write the
@@ -388,9 +397,18 @@ def _generator_for(runtime: str, workspace: Path, path: str,
         return None
 
     tier = coder_runtimes.CoderRuntime(runtime)
+    profile = coder_runtimes.profile_for(tier, profile)
+    usage_sink = usage_sink if usage_sink is not None else {}
 
     def generate(spec: str, model: str = "", *args: Any, **kwargs: Any) -> str:
-        result = coder_runtimes.write_module(tier, spec, workspace=workspace, path=path)
+        result = coder_runtimes.write_module(tier, spec, workspace=workspace, path=path,
+                                             profile=profile)
+        # Recorded here, at the only place that knows what a call actually cost. Both the
+        # ledger (what has been spent) and the piece outcome (what this rung charged for
+        # this work) read from the same measurement, so a routing decision and a budget
+        # cannot disagree.
+        coder_runtimes.record_call(result)
+        usage_sink.update(result.usage or {})
         if result.exhausted:
             # Raised rather than returned: an exhausted tier is not a bad answer to be
             # repaired, it is a tier that must stop being used. build_blueprint catches
@@ -413,6 +431,8 @@ async def build_blueprint(
     max_attempts: int = 1,
     targeted_repair: bool = True,
     advisory_model_test: bool = True,
+    runtime_profiles: dict[coder_runtimes.CoderRuntime,
+                           coder_runtimes.RuntimeProfile] | None = None,
 ) -> BuildResult:
     """Build every piece, in dependency order, verifying as it goes.
 
@@ -441,6 +461,9 @@ async def build_blueprint(
         emit("piece_started", piece=piece.name)
         piece_started = time.time()
         module = piece.module or piece.name
+        # Filled in by the generator as calls happen, so the outcome carries what this piece
+        # actually cost rather than an estimate reconstructed afterwards.
+        piece_usage: dict[str, Any] = {}
 
         expected = _contract_from_piece(piece)
 
@@ -494,8 +517,11 @@ async def build_blueprint(
                     # page or the dependency interfaces, which say how to build it rather
                     # than what it must do.
                     requirement=piece.spec,
-                    generate=_generator_for(decision.chosen, ws, f"{module}.py",
-                                            fixed=piece.source),
+                    generate=_generator_for(
+                        decision.chosen, ws, f"{module}.py", fixed=piece.source,
+                        profile=(runtime_profiles or {}).get(
+                            coder_runtimes.CoderRuntime(decision.chosen)),
+                        usage_sink=piece_usage),
                     resample=decision.chosen == coder_runtimes.CoderRuntime.LOCAL.value,
                     targeted=targeted_repair,
                     advisory_model_test=advisory_model_test,
@@ -544,6 +570,7 @@ async def build_blueprint(
             runtime=decision.chosen,
             ladder_note=decision.describe(),
             attempts_to_first_success=attempt if pipeline.passed else 0,
+            usage=dict(piece_usage),
         )
 
         # Contract check runs even when the unit test passed: a module can satisfy a

@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.153] - 2026-08-15
+
+### Added
+- **DELEGATION.md** - which runtime, at what effort, for what work. Measured, dated and
+  re-runnable, and surfaced through /ai/context so the next AI finds it without being told.
+- enchmarks/delegation/bench.py - builds a real blueprint piece per (runtime, effort) and
+  lets that piece's own contract and acceptance scenario decide whether it worked.
+
+### Changed
+- **Codex default effort: medium -> low, on measurement.** Eight builds across three real
+  pieces at three effort levels **all verified with zero repairs**. Effort bought nothing in
+  quality and cost real time: high averaged 136 s against low's 86 s. Token counts did not
+  order by effort at all - low was cheapest on one piece and dearest on another, so
+  run-to-run variance is larger than the effect.
+
+  This reverses the medium default shipped in 0.1.151, which was reasoning rather than
+  measurement.
+
+  The result that settles it: storage - nine coupled functions, the piece the local tier
+  failed 0/4 in every configuration across 441 minutes - was verified by **codex:low in 89
+  seconds, first try**. Low suffices because a blueprint piece arrives with a contract and a
+  scenario, so the model fills in a known shape rather than deciding what the shape is.
+
+- write_module and uild_blueprint take per-runtime profiles; usage is recorded per
+  piece, so a routing decision and a budget read from the same measurement.
+
 ## [0.1.152] - 2026-08-15
 
 ### Added
