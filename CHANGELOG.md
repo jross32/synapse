@@ -10,6 +10,30 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.150] - 2026-08-15
+
+### Added
+- **Gemini joins the default ladder**, between the paid trio and the local models:
+  claude -> codex -> copilot -> gemini -> local.
+
+  Almost nothing had to be built - it was already installed, already in the CoderRuntime
+  enum, and already had a headless_argv branch mapping our authority levels onto its
+  --approval-mode (plan / auto_edit / yolo). It was simply never in the rotation.
+
+  Exercised before being trusted, because the two rungs before it had never been run and
+  both turned out to be broken: gemini built the 
+eader piece 1/1, verified, 0 repairs,
+  188 s.
+
+  Placement is deliberate - a **last paid resort**, not a preference. Weaker than Claude or
+  Codex here, but a far better landing than the local tier, because it answers in minutes
+  rather than overnight and its free allowance is generous where Copilot's is not.
+
+  Recorded in the module docstring because it will otherwise bite: Google's free allowance
+  is per-model and lopsided. Flash and Flash-Lite get ~1,500 requests/day; Pro is 25-50/day
+  and, since May 2026, largely behind billing. A gemini rung should ask for a Flash model
+  unless told otherwise.
+
 ## [0.1.149] - 2026-08-14
 
 ### Fixed

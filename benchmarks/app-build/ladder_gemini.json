@@ -1,0 +1,38 @@
+{
+ "blueprint_id": "cli-csv-report",
+ "workspace": "C:\\Users\\justi\\synapse\\benchmarks\\app-build\\ladder-gemini",
+ "pieces": [
+  {
+   "name": "reader",
+   "passed": true,
+   "verified": true,
+   "escalated": false,
+   "repairs": 0,
+   "seconds": 187.4,
+   "local_tokens": 0,
+   "stop_reason": "tests passed",
+   "checks": {
+    "contract": "pass",
+    "scenario": "pass"
+   },
+   "escalation_packet": "",
+   "runtime": "gemini",
+   "ladder_note": "built with gemini",
+   "attempts_to_first_success": 1,
+   "test_source": "from reader import *  # noqa: F403 - scenarios call by bare name\n\nimport inspect\n\nimport reader as m\n\n_want_0 = ['text', 'required']\nassert hasattr(m, 'read_rows'), (\n    'reader.read_rows' + ' is missing. The contract requires: '\n    + 'read_rows(text, required)' + '. Defined here: ' + str([n for n in dir(m) if not n.startswith('_')]))\n_got_0 = list(inspect.signature(m.read_rows).parameters)[:2]\nassert _got_0 == _want_0, (\n    'reader.read_rows' + ' takes ' + str(_got_0)\n    + ' but the contract requires ' + str(_want_0)\n    + '. Callers were written against the contract, so rename the parameters to match exactly - including their order.')\n_want_1 = ['value']\nassert hasattr(m, 'parse_amount'), (\n    'reader.parse_amount' + ' is missing. The contract requires: '\n    + 'parse_amount(value)' + '. Defined here: ' + str([n for n in dir(m) if not n.startswith('_')]))\n_got_1 = list(inspect.signature(m.parse_amount).parameters)[:1]\nassert _got_1 == _want_1, (\n    'reader.parse_amount' + ' takes ' + str(_got_1)\n    + ' but the contract requires ' + str(_want_1)\n    + '. Callers were written against the contract, so rename the parameters to match exactly - including their order.')\n\n_rows, _problems = read_rows(\"name,amount\\nalice,10\\nbob,20\\n\", [\"name\", \"amount\"])\nassert isinstance(_rows, list) and len(_rows) == 2, (\n    \"read_rows must return (rows, problems) with one dict per good row. Got %r\" % (_rows,))\ntry:\n    _first = _rows[0][\"name\"]\nexcept (TypeError, KeyError, IndexError):\n    raise AssertionError(\n        \"read_rows returned %r, whose items are %s. Rows must be dicts keyed by the header \"\n        \"names, so the caller can read row['name'].\" % (_rows, type(_rows[0]).__name__))\nassert _first == \"alice\", \"read_rows kept the wrong value for the first row: %r\" % (_first,)\nassert _problems == [], \"a clean file produced problems: %r\" % (_problems,)\n\n_rows, _problems = read_rows(\"name,amount\\nalice,10\\n,20\\nbob,\\n\", [\"name\", \"amount\"])\nassert len(_rows) == 1, (\n    \"rows with a missing required value must be rejected, not kept. Got %r\" % (_rows,))\nassert len(_problems) == 2, (\n    \"each rejected row needs its own problem line. Got %r\" % (_problems,))\n_joined = \" \".join(_problems)\nassert \"3\" in _joined and \"4\" in _joined, (\n    \"a problem must name the 1-based line number in the file so the user can find the row. \"\n    \"The header is line 1, so these are lines 3 and 4. Got %r\" % (_problems,))\n\nassert read_rows(\"\", [\"name\"]) == ([], []), (\n    \"empty input must return ([], []) rather than raising: got %r\" % (read_rows(\"\", [\"name\"]),))\n\nfor _text, _want in ((\"1,234.50\", 1234.5), (\" 12 \", 12.0), (\"$4.20\", 4.2), (\"(5)\", -5.0),\n                     (\"0\", 0.0)):\n    _got = parse_amount(_text)\n    assert _got is not None, (\n        \"parse_amount(%r) returned None. It must return a float or raise ValueError - \"\n        \"None makes every caller check for it.\" % (_text,))\n    assert abs(float(_got) - _want) < 1e-9, (\n        \"parse_amount(%r) returned %r, expected %r\" % (_text, _got, _want))\n\ntry:\n    parse_amount(\"not a number\")\n    raise AssertionError(\n        \"parse_amount must raise ValueError on input it cannot read, not return a default.\")\nexcept ValueError as _exc:\n    assert \"not a number\" in str(_exc), (\n        \"the ValueError must name the offending value so the user can find it. Got %r\"\n        % (str(_exc),))\n\nprint('OK')\n"
+  }
+ ],
+ "passed": false,
+ "seconds": 188.0,
+ "local_tokens": 0,
+ "escalations": [],
+ "notes": [
+  "entrypoint written to report.py",
+  "The pieces built but the assembled app failed a render-level check. Those failures are in web_checks and are phrased for a repair prompt.",
+  "Some pieces need a stronger model. Their escalation_packet fields are self-contained: requirement, current code, the real error."
+ ],
+ "web_checks": {
+  "assembled": "fail: the assembled program raised on startup - ModuleNotFoundError: No module named 'cli'",
+  "acceptance": "fail: ModuleNotFoundError: No module named 'cli'"
+ }
+}

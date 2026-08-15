@@ -44,7 +44,14 @@ def test_exhaustion_falls_exactly_one_rung(monkeypatch):
     assert "out of room" in decision.reasons["claude"]
 
     cr.mark_exhausted(cr.CoderRuntime.CODEX)
+    assert cr.pick().chosen == "copilot"
+
     cr.mark_exhausted(cr.CoderRuntime.COPILOT)
+    assert cr.pick().chosen == "gemini", (
+        "gemini sits between the paid trio and the local models: a last paid resort that "
+        "answers in minutes, rather than dropping straight to an overnight tier")
+
+    cr.mark_exhausted(cr.CoderRuntime.GEMINI)
     assert cr.pick().chosen == "local", "local is the floor, it must always be reachable"
 
 

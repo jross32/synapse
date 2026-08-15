@@ -42,13 +42,25 @@ DEFAULT_LADDER: tuple[CoderRuntime, ...] = (
     CoderRuntime.CLAUDE,
     CoderRuntime.CODEX,
     CoderRuntime.COPILOT,
+    CoderRuntime.GEMINI,
     CoderRuntime.LOCAL,
 )
 """Best first, free last.
 
-Gemini is omitted from the default rather than removed: it is supported by
-``headless_argv`` and can be put in a ladder explicitly, but it is not part of the paid
-rotation this machine actually has credits on.
+Gemini sits below the paid trio and above the local models on purpose. It is not as strong
+as Claude or Codex on this kind of work, so it is a *last paid resort* rather than a
+preference - but it is a far better place to land than the local tier, because it answers in
+minutes rather than overnight and its free allowance is generous where Copilot's is not.
+
+Verified on this machine before being added: it built the `reader` piece 1/1, verified, zero
+repairs, 188 s. That check exists because the two rungs before it, `codex` and `copilot`,
+had both never been exercised and both turned out to be broken - one silently writing
+nothing and exiting 0.
+
+Google's free allowance is per-model and the difference is large: Flash and Flash-Lite get
+~1,500 requests/day, while Pro is 25-50/day and, since May 2026, largely behind billing. So
+a Gemini rung should ask for a Flash model unless a caller deliberately says otherwise -
+picking Pro by default would exhaust the tier in an afternoon.
 """
 
 
