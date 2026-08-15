@@ -44,6 +44,15 @@ class RegisterRequest(BaseModel):
     blueprint: dict[str, Any]
 
 
+class FromBuildRequest(BaseModel):
+    directory: str
+    blueprint_id: str = ""
+    name: str = ""
+    summary: str = ""
+    save: bool = False
+    """Off by default: a draft is a starting point, not a catalog entry."""
+
+
 class StackRequest(BaseModel):
     want: list[str] = Field(default_factory=list)
 
@@ -97,6 +106,32 @@ def build_blueprints_router(storage: Any, data_dir: Path) -> APIRouter:
         if not bp.id:
             raise invalid("blueprint", "A blueprint needs an id.")
         bp_mod.save_blueprint(bp)
+        return bp
+
+    @router.post("/from-build", response_model=Blueprint)
+    async def from_build(payload: FromBuildRequest) -> Blueprint:
+        """Draft a blueprint from an app that already works.
+
+        Returns a **draft**: pieces, contracts and dependencies are read off the source, but
+        every scenario is empty. A scenario says what a caller needs, and that is not
+        recoverable from code that happens to work - inferring one from the implementation
+        would assert whatever the code already does, which is a check that cannot fail.
+
+        Saved only when `save` is set, so a bad draft does not silently join the catalog.
+        """
+        directory = Path(payload.directory).expanduser()
+        if not directory.is_dir():
+            raise invalid("blueprint", f"No such directory: {directory}")
+        bp = bp_mod.distil_from_build(
+            directory,
+            blueprint_id=payload.blueprint_id or bp_mod.slugify(directory.name),
+            name=payload.name or directory.name,
+            summary=payload.summary,
+        )
+        if not bp.pieces:
+            raise invalid("blueprint", f"No app modules found in {directory}")
+        if payload.save:
+            bp_mod.save_blueprint(bp)
         return bp
 
     @router.post("/{blueprint_id}/build", response_model=runner_mod.BuildResult)

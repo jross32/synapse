@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.154] - 2026-08-15
+
+### Added
+- **POST /blueprints/from-build** - draft a blueprint from an app that already works.
+  Authoring one by hand was the expensive part of the system and the only thing standing
+  between "delegate this shape" and "delegate anything". The file layout is the piece list
+  and each module's public signatures are its contract, so most of it is mechanical.
+
+  Proven against a real build: distilling phase-d-cli recovers exactly the piece set of the
+  hand-written cli-csv-report blueprint - reader, summary, cli - with cli's dependencies
+  read off its imports and 
+eport.py identified as the entrypoint.
+
+  It deliberately does **not** invent scenarios. A scenario says what a *caller* needs, which
+  is not recoverable from code that happens to work; inferring one from the implementation
+  would assert whatever the code already does. Every piece returns 	ests="" and the
+  blueprint is marked draft.
+
+  The file-scanning half was delegated to codex:low per DELEGATION.md (105 s, 6/6 tests
+  first time); the Blueprint/Piece wiring stayed hand-written because it needs the
+  surrounding types.
+
+### Fixed
+- Two wiring bugs found by running the distiller on a real build rather than trusting it:
+  scaffold_partials.py is copied into every workspace by the scaffold, so it looked like
+  app code; and entrypoint detection was backwards - keying on "imports the most modules"
+  picked cli.py, which 
+eport.py imports. The entrypoint is the module **nothing**
+  imports.
+
 ## [0.1.153] - 2026-08-15
 
 ### Added

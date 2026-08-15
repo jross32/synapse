@@ -31,6 +31,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from . import build_scan
 from pydantic import BaseModel, Field
 
 from .runtime_paths import repo_root
@@ -345,6 +346,84 @@ def resolve_stack(wanted: list[str], catalog: list[Blueprint] | None = None) -> 
     return {"selected": [b.id for b in selected], "unknown": unknown,
             "provides": sorted(available), "unmet_requirements": unmet,
             "complete": not unmet and not unknown}
+
+
+INSTALLED_ASSETS = frozenset({"scaffold_partials"})
+"""Modules the scaffold copies into every workspace, so they are not part of the app.
+
+They are on disk next to the app's own files and look identical to a scanner. Distilling
+them would put a piece in the blueprint that the blueprint itself installs.
+"""
+
+
+def distil_from_build(directory: Path | str, *, blueprint_id: str, name: str,
+                      summary: str = "") -> Blueprint:
+    """Draft a blueprint from an app that already works.
+
+    Authoring a blueprint by hand is the expensive part of this whole system, and it is the
+    only thing standing between "delegate this shape" and "delegate anything". Most of it,
+    though, is mechanical: the file layout is the piece list, and each module's public
+    signatures are its contract. That part is read straight off the source.
+
+    What CANNOT be distilled is the **acceptance scenario**. A scenario says what a caller
+    needs - that `create_user` returns the id, that `get_user_by_email` includes the password
+    hash - and none of that is recoverable from code that happens to work. Inferring it from
+    the implementation would produce a check that asserts whatever the code already does,
+    which is the definition of a test that cannot fail.
+
+    So every piece comes back with `tests=""` and the blueprint is marked ``draft``. It is a
+    head start, not a finished recipe, and `test_every_builtin_piece_declares_a_scenario`
+    deliberately skips drafts so an unfinished one cannot be mistaken for a shipped one.
+    """
+    rows = [row for row in build_scan.scan_build(directory)
+            if row["module"] not in INSTALLED_ASSETS]
+    module_names = {row["module"] for row in rows}
+
+    # More than one module can look like an entrypoint: the CLI build has a `main()` inside
+    # its command module *and* a `__main__` guard in the runner you actually invoke. The one
+    # you run is the one **nothing else imports** - anything imported is a dependency, however
+    # main-like it looks. Measured on that build: keying on "imports the most modules" picked
+    # `cli.py`, which `report.py` imports, and `report.py` is the file you run.
+    imported_by_others = {dep for row in rows for dep in row["imports_local"]}
+    candidates = [row for row in rows
+                  if row["is_entrypoint"] and row["module"] not in imported_by_others]
+    entry = min(candidates, key=lambda row: row["module"], default=None)
+
+    pieces: list[Piece] = []
+    for row in rows:
+        if entry is not None and row["module"] == entry["module"]:
+            continue  # the entrypoint is wiring, not a piece to be written
+        pieces.append(Piece(
+            name=row["module"],
+            module=row["module"],
+            spec=(row["doc"] or f"Write `{row['path']}`.").strip(),
+            contract={
+                "functions": [{"name": fn["name"], "args": fn["args"]}
+                              for fn in row["functions"]],
+                "constants": row["constants"],
+            },
+            depends_on=[dep for dep in row["imports_local"]
+                        if dep in module_names
+                        and not (entry and dep == entry["module"])],
+            checks=[CheckKind.UNIT, CheckKind.CONTRACT],
+        ))
+
+    blueprint = Blueprint(
+        id=blueprint_id,
+        name=name,
+        summary=summary or f"Drafted from an existing build in {Path(directory).name}.",
+        kind=BlueprintKind.OTHER,
+        pieces=pieces,
+        draft=True,
+        source="distilled",
+        provenance={"distilled_from": str(directory)},
+    )
+    if entry is not None:
+        blueprint.entrypoint = {
+            "path": entry["path"],
+            "source": (Path(directory) / entry["path"]).read_text(encoding="utf-8"),
+        }
+    return blueprint
 
 
 def slugify(text: str) -> str:
