@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.149] - 2026-08-14
+
+### Fixed
+- **Codex could never write a file.** --ignore-user-config silently overrides
+  --sandbox workspace-write back to read-only - whatever the flag order, and even against
+  an explicit -c sandbox_mode="workspace-write". Codex reported sandbox: read-only in its
+  own header, refused every patch with "writing is blocked by read-only sandbox", **and
+  exited 0**, so the build recorded a success over an empty workspace. The flag is gone.
+
+  Measured, same directory and prompt: with it, no file; without it, file written. This also
+  affected every Codex squad worker, which has been running read-only since the argv was
+  first written.
+
+- **A real quota message did not read as exhaustion.** Copilot says
+  "You have exceeded your monthly quota (Request ID: ...)" and exits 1. The patterns expected
+  "quota exceeded" in that order and matched nothing, so an exhausted tier looked like a hard
+  failure - the one distinction the ladder exists to make.
+
+### Verified for the first time
+The middle rungs of the ladder had never produced a piece: claude had built all 3, local
+had been measured for 441 minutes, and codex and copilot had built nothing ever. They are
+exactly the rungs that engage when Claude credits run out.
+
+- codex now builds the 
+eader piece: 1/1, verified, 0 repairs, 113 s.
+- **Fallback proven against a genuinely exhausted tier.** Copilot on this machine really has
+  exceeded its monthly quota, so the ladder was tested against the real condition rather than
+  a mock: it detected the exhaustion at 27 s, dropped a rung, and codex finished the piece
+  verified at 142 s, with a 3485 s cooldown recorded against copilot.
+
 ## [0.1.148] - 2026-08-14
 
 ### Phase C measured

@@ -111,7 +111,21 @@ def headless_argv(
                 "--dangerously-bypass-approvals-and-sandbox", "--ignore-rules",
             ],
         }[authority]
-        return [executable, "exec", "--ignore-user-config", "--skip-git-repo-check",
+        # `--ignore-user-config` is deliberately NOT passed. It silently overrides
+        # `--sandbox workspace-write` back to read-only, whatever the flag order and even
+        # against an explicit `-c sandbox_mode="workspace-write"`. Codex then reports
+        # `sandbox: read-only` in its own header, refuses every patch with
+        # "writing is blocked by read-only sandbox", **and exits 0** - so the caller sees a
+        # success with an empty workspace rather than an error.
+        #
+        # Measured directly, same directory, same prompt:
+        #   with    --ignore-user-config -> sandbox: read-only,      no file written
+        #   without --ignore-user-config -> sandbox: workspace-write, file written
+        #
+        # The cost of dropping it is that the user's ~/.codex config applies. That is the
+        # better trade: a flag that quietly disables the sandbox the caller asked for is
+        # worse than a config the user chose on purpose.
+        return [executable, "exec", "--skip-git-repo-check",
                 "--color", "never", *permission_args, *runtime_args, prompt]
 
     if runtime == CoderRuntime.COPILOT.value:
@@ -143,6 +157,12 @@ EXHAUSTION_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         # build would otherwise demote the runtime for an hour.
         r"\brate[ -]?limit(ed|s)?\b",
         r"\bquota (exceeded|exhausted)\b",
+        # GitHub Copilot's real wording, caught the first time the rung was exercised:
+        # "You have exceeded your monthly quota (Request ID: ...)", exit 1. The patterns
+        # above expect "quota exceeded" in that order and matched nothing, so an exhausted
+        # tier read as a hard failure - the one thing the ladder exists to tell apart.
+        r"\bexceeded your\b.*\b(quota|limit|allowance)\b",
+        r"\b(monthly|daily|weekly) (quota|limit|allowance)\b.*\bexceed",
         r"\binsufficient[_ ]quota\b",
         r"\bout of (credits?|tokens?)\b",
         r"\bcredit balance is too low\b",

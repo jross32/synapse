@@ -1,0 +1,40 @@
+{
+ "blueprint_id": "cli-csv-report",
+ "workspace": "C:\\Users\\justi\\synapse\\benchmarks\\app-build\\ladder-copilot",
+ "pieces": [
+  {
+   "name": "reader",
+   "passed": false,
+   "verified": false,
+   "escalated": true,
+   "repairs": 0,
+   "seconds": 40.9,
+   "local_tokens": 0,
+   "stop_reason": "reader.py does not define `read_rows(text, required)`. It defines: nothing public",
+   "checks": {
+    "contract": "fail: reader.py does not define `read_rows(text, required)`. It defines: nothing public",
+    "scenario": "fail"
+   },
+   "escalation_packet": "",
+   "runtime": "copilot",
+   "ladder_note": "built with copilot",
+   "attempts_to_first_success": 0,
+   "test_source": ""
+  }
+ ],
+ "passed": false,
+ "seconds": 41.3,
+ "local_tokens": 0,
+ "escalations": [
+  "reader"
+ ],
+ "notes": [
+  "entrypoint written to report.py",
+  "The pieces built but the assembled app failed a render-level check. Those failures are in web_checks and are phrased for a repair prompt.",
+  "Some pieces need a stronger model. Their escalation_packet fields are self-contained: requirement, current code, the real error."
+ ],
+ "web_checks": {
+  "assembled": "fail: the assembled program raised on startup - ModuleNotFoundError: No module named 'cli'",
+  "acceptance": "fail: ModuleNotFoundError: No module named 'cli'"
+ }
+}
