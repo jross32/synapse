@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.155] - 2026-08-15
+
+### Added
+- **Drafted blueprints arrive with scenario skeletons that fail until filled in.** Writing
+  scenarios was the remaining bottleneck after `from-build`. The judgement cannot be
+  automated - a scenario says what a *caller* needs - but the typing can be.
+
+  The safety property is the design: every stub is
+  `assert False, "TODO: state what a caller needs from read_rows(). It returned %r..."`, so
+  an unfinished scenario **fails**. A stub that passed while asserting nothing would be a
+  false pass wearing a TODO. It also prints what the function really returned, so whoever
+  fills it in is looking at output rather than guessing.
+
+  Placeholder arguments are typed by name - `user_id` and anything ending in `_id` get `0`,
+  the rest get `""` - because a string in an id position fails for the wrong reason and
+  sends whoever reads it after the wrong bug.
+
+  Stronger than 0.1.154's empty `tests`, which would have let a draft run and report nothing
+  wrong; the test asserting `tests == ""` now asserts the stronger property instead.
+
+  Delegated to codex:low (162 s, 7/7 first time) - fourth clean delegation in a row.
+
 ## [0.1.154] - 2026-08-15
 
 ### Added

@@ -31,7 +31,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from . import build_scan
+from . import build_scan, scenario_skeleton
 from pydantic import BaseModel, Field
 
 from .runtime_paths import repo_root
@@ -406,6 +406,11 @@ def distil_from_build(directory: Path | str, *, blueprint_id: str, name: str,
                         if dep in module_names
                         and not (entry and dep == entry["module"])],
             checks=[CheckKind.UNIT, CheckKind.CONTRACT],
+            # A skeleton, not a scenario: one stub per function, each of which FAILS until
+            # someone states what a caller actually needs. That keeps the draft honest in
+            # both directions - it cannot be mistaken for finished, and it cannot pass while
+            # asserting nothing, which is a false pass wearing a TODO.
+            tests=scenario_skeleton.scenario_skeleton(row["module"], row["functions"]),
         ))
 
     blueprint = Blueprint(

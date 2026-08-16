@@ -58,8 +58,16 @@ def test_scenarios_are_left_empty_and_the_draft_says_so(drafted):
     check that cannot fail, which is worse than no check.
     """
     assert drafted.draft is True
-    assert all(p.tests == "" for p in drafted.pieces)
     assert drafted.source == "distilled"
+
+    # A skeleton is supplied, not a scenario: every stub FAILS until someone states what a
+    # caller needs. That is a stronger guarantee than leaving `tests` empty, which would let
+    # a draft run and report nothing wrong.
+    for piece in drafted.pieces:
+        if not piece.contract["functions"]:
+            continue
+        assert "assert False" in piece.tests, f"{piece.name} has no failing stub"
+        assert "TODO" in piece.tests
 
 
 def test_installed_scaffold_assets_are_not_mistaken_for_app_code(drafted):
