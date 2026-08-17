@@ -6,7 +6,19 @@
 
 ## Current version
 
-`0.1.109`
+`0.1.156`
+
+> **Canonical AI execution/accounting foundation (2026-08-17, ADR-0036):** Agent Squad
+> launches now reserve a durable SQLite execution before PTY startup, finalize provider
+> capacity and provenance-tagged usage once, preserve unknown rather than fake zero, and
+> expose typed `/api/v1/ai/runtimes` + execution receipt endpoints. Real Windows PTY proof
+> passed through HTTP → ConPTY → event subscriber → REST/squad rollup without provider
+> credits. Copilot quota evidence survives restart, Codex ANSI usage parses, relaunch/spawn
+> failure/timeout races are covered, and worker reads are project/work-item scoped. This is
+> intentionally the first unit: Coder Workspace, Blueprints, Cases, quick actions, local AI,
+> reservations/probes, scoped MCP writes, and public capability credentials migrate next.
+> Release verification: renderer + Electron typechecks, docs synchronization, real daemon/browser
+> smoke, and **1,049 passed / 14 skipped**.
 
 > **One session per AI (2026-08-02, PLAN 7 Phase 1):** the Live rail measured 84 sessions, 72 top-level,
 > for a handful of real tasks. Fixed both causes: a returning agent now re-attaches via `resume_key`

@@ -1137,6 +1137,19 @@ def classify_worker_failure(scrollback: bytes) -> str | None:
             "to review the reset time or available credits, then relaunch this worker. Other signed-in "
             "runtimes may continue in the meantime."
         )
+    if any(pattern in text for pattern in (
+        "you have exceeded your monthly quota",
+        "usage limit reached",
+        "quota exceeded",
+        "quota exhausted",
+        "exhausted your daily quota",
+        "out of credits",
+    )):
+        return (
+            "The selected AI runtime reported that its usage allowance is exhausted. "
+            "Synapse has marked this runtime unavailable until fresh provider evidence "
+            "or an authorized recheck clears it; another allowed runtime may continue."
+        )
     return None
 
 

@@ -16,8 +16,12 @@ habits) and ADR-0027 (the AI-drivable design).
 - **Base URL (remote / from anywhere):** the WAN tunnel URL. Get it from `GET /api/v1/mcp/connector`
   (`connector_url` / `tunnel_url`) — the Cloudtap tunnel now auto-opens on daemon start (ADR-0026), so a
   `*.trycloudflare.com` URL is usually already live.
-- **Auth:** every call needs the header `X-Synapse-Token: <token>`. The token is the daemon's local token —
-  read it from `data/auth-token` in the repo (same machine), or the operator hands it to you (remote).
+- **Auth (same machine):** every call needs `X-Synapse-Token`. A trusted local operator may read the
+  daemon token from `data/auth-token`. Synapse-launched workers receive a narrower task credential.
+- **Remote warning:** the current WAN REST path still accepts the desktop root token for compatibility.
+  That is legacy, high-risk, operator-supervised access—not project-scoped public automation. Do not hand
+  the root token to a routine or third-party AI. ADR-0036 requires scoped, expiring credentials before
+  public unattended drive is considered safe.
 
 ```bash
 SYN=http://127.0.0.1:7878/api/v1
@@ -31,7 +35,8 @@ Always start here so you know what exists:
 
 - `GET /api/v1/ai/context` — capability digest: projects (with paths, ports, health), per-project AI-context
   files, and how to call things. **Read this first.**
-- `GET /api/v1/openapi.json` — the full endpoint surface (235+ routes) + every request/response schema.
+- `GET /api/v1/openapi.json` — the complete live endpoint surface (currently 226 paths / 290 operations)
+  plus every request/response schema. Treat the live document, not these counts, as canonical.
   `GET /api/v1/docs` is the same as browsable Swagger UI.
 - `GET /api/v1/coordination/snapshot` — who else (other AIs) is working + which files are claimed. Register
   yourself + claim a lane before editing shared files (see `AGENTS.md`).
@@ -57,12 +62,17 @@ decisions, searches/findings, action/evidence receipts, MCP/tool use, squads, wo
 correlated terminal output; Summary View keeps only the major story. So use meaningful `agent_label`, `task`,
 and heartbeat `last_intent` values.
 
-After registration, add `X-Synapse-Session: <session id>` to other Synapse API calls. The daemon will record
+Registration returns `id` (the session id), `resume_key`, and a one-time `session_key`.
+After registration, add both `X-Synapse-Session: <id>` and
+`X-Synapse-Session-Key: <session_key>` to other Synapse API calls. The daemon will record
 safe method/result receipts automatically. Report richer boundaries explicitly:
 
 ```bash
 curl -s "$SYN/activity/sessions/$SESSION_ID/events" -X POST \
-  -H "X-Synapse-Token: $TOK" -H 'Content-Type: application/json' \
+  -H "X-Synapse-Token: $TOK" \
+  -H "X-Synapse-Session: $SESSION_ID" \
+  -H "X-Synapse-Session-Key: $SESSION_KEY" \
+  -H 'Content-Type: application/json' \
   -d '{"category":"decision","status":"success","title":"Kept Reflex per-worker",\
 "summary_md":"A shared fixed-port controller could create stale ownership; isolated stdio children preserve automatic availability without cross-AI contention.",\
 "authority":"none"}'
@@ -153,10 +163,10 @@ curl -s "$SYN/capture" -X POST -H "X-Synapse-Token: $TOK" -H 'Content-Type: appl
 
 ## 8. Drive Synapse remotely — two ways
 
-**The WAN tunnel exposes the whole token-guarded REST API**, not just `/mcp`. So the simplest way for any
-HTTP-capable AI (another Claude Code, a script, anything that can send headers) to drive Synapse **from
-anywhere** is: use the everything above with the **tunnel URL as the base** instead of `localhost:7878`, and
-the same `X-Synapse-Token`. Full drive — including `POST /agent-work-items/{id}/launch` — works remotely this way.
+**Legacy/operator-supervised WAN REST:** the tunnel currently exposes the token-guarded REST API, not just
+`/mcp`. Using the desktop root token remotely grants root-equivalent Synapse control. This is useful for the
+owner's supervised recovery but is not the safe public AI contract. Keep it disabled unless actively used;
+scoped public credentials from ADR-0036 must land before unattended remote AI drive.
 
 **For MCP-native clients** (e.g. the claude.ai web custom connector) Synapse also speaks Model Context Protocol
 at **`/mcp/<token>`** (ADR-0012). Read tools are always on (`synapse_get_context`,
@@ -165,6 +175,10 @@ at **`/mcp/<token>`** (ADR-0012). Read tools are always on (`synapse_get_context
 behind `SYNAPSE_MCP_ALLOW_WRITES=1` (default **off**) — set it to let a remote MCP client set up work; launching a
 worker stays on the REST path (`POST /agent-work-items/{id}/launch`, reachable over the same tunnel). `GET
 /api/v1/mcp/connector` returns the ready-made connector URL (tunnel URL + path token).
+
+Those four MCP writes are a legacy global switch and do not yet share the scoped ADR-0036 execution service.
+Do not interpret them as full-write MCP. The future write connector will use revocable project capabilities
+and call the same application services as REST.
 
 > **Security:** the `X-Synapse-Token` (and the connector's path token) is the whole trust boundary — with the
 > WAN tunnel on, anyone holding the token can drive Synapse. Treat it like a password; don't paste it into
@@ -196,6 +210,9 @@ Do not post stage updates yourself; Electron owns those measured facts. A duplic
 | Goal | Call |
 |---|---|
 | Orient | `GET /ai/context`, `GET /openapi.json`, `GET /coordination/snapshot` |
+| Runtime readiness + measured usage | `GET /ai/runtimes` |
+| Execution receipt | `GET /ai/executions/{execution_id}` |
+| Local operator capacity evidence | `POST /ai/runtimes/{runtime_id}/capacity` or `/recheck` |
 | Create squad | `POST /agent-squads` |
 | Add work | `POST /agent-squads/{id}/work-items` |
 | Run work | `POST /agent-work-items/{id}/launch` |

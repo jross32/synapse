@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request
 from . import activity as activity_module
 from . import agent_squads as squads
 from . import coder_runtimes
+from . import ai_executions
 from . import coordination
 from . import mcp_servers as mcp_servers_module
 from . import personalities as personalities_module
@@ -266,6 +267,14 @@ async def _close_worker_at_timeout(
             # handed off but failed to exit still loses its process at the same
             # deadline; its evidence-backed status remains intact.
             updated = current
+        ai_executions.finalize_pty_execution(
+            conn,
+            pty_session_id=session_id,
+            output=(session.scrollback_bytes() if hasattr(session, "scrollback_bytes") else b""),
+            exit_code=None,
+            work_outcome=updated.status.value,
+            process_outcome_override="timed_out",
+        )
         audit(
             conn,
             AuditRecord(
@@ -638,7 +647,38 @@ def build_agent_squads_router(
                     personality = personalities_module.get_personality(conn, work_item.personality_id)
                 except Exception:
                     personality = None
-            chosen_runtime = squads.pick_runtime(role, body.preferred_runtime or work_item.preferred_runtime)
+            explicitly_requested = body.preferred_runtime or work_item.preferred_runtime
+            chosen_runtime = squads.pick_runtime(role, explicitly_requested)
+            capacity = {
+                item.runtime_id: item
+                for item in ai_executions.list_capacity(conn)
+            }
+            if explicitly_requested is None:
+                candidates = role.preferred_runtimes or [chosen_runtime]
+                chosen_runtime = next(
+                    (
+                        candidate
+                        for candidate in candidates
+                        if candidate in {runtime.value for runtime in coder_runtimes.CoderRuntime}
+                        and capacity.get(candidate) is not None
+                        and capacity[candidate].eligible_for_attempt
+                    ),
+                    chosen_runtime,
+                )
+            selected_capacity = capacity.get(chosen_runtime)
+            if selected_capacity is not None and not selected_capacity.eligible_for_attempt:
+                raise conflict(
+                    "agent_runtime",
+                    f"{chosen_runtime.title()} is not currently usable: {selected_capacity.state.value}.",
+                    runtime_id=chosen_runtime,
+                    capacity_state=selected_capacity.state.value,
+                    reason_code=selected_capacity.reason_code,
+                    detail=selected_capacity.detail,
+                    evidence_at=(
+                        selected_capacity.evidence_at.isoformat()
+                        if selected_capacity.evidence_at else None
+                    ),
+                )
             argv = squads.argv_for_runtime(chosen_runtime)
             runtime_mcp_env: dict[str, str] = {}
             installed_mcp_servers = mcp_servers_module.list_servers(storage.conn)
@@ -748,6 +788,44 @@ def build_agent_squads_router(
                     authority=body.authority,
                     prompt_file=prompt_file,
                 )
+            # Correlate the work item and execution before PTY startup. An
+            # instant-exiting CLI may publish its final event from inside
+            # manager.spawn(); the subscriber must already be able to find both.
+            work_item = squads.set_work_item_session(
+                conn,
+                work_item.id,
+                status=squads.AgentWorkItemStatus.RUNNING,
+                pty_session_id=session_id,
+                chosen_runtime=chosen_runtime,
+                opened_in_tab=body.open_in_tab,
+            )
+            try:
+                runtime_profile = coder_runtimes.profile_for(
+                    coder_runtimes.CoderRuntime(chosen_runtime)
+                )
+            except ValueError:
+                # Direct/custom executable sessions are an existing supported
+                # escape hatch. They still receive an execution receipt, but no
+                # provider-specific model/effort defaults or quota classification.
+                runtime_profile = coder_runtimes.RuntimeProfile()
+            execution = ai_executions.reserve_execution(
+                conn,
+                kind="agent_work_item",
+                project_id=project.id,
+                runtime_id=chosen_runtime,
+                model=runtime_profile.model or None,
+                effort=runtime_profile.effort or None,
+                authority=body.authority.value,
+                source_type="agent_work_item",
+                source_id=work_item.id,
+                pty_session_id=session_id,
+                metadata={
+                    "squad_id": squad.id,
+                    "role_id": role.id,
+                    "execution_mode": body.execution_mode.value,
+                    "mcp_server_ids_configured": attached_mcp_server_ids,
+                },
+            )
         # PTY startup can await platform work. Never hold the daemon's shared
         # SQLite transaction across that await: simultaneous squad launches or
         # a routine heartbeat would otherwise attempt BEGIN on the same live
@@ -765,6 +843,12 @@ def build_agent_squads_router(
         except Exception as exc:
             with storage.transaction() as conn:
                 coordination.end_session(conn, coordination_session.id)
+                ai_executions.finalize_spawn_failure(conn, execution.id, str(exc))
+                # No process ever owned the work. Keep the item retryable while
+                # the failed launch attempt remains a durable blocked receipt.
+                squads.update_work_item_status(
+                    conn, work_item.id, squads.AgentWorkItemStatus.QUEUED
+                )
                 audit(
                     conn,
                     AuditRecord(
@@ -797,14 +881,7 @@ def build_agent_squads_router(
             )
 
         with storage.transaction() as conn:
-            work_item = squads.set_work_item_session(
-                conn,
-                work_item.id,
-                status=squads.AgentWorkItemStatus.RUNNING,
-                pty_session_id=session.session_id,
-                chosen_runtime=chosen_runtime,
-                opened_in_tab=body.open_in_tab,
-            )
+            work_item = squads.get_work_item(conn, work_item.id)
             audit(
                 conn,
                 AuditRecord(
@@ -894,6 +971,7 @@ def build_agent_squads_router(
             "authority": body.authority.value,
             "timeout_seconds": body.timeout_seconds,
             "coordination_session_id": coordination_session.id,
+            "execution_id": execution.id,
         }
 
     async def _do_launch(
@@ -1124,6 +1202,13 @@ async def subscribe_agent_squad_events(
                 exit_code=exit_code if isinstance(exit_code, int) or exit_code is None else None,
                 failure_reason=failure_reason,
             )
+            finalized_execution = ai_executions.finalize_pty_execution(
+                conn,
+                pty_session_id=session_id,
+                output=session.scrollback_bytes() if session is not None else b"",
+                exit_code=exit_code if isinstance(exit_code, int) or exit_code is None else None,
+                work_outcome=(updated.status.value if updated is not None else None),
+            )
             coordination_session = coordination.get_session_by_coder_thread_id(
                 conn, session_id
             )
@@ -1145,6 +1230,10 @@ async def subscribe_agent_squad_events(
                 "session_id": session_id,
                 "status": updated.status.value,
                 "transcript_file_id": updated.transcript_file_id,
+                "execution_id": finalized_execution.id if finalized_execution else None,
+                "accounting_state": (
+                    finalized_execution.accounting_state if finalized_execution else "missing_execution"
+                ),
             },
         )
         if coordination_session is not None:

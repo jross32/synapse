@@ -119,6 +119,14 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
 
     async def _fake_spawn(**kwargs):
         captured.update(kwargs)
+        reserved = app.state.storage.conn.execute(
+            "SELECT id FROM ai_executions WHERE pty_session_id = ?", (kwargs["session_id"],)
+        ).fetchone()
+        linked = app.state.storage.conn.execute(
+            "SELECT pty_session_id FROM agent_work_items WHERE id = ?", (env_item_id["id"],)
+        ).fetchone()
+        captured["reserved_before_spawn"] = bool(reserved)
+        captured["linked_before_spawn"] = linked["pty_session_id"] if linked else None
         return SimpleNamespace(
             session_id=kwargs["session_id"],
             summary=lambda: SimpleNamespace(
@@ -134,6 +142,7 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
             ),
         )
 
+    env_item_id: dict[str, str] = {}
     monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
     monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
 
@@ -163,6 +172,7 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
         assert github.status_code == 201, github.text
         squad = _create_squad(c)
         item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        env_item_id["id"] = item["id"]
         launched = c.post(
             f"/api/v1/agent-work-items/{item['id']}/launch",
             json={"preferred_runtime": "codex", "open_in_tab": False},
@@ -198,6 +208,8 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
     env = captured["env"]
     assert isinstance(argv, list)
     assert isinstance(env, dict)
+    assert captured["reserved_before_spawn"] is True
+    assert captured["linked_before_spawn"] == captured["session_id"]
     assert "mcp_servers.reflex.command=\"node\"" in argv
     assert "mcp_servers.github.env_vars=[\"GITHUB_TOKEN\"]" in argv
     assert "supersecret" not in " ".join(argv)
@@ -622,6 +634,7 @@ def test_automatic_launch_uses_absolute_prompt_and_mcp_paths(
         )
         assert launched.status_code == 200, launched.text
         body = launched.json()
+        assert body["execution_id"]
 
     argv = captured["argv"]
     env = captured["env"]
@@ -641,6 +654,30 @@ def test_automatic_launch_uses_absolute_prompt_and_mcp_paths(
     assert env["SYNAPSE_SESSION_ID"] == body["coordination_session_id"]
     assert env["SYNAPSE_ROLE_PROMPT_FILE"] != "C:/caller/prompt.md"
     assert str(Path(env["SYNAPSE_ROLE_PROMPT_FILE"])) in argv[-1]
+    execution = app.state.storage.conn.execute(
+        "SELECT * FROM ai_executions WHERE id = ?", (body["execution_id"],)
+    ).fetchone()
+    assert execution is not None
+    assert execution["source_id"] == item["id"]
+    assert execution["pty_session_id"] == body["session_id"]
+    assert execution["runtime_id"] == "codex"
+    assert execution["authority"] == "workspace"
+    with app.state.storage.transaction() as conn:
+        from synapse_daemon import ai_executions
+        ai_executions.finalize_pty_execution(
+            conn,
+            pty_session_id=body["session_id"],
+            output=b"tokens used: 49,912",
+            exit_code=0,
+            work_outcome="handoff",
+        )
+    with client as c:
+        usage = c.get(f"/api/v1/agent-work-items/{item['id']}/tokens").json()
+        assert len(usage) == 1
+        assert usage[0]["total_tokens"] == 49_912
+        assert usage[0]["token_provenance"] == "runtime_reported"
+        rollup = c.get(f"/api/v1/agent-squads/{squad['id']}/token-usage").json()
+        assert rollup["total_tokens"] == 49_912
 
 
 @pytest.mark.asyncio
@@ -1140,6 +1177,45 @@ def test_unknown_worker_exit_status_blocks_instead_of_implying_clean_exit(tmp_pa
     assert updated is not None
     assert updated.status == agent_squads.AgentWorkItemStatus.BLOCKED
     assert "exit status was unavailable" in (updated.blockers_md or "")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows ConPTY execution proof")
+def test_real_pty_finalizer_flows_into_runtime_and_squad_accounting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP launch -> real PTY -> WS subscriber -> canonical REST accounting."""
+    app, client = _harness(tmp_path)
+    monkeypatch.setattr(
+        agent_squads,
+        "argv_for_runtime",
+        lambda runtime: [
+            "powershell.exe", "-NoProfile", "-Command",
+            "Write-Output 'tokens used'; Write-Output '49,912'",
+        ],
+    )
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "codex", "open_in_tab": False},
+        )
+        assert launched.status_code == 200, launched.text
+        execution_id = launched.json()["execution_id"]
+        for _ in range(80):
+            receipt = c.get(f"/api/v1/ai/executions/{execution_id}").json()
+            if receipt["state"] == "finalized":
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail("real PTY execution did not finalize")
+        assert receipt["accounting_state"] == "measured"
+        assert receipt["usage"][0]["total_tokens"] == 49_912
+        usage = c.get(f"/api/v1/agent-work-items/{item['id']}/tokens").json()
+        assert usage[0]["total_tokens"] == 49_912
+        rollup = c.get(f"/api/v1/agent-squads/{squad['id']}/token-usage").json()
+        assert rollup["total_tokens"] == 49_912
 
 
 def test_stop_squad_blocks_worker_before_pty_finalization_race(

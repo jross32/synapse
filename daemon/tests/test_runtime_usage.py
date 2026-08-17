@@ -8,6 +8,16 @@ from __future__ import annotations
 
 from synapse_daemon.runtime_usage import Usage, parse_usage
 
+
+def test_codex_uses_final_ansi_wrapped_footer_not_echoed_command() -> None:
+    output = (
+        "Write-Output 'tokens used'; Write-Output '49,912'\r\n"
+        "\x1b[?25h\x1b[0mtokens used\r\n49,912\x1b[0m\r\n"
+    )
+    usage = parse_usage("codex", output)
+    assert usage.total_tokens == 49_912
+    assert "total_tokens" in usage.reported_fields
+
 # `claude --output-format json --print "reply with the single word ok"`, trimmed.
 CLAUDE = """{"type":"result","subtype":"success","is_error":false,"duration_ms":4953,
 "result":"ok","session_id":"4a9aa6c6","total_cost_usd":0.16612700000000002,

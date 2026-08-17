@@ -6,7 +6,7 @@ It runs on your computer as an always-on engine. You can put multiple AI coding 
 
 Think of it as **mission control for your projects and your AI helpers** — one engine, many AIs, one source of truth.
 
-> **Status:** early development (`v0.1.155`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release adds a **local-AI layer**: Synapse profiles your machine (reading real VRAM from `nvidia-smi`, since Windows' own field caps at 4 GB and misreports a 6 GB card), **benchmarks the models you have installed** on tool-calling, coding, code repair, structured output, instruction adherence, diff reasoning and vision, and turns those measurements into per-role recommendations. A new **agent loop** lets a local model actually do work — filesystem tools, opt-in shell, and web search plus fetch, so local models get internet access — and `GET /api/v1/ai/context` now publishes a `local_ai` block so **any** connected AI can see which local models exist, what each is measured to be good at, and hand off work that doesn't need a frontier model. The preceding release made Synapse's equipment discoverable to any AI that connects and finished Gemini as a first-class runtime.
+> **Status:** early development (`v0.1.156`). It already launches projects, runs AI coding sessions, spins up AI teams ("squads"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release begins the **canonical AI execution and accounting contract**: Agent Squad runs receive durable execution IDs, provider readiness and quota evidence survive restarts, measured usage carries provenance, missing measurements stay unknown instead of reading as zero, and AIs can inspect the typed contracts through `/api/v1/ai/runtimes`. Other execution paths are migrating incrementally and remain labeled partial until they share this source of truth. The preceding local-AI release profiles installed models, benchmarks their real capabilities, gives them filesystem/opt-in shell/web tools, and advertises those measurements through `/api/v1/ai/context`.
 >
 > 📸 **[See what Synapse looks like →](./docs/screenshots/)** — real screenshots of the running app (including Deep Live View and the verified restart checklist), refreshed as the UI evolves.
 
@@ -270,7 +270,7 @@ pip install -e ".[dev]"
 
 # checks
 npm run typecheck                 # TypeScript passes
-(cd daemon && python -m pytest -q) # 744 tests pass + 14 skipped
+(cd daemon && python -m pytest -q) # 1,049 tests pass + 14 skipped
 
 # run the dev stack (daemon + Vite + Electron)
 synapse.cmd

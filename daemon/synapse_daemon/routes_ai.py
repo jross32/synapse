@@ -18,7 +18,8 @@ import json
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel, Field
 
 from . import __version__
 from . import projects as projects_module
@@ -30,6 +31,7 @@ from . import benchmarks as benchmarks_module
 from . import coder_workspace as coder_workspace_module
 from . import blueprints as blueprints_module
 from . import local_models as local_models_module
+from . import ai_executions as ai_executions_module
 from . import mcp_servers as mcp_servers_module
 from . import quality_os as quality_os_module
 from .ai_context_memory import ai_context_metadata
@@ -39,10 +41,28 @@ from .pty_sessions import PtySessionManager
 from .synapse_dev import SynapseDevManager
 from .time_utils import utc_now
 from .tools_registry import ToolRegistry
+from .audit import AuditRecord, audit
 
 #: Cap inlined files per project so the AI context payload stays small.
 #: A Claude session can hit /api/v1/projects/{id}/files for the full list.
 _INLINE_FILE_CAP = 25
+
+
+class AIRuntimesResponse(BaseModel):
+    schema_: str = Field(default="synapse.ai.runtimes/v1", alias="schema")
+    capacity: list[ai_executions_module.RuntimeCapacity]
+    executions: list[ai_executions_module.AIExecution]
+    measurement_note: str
+
+
+class RuntimeRecheckRequest(BaseModel):
+    acknowledge_provider_reset: bool
+    note: str
+
+
+class RuntimeCapacityUpdateRequest(BaseModel):
+    state: ai_executions_module.RuntimeCapacityState
+    note: str
 
 
 def _file_to_inline(row) -> dict[str, Any]:  # noqa: ANN001
@@ -65,6 +85,158 @@ def build_ai_router(
     started_at: datetime | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/ai", tags=["ai"])
+    with storage.transaction() as conn:
+        ai_executions_module.import_legacy_exhaustion(
+            conn, storage.data_dir / "runtime-ledger.jsonl"
+        )
+
+    @router.get("/runtimes", response_model=AIRuntimesResponse)
+    async def runtimes(
+        request: Request,
+        project_id: str | None = None,
+        runtime_id: str | None = None,
+        execution_limit: int = Query(default=50, ge=1, le=500),
+    ) -> AIRuntimesResponse:
+        """Runtime readiness and measured usage from the canonical execution ledger.
+
+        Missing measurements are returned as null inside each execution, never as a
+        synthetic zero. Capacity is evidence-backed and survives daemon restarts.
+        """
+        subject = request.state.auth_subject
+        if subject.kind == "worker":
+            if project_id is not None and project_id != subject.project_id:
+                from .errors import SynapseError
+                raise SynapseError(
+                    code="auth.worker_scope_denied",
+                    message="A worker can only read runtime executions for its assigned project.",
+                    status=403,
+                )
+            project_id = subject.project_id
+        return AIRuntimesResponse(
+            schema="synapse.ai.runtimes/v1",
+            capacity=[
+                item.model_dump(mode="json")
+                for item in ai_executions_module.list_capacity(storage.conn)
+                if runtime_id is None or item.runtime_id == runtime_id
+            ],
+            executions=[
+                item.model_dump(mode="json")
+                for item in ai_executions_module.list_executions(
+                    storage.conn,
+                    project_id=project_id,
+                    runtime_id=runtime_id,
+                    limit=execution_limit,
+                )
+            ],
+            measurement_note=(
+                "null means unavailable or unmeasured; it never means zero. "
+                "Only compare usage values with compatible provenance and source."
+            ),
+        )
+
+    @router.get("/executions/{execution_id}", response_model=ai_executions_module.AIExecution)
+    async def execution(request: Request, execution_id: str) -> ai_executions_module.AIExecution:
+        item = ai_executions_module.get_execution(storage.conn, execution_id)
+        if item is None:
+            from .errors import not_found
+            raise not_found("ai_execution", execution_id)
+        subject = request.state.auth_subject
+        if subject.kind == "worker" and (
+            item.project_id != subject.project_id
+            or item.source_type != "agent_work_item"
+            or item.source_id != subject.work_item_id
+        ):
+            from .errors import SynapseError
+            raise SynapseError(
+                code="auth.worker_scope_denied",
+                message="A worker can only read its own execution receipt.",
+                status=403,
+            )
+        return item
+
+    @router.post(
+        "/runtimes/{runtime_id}/recheck",
+        response_model=ai_executions_module.RuntimeCapacity,
+    )
+    async def recheck_runtime(
+        request: Request,
+        runtime_id: str,
+        payload: RuntimeRecheckRequest,
+    ) -> ai_executions_module.RuntimeCapacity:
+        """Acknowledge a provider reset without pretending readiness was verified."""
+        from .errors import SynapseError, invalid
+
+        subject = request.state.auth_subject
+        if subject.kind != "local":
+            raise SynapseError(
+                code="auth.local_operator_required",
+                message="Only the local operator can clear durable provider quota evidence.",
+                status=403,
+            )
+        if not payload.acknowledge_provider_reset or not payload.note.strip():
+            raise invalid(
+                "ai_runtime",
+                "Confirm the provider reset and include a note before allowing a new attempt.",
+            )
+        try:
+            with storage.transaction() as conn:
+                capacity = ai_executions_module.acknowledge_provider_reset(
+                    conn, runtime_id, note=payload.note.strip()
+                )
+                audit(
+                    conn,
+                    AuditRecord(
+                        entity_type="ai_runtime",
+                        entity_id=runtime_id,
+                        action="provider_reset.acknowledge",
+                        source="desktop",
+                        result="success",
+                        details={"new_state": capacity.state.value},
+                    ),
+                )
+        except ValueError:
+            raise invalid("ai_runtime", f"Unknown runtime '{runtime_id}'.")
+        return capacity
+
+    @router.post(
+        "/runtimes/{runtime_id}/capacity",
+        response_model=ai_executions_module.RuntimeCapacity,
+    )
+    async def update_runtime_capacity(
+        request: Request,
+        runtime_id: str,
+        payload: RuntimeCapacityUpdateRequest,
+    ) -> ai_executions_module.RuntimeCapacity:
+        """Record local-operator knowledge without spending a provider call."""
+        from .errors import SynapseError, invalid
+
+        if request.state.auth_subject.kind != "local":
+            raise SynapseError(
+                code="auth.local_operator_required",
+                message="Only the local operator can attest provider capacity.",
+                status=403,
+            )
+        if not payload.note.strip():
+            raise invalid("ai_runtime", "A capacity attestation must include its evidence note.")
+        try:
+            with storage.transaction() as conn:
+                capacity = ai_executions_module.set_operator_capacity(
+                    conn, runtime_id, state=payload.state, note=payload.note.strip()
+                )
+                audit(
+                    conn,
+                    AuditRecord(
+                        entity_type="ai_runtime",
+                        entity_id=runtime_id,
+                        action="capacity.attest",
+                        source="desktop",
+                        result="success",
+                        details={"state": capacity.state.value, "evidence_source": "user_reported"},
+                    ),
+                )
+        except ValueError as exc:
+            raise invalid("ai_runtime", str(exc))
+        return capacity
 
     @router.get("/health-report", response_model=None)
     async def health_report() -> dict[str, Any]:
@@ -446,6 +618,21 @@ def build_ai_router(
             "tools": tools,
             "mcp_servers": mcp_block,
             "local_ai": local_ai_block,
+            "runtime_execution": {
+                "schema": "synapse.ai.runtimes/v1",
+                "capacity": [
+                    item.model_dump(mode="json")
+                    for item in ai_executions_module.list_capacity(storage.conn)
+                ],
+                "endpoints": {
+                    "readiness_and_usage": "GET /api/v1/ai/runtimes",
+                    "execution": "GET /api/v1/ai/executions/{execution_id}",
+                },
+                "note": (
+                    "Capacity is evidence-backed. Unknown usage is null, not zero; "
+                    "process exit and accepted work completion are separate facts."
+                ),
+            },
             # Blueprints are listed here so an AI told "build me an app" discovers what can
             # be built from this payload alone, without being handed a file path.
             "blueprints": blueprints_block,
@@ -483,6 +670,26 @@ def build_ai_router(
                 ],
             },
             "endpoints_for_ai": [
+                {
+                    "purpose": "read evidence-backed AI runtime readiness and measured usage",
+                    "method": "GET",
+                    "path": "/api/v1/ai/runtimes",
+                },
+                {
+                    "purpose": "read one durable AI execution receipt and its usage observations",
+                    "method": "GET",
+                    "path": "/api/v1/ai/executions/{execution_id}",
+                },
+                {
+                    "purpose": "locally acknowledge a provider quota reset and permit a fresh attempt without claiming verified readiness",
+                    "method": "POST",
+                    "path": "/api/v1/ai/runtimes/{runtime_id}/recheck",
+                },
+                {
+                    "purpose": "record local-operator knowledge that a runtime is quota exhausted, disabled, or unknown without spending a provider call",
+                    "method": "POST",
+                    "path": "/api/v1/ai/runtimes/{runtime_id}/capacity",
+                },
                 {
                     "purpose": "list registered projects",
                     "method": "GET",

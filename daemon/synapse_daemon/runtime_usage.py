@@ -1,6 +1,12 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import re
+
+_ANSI_CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def _plain_terminal_text(value: str) -> str:
+    return _ANSI_CSI_RE.sub("", value).replace("\r", "")
 
 @dataclass
 class Usage:
@@ -12,6 +18,7 @@ class Usage:
     cost_usd: float = 0.0
     credits: float = 0.0
     requests: int = 0
+    reported_fields: set[str] = field(default_factory=set)
 
 def parse_claude(stdout: str) -> Usage:
     usage_obj = Usage(runtime="claude")
@@ -27,6 +34,8 @@ def parse_claude(stdout: str) -> Usage:
         
         # total_cost_usd -> cost_usd
         cost_usd = data.get("total_cost_usd", 0.0)
+        if "total_cost_usd" in data:
+            usage_obj.reported_fields.add("cost_usd")
         try:
             usage_obj.cost_usd = float(cost_usd) if cost_usd is not None else 0.0
         except (ValueError, TypeError):
@@ -35,6 +44,7 @@ def parse_claude(stdout: str) -> Usage:
         # usage dictionary
         usage_dict = data.get("usage")
         if isinstance(usage_dict, dict):
+            usage_obj.reported_fields.update({"input_tokens", "output_tokens", "total_tokens"})
             input_tokens = usage_dict.get("input_tokens", 0)
             output_tokens = usage_dict.get("output_tokens", 0)
             cache_creation = usage_dict.get("cache_creation_input_tokens", 0)
@@ -152,6 +162,9 @@ def parse_gemini(stdout: str) -> Usage:
                 usage_obj.total_tokens = total_tot
                 usage_obj.requests = total_reqs
                 usage_obj.model = best_model
+                usage_obj.reported_fields.update(
+                    {"input_tokens", "output_tokens", "total_tokens", "requests"}
+                )
     except Exception:
         pass
     return usage_obj
@@ -159,9 +172,10 @@ def parse_gemini(stdout: str) -> Usage:
 def parse_codex(stdout: str) -> Usage:
     usage_obj = Usage(runtime="codex")
     try:
-        match = re.search(r'tokens\s+used', stdout, re.IGNORECASE)
-        if match:
-            sub = stdout[match.end():]
+        plain = _plain_terminal_text(stdout)
+        matches = list(re.finditer(r'tokens\s+used', plain, re.IGNORECASE))
+        if matches:
+            sub = plain[matches[-1].end():]
             direct_match = re.match(r'^[\s:=]*([\d,]+(?:\.\d*)?)', sub)
             if direct_match:
                 num_str = direct_match.group(1)
@@ -173,6 +187,7 @@ def parse_codex(stdout: str) -> Usage:
                 num_str_clean = num_str.replace(',', '')
                 try:
                     usage_obj.total_tokens = int(float(num_str_clean))
+                    usage_obj.reported_fields.add("total_tokens")
                 except (ValueError, TypeError):
                     pass
     except Exception:
@@ -182,9 +197,10 @@ def parse_codex(stdout: str) -> Usage:
 def parse_copilot(stdout: str) -> Usage:
     usage_obj = Usage(runtime="copilot")
     try:
-        match = re.search(r'AI\s+Credits', stdout, re.IGNORECASE)
-        if match:
-            sub = stdout[match.end():]
+        plain = _plain_terminal_text(stdout)
+        matches = list(re.finditer(r'AI\s+Credits', plain, re.IGNORECASE))
+        if matches:
+            sub = plain[matches[-1].end():]
             direct_match = re.match(r'^[\s:=]*([\d,]+(?:\.\d*)?)', sub)
             if direct_match:
                 num_str = direct_match.group(1)
@@ -196,6 +212,7 @@ def parse_copilot(stdout: str) -> Usage:
                 num_str_clean = num_str.replace(',', '')
                 try:
                     usage_obj.credits = float(num_str_clean)
+                    usage_obj.reported_fields.add("credits")
                 except (ValueError, TypeError):
                     pass
     except Exception:

@@ -143,6 +143,31 @@ def record_tokens(
 
 
 def list_for_work_item(conn: sqlite3.Connection, work_item_id: str) -> list[WorkItemTokenUsage]:
+    canonical = conn.execute(
+        "SELECT u.*, e.runtime_id FROM ai_usage_observations u "
+        "JOIN ai_executions e ON e.id = u.execution_id "
+        "WHERE e.source_type = 'agent_work_item' AND e.source_id = ? "
+        "AND u.total_tokens IS NOT NULL ORDER BY u.captured_at",
+        (work_item_id,),
+    ).fetchall()
+    if canonical:
+        wi = conn.execute(
+            "SELECT squad_id, assigned_role_id FROM agent_work_items WHERE id = ?",
+            (work_item_id,),
+        ).fetchone()
+        return [
+            WorkItemTokenUsage(
+                id=row["id"], work_item_id=work_item_id,
+                squad_id=wi["squad_id"] if wi else None,
+                role_id=wi["assigned_role_id"] if wi else None,
+                runtime_id=row["runtime_id"], input_tokens=row["input_tokens"] or 0,
+                output_tokens=row["output_tokens"] or 0, total_tokens=row["total_tokens"],
+                token_provenance=row["provenance"], token_source=row["source"],
+                captured_at=from_iso(row["captured_at"]),
+                metadata={**_loads_dict(row["metadata_json"]), "execution_id": row["execution_id"]},
+            )
+            for row in canonical
+        ]
     rows = conn.execute(
         "SELECT * FROM work_item_token_usage WHERE work_item_id = ? ORDER BY captured_at",
         (work_item_id,),
@@ -151,17 +176,16 @@ def list_for_work_item(conn: sqlite3.Connection, work_item_id: str) -> list[Work
 
 
 def sum_squad_tokens(conn: sqlite3.Connection, squad_id: str) -> SquadTokenRollup:
-    rows = conn.execute(
-        "SELECT role_id, input_tokens, output_tokens, total_tokens "
-        "FROM work_item_token_usage WHERE squad_id = ?",
-        (squad_id,),
-    ).fetchall()
     rollup = SquadTokenRollup(squad_id=squad_id)
-    for row in rows:
-        rollup.entries += 1
-        rollup.input_tokens += row["input_tokens"]
-        rollup.output_tokens += row["output_tokens"]
-        rollup.total_tokens += row["total_tokens"]
-        role = row["role_id"] or "unassigned"
-        rollup.by_role[role] = rollup.by_role.get(role, 0) + row["total_tokens"]
+    work_items = conn.execute(
+        "SELECT id FROM agent_work_items WHERE squad_id = ?", (squad_id,)
+    ).fetchall()
+    for work_item in work_items:
+        for usage in list_for_work_item(conn, work_item["id"]):
+            rollup.entries += 1
+            rollup.input_tokens += usage.input_tokens
+            rollup.output_tokens += usage.output_tokens
+            rollup.total_tokens += usage.total_tokens
+            role = usage.role_id or "unassigned"
+            rollup.by_role[role] = rollup.by_role.get(role, 0) + usage.total_tokens
     return rollup

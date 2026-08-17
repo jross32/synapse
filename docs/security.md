@@ -109,9 +109,11 @@ surface from `/api/v1`, because claude.ai's connector dialog sends only the URL
 - **Read-only by default.** Advertised tools only read (projects, tools,
   quick-actions, squads, per-project records, an orientation digest). No
   launch, create, run-action, or delete over the connector.
-- **Writes are opt-in.** `SYNAPSE_MCP_ALLOW_WRITES=1` additionally exposes
-  `synapse_add_project_idea` (capture a quick ADR idea). Process launch / exec
-  is never exposed here — that stays CLI-only until OAuth (v2).
+- **Writes are opt-in and legacy-global.** `SYNAPSE_MCP_ALLOW_WRITES=1` additionally exposes
+  `synapse_create_squad`, `synapse_add_work_item`, `synapse_capture_note`, and
+  `synapse_add_project_idea`. They are not project-capability-scoped yet. Process launch / exec
+  remains on REST. ADR-0036 forbids broadening this into full-write MCP until the connector uses
+  expiring, revocable project credentials and the same authority/audit services as REST.
 - **Close the tunnel when done.** Like remote recovery, this intentionally
   publishes a surface on the public internet via Cloudtap; close it from
   `Settings → Phone access` when not in use.
@@ -214,3 +216,11 @@ in screenshots, and are readable by other locally authorized AI sessions.
 No secrets are stored in plaintext by Synapse. Project env vars marked as `secret: true` are stored encrypted at rest (Windows DPAPI on the daemon's user account). The UI never round-trips secret values back to the client after the initial save — only a `(set)` placeholder is shown.
 
 (Secrets are formalised in Round 2 of design contracts — see `v0.1.1.5`.)
+### AI execution authority and public drive
+
+ADR-0036 makes REST the complete execution control plane and keeps accounting/readiness in
+one SQLite service. A public or MCP client must not receive the desktop local/root token as
+its normal automation credential. Public writes require an expiring, revocable capability
+bound to allowed projects, authority, actions, duration, concurrency, and spend. MCP write
+tools must call the same scoped service rather than invoking storage/domain functions through
+a parallel global write switch. Full authority is explicit and never inherited by schedules.

@@ -7,6 +7,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from synapse_daemon import coder_workspace
+from synapse_daemon import ai_executions
+from synapse_daemon import coordination
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -50,6 +52,142 @@ def test_ai_context_returns_versioned_digest(tmp_path: Path) -> None:
         # for AI sessions.
         assert any(e["path"] == "/api/v1/projects" for e in body["endpoints_for_ai"])
         assert any(e["path"] == "/api/v1/ai/health-report" for e in body["endpoints_for_ai"])
+        assert body["runtime_execution"]["schema"] == "synapse.ai.runtimes/v1"
+        assert body["runtime_execution"]["endpoints"]["readiness_and_usage"] == (
+            "GET /api/v1/ai/runtimes"
+        )
+
+
+def test_ai_runtime_endpoint_exposes_null_unknown_and_durable_capacity(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    storage = client.app.state.storage
+    with storage.transaction() as conn:
+        ai_executions.reserve_execution(
+            conn,
+            kind="agent_work_item",
+            project_id="demo",
+            runtime_id="codex",
+            source_type="agent_work_item",
+            source_id="runtime-api-test",
+            pty_session_id="runtime-api-pty",
+        )
+        ai_executions.finalize_pty_execution(
+            conn,
+            pty_session_id="runtime-api-pty",
+            output=b"answer without a usage footer",
+            exit_code=0,
+            work_outcome="handoff",
+        )
+    with client as c:
+        response = c.get("/api/v1/ai/runtimes?project_id=demo&runtime_id=codex")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["schema"] == "synapse.ai.runtimes/v1"
+        assert body["capacity"][0]["runtime_id"] == "codex"
+        assert body["capacity"][0]["state"] == "available"
+        assert body["executions"][0]["accounting_state"] == "unreported"
+        assert body["executions"][0]["usage"] == []
+        assert "null means unavailable" in body["measurement_note"]
+
+        detail = c.get(f"/api/v1/ai/executions/{body['executions'][0]['id']}")
+        assert detail.status_code == 200
+        assert detail.json()["runtime_id"] == "codex"
+
+        openapi = c.get("/api/v1/openapi.json").json()
+        runtime_schema = openapi["paths"]["/api/v1/ai/runtimes"]["get"]["responses"]["200"]
+        assert runtime_schema["content"]["application/json"]["schema"]["$ref"].endswith(
+            "/AIRuntimesResponse"
+        )
+
+
+def test_worker_runtime_reads_are_project_and_work_item_scoped(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    storage = client.app.state.storage
+    with storage.transaction() as conn:
+        own = ai_executions.reserve_execution(
+            conn, kind="agent_work_item", project_id="demo", runtime_id="codex",
+            source_type="agent_work_item", source_id="own-work", pty_session_id="own-pty",
+        )
+        foreign = ai_executions.reserve_execution(
+            conn, kind="agent_work_item", project_id=None, runtime_id="claude",
+            source_type="agent_work_item", source_id="foreign-work", pty_session_id="foreign-pty",
+        )
+        session = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="demo", runtime_id="codex", agent_label="Scoped worker",
+                task="Read own receipt",
+            ),
+        )
+        credential = coordination.issue_session_credential(
+            conn, session.id, authority="observe", ttl_seconds=600,
+            work_item_id="own-work", squad_id=None,
+        )
+    headers = {"X-Synapse-Token": credential, "X-Synapse-Session": session.id}
+    worker = TestClient(client.app, headers=headers)
+    with worker as c:
+        listing = c.get("/api/v1/ai/runtimes")
+        assert listing.status_code == 200
+        assert {row["id"] for row in listing.json()["executions"]} == {own.id}
+        assert c.get(f"/api/v1/ai/executions/{own.id}").status_code == 200
+        denied = c.get(f"/api/v1/ai/executions/{foreign.id}")
+        assert denied.status_code == 403
+        assert denied.json()["code"] == "auth.worker_scope_denied"
+
+
+def test_local_operator_can_acknowledge_reset_without_claiming_ready(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    storage = client.app.state.storage
+    with storage.transaction() as conn:
+        ai_executions.reserve_execution(
+            conn, kind="agent_work_item", project_id="demo", runtime_id="copilot",
+            source_type="agent_work_item", source_id="quota-work", pty_session_id="quota-pty",
+        )
+        ai_executions.finalize_pty_execution(
+            conn, pty_session_id="quota-pty",
+            output=b"You have exceeded your monthly quota", exit_code=1,
+            work_outcome="blocked",
+        )
+    with client as c:
+        blocked = next(
+            row for row in c.get("/api/v1/ai/runtimes").json()["capacity"]
+            if row["runtime_id"] == "copilot"
+        )
+        assert blocked["state"] == "quota_exhausted"
+        reset = c.post(
+            "/api/v1/ai/runtimes/copilot/recheck",
+            json={
+                "acknowledge_provider_reset": True,
+                "note": "Provider dashboard shows the monthly allowance reset.",
+            },
+        )
+        assert reset.status_code == 200, reset.text
+        assert reset.json()["state"] == "unknown"
+        assert reset.json()["usable_now"] is False
+        assert reset.json()["eligible_for_attempt"] is True
+
+
+def test_local_operator_can_attest_known_quota_without_provider_call(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    with client as c:
+        response = c.post(
+            "/api/v1/ai/runtimes/copilot/capacity",
+            json={
+                "state": "quota_exhausted",
+                "note": "Copilot CLI reported the monthly quota was exceeded before this run.",
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["state"] == "quota_exhausted"
+        assert response.json()["evidence_source"] == "user_reported"
+        assert response.json()["eligible_for_attempt"] is False
+        audit_row = c.get("/api/v1/audit").json()["entries"]
+        assert any(
+            row["entity_type"] == "ai_runtime"
+            and row["entity_id"] == "copilot"
+            and row["action"] == "capacity.attest"
+            for row in audit_row
+        )
 
 
 def test_ai_context_requires_auth(tmp_path: Path) -> None:

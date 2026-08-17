@@ -3,6 +3,14 @@
   "generated_at": "2026-08-01",
   "items": [
     {
+      "id": "canonical-ai-execution-accounting",
+      "title": "Canonical AI execution and usage accounting",
+      "status": "in_progress",
+      "phase": "AI operator experience",
+      "adr": "ADR-0036",
+      "summary": "One durable execution ID, evidence-backed runtime readiness, nullable provenance-tagged usage, and truthful completion across every AI launch path. Agent Squad PTY accounting and read-only REST are the first shipped unit; remaining launch paths migrate incrementally."
+    },
+    {
       "id": "ai-council-review",
       "title": "AI Council Review",
       "status": "in_progress",

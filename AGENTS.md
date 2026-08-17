@@ -71,6 +71,11 @@ capability MUST:
 A capability an AI cannot *discover* (via `ai/context`) and *drive* (via the API) is
 not shippable — treat that gap like a failing test.
 
+**Enforce it in the feature's tests.** Every new AI-usable operation must assert its REST
+route appears in live OpenAPI and its task-oriented pointer appears in `/api/v1/ai/context`
+(or is explicitly marked internal/admin-only with the reason). A renderer-only action, an
+MCP-only duplicate, or an undocumented route is a failed implementation, not follow-up polish.
+
 ---
 
 ## AI Working Agreement — every AI, every session

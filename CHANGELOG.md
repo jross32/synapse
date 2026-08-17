@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.156] -- 2026-08-17
+
+### Added
+- **Canonical Agent Squad execution and accounting foundation (ADR-0036).** Every squad
+  launch now reserves a durable execution before PTY startup, returns its `execution_id`,
+  and finalizes process/work outcomes and provenance-tagged usage exactly once. SQLite
+  persists provider capacity across daemon restarts; unknown measurements remain null.
+- `GET /api/v1/ai/runtimes`, `GET /api/v1/ai/executions/{id}`, and local-operator-only
+  capacity/recheck actions expose typed, AI-discoverable readiness, usage, evidence,
+  user attestation, and reset acknowledgement contracts without requiring a paid canary.
+
+### Fixed
+- Agent Squad PTY output now feeds the same token values used by work-item/squad rollups
+  and budget gates. Copilot monthly exhaustion becomes durable and subsequent automatic
+  selection skips it; Codex ANSI-wrapped usage footers parse correctly.
+- Execution rows exist before an instant-exiting PTY can finalize, relaunches create
+  separate attempts, failed spawns retain receipts while leaving work retryable, and
+  timeouts remain sticky after late process events.
+- Project-scoped workers can read only their assigned project's execution list and their
+  own execution detail. Direct REST session documentation now includes the required bound
+  session key and labels current root-token WAN/MCP writes as legacy high-risk access.
+
 ## [0.1.155] - 2026-08-15
 
 ### Added
