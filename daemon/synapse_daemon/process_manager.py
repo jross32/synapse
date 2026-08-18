@@ -411,10 +411,46 @@ class ProcessManager:
                             "over_budget": budget_warnings,
                         },
                     )
+                await self._probe_health()
             except asyncio.CancelledError:
                 break
             except Exception:  # pragma: no cover — defensive; loop must not die
                 log.exception("Heartbeat loop iteration failed.")
+
+
+    async def _probe_health(self) -> None:
+        """Run each live project's declared health probe and record the result.
+
+        This did not exist. `HealthProbe` has been part of the project model since the
+        beginning and `projects.set_health` was written to store the outcome, but nothing
+        ever called either - `set_health` had exactly one caller in the whole repo, and it
+        was a test. Every project therefore sat at `current_health: "unknown"` with
+        `last_health_at: null` forever, and no health target could have worked no matter how
+        correct it was.
+
+        Runs off the heartbeat rather than its own timer: the interval is already the right
+        order of magnitude, and one loop that cannot die is easier to reason about than two.
+        """
+        from . import projects as projects_mod
+        from .health import HealthState, probe_once
+
+        for project_id in list(self._live):
+            try:
+                with self._storage.transaction() as conn:
+                    project = projects_mod.get(conn, project_id)
+                    if project is None or project.health.kind == "none":
+                        continue
+                    state, detail = await asyncio.to_thread(probe_once, project.health)
+                    if state is HealthState.UNKNOWN:
+                        continue
+                    if project.current_health != state.value:
+                        # Logged on transition only: a misconfigured probe would otherwise
+                        # print the same line every fifteen seconds forever.
+                        log.info("Health %s -> %s for %s: %s",
+                                 project.current_health, state.value, project_id, detail)
+                    projects_mod.set_health(conn, project_id, state=state)
+            except Exception:  # pragma: no cover -- a probe must never kill the loop
+                log.exception("Health probe failed for %s.", project_id)
 
     def _sample(self, project_id: str, live: _LiveChild) -> ResourceSnapshot | None:
         """Sum CPU% + RSS across a managed process and all its descendants."""

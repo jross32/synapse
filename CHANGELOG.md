@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.157] - 2026-08-18
+
+### Fixed
+- **Health probes never ran.** `HealthProbe` has been in the project model since the
+  beginning and `projects.set_health` was written to record the outcome, but nothing ever
+  called either - `set_health` had exactly one caller in the whole repo and it was a test.
+  Every project sat at `current_health: "unknown"` with `last_health_at: null` forever, so
+  no health target could work however correct it was. The heartbeat now probes every live
+  project.
+
+- **`wbscrper` was polled at `/api/status`, which that server has never served.** The app
+  came up fine and the probe 404'd, so it looked broken while working perfectly. Added a real
+  `GET /api/health` to the scraper (version, uptime, pid - no DB, no browser, so it cannot
+  fail for a reason unrelated to the process being alive) and repointed the probe.
+
+### Added
+- `HealthState.MISCONFIGURED`, distinct from `UNHEALTHY`. A 4xx other than 408/429 means the
+  server *answered* - the process is alive and the URL is wrong. Those need opposite fixes
+  and were indistinguishable, which is why this went unnoticed. Verified against the live
+  scraper: `/api/status` reports misconfigured with "the app is up but that endpoint does not
+  exist", `/api/health` reports healthy.
+
+  Probing runs off the existing heartbeat rather than its own timer, logs only on transition
+  so a bad probe cannot spam every 15 s, and cannot kill the loop.
+
 ## [0.1.156] -- 2026-08-17
 
 ### Added
