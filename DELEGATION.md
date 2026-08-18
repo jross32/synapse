@@ -130,3 +130,48 @@ BENCH_BLUEPRINT=webapp-auth-crud python benchmarks/delegation/bench.py "codex:lo
 Results append to `benchmarks/delegation/results.json`. Numbers above are one machine, one
 day, n=1 per cell — enough to choose a default, not enough to defend a ranking. If a result
 here matters to a decision you are making, run it again.
+
+## Delegating to a cheaper Claude (measured 2026-08-18)
+
+The `claude` rung takes `--model` and `--effort` like any other, so "call a cheaper me" is
+just a profile. Same piece (`summary`), same scenario deciding the verdict:
+
+| Rung | Verified | Seconds | Cost | Tokens |
+|---|---|---|---|---|
+| claude, haiku, low | yes | 30 | **$0.043** | 93,736 |
+| claude, sonnet, low | yes | 20 | $0.087 | 87,946 |
+| codex, low | yes | 82 | $0 (subscription) | 21,268 |
+| gemini flash | yes | ~105 | $0 (free tier) | — |
+
+**Haiku costs half of Sonnet for the same verified result.** Sonnet is faster. Both pass,
+because the scenario is what decides, not the model's confidence.
+
+### The saving that actually matters
+
+A delegate's tokens are **not in the orchestrator's context window**. That is the real
+difference, and it is larger than the per-call price: context grows for the whole session and
+every later turn pays for it again, while a delegate starts cold, does one job, and its
+transcript is discarded. Writing a 300-line module inline costs those tokens *and* carries
+them for the rest of the conversation; delegating costs $0.04 and carries nothing.
+
+### Do you need a second or third pass?
+
+No, and this is the point of the whole design. A review pass exists to catch what the first
+pass got wrong, which only makes sense when nothing objective can. Here an acceptance
+scenario already decides pass/fail, so:
+
+- if the scenario passes, a review pass can only add cost and opinions
+- if it fails, the loop repairs from the real error, which is better information than a
+  reviewer's guess
+- escalate a rung only when the loop is genuinely stuck
+
+Five delegated modules so far - `runtime_usage`, `runtime_ledger`, `build_scan`,
+`scenario_skeleton` - passed their tests **first time, with no second pass**. Spend a second
+opinion on deciding *what to build*, never on checking work a scenario already checked.
+
+### Practical routing
+
+- **Free and not urgent** -> gemini flash, then local overnight.
+- **Free-ish and want it now** -> codex:low. Fastest verified-per-dollar on a subscription.
+- **Metered but cheapest** -> claude haiku, low effort. Half of sonnet, same outcome.
+- **Judgement, design, debugging a weird failure** -> keep it. That is what does not delegate.

@@ -10,6 +10,30 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.158] - 2026-08-18
+
+### Fixed
+- **Claude calls recorded $0.00 spend, always.** Claude only reports usage under
+  `--output-format json` and the argv never asked for it, so the one rung metered in real
+  money contributed nothing to the ledger. A spend tracker that always reads zero is worse
+  than none, because it looks like it is working. Safe to add: `write_module` reads the
+  module back off disk, so stdout only ever carries telemetry.
+
+### Measured
+- **Delegating to a cheaper Claude.** Same piece, same scenario deciding the verdict:
+  haiku/low verified in 30 s for **$0.043**; sonnet/low verified in 20 s for $0.087. Haiku
+  costs half for the same result; sonnet is faster.
+
+  The larger saving is structural: a delegate's tokens never enter the orchestrator's
+  context window. Context is paid for again on every later turn, while a delegate starts
+  cold, does one job, and its transcript is discarded.
+
+  And a second or third pass is not needed - the acceptance scenario already decides
+  pass/fail objectively, so a reviewer can only add cost and opinions. Five delegated
+  modules have now passed their tests first time with no review pass.
+
+  Written up in `DELEGATION.md`.
+
 ## [0.1.157] - 2026-08-18
 
 ### Fixed

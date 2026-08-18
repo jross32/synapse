@@ -188,8 +188,15 @@ def headless_argv(
             # A ceiling the CLI enforces itself, so a runaway loop cannot outspend it even
             # if our own accounting is wrong.
             tuning += ["--max-budget-usd", str(profile.max_budget_usd)]
+        # `--output-format json` always: it is the only way claude reports what a call
+        # cost, and this is the one rung metered in real money. Without it the ledger
+        # recorded 0.0 USD for every claude call - a spend tracker that always reads zero is
+        # worse than none, because it looks like it is working.
+        #
+        # Safe for the file-writing flow: write_module reads the module back off disk, so
+        # what stdout carries is only ever telemetry.
         return [executable, *runtime_args, "--strict-mcp-config", *permission_args,
-                *tuning, "--print", prompt]
+                *tuning, "--output-format", "json", "--print", prompt]
 
     if runtime == CoderRuntime.CODEX.value:
         permission_args = {
