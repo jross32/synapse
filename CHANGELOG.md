@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.160] - 2026-08-18
+
+### Added
+- **Two connector URLs instead of one.** Read-only vs writes was a server-wide env var, so
+  there was no link you could safely hand out while your own could still drive the machine.
+  `?mode=read` now pins a URL to the read-only surface regardless of the server setting:
+  **10 tools on the read-only link, 24 on the full one**, and the read-only link refuses a
+  write with an explanation rather than a stack trace. Both are shown in Settings with what
+  each can do.
+
+- **All 103 Reflex tools reachable from a remote chat**, via a generic stdio MCP proxy
+  (`synapse_list_mcp_tools` / `synapse_call_mcp_tool`) rather than a Reflex special case -
+  so Playwright, GitHub and anything else registered comes along for free. Verified end to
+  end: `get_system_info` returned this machine's real CPU and username through the tunnel.
+
+### Fixed
+- **Relaunching a project that was already running reported "failed".** `self._live` only
+  knows children this daemon spawned, so anything started before a daemon restart was
+  invisible: pressing Launch spawned a second copy, which died on the bound port. A healthy
+  app looked broken, and the button that appeared to fix it was the thing breaking it.
+
+  The contradiction was visible in the API the whole time - status `stopped` alongside
+  health `healthy`. Launch now checks the expected port first, marks the project running,
+  and says so instead of spawning a doomed duplicate.
+
 ## [0.1.159] - 2026-08-18
 
 ### Added

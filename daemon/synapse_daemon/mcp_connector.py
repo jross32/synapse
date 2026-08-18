@@ -19,6 +19,7 @@ import json
 import os
 from pathlib import Path
 
+from . import mcp_servers
 from .runtime_paths import repo_root
 from typing import Any
 
@@ -46,6 +47,56 @@ def _writes_allowed() -> bool:
     return os.getenv("SYNAPSE_MCP_ALLOW_WRITES", "").strip() in {"1", "true", "yes"}
 
 
+
+def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -> Any:
+    """Speak MCP to a stdio server for exactly one call, then shut it down.
+
+    A short-lived process per call rather than a pool: these servers are cheap to start,
+    and a long-lived one held across a remote chat's idle time is a process nobody is
+    watching. Correctness first; if the startup cost ever matters it can be pooled later.
+
+    Handshake is required - a server that has not seen `initialize` is entitled to refuse
+    everything after it, and several do.
+    """
+    import json as _json
+    import subprocess
+
+    argv = [server.command, *(server.args or [])]
+    env = {**os.environ, **{k: str(v) for k, v in (server.env or {}).items()}}
+    proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                            env=env)
+    try:
+        lines = [
+            _json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2024-11-05", "capabilities": {},
+                "clientInfo": {"name": "synapse", "version": __version__}}}),
+            _json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+            _json.dumps({"jsonrpc": "2.0", "id": 2, "method": method, "params": params}),
+        ]
+        out, err = proc.communicate("\n".join(lines) + "\n", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise ValueError(f"{server.id} did not answer within {timeout}s")
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    for line in (out or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            message = _json.loads(line)
+        except ValueError:
+            continue
+        if message.get("id") == 2:
+            if "error" in message:
+                raise ValueError(f"{server.id}: {message['error']}")
+            return message.get("result")
+    raise ValueError(
+        f"{server.id} returned no reply to {method}. stderr: {(err or '')[-400:]}")
+
 def _require_writes() -> None:
     """One place that refuses a write when the gate is off.
 
@@ -57,7 +108,7 @@ def _require_writes() -> None:
         raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
 
 
-def _tool_specs() -> list[dict[str, Any]]:
+def _tool_specs(allow_writes: bool | None = None) -> list[dict[str, Any]]:
     """The MCP tool catalogue advertised to the client (read-only v1)."""
 
     empty = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -131,7 +182,7 @@ def _tool_specs() -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
     ]
-    if _writes_allowed():
+    if _writes_allowed() if allow_writes is None else allow_writes:
         # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
         # remote MCP client (e.g. the claude.ai connector over the WAN tunnel) SET UP work:
         # capture context, create a squad, and assign work items. LAUNCHING a worker (which
@@ -310,6 +361,41 @@ def _tool_specs() -> list[dict[str, Any]]:
                         "additionalProperties": False,
                     },
                 },
+                {
+                    "name": "synapse_list_mcp_tools",
+                    "description": (
+                        "List the tools of an MCP server registered in Synapse - reflex (full desktop "
+                        "control: screenshots, clicks, typing, windows, processes, files), playwright "
+                        "(browser), github, memory. Call this to discover exact tool names and arguments "
+                        "before synapse_call_mcp_tool."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"server": {"type": "string", "description": "Server id, e.g. reflex"}},
+                        "required": ["server"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_call_mcp_tool",
+                    "description": (
+                        "Call a tool on a registered MCP server on this machine. This is how a remote chat "
+                        "drives the desktop through reflex (take_screenshot, click_mouse, type_text, "
+                        "run_command, list_windows...) or a browser through playwright. Discover names with "
+                        "synapse_list_mcp_tools first."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "server": {"type": "string", "description": "Server id, e.g. reflex"},
+                            "tool": {"type": "string", "description": "Tool name on that server."},
+                            "arguments": {"type": "object", "description": "Arguments for that tool."},
+                            "timeout_seconds": {"type": "integer", "description": "Default 120."},
+                        },
+                        "required": ["server", "tool"],
+                        "additionalProperties": False,
+                    },
+                },
             ]
         )
     return specs
@@ -322,7 +408,21 @@ def build_mcp_router(
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
 
-    def _call_tool(name: str, args: dict[str, Any]) -> Any:
+    def _call_tool(name: str, args: dict[str, Any], *, allow_writes: bool = True) -> Any:
+        def _require_writes() -> None:
+            """Refuse a write on the read-only URL, whatever the server-wide setting says.
+
+            The point of handing out a read-only link is that it stays read-only even while
+            the machine has writes enabled for the operator's own link.
+            """
+            if not allow_writes:
+                raise ValueError(
+                    "This is the read-only connector URL. Use the full-access URL from "
+                    "Synapse Settings to write files, run commands or dispatch work.")
+            if not _writes_allowed():
+                raise ValueError(
+                    "Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+
         if name == "synapse_list_projects":
             return [p.model_dump(mode="json") for p in projects_module.list_projects(storage.conn)]
         if name == "synapse_list_tools":
@@ -629,9 +729,40 @@ def build_mcp_router(
             except Exception as exc:  # noqa: BLE001
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
+        if name in ("synapse_list_mcp_tools", "synapse_call_mcp_tool"):
+            _require_writes()
+            server_id = str(args.get("server", "")).strip()
+            if not server_id:
+                raise ValueError("server is required")
+            with storage.transaction() as conn:
+                servers = {row.id: row for row in mcp_servers.list_servers(conn)}
+            server = servers.get(server_id)
+            if server is None:
+                raise ValueError(
+                    f"No MCP server {server_id!r}. Registered: {sorted(servers)}")
+            if server.transport != "stdio":
+                raise ValueError(
+                    f"{server_id} uses {server.transport} transport; only stdio is proxied.")
+
+            timeout = int(args.get("timeout_seconds") or 120)
+            if name == "synapse_list_mcp_tools":
+                reply = _stdio_mcp(server, "tools/list", {}, timeout)
+                return [
+                    {"name": t.get("name"), "description": (t.get("description") or "")[:300],
+                     "inputSchema": t.get("inputSchema")}
+                    for t in (reply or {}).get("tools", [])
+                ]
+
+            tool = str(args.get("tool", "")).strip()
+            if not tool:
+                raise ValueError("tool is required")
+            return _stdio_mcp(server, "tools/call",
+                              {"name": tool, "arguments": args.get("arguments") or {}},
+                              timeout)
+
         raise ValueError(f"Unknown tool: {name}")
 
-    def _handle(msg: Any) -> dict[str, Any] | None:
+    def _handle(msg: Any, allow_writes: bool = True) -> dict[str, Any] | None:
         """Handle one JSON-RPC message. Returns a response dict, or None for
         notifications (no id)."""
 
@@ -666,12 +797,12 @@ def build_mcp_router(
         if isinstance(method, str) and method.startswith("notifications/"):
             return None  # client notifications need no response
         if method == "tools/list":
-            return _ok(msg_id, {"tools": _tool_specs()})
+            return _ok(msg_id, {"tools": _tool_specs(allow_writes)})
         if method == "tools/call":
             name = (params or {}).get("name", "")
             args = (params or {}).get("arguments") or {}
             try:
-                data = _call_tool(name, args)
+                data = _call_tool(name, args, allow_writes=allow_writes)
             except SynapseError as exc:  # not_found / invalid -> tool error, not transport error
                 return _tool_error(msg_id, exc.envelope.message)
             except Exception as exc:  # noqa: BLE001 -- surface as an MCP tool error
@@ -698,13 +829,19 @@ def build_mcp_router(
         except Exception:  # noqa: BLE001
             return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
 
+        # `?mode=read` pins this URL to the read-only surface regardless of the
+        # server-wide setting. That is what makes a read-only link worth handing out: it
+        # stays read-only while the operator's own link can still drive the machine.
+        allow_writes = request.query_params.get("mode", "").strip().lower() != "read"
+
         if isinstance(payload, list):
-            responses = [r for r in (_handle(m) for m in payload) if r is not None]
+            responses = [r for r in (_handle(m, allow_writes) for m in payload)
+                         if r is not None]
             if not responses:
                 return Response(status_code=202)
             return JSONResponse(responses)
 
-        response = _handle(payload)
+        response = _handle(payload, allow_writes)
         if response is None:
             return Response(status_code=202)
         return JSONResponse(response)
@@ -741,6 +878,9 @@ def build_mcp_info_router(registry: ToolRegistry, auth: AuthManager) -> APIRoute
         except Exception:  # noqa: BLE001 -- cloudtap optional / not installed
             tunnel_url = None
         connector_url = f"{tunnel_url.rstrip('/')}{mcp_path}" if tunnel_url else None
+        # Two links on purpose. The read-only one is safe to paste anywhere; the full one
+        # can write files, run commands and dispatch coding work on this machine.
+        read_only_url = f"{connector_url}?mode=read" if connector_url else None
         return {
             "read_only": not _writes_allowed(),
             "writes_enabled": _writes_allowed(),
@@ -750,6 +890,7 @@ def build_mcp_info_router(registry: ToolRegistry, auth: AuthManager) -> APIRoute
             "tunnel_url": tunnel_url,
             "tunnel_open": bool(tunnel_url),
             "connector_url": connector_url,
+            "read_only_url": read_only_url,
         }
 
     return router

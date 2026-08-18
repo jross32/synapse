@@ -13,6 +13,7 @@ export interface McpConnectorInfo {
   tunnel_url: string | null;
   tunnel_open: boolean;
   connector_url: string | null;
+  read_only_url: string | null;
 }
 
 export function getMcpConnectorInfo(): Promise<McpConnectorInfo> {

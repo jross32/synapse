@@ -69,6 +69,22 @@ class _LiveChild:
     psutil_cache: dict[int, psutil.Process] = field(default_factory=dict)
 
 
+
+def _port_in_use(port: int) -> bool:
+    """Is anything listening on this port right now?
+
+    Connecting is the only answer that is true regardless of who owns the process, which is
+    the whole point: the process we are asking about is one this daemon did not start.
+    """
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.35)
+        try:
+            return sock.connect_ex(("127.0.0.1", int(port))) == 0
+        except OSError:
+            return False
+
 class ProcessManager:
     """Owns the spawn / monitor / stop / recover flow for managed projects."""
 
@@ -125,6 +141,27 @@ class ProcessManager:
 
         if not project.launch_cmd.strip():
             raise invalid("project", f"Project '{project_id}' has no launch_cmd.")
+
+        # Something else is already serving this project's port.
+        #
+        # `self._live` only knows about children THIS daemon spawned, so it is empty for
+        # anything started before a daemon restart. The app kept running; Synapse forgot it.
+        # Pressing Launch then spawned a second copy, which died instantly on the bound port
+        # and reported "failed" - so a perfectly healthy app looked broken, and the button
+        # that appeared to be the fix was the thing breaking it.
+        #
+        # The giveaway was visible in the API the whole time: status "stopped" alongside
+        # health "healthy" is self-contradictory, and only one thing explains it.
+        if project.expected_port and _port_in_use(project.expected_port):
+            with self._storage.transaction() as conn:
+                projects_module.set_status(conn, project_id, status=EntityStatus.RUNNING)
+            raise conflict(
+                "project",
+                f"Project '{project_id}' is already serving port {project.expected_port} "
+                f"(started outside this daemon session, so it was not in the process table). "
+                f"Marked it running rather than starting a second copy - stop it first if "
+                f"you want a fresh one.",
+            )
 
         # Transition: idle/stopped/error -> launching.
         with self._storage.transaction() as conn:

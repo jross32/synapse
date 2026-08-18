@@ -748,40 +748,76 @@ export function PhoneAccessPanel(): JSX.Element {
 
             <SectionCard
               title='Connect to Claude (MCP connector)'
-              subtitle='Add Synapse to claude.ai as a read-only custom connector over your Cloudtap tunnel.'
+              subtitle='Two links: a read-only one that is safe to hand out, and a full-access one that lets an AI write files, run commands and dispatch coding work on this machine.'
               icon={Sparkles}
             >
               {mcpInfo?.connector_url ? (
                 <div className='space-y-3'>
-                  <div className='flex flex-wrap items-center gap-2'>
-                    <Badge
-                      variant='outline'
-                      className='rounded-full border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200'
-                    >
-                      {mcpInfo.read_only ? 'Read-only' : 'Writes enabled'}
-                    </Badge>
-                    <span className='text-xs text-muted-foreground'>
-                      Paste into claude.ai &rarr; Settings &rarr; Connectors &rarr; Add custom connector.
-                    </span>
-                  </div>
+                  <span className='text-xs text-muted-foreground'>
+                    Paste into claude.ai or ChatGPT &rarr; Settings &rarr; Connectors &rarr; Add custom connector.
+                  </span>
+
                   <div className='space-y-2 rounded-2xl border border-border/70 bg-background/55 p-4'>
-                    <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary/85'>
-                      Connector URL
-                    </p>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <Badge
+                        variant='outline'
+                        className='rounded-full border-sky-500/40 bg-sky-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-sky-200'
+                      >
+                        Read-only
+                      </Badge>
+                      <span className='text-xs text-muted-foreground'>
+                        Looks at projects, notes and activity. Cannot change anything.
+                      </span>
+                    </div>
+                    <code className='block break-all font-mono text-xs text-foreground'>
+                      {mcpInfo.read_only_url ?? `${mcpInfo.connector_url}?mode=read`}
+                    </code>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={() => void copy(mcpInfo.read_only_url ?? `${mcpInfo.connector_url}?mode=read`)}
+                    >
+                      <Copy className='h-4 w-4' />
+                      {justCopied === (mcpInfo.read_only_url ?? `${mcpInfo.connector_url}?mode=read`)
+                        ? 'Copied'
+                        : 'Copy read-only URL'}
+                    </Button>
+                  </div>
+
+                  <div className='space-y-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.06] p-4'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <Badge
+                        variant='outline'
+                        className='rounded-full border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200'
+                      >
+                        {mcpInfo.writes_enabled ? 'Full access' : 'Full access (disabled)'}
+                      </Badge>
+                      <span className='text-xs text-muted-foreground'>
+                        Writes files, runs commands, drives the desktop through Reflex, and dispatches coding work to
+                        codex / gemini / local models.
+                      </span>
+                    </div>
                     <code className='block break-all font-mono text-xs text-foreground'>
                       {mcpInfo.connector_url}
                     </code>
                     <Button type='button' onClick={() => void copy(mcpInfo.connector_url!)}>
                       <Copy className='h-4 w-4' />
-                      {justCopied === mcpInfo.connector_url ? 'Copied' : 'Copy connector URL'}
+                      {justCopied === mcpInfo.connector_url ? 'Copied' : 'Copy full-access URL'}
                     </Button>
+                    {!mcpInfo.writes_enabled && (
+                      <p className='text-xs text-amber-200/90'>
+                        This link is served read-only until the daemon starts with{' '}
+                        <code className='font-mono'>SYNAPSE_MCP_ALLOW_WRITES=1</code>.
+                      </p>
+                    )}
                   </div>
+
                   <div className='flex items-start gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100'>
                     <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
                     <p>
-                      Treat this URL like a password &mdash; it carries your daemon token. It only works while the
-                      Cloudtap tunnel above is open; close the tunnel when you&apos;re done. Writes stay off unless you
-                      set <code className='font-mono'>SYNAPSE_MCP_ALLOW_WRITES=1</code>.
+                      Both URLs carry your daemon token &mdash; treat them like passwords, and only while the Cloudtap
+                      tunnel above is open. The full-access link can do anything you can do on this machine, so hand out
+                      the read-only one unless you specifically want an AI writing code here.
                     </p>
                   </div>
                 </div>
