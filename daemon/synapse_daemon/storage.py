@@ -19,6 +19,7 @@ on top in later milestones.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -37,6 +38,16 @@ class Storage:
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / DEFAULT_DB_FILENAME
         self._conn: sqlite3.Connection | None = None
+        # Guards `transaction()` below. One sqlite3.Connection is shared across the whole
+        # daemon - the class docstring says so - but nothing serialized access to it. A
+        # background task (the health-probe heartbeat) held a transaction open across a
+        # network await, and a concurrent HTTP request's own `transaction()` collided with
+        # it: `sqlite3.OperationalError: cannot start a transaction within a transaction`.
+        # Fixing that one call site is not enough - the connection had no protection against
+        # the *next* caller making the same mistake. A `threading.Lock` covers both kinds of
+        # caller this connection actually sees: plain coroutines running on the event-loop
+        # thread, and `asyncio.to_thread` workers running on real OS threads.
+        self._transaction_lock = threading.Lock()
 
     # ── lifecycle ────────────────────────────────────────────────────────
 
@@ -91,14 +102,22 @@ class Storage:
         """
 
         conn = self.conn
-        conn.execute("BEGIN IMMEDIATE")
+        # Held only around BEGIN..COMMIT/ROLLBACK, never across an await inside the `with`
+        # block - a caller that does that will stall other transactions for as long as it
+        # takes, which is a slow bug rather than a wrong one, and is the reason
+        # `_probe_health` was rewritten to run its network call before opening this.
+        self._transaction_lock.acquire()
         try:
-            yield conn
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
-        else:
-            conn.execute("COMMIT")
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                yield conn
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            else:
+                conn.execute("COMMIT")
+        finally:
+            self._transaction_lock.release()
 
     # ── migrations ───────────────────────────────────────────────────────
 

@@ -483,18 +483,33 @@ class ProcessManager:
 
         for project_id in candidates:
             try:
+                # The read needs no transaction - it is one SELECT, and wrapping it just to
+                # get `conn` was what caused the actual bug: the network probe used to run
+                # *inside* that transaction.
+                project = projects_mod.get(self._storage.conn, project_id)
+                if project is None or project.health.kind == "none":
+                    continue
+
+                # Outside any transaction, on purpose. This can take up to
+                # `project.health.timeout_seconds` and used to run with a transaction held
+                # open on the single shared connection for its whole duration - so any
+                # concurrent request (GET /profile, mid-repro) that opened its own
+                # transaction while this `await` was in flight collided with it:
+                # "cannot start a transaction within a transaction". A background probe
+                # holding a lock across a slow network call is the bug; the fix is to not
+                # hold anything across it, not to make the lock smarter.
+                state, detail = await asyncio.to_thread(probe_once, project.health)
+                if state is HealthState.UNKNOWN:
+                    continue
+                if project.current_health != state.value:
+                    # Logged on transition only: a misconfigured probe would otherwise
+                    # print the same line every fifteen seconds forever.
+                    log.info("Health %s -> %s for %s: %s",
+                             project.current_health, state.value, project_id, detail)
+
+                # The write is back in a transaction, opened only now that the slow part is
+                # done - so it is held for microseconds, not seconds.
                 with self._storage.transaction() as conn:
-                    project = projects_mod.get(conn, project_id)
-                    if project is None or project.health.kind == "none":
-                        continue
-                    state, detail = await asyncio.to_thread(probe_once, project.health)
-                    if state is HealthState.UNKNOWN:
-                        continue
-                    if project.current_health != state.value:
-                        # Logged on transition only: a misconfigured probe would otherwise
-                        # print the same line every fifteen seconds forever.
-                        log.info("Health %s -> %s for %s: %s",
-                                 project.current_health, state.value, project_id, detail)
                     projects_mod.set_health(conn, project_id, state=state)
 
                     # A healthy probe means the app is serving, whoever started it. Leaving

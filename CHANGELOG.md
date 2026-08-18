@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.163] - 2026-08-18
+
+### Fixed
+- **The real cause of the home-page error, this time.** 0.1.162 fixed one nested-transaction
+  call site; a second, unrelated one (`ensure_current_host`) kept crashing `GET /profile`
+  with the same `sqlite3.OperationalError: cannot start a transaction within a transaction`.
+  It was not nesting - it was a genuine **concurrency** bug, self-inflicted in 0.1.161: the
+  new health-probe heartbeat held a transaction open across a network `await` (up to
+  `timeout_seconds`, every 2s heartbeat tick), on the single connection the whole daemon
+  shares. Any request that opened its own transaction while that await was in flight
+  collided with it.
+
+  Fixed at both ends:
+  - `_probe_health` no longer holds a transaction across the network probe - the read needs
+    none, the probe runs with nothing held, and the write opens a transaction only once the
+    slow part is done.
+  - `Storage.transaction()` now serializes callers with a `threading.Lock`, so this class of
+    bug can't be reintroduced by a future call site making the same mistake. The shared
+    connection was already documented as multi-thread-accessible; nothing had ever made it
+    safe.
+
+  Verified against the live daemon under real load, not just unit tests: 798 concurrent
+  `GET /profile` requests over 30 seconds (~15 heartbeat ticks) - 0 failures. Before the fix
+  this failed intermittently within seconds.
+
 ## [0.1.162] - 2026-08-18
 
 ### Changed
