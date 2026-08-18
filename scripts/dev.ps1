@@ -206,6 +206,12 @@ function Start-DaemonOnly {
   if ($BindLan) {
     $daemonArgs += '--bind-lan'
   }
+# Let MCP clients (the ChatGPT / claude.ai connectors) dispatch real work, not just read.
+# Without this the connector advertises read-only tools, so a remote chat can look at
+# projects and can do nothing with them. Gated by an env var rather than always-on, and the
+# connector still requires the auth token on every call.
+$env:SYNAPSE_MCP_ALLOW_WRITES = '1'
+
   Write-Host "-> Starting daemon (foreground): python $($daemonArgs -join ' ')"
   Write-Host ""
   & python @daemonArgs

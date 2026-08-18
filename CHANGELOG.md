@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.159] - 2026-08-18
+
+### Added
+- **A remote MCP client can now dispatch real work, not just read.** The connector advertised
+  10 read-only tools, so a chat connected over MCP could look at projects and do nothing with
+  them. It now advertises 22, gated behind `SYNAPSE_MCP_ALLOW_WRITES` and the auth token:
+
+  | Tool | What it unlocks |
+  |---|---|
+  | `synapse_runtime_status` | which rungs are usable and what each has spent today |
+  | `synapse_delegate_module` | have codex/gemini/claude WRITE a module here and return it |
+  | `synapse_run_command` | shell: create folders anywhere, git, npm, tests, launches |
+  | `synapse_read_file` / `synapse_write_file` | file IO anywhere on the machine |
+  | `synapse_http` | reach the web scraper's full REST API on :12345, and Synapse's own |
+  | `synapse_list_blueprints` / `synapse_launch_work_item` | build recipes, start squad workers |
+
+  Verified by driving the MCP endpoint exactly as a remote chat would: Gemini wrote a working
+  `slugify.py` in 84.7 s (`'Hello, World!' -> 'hello-world'`), a new project folder was
+  created outside the repo with a file in it that runs, and the web scraper answered on
+  :12345.
+
+  `SYNAPSE_MCP_ALLOW_WRITES=1` moved above the daemon launch in `scripts/dev.ps1` - it was
+  set 13 lines *after* the `-DaemonOnly` branch already started the process, so it had never
+  taken effect on that path.
+
+  `synapse_http` is restricted to localhost and private ranges: it runs inside the operator's
+  network, and an arbitrary outbound URL would make it an open proxy behind their firewall.
+  Public fetching goes through the web scraper, which is reachable through it.
+
 ## [0.1.158] - 2026-08-18
 
 ### Fixed

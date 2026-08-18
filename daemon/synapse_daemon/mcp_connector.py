@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
+
+from .runtime_paths import repo_root
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
@@ -41,6 +44,17 @@ JSONRPC = "2.0"
 
 def _writes_allowed() -> bool:
     return os.getenv("SYNAPSE_MCP_ALLOW_WRITES", "").strip() in {"1", "true", "yes"}
+
+
+def _require_writes() -> None:
+    """One place that refuses a write when the gate is off.
+
+    Repeating the check inside each handler is how one of them ends up missing it, and a
+    write tool that runs while the operator believes writes are disabled is the worst bug
+    this file could have.
+    """
+    if not _writes_allowed():
+        raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
 
 
 def _tool_specs() -> list[dict[str, Any]]:
@@ -180,6 +194,119 @@ def _tool_specs() -> list[dict[str, Any]]:
                             "assigned_role_id": {"type": "string", "description": "Role id, e.g. 'implementer' / 'reviewer'."},
                         },
                         "required": ["squad_id", "title"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_runtime_status",
+                    "description": "Which coding runtimes (claude/codex/copilot/gemini/local) can be used right now, what each has spent today, and which are cooling down after running out of credit. Call this BEFORE dispatching work.",
+                    "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+                },
+                {
+                    "name": "synapse_list_blueprints",
+                    "description": "Verified recipes that can be built end to end. Each lists what it guarantees and which checks enforce those guarantees.",
+                    "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+                },
+                {
+                    "name": "synapse_delegate_module",
+                    "description": (
+                        "Have a coding runtime WRITE ONE PYTHON MODULE to a workspace on this machine and return the source it wrote. "
+                        "This is the core dispatch primitive: how you get real code written without writing it yourself. Takes 20-120s. "
+                        "Pick a runtime with synapse_runtime_status. State the required function signatures IN THE SPEC - withholding "
+                        "them measurably triples the repair count."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "spec": {"type": "string", "description": "What to write. Include the exact signatures the caller needs."},
+                            "path": {"type": "string", "description": "Filename to write, e.g. parser.py"},
+                            "workspace": {"type": "string", "description": "Absolute directory to write into. Created if missing."},
+                            "runtime": {"type": "string", "enum": ["claude", "codex", "copilot", "gemini"], "description": "Default: best rung available now."},
+                            "model": {"type": "string", "description": "Optional model override, e.g. haiku"},
+                            "effort": {"type": "string", "enum": ["low", "medium", "high", "xhigh", "max"], "description": "Default low: measured as good as high on contract-shaped work."},
+                        },
+                        "required": ["spec", "path", "workspace"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_launch_work_item",
+                    "description": "Look up a squad work item and return the exact REST call that starts a real AI worker for it on this machine.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"work_item_id": {"type": "string"}},
+                        "required": ["work_item_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_run_command",
+                    "description": (
+                        "Run a shell command on this machine and return stdout/stderr/exit code. "
+                        "This is what makes a remote chat able to actually DO things here: create folders "
+                        "anywhere, git clone/commit, npm install, run tests, start a project. Default shell "
+                        "is PowerShell on Windows. Blocking, so keep commands under the timeout - start "
+                        "long-running servers with a project launch instead."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "command": {"type": "string", "description": "The command line to run."},
+                            "cwd": {"type": "string", "description": "Absolute working directory. Defaults to the Synapse repo."},
+                            "timeout_seconds": {"type": "integer", "description": "Default 120, max 900."},
+                        },
+                        "required": ["command"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_read_file",
+                    "description": "Read a UTF-8 text file anywhere on this machine.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "Absolute path."},
+                            "max_chars": {"type": "integer", "description": "Default 40000."},
+                        },
+                        "required": ["path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_write_file",
+                    "description": (
+                        "Write a UTF-8 text file anywhere on this machine, creating parent directories. "
+                        "Refuses to overwrite unless overwrite=true, so a mistaken path cannot silently "
+                        "destroy work."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "Absolute path."},
+                            "content": {"type": "string"},
+                            "overwrite": {"type": "boolean", "description": "Default false."},
+                        },
+                        "required": ["path", "content"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_http",
+                    "description": (
+                        "Call an HTTP endpoint from this machine. This is how you reach the web scraper's "
+                        "full REST API on http://localhost:12345 (scraping, security headers, broken links, "
+                        "screenshots, GraphQL introspection - everything it exposes) and Synapse's own API "
+                        "on http://127.0.0.1:7878/api/v1. Localhost and private addresses only."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string"},
+                            "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "description": "Default GET."},
+                            "json_body": {"type": "object", "description": "Optional JSON request body."},
+                            "timeout_seconds": {"type": "integer", "description": "Default 60."},
+                        },
+                        "required": ["url"],
                         "additionalProperties": False,
                     },
                 },
@@ -345,6 +472,163 @@ def build_mcp_router(
                     ),
                 )
             return work_item.model_dump(mode="json")
+        if name == "synapse_runtime_status":
+            _require_writes()
+            from . import coder_runtimes as _cr
+
+            return [r.model_dump(mode="json") for r in _cr.preflight()]
+
+        if name == "synapse_list_blueprints":
+            _require_writes()
+            from . import blueprints as _bp
+
+            return _bp.summarize_for_ai()
+
+        if name == "synapse_delegate_module":
+            _require_writes()
+            from . import coder_runtimes as _cr
+
+            spec = str(args.get("spec", "")).strip()
+            path = str(args.get("path", "")).strip()
+            workspace = Path(str(args.get("workspace", "")).strip()).expanduser()
+            if not spec or not path:
+                raise ValueError("spec and path are required")
+            if not workspace.is_absolute():
+                raise ValueError("workspace must be an absolute path")
+            workspace.mkdir(parents=True, exist_ok=True)
+
+            wanted = str(args.get("runtime", "") or "").strip()
+            runtime = (_cr.CoderRuntime(wanted) if wanted
+                       else _cr.CoderRuntime(_cr.pick().chosen))
+            if runtime is _cr.CoderRuntime.LOCAL:
+                raise ValueError(
+                    "The local tier is not reachable through this tool: it takes minutes to "
+                    "an hour and would time the call out. Use the blueprint build API."
+                )
+            profile = _cr.RuntimeProfile(
+                model=str(args.get("model", "") or ""),
+                effort=str(args.get("effort", "") or "low"),
+            )
+            result = _cr.write_module(runtime, spec, workspace=workspace, path=path,
+                                      profile=profile)
+            _cr.record_call(result)
+            return {
+                "ok": result.ok,
+                "runtime": runtime.value,
+                "path": str(workspace / path),
+                "seconds": result.seconds,
+                "usage": result.usage,
+                "error": result.error,
+                "exhausted": result.exhausted,
+                "source": result.source,
+            }
+
+        if name == "synapse_launch_work_item":
+            _require_writes()
+            work_item_id = str(args.get("work_item_id", "")).strip()
+            if not work_item_id:
+                raise ValueError("work_item_id is required")
+            with storage.transaction() as conn:
+                item = squads.get_work_item(conn, work_item_id)
+            return {
+                "work_item_id": work_item_id,
+                "title": getattr(item, "title", None),
+                "start_with": (
+                    "POST /api/v1/agent-work-items/" + work_item_id + "/launch"
+                ),
+                "why_not_here": (
+                    "Spawning goes over REST so the worker outlives this MCP call and keeps "
+                    "running after the client disconnects."
+                ),
+            }
+
+        if name == "synapse_run_command":
+            _require_writes()
+            import subprocess
+            import sys as _sys
+
+            command = str(args.get("command", "")).strip()
+            if not command:
+                raise ValueError("command is required")
+            timeout = min(int(args.get("timeout_seconds") or 120), 900)
+            cwd = str(args.get("cwd") or repo_root())
+            shell_argv = (["powershell", "-NoProfile", "-Command", command]
+                          if _sys.platform == "win32" else ["bash", "-lc", command])
+            try:
+                done = subprocess.run(shell_argv, capture_output=True, text=True,
+                                      timeout=timeout, cwd=cwd)
+            except subprocess.TimeoutExpired:
+                return {"ok": False, "timed_out": True,
+                        "detail": f"did not finish within {timeout}s"}
+            return {
+                "ok": done.returncode == 0,
+                "exit_code": done.returncode,
+                "stdout": (done.stdout or "")[-20000:],
+                "stderr": (done.stderr or "")[-8000:],
+                "cwd": cwd,
+            }
+
+        if name == "synapse_read_file":
+            _require_writes()
+            target = Path(str(args.get("path", "")).strip()).expanduser()
+            if not target.is_file():
+                raise ValueError(f"No such file: {target}")
+            limit = int(args.get("max_chars") or 40000)
+            text = target.read_text(encoding="utf-8", errors="replace")
+            return {"path": str(target), "chars": len(text),
+                    "truncated": len(text) > limit, "content": text[:limit]}
+
+        if name == "synapse_write_file":
+            _require_writes()
+            target = Path(str(args.get("path", "")).strip()).expanduser()
+            if not target.is_absolute():
+                raise ValueError("path must be absolute")
+            if target.exists() and not bool(args.get("overwrite")):
+                # An accidental path should cost a retry, not somebody's work.
+                raise ValueError(f"{target} exists. Pass overwrite=true to replace it.")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            content = str(args.get("content", ""))
+            target.write_text(content, encoding="utf-8")
+            return {"ok": True, "path": str(target), "bytes": len(content.encode())}
+
+        if name == "synapse_http":
+            _require_writes()
+            import json as _json
+            import urllib.error
+            import urllib.request
+            from urllib.parse import urlparse
+
+            url = str(args.get("url", "")).strip()
+            host = (urlparse(url).hostname or "").lower()
+            # Local and private only. This tool runs inside the operator's network, so an
+            # arbitrary outbound URL would turn it into an open proxy sitting behind their
+            # firewall. Public fetching is the web scraper's job, and it is reachable here.
+            allowed = (host in {"localhost", "127.0.0.1", "::1"}
+                       or host.startswith(("10.", "192.168.", "169.254."))
+                       or (host.startswith("172.") and 16 <= int(host.split(".")[1] or 0) <= 31))
+            if not allowed:
+                raise ValueError(
+                    f"{host!r} is not local. This tool reaches services on this machine "
+                    "(the web scraper on :12345, Synapse on :7878). To fetch a public site, "
+                    "use the web scraper's own API through this tool."
+                )
+            method = str(args.get("method") or "GET").upper()
+            body = args.get("json_body")
+            data = _json.dumps(body).encode() if body is not None else None
+            request = urllib.request.Request(
+                url, data=data, method=method,
+                headers={"Content-Type": "application/json"} if data else {})
+            try:
+                with urllib.request.urlopen(
+                        request, timeout=int(args.get("timeout_seconds") or 60)) as resp:
+                    return {"ok": True, "status": resp.status,
+                            "body": resp.read().decode("utf-8", "replace")[:40000]}
+            except urllib.error.HTTPError as exc:
+                return {"ok": False, "status": exc.code,
+                        "body": exc.read().decode("utf-8", "replace")[:8000]}
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
         raise ValueError(f"Unknown tool: {name}")
 
     def _handle(msg: Any) -> dict[str, Any] | None:
