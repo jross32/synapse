@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.162] - 2026-08-18
+
+### Changed
+- **MCP write access is a toggle in Settings, not an environment variable, and defaults ON.**
+  An env var is the wrong shape for a user setting: it has to be present in whichever shell
+  launched the app, so it silently reverted whenever Synapse was started a different way -
+  which is exactly what happened repeatedly today. It is now persisted in `boot-config.json`
+  and switched beside the connector URLs it governs.
+
+  `SYNAPSE_MCP_ALLOW_WRITES` still wins when explicitly set to `1`/`0`, so a locked-down
+  deployment can force either state, but it is no longer how a person turns this on.
+
+  The safety property that replaces "off by default" is the read-only URL: `?mode=read`
+  stays read-only however the machine is configured, so there is always a link you can hand
+  out. The tests were repointed at that rather than deleted.
+
+### Fixed
+- **The error on the home page.** `GET /profile` returned 500 because `_set_sync_status`
+  opened a transaction inside one that was already open - and it is called from the *failure*
+  path of `_refresh_from_remote`. So any ordinary sync failure (offline, remote down) was
+  replaced by `sqlite3.OperationalError: cannot start a transaction within a transaction`,
+  and the real reason was never recorded. Recording a failure can no longer raise one.
+
 ## [0.1.161] - 2026-08-18
 
 ### Fixed

@@ -32,13 +32,14 @@ def _harness(tmp_path: Path) -> tuple[TestClient, str]:
     return TestClient(app), token
 
 
-def _rpc(client: TestClient, token: str, method: str, params: dict | None = None, msg_id: int | None = 1):
+def _rpc(client: TestClient, token: str, method: str, params: dict | None = None,
+         msg_id: int | None = 1, url_suffix: str = ""):
     body: dict = {"jsonrpc": "2.0", "method": method}
     if msg_id is not None:
         body["id"] = msg_id
     if params is not None:
         body["params"] = params
-    return client.post(f"/mcp/{token}", json=body)
+    return client.post(f"/mcp/{token}{url_suffix}", json=body)
 
 
 def test_unauthorized_token_is_401(tmp_path: Path) -> None:
@@ -72,15 +73,22 @@ def test_ping(tmp_path: Path) -> None:
     assert res.json()["result"] == {}
 
 
-def test_tools_list_is_read_only_by_default(tmp_path: Path) -> None:
+def test_read_only_url_never_advertises_a_write_tool(tmp_path: Path, monkeypatch) -> None:
+    """`?mode=read` pins a URL to the read surface however the machine is configured.
+
+    Writes default ON now (0.1.162) - an env var was the wrong shape for a user setting and
+    silently reverted depending on which shell launched the app. What replaces "off by
+    default" as the safety property is this: there is a URL you can hand out that stays
+    read-only even while your own can drive the machine.
+    """
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
     client, token = _harness(tmp_path)
-    res = _rpc(client, token, "tools/list")
+    res = _rpc(client, token, "tools/list", url_suffix="?mode=read")
     names = {t["name"] for t in res.json()["result"]["tools"]}
     assert "synapse_get_context" in names
     assert "synapse_list_projects" in names
-    assert "synapse_get_project_records" in names
-    # Writes are off by default -> the write tool is not advertised.
     assert "synapse_add_project_idea" not in names
+    assert "synapse_run_command" not in names
 
 
 def test_tools_call_list_projects(tmp_path: Path) -> None:
@@ -129,7 +137,8 @@ def test_connector_info_authed(tmp_path: Path) -> None:
     res = client.get("/api/v1/mcp/connector", headers={"X-Synapse-Token": token})
     assert res.status_code == 200, res.text
     d = res.json()
-    assert d["read_only"] is True
+    assert d["read_only"] is not d["writes_enabled"]
+    assert d["read_only_url"] is None  # no tunnel in tests, same as connector_url
     assert d["mcp_path"] == f"/mcp/{token}"
     assert d["local_url"].endswith(f"/mcp/{token}")
     # No Cloudtap tunnel open in tests -> no connector URL yet.
@@ -158,8 +167,10 @@ def test_writes_opt_in_exposes_add_idea(tmp_path: Path, monkeypatch: pytest.Monk
     assert "Use Redis" in result["content"][0]["text"]
 
 
-def test_drive_tools_hidden_when_writes_off(tmp_path: Path) -> None:
-    # Default = read-only: drive tools are neither advertised nor callable (ADR-0027).
+def test_drive_tools_hidden_when_writes_off(tmp_path: Path, monkeypatch) -> None:
+    # Turning writes off must still hide AND refuse the drive tools (ADR-0027). The switch
+    # moved from "unset by default" to a persisted setting; the gate itself is unchanged.
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "0")
     client, token = _harness(tmp_path)
     names = {t["name"] for t in _rpc(client, token, "tools/list").json()["result"]["tools"]}
     for tool in ("synapse_create_squad", "synapse_add_work_item", "synapse_capture_note"):

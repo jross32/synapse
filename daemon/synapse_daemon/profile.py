@@ -11,7 +11,9 @@ Local-first rules:
 from __future__ import annotations
 
 import json
+import logging
 import platform as platform_mod
+import sqlite3
 import socket
 import subprocess
 import time
@@ -19,6 +21,8 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -1175,8 +1179,19 @@ class ProfileManager:
         return self._storage.conn.execute("SELECT * FROM profile_state WHERE id = 1").fetchone()
 
     def _set_sync_status(self, *, error: str | None) -> None:
-        with self._storage.transaction() as conn:
-            conn.execute(
+        """Record the outcome of a remote sync.
+
+        Deliberately NOT wrapped in `self._storage.transaction()`. This is called from the
+        failure path of `_refresh_from_remote`, which already runs inside a transaction, and
+        `transaction()` is not reentrant - so recording a sync failure raised
+        `sqlite3.OperationalError: cannot start a transaction within a transaction`.
+
+        That turned every ordinary sync failure (offline, remote down) into a 500 on
+        `GET /profile`, which is what put the error badge on the home page: the real problem
+        was masked by the error handler failing to record it.
+        """
+        try:
+            self._storage.conn.execute(
                 """
                 UPDATE profile_state
                 SET last_sync_at = ?, last_sync_error = ?, updated_at = ?
@@ -1184,6 +1199,8 @@ class ProfileManager:
                 """,
                 (_now_iso(), error, _now_iso()),
             )
+        except sqlite3.Error:  # noqa: BLE001 -- recording a failure must not raise a new one
+            log.debug("Could not record profile sync status.", exc_info=True)
 
     def _catalog_item(self, item_key: str) -> CatalogPreferenceItem:
         state = self.catalog_state()

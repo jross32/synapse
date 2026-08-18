@@ -8,6 +8,7 @@ import { apiFetch } from './api-client';
 export interface NetworkStatus {
   bind_lan_persisted: boolean;
   wan_auto_start: boolean;
+  mcp_writes_enabled: boolean;
   bound_host: string;
   bound_port: number;
   lan_ips: string[];
@@ -38,5 +39,15 @@ export async function patchNetworkWanAutoStart(
   return apiFetch<{ wan_auto_start: boolean }>('/system/network', {
     method: 'PATCH',
     body: { wan_auto_start: wanAutoStart },
+  });
+}
+
+/** Turn the MCP connector's write/dispatch tools on or off. Persisted, so it survives a
+ *  restart - unlike the environment variable this replaced, which depended on whichever
+ *  shell happened to launch the app. */
+export function patchMcpWrites(enabled: boolean): Promise<{ mcp_writes_enabled: boolean }> {
+  return apiFetch<{ mcp_writes_enabled: boolean }>('/system/network', {
+    method: 'PATCH',
+    body: JSON.stringify({ mcp_writes_enabled: enabled }),
   });
 }

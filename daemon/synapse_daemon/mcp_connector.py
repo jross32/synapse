@@ -45,7 +45,25 @@ JSONRPC = "2.0"
 
 
 def _writes_allowed() -> bool:
-    return os.getenv("SYNAPSE_MCP_ALLOW_WRITES", "").strip() in {"1", "true", "yes"}
+    """Whether the connector serves its write/dispatch tools.
+
+    The persisted setting is the source of truth. `SYNAPSE_MCP_ALLOW_WRITES` still wins when
+    it is set, so a locked-down deployment can force it either way without touching the
+    file - but it is no longer how a person turns this on, because an environment variable
+    has to exist in whichever shell launched the app and silently reverted otherwise.
+    """
+    override = os.getenv("SYNAPSE_MCP_ALLOW_WRITES", "").strip().lower()
+    if override in {"1", "true", "yes"}:
+        return True
+    if override in {"0", "false", "no"}:
+        return False
+    try:
+        from . import boot_config
+        from .runtime_paths import repo_root
+
+        return boot_config.load(repo_root() / "data").mcp_writes_enabled
+    except Exception:  # noqa: BLE001 -- a missing config must not disable the connector
+        return True
 
 
 

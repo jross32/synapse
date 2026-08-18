@@ -98,6 +98,7 @@ class NetworkPatch(BaseModel):
     # only `wan_auto_start`). A field left None is untouched.
     bind_lan: bool | None = None
     wan_auto_start: bool | None = None
+    mcp_writes_enabled: bool | None = None
 
 
 class RestartRequest(BaseModel):
@@ -220,6 +221,7 @@ def _restart_operation(storage: Storage, operation_id: str | None = None) -> dic
 class RemoteAccessNetwork(BaseModel):
     bind_lan_persisted: bool
     wan_auto_start: bool = True
+    mcp_writes_enabled: bool = True
     bound_host: str
     bound_port: int
     lan_ips: list[str]
@@ -282,6 +284,7 @@ def _network_status(request: Request, data_dir: Path) -> dict[str, Any]:
     return {
         "bind_lan_persisted": cfg.bind_lan,
         "wan_auto_start": cfg.wan_auto_start,
+        "mcp_writes_enabled": cfg.mcp_writes_enabled,
         "bound_host": live_host,
         "bound_port": port,
         "lan_ips": lan_ips,
@@ -619,6 +622,11 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
         if payload.wan_auto_start is not None and payload.wan_auto_start != cfg.wan_auto_start:
             changes["wan_auto_start"] = {"previous": cfg.wan_auto_start, "current": payload.wan_auto_start}
             cfg.wan_auto_start = payload.wan_auto_start
+        if (payload.mcp_writes_enabled is not None
+                and payload.mcp_writes_enabled != cfg.mcp_writes_enabled):
+            changes["mcp_writes_enabled"] = {"previous": cfg.mcp_writes_enabled,
+                                             "current": payload.mcp_writes_enabled}
+            cfg.mcp_writes_enabled = payload.mcp_writes_enabled
         if changes:
             boot_config.save(data_dir, cfg)
             with storage.transaction() as conn:
@@ -642,6 +650,8 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
         return {
             "bind_lan_persisted": cfg.bind_lan,
             "wan_auto_start": cfg.wan_auto_start,
+            "mcp_writes_enabled": cfg.mcp_writes_enabled,
+        "mcp_writes_enabled": cfg.mcp_writes_enabled,
             "bound_host": live_host,
             "restart_required": cfg.bind_lan != (live_host == LAN_HOST),
         }

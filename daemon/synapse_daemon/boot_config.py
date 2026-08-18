@@ -40,6 +40,18 @@ class BootConfig:
     # turn this off in Settings -> Network; a fresh install ships with WAN on.
     wan_auto_start: bool = True
 
+    # Whether the MCP connector serves its write/dispatch tools.
+    #
+    # This was an environment variable, and an environment variable is the wrong shape for
+    # a user setting: it has to be present in whichever shell happened to launch the app, so
+    # it silently reverted every time Synapse was started a different way. Persisted here,
+    # it survives restarts and is one toggle in Settings.
+    #
+    # Default ON. The connector is reachable only with the daemon token, the read-only URL
+    # exists for anything that should not write, and a default of OFF meant the tools were
+    # advertised-but-refused for most of a day.
+    mcp_writes_enabled: bool = True
+
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
@@ -68,6 +80,8 @@ def load(data_dir: Path) -> BootConfig:
         cfg.bind_lan = raw["bind_lan"]
     if isinstance(raw.get("wan_auto_start"), bool):
         cfg.wan_auto_start = raw["wan_auto_start"]
+    if isinstance(raw.get("mcp_writes_enabled"), bool):
+        cfg.mcp_writes_enabled = raw["mcp_writes_enabled"]
     return cfg
 
 

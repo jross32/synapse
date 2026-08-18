@@ -35,7 +35,7 @@ import { canRestart, openExternal, restartApp } from '@shared/electron-bridge';
 import { runToolAction } from '@shared/tools-client';
 import {
   patchNetworkBindLan,
-  patchNetworkWanAutoStart,
+  patchNetworkWanAutoStart, patchMcpWrites,
 } from '@shared/system-client';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -177,6 +177,19 @@ export function PhoneAccessPanel(): JSX.Element {
       await refresh();
     } catch (err) {
       setError((err as Error).message || 'Could not update LAN access.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleMcpWrites(enabled: boolean): Promise<void> {
+    setBusy('mcp-writes');
+    setError(null);
+    try {
+      await patchMcpWrites(enabled);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message || 'Could not change MCP write access.');
     } finally {
       setBusy(null);
     }
@@ -756,6 +769,36 @@ export function PhoneAccessPanel(): JSX.Element {
                   <span className='text-xs text-muted-foreground'>
                     Paste into claude.ai or ChatGPT &rarr; Settings &rarr; Connectors &rarr; Add custom connector.
                   </span>
+
+                  <div className='flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-4'>
+                    <div>
+                      <p className='text-sm font-medium text-foreground'>Allow writing and running code</p>
+                      <p className='mt-1 text-xs text-muted-foreground'>
+                        When on, the full-access URL below can create files, run commands, drive the desktop and
+                        dispatch coding work. Turn it off and both URLs become read-only. Saved on this machine, so
+                        it survives a restart.
+                      </p>
+                    </div>
+                    <button
+                      type='button'
+                      role='switch'
+                      aria-checked={mcpInfo.writes_enabled}
+                      aria-label='Allow MCP clients to write and run code'
+                      disabled={busy === 'mcp-writes'}
+                      onClick={() => void toggleMcpWrites(!mcpInfo.writes_enabled)}
+                      className={[
+                        'relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50',
+                        mcpInfo.writes_enabled ? 'bg-primary' : 'bg-secondary',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'absolute top-1 h-4 w-4 rounded-full bg-card transition-all',
+                          mcpInfo.writes_enabled ? 'left-6' : 'left-1',
+                        ].join(' ')}
+                      />
+                    </button>
+                  </div>
 
                   <div className='space-y-2 rounded-2xl border border-border/70 bg-background/55 p-4'>
                     <div className='flex flex-wrap items-center gap-2'>
