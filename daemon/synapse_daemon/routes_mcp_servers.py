@@ -19,6 +19,7 @@ from .mcp_servers import (
     McpServerUpdate,
 )
 from .models import AuditSource
+from .errors import invalid
 from .storage import Storage
 
 
@@ -55,6 +56,34 @@ def build_mcp_servers_router(storage: Storage, manager: McpServerManager) -> API
                 ),
             )
         return result
+
+    @router.get("/{server_id}/tools", response_model=None)
+    async def server_tools(server_id: str) -> dict:
+        """What one installed MCP server can actually do, asked of the server itself.
+
+        The UI had no way to show this, so an installed server was a name in a list with no
+        indication of whether it worked or what it offered. Asking it is also the only
+        honest status check: a server that answers `tools/list` is genuinely up.
+        """
+        from .mcp_connector import http_mcp, stdio_mcp
+
+        # A read, on the shared connection. `storage.transaction()` is not reentrant and
+        # this route runs inside one already, so opening another raised
+        # "cannot start a transaction within a transaction" for every server.
+        server = next(
+            (s for s in mcp.list_servers(storage.conn) if s.id == server_id), None)
+        if server is None:
+            raise invalid("mcp_server", f"No MCP server {server_id!r}.")
+        speak = http_mcp if server.transport == "http" else stdio_mcp
+        try:
+            reply = speak(server, "tools/list", {}, 60)
+        except Exception as exc:  # noqa: BLE001 -- a dead server is a result, not a crash
+            return {"id": server.id, "name": server.name, "reachable": False,
+                    "error": str(exc)[:300], "tools": []}
+        tools = [{"name": t.get("name"), "description": (t.get("description") or "")[:240]}
+                 for t in (reply or {}).get("tools", [])]
+        return {"id": server.id, "name": server.name, "reachable": True,
+                "transport": server.transport, "count": len(tools), "tools": tools}
 
     @router.get("/registry", response_model=McpCatalog)
     async def registry() -> McpCatalog:

@@ -56,6 +56,7 @@ import { AiFactoryPage } from './pages/AiFactory';
 import { WhatsnewPage } from './pages/Whatsnew';
 import { SettingsPage } from './pages/Settings';
 import { WebScraperPage } from './pages/WebScraper';
+import { McpServerPage } from './pages/McpServerPage';
 
 export default function App(): JSX.Element {
   const mobileRoute = isMobileRoute();
@@ -501,6 +502,19 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               />
             )}
             {route.kind === 'installed' && route.id === 'web-scraper' && <WebScraperPage />}
+            {/* Every other installed MCP server gets a real page instead of a blank pane.
+                Reflex was listed in the sidebar and rendered nothing, which is why it felt
+                missing. */}
+            {route.kind === 'installed' && route.id !== 'web-scraper' && (
+              <McpServerPage
+                serverId={route.id}
+                blurb={
+                  route.id === 'reflex'
+                    ? 'AI computer control for Windows: screenshots, mouse, keyboard, windows, processes and files. Reachable from a connected chat through synapse_call_mcp_tool.'
+                    : 'Installed MCP server. These tools are reachable from a connected chat through synapse_call_mcp_tool.'
+                }
+              />
+            )}
           </div>
         </main>
 

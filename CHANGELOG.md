@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.161] - 2026-08-18
+
+### Fixed
+- **Every MCP server is now reachable and shows its tools.** Measured after the fixes:
+  reflex 103, web-scraper 93, github 26, playwright 24, memory 9 - **255 tools**, where
+  before only reflex answered.
+
+  - `npx`-launched servers (playwright, memory, github) failed with `[WinError 2]` because
+    `npx` is a `.cmd` shim on Windows and CreateProcess will not find it from a bare name.
+    Now resolved through `resolve_command`, which already knew how to look beyond PATH.
+  - The web scraper returned `400` on every call: streamable-HTTP MCP hands out an
+    `Mcp-Session-Id` on `initialize` and rejects everything after it unless the id comes
+    back. Its 93 tools were unreachable for want of one header.
+
+- **A project running outside this daemon session is recognised again.** The health probe
+  only looked at processes this daemon spawned, so an app started before a restart was never
+  probed - the web scraper sat at `status: stopped` while serving happily. The probe now
+  covers every project that declares one, and a healthy probe corrects a stale status.
+
+- `GET /mcp-servers/{id}/tools` opened a transaction inside an existing one
+  (`cannot start a transaction within a transaction`). It is a read; it uses the shared
+  connection.
+
+### Added
+- **A page for every installed MCP server.** Reflex was listed in the sidebar and rendered
+  a blank pane, which is why it felt missing. It now shows its live tool list, filterable,
+  with the connection state taken from the server answering `tools/list` rather than from a
+  flag written down once.
+
 ## [0.1.160] - 2026-08-18
 
 ### Added

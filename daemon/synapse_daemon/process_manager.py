@@ -154,7 +154,7 @@ class ProcessManager:
         # health "healthy" is self-contradictory, and only one thing explains it.
         if project.expected_port and _port_in_use(project.expected_port):
             with self._storage.transaction() as conn:
-                projects_module.set_status(conn, project_id, status=EntityStatus.RUNNING)
+                projects_module.set_status(conn, project_id, status=EntityStatus.LAUNCHED)
             raise conflict(
                 "project",
                 f"Project '{project_id}' is already serving port {project.expected_port} "
@@ -471,7 +471,17 @@ class ProcessManager:
         from . import projects as projects_mod
         from .health import HealthState, probe_once
 
-        for project_id in list(self._live):
+        # Every project that declares a probe, not just the ones this daemon spawned.
+        #
+        # Scoping it to `self._live` meant an app started before a daemon restart was never
+        # probed at all - which is the whole case worth catching, because that is exactly
+        # when Synapse's own view has gone stale. The web scraper sat at status "stopped"
+        # while serving happily on its port, and nothing would ever have noticed.
+        with self._storage.transaction() as conn:
+            candidates = [p.id for p in projects_mod.list_projects(conn)
+                          if p.health.kind != "none"]
+
+        for project_id in candidates:
             try:
                 with self._storage.transaction() as conn:
                     project = projects_mod.get(conn, project_id)
@@ -486,6 +496,15 @@ class ProcessManager:
                         log.info("Health %s -> %s for %s: %s",
                                  project.current_health, state.value, project_id, detail)
                     projects_mod.set_health(conn, project_id, state=state)
+
+                    # A healthy probe means the app is serving, whoever started it. Leaving
+                    # the status at "stopped" while health reads "healthy" is the exact
+                    # contradiction that made a working web scraper look broken, and it is
+                    # the state the UI shows the operator.
+                    if (state is HealthState.HEALTHY
+                            and project.status is not EntityStatus.LAUNCHED):
+                        projects_mod.set_status(conn, project_id,
+                                                status=EntityStatus.LAUNCHED)
             except Exception:  # pragma: no cover -- a probe must never kill the loop
                 log.exception("Health probe failed for %s.", project_id)
 

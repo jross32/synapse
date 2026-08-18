@@ -21,6 +21,7 @@ from pathlib import Path
 
 from . import mcp_servers
 from .runtime_paths import repo_root
+from .runtime_resolution import resolve_command
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
@@ -48,6 +49,62 @@ def _writes_allowed() -> bool:
 
 
 
+
+def _http_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -> Any:
+    """Speak MCP to a server that listens over HTTP rather than stdio.
+
+    The web scraper is registered this way - it is a long-running service on its own port,
+    not a process to spawn per call - so a stdio-only proxy could not reach any of its ~93
+    tools. Same JSON-RPC, different pipe.
+
+    Streamable HTTP servers may answer with `text/event-stream`, so the response is scanned
+    for `data:` frames as well as parsed as plain JSON.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    headers = {"Content-Type": "application/json",
+               "Accept": "application/json, text/event-stream",
+               "MCP-Protocol-Version": "2024-11-05"}
+
+    def _post(payload: dict[str, Any]) -> Any:
+        request = urllib.request.Request(
+            server.url, data=_json.dumps(payload).encode(),
+            headers=dict(headers), method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as resp:
+                body = resp.read().decode("utf-8", "replace")
+                session = resp.headers.get("Mcp-Session-Id")
+                if session:
+                    # Streamable-HTTP servers hand out a session on `initialize` and reject
+                    # everything after it with 400 unless the id comes back. Without this the
+                    # web scraper's ~93 tools were unreachable for that one header.
+                    headers["Mcp-Session-Id"] = session
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:300]
+            raise ValueError(f"{server.id} returned {exc.code}: {detail}")
+        for line in body.splitlines():
+            line = line.strip()
+            if line.startswith("data:"):
+                line = line[5:].strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                message = _json.loads(line)
+            except ValueError:
+                continue
+            if message.get("id") == payload.get("id"):
+                if "error" in message:
+                    raise ValueError(f"{server.id}: {message['error']}")
+                return message.get("result")
+        raise ValueError(f"{server.id} gave no reply to {payload.get('method')}")
+
+    _post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2024-11-05", "capabilities": {},
+        "clientInfo": {"name": "synapse", "version": __version__}}})
+    return _post({"jsonrpc": "2.0", "id": 2, "method": method, "params": params})
+
 def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -> Any:
     """Speak MCP to a stdio server for exactly one call, then shut it down.
 
@@ -61,7 +118,12 @@ def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -
     import json as _json
     import subprocess
 
-    argv = [server.command, *(server.args or [])]
+    # `npx` and friends are `.cmd` shims on Windows, and CreateProcess will not find them
+    # from a bare name - every npx-launched server failed with
+    # "[WinError 2] The system cannot find the file specified". resolve_command already
+    # knows how to look beyond PATH, so reuse it rather than guessing at extensions.
+    executable = resolve_command(server.command) or server.command
+    argv = [executable, *(server.args or [])]
     env = {**os.environ, **{k: str(v) for k, v in (server.env or {}).items()}}
     proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, encoding="utf-8",
@@ -182,7 +244,11 @@ def _tool_specs(allow_writes: bool | None = None) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
     ]
-    if _writes_allowed() if allow_writes is None else allow_writes:
+    # AND, never OR: `allow_writes` says this URL may write, `_writes_allowed()` says the
+    # server may. Advertising on the URL alone listed 24 tools while the handlers refused 14
+    # of them, which is a worse failure than hiding them - a client cannot tell a permission
+    # problem from a broken tool.
+    if _writes_allowed() and (True if allow_writes is None else allow_writes):
         # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
         # remote MCP client (e.g. the claude.ai connector over the WAN tunnel) SET UP work:
         # capture context, create a squad, and assign work items. LAUNCHING a worker (which
@@ -740,13 +806,14 @@ def build_mcp_router(
             if server is None:
                 raise ValueError(
                     f"No MCP server {server_id!r}. Registered: {sorted(servers)}")
-            if server.transport != "stdio":
+            if server.transport not in ("stdio", "http"):
                 raise ValueError(
-                    f"{server_id} uses {server.transport} transport; only stdio is proxied.")
+                    f"{server_id} uses {server.transport} transport, which is not proxied.")
 
             timeout = int(args.get("timeout_seconds") or 120)
+            speak = _http_mcp if server.transport == "http" else _stdio_mcp
             if name == "synapse_list_mcp_tools":
-                reply = _stdio_mcp(server, "tools/list", {}, timeout)
+                reply = speak(server, "tools/list", {}, timeout)
                 return [
                     {"name": t.get("name"), "description": (t.get("description") or "")[:300],
                      "inputSchema": t.get("inputSchema")}
@@ -756,9 +823,9 @@ def build_mcp_router(
             tool = str(args.get("tool", "")).strip()
             if not tool:
                 raise ValueError("tool is required")
-            return _stdio_mcp(server, "tools/call",
-                              {"name": tool, "arguments": args.get("arguments") or {}},
-                              timeout)
+            return speak(server, "tools/call",
+                         {"name": tool, "arguments": args.get("arguments") or {}},
+                         timeout)
 
         raise ValueError(f"Unknown tool: {name}")
 
@@ -925,3 +992,10 @@ def _quick_action_dict(action: Any) -> dict[str, Any]:
         "category": getattr(action, "category", None),
         "tags": list(getattr(action, "tags", []) or []),
     }
+
+
+# Public aliases. The routes layer needs to speak MCP to an installed server too, and
+# reaching for a underscored name across modules is how a private helper quietly becomes an
+# API without anyone deciding that it should.
+http_mcp = _http_mcp
+stdio_mcp = _stdio_mcp

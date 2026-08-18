@@ -383,6 +383,11 @@ function spawnDaemon(): ChildProcess {
 
   const proc = spawn(launch.command, launch.args, {
     cwd: launch.cwd,
+    // The MCP connector serves write tools only when this is set. Without it the desktop
+    // app - which is how Synapse is actually run - started a daemon that advertised
+    // dispatch tools and then refused every one of them, because only scripts/dev.ps1 set
+    // the flag. Advertising a tool you will not run is worse than not advertising it.
+    env: { ...process.env, SYNAPSE_MCP_ALLOW_WRITES: process.env.SYNAPSE_MCP_ALLOW_WRITES ?? '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
     // detached: false in dev so the daemon dies with us cleanly.
     // Milestone J flips this so the daemon survives UI death.
