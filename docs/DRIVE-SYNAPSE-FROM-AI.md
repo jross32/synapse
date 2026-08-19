@@ -89,7 +89,8 @@ curl -s "$SYN/activity/notifications"   -H "X-Synapse-Token: $TOK"   # the opera
 curl -s "$SYN/coordination/snapshot"    -H "X-Synapse-Token: $TOK"   # live peers + claimed file lanes
 ```
 `GET /api/v1/ai/context` also carries an `ai_activity` block (connected sessions + the recent feed).
-Over MCP: `synapse_list_sessions` and `synapse_recent_activity` (read-only, always available).
+Over MCP: `synapse_list_sessions` and `synapse_recent_activity` (read-only, always available) — see
+section 8 for the full always-on read-tool list, including `synapse_list_playbooks` / `synapse_get_playbook`.
 
 ## 3. Drive an AI squad (build / debug / review an app)
 
@@ -168,17 +169,37 @@ curl -s "$SYN/capture" -X POST -H "X-Synapse-Token: $TOK" -H 'Content-Type: appl
 owner's supervised recovery but is not the safe public AI contract. Keep it disabled unless actively used;
 scoped public credentials from ADR-0036 must land before unattended remote AI drive.
 
-**For MCP-native clients** (e.g. the claude.ai web custom connector) Synapse also speaks Model Context Protocol
-at **`/mcp/<token>`** (ADR-0012). Read tools are always on (`synapse_get_context`,
-`synapse_list_projects/tools/quick_actions/agent_squads`, `synapse_get_project_records`). **Drive tools**
-(`synapse_create_squad`, `synapse_add_work_item`, `synapse_capture_note`, `synapse_add_project_idea`) are gated
-behind `SYNAPSE_MCP_ALLOW_WRITES=1` (default **off**) — set it to let a remote MCP client set up work; launching a
-worker stays on the REST path (`POST /agent-work-items/{id}/launch`, reachable over the same tunnel). `GET
-/api/v1/mcp/connector` returns the ready-made connector URL (tunnel URL + path token).
+**For MCP-native clients** (e.g. the claude.ai or ChatGPT custom connector) Synapse also speaks Model Context
+Protocol at **`/mcp/<token>`** (ADR-0012, `daemon/synapse_daemon/mcp_connector.py`). Read tools are always
+on — `synapse_get_context`, `synapse_list_projects`, `synapse_get_project_records`, `synapse_list_tools`,
+`synapse_list_quick_actions`, `synapse_list_skill_packs` / `synapse_get_skill_pack`, `synapse_list_agent_squads`,
+`synapse_list_sessions`, `synapse_recent_activity`, and `synapse_list_playbooks` / `synapse_get_playbook`
+(step-by-step procedures for driving something outside this codebase, e.g. a third-party web UI — see
+`playbooks.py`).
 
-Those four MCP writes are a legacy global switch and do not yet share the scoped ADR-0036 execution service.
-Do not interpret them as full-write MCP. The future write connector will use revocable project capabilities
-and call the same application services as REST.
+**Write/dispatch tools are on by default**, not off: `boot_config.mcp_writes_enabled` defaults to `True`, with
+a Settings UI toggle (`PhoneAccessPanel.tsx`) to turn it off, and `SYNAPSE_MCP_ALLOW_WRITES` still available
+as an env override that wins over the persisted setting either way. When writes are enabled, the connector
+advertises a much larger set than the original four: `synapse_add_project_idea`, `synapse_capture_note`,
+`synapse_create_squad`, `synapse_add_work_item`, `synapse_runtime_status`, `synapse_list_blueprints`,
+`synapse_delegate_module` (dispatch a coding runtime to write one module), `synapse_launch_work_item`
+(read-only despite the name — it returns the REST call that starts a worker, launching stays on
+`POST /agent-work-items/{id}/launch`), `synapse_run_command`, `synapse_read_file`, `synapse_write_file`,
+`synapse_http` (localhost/private-IP only), `synapse_list_mcp_tools` / `synapse_call_mcp_tool` (proxy to any
+other registered MCP server — Reflex, Playwright, the web scraper), and `synapse_report_playbook_status`.
+Every tool carries an explicit `readOnlyHint`/`destructiveHint` annotation (`_TOOL_ANNOTATIONS`) so an MCP
+client like ChatGPT can tell which calls are safe to run without confirmation — the genuinely open-ended ones
+(`synapse_run_command`, `synapse_call_mcp_tool`, `synapse_http`) are annotated as destructive on purpose,
+not softened to slip past a client's safety layer.
+
+There is a **single connector URL**, not two — `GET /api/v1/mcp/connector` returns `connector_url` (tunnel URL
++ path token, full access per the current toggle) and `read_only_url` (the same URL with `?mode=read`
+appended). `?mode=read` pins a link to read-only regardless of the server-wide setting, which is what makes a
+read-only link worth handing out separately: it stays read-only even while the operator's own link can write.
+
+These MCP writes are a global switch, scoped only by the read-only URL variant, and do not yet share the
+scoped ADR-0036 execution service. Do not interpret them as project-scoped write access. The future write
+connector will use revocable project capabilities and call the same application services as REST.
 
 > **Security:** the `X-Synapse-Token` (and the connector's path token) is the whole trust boundary — with the
 > WAN tunnel on, anyone holding the token can drive Synapse. Treat it like a password; don't paste it into
