@@ -44,8 +44,16 @@ DEFAULT_PROTOCOL_VERSION = "2025-06-18"
 JSONRPC = "2.0"
 
 
-def _writes_allowed() -> bool:
+def _writes_allowed(data_dir: Path) -> bool:
     """Whether the connector serves its write/dispatch tools.
+
+    `data_dir` is required rather than defaulted, on purpose: this used to fall back to a
+    hardcoded `repo_root() / "data"` when no override was set, which silently read the
+    WRONG config for a daemon started with a non-default `--data-dir`, and for any isolated
+    test using its own `Storage` - caught by a test in this suite that set
+    `mcp_writes_enabled=False` in a scratch data dir and watched a write tool succeed
+    anyway, because this function was reading the real repo's config instead. There is no
+    silent fallback left to get wrong; every caller passes `storage.data_dir` explicitly.
 
     The persisted setting is the source of truth. `SYNAPSE_MCP_ALLOW_WRITES` still wins when
     it is set, so a locked-down deployment can force it either way without touching the
@@ -59,9 +67,8 @@ def _writes_allowed() -> bool:
         return False
     try:
         from . import boot_config
-        from .runtime_paths import repo_root
 
-        return boot_config.load(repo_root() / "data").mcp_writes_enabled
+        return boot_config.load(data_dir).mcp_writes_enabled
     except Exception:  # noqa: BLE001 -- a missing config must not disable the connector
         return True
 
@@ -177,18 +184,67 @@ def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -
     raise ValueError(
         f"{server.id} returned no reply to {method}. stderr: {(err or '')[-400:]}")
 
-def _require_writes() -> None:
-    """One place that refuses a write when the gate is off.
+_TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
+    # ChatGPT (and other MCP clients) read `annotations.readOnlyHint` to decide whether a
+    # tool call needs confirmation - and per OpenAI's own docs, a tool with NO annotation is
+    # treated as a write action by default. Every tool here was shipped with none, so every
+    # single one - including plain listing/reading tools - was classified as a write action
+    # and gated behind confirmation, which is very likely why ChatGPT could see and list all
+    # 24 tools but denied calling them: nothing told it which of them were actually safe.
+    #
+    # These are load-bearing claims, not decoration: getting one wrong in the permissive
+    # direction is a real safety problem (a client may skip confirmation on a tool marked
+    # readOnlyHint: true), so `test_every_tool_is_annotated_and_matches_its_handler` checks
+    # each one against what the handler actually does, not just that a value is present.
+    #
+    # -- genuinely read-only: nothing here can change state on this machine --
+    "synapse_get_context": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_projects": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_project_records": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_tools": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_quick_actions": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_skill_packs": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_skill_pack": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_agent_squads": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_sessions": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_recent_activity": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_runtime_status": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_blueprints": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_mcp_tools": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_read_file": {"readOnlyHint": True, "idempotentHint": True},
+    # Looks up a work item and returns the REST call that starts it - it does not spawn
+    # anything itself (see the handler), so it genuinely is read-only despite the name.
+    "synapse_launch_work_item": {"readOnlyHint": True, "idempotentHint": True},
+    # -- additive writes: create a new record, never delete or overwrite an existing one --
+    "synapse_add_project_idea": {"readOnlyHint": False, "destructiveHint": False,
+                                 "idempotentHint": False},
+    "synapse_capture_note": {"readOnlyHint": False, "destructiveHint": False,
+                             "idempotentHint": False},
+    "synapse_create_squad": {"readOnlyHint": False, "destructiveHint": False,
+                             "idempotentHint": False},
+    "synapse_add_work_item": {"readOnlyHint": False, "destructiveHint": False,
+                              "idempotentHint": False},
+    # -- writes that can overwrite or replace content that already exists --
+    "synapse_delegate_module": {"readOnlyHint": False, "destructiveHint": True,
+                                "idempotentHint": False, "openWorldHint": True},
+    "synapse_write_file": {"readOnlyHint": False, "destructiveHint": True,
+                           "idempotentHint": False},
+    # -- genuinely open-ended. Annotated as what they are, not softened to get past a
+    #    client's safety layer: synapse_run_command runs arbitrary shell, synapse_http can
+    #    issue DELETE against anything on the local network, and synapse_call_mcp_tool
+    #    proxies to reflex's ~103 tools including full desktop mouse/keyboard control. A
+    #    client asking for confirmation before any of these run is correct behaviour, not a
+    #    bug to route around. --
+    "synapse_run_command": {"readOnlyHint": False, "destructiveHint": True,
+                            "idempotentHint": False, "openWorldHint": True},
+    "synapse_http": {"readOnlyHint": False, "destructiveHint": True,
+                     "idempotentHint": False, "openWorldHint": False},
+    "synapse_call_mcp_tool": {"readOnlyHint": False, "destructiveHint": True,
+                              "idempotentHint": False, "openWorldHint": True},
+}
 
-    Repeating the check inside each handler is how one of them ends up missing it, and a
-    write tool that runs while the operator believes writes are disabled is the worst bug
-    this file could have.
-    """
-    if not _writes_allowed():
-        raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
 
-
-def _tool_specs(allow_writes: bool | None = None) -> list[dict[str, Any]]:
+def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
     """The MCP tool catalogue advertised to the client (read-only v1)."""
 
     empty = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -262,11 +318,12 @@ def _tool_specs(allow_writes: bool | None = None) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
     ]
-    # AND, never OR: `allow_writes` says this URL may write, `_writes_allowed()` says the
-    # server may. Advertising on the URL alone listed 24 tools while the handlers refused 14
-    # of them, which is a worse failure than hiding them - a client cannot tell a permission
-    # problem from a broken tool.
-    if _writes_allowed() and (True if allow_writes is None else allow_writes):
+    # The caller is responsible for combining "does the server allow writes right now"
+    # with "does this URL allow them" before calling this - `_tool_specs` itself has no
+    # storage to check the server-wide setting against, on purpose: the previous version
+    # read a hardcoded path here and silently disagreed with the actual configured data
+    # directory whenever the daemon was not running out of the repo checkout.
+    if allow_writes:
         # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
         # remote MCP client (e.g. the claude.ai connector over the WAN tunnel) SET UP work:
         # capture context, create a squad, and assign work items. LAUNCHING a worker (which
@@ -482,6 +539,15 @@ def _tool_specs(allow_writes: bool | None = None) -> list[dict[str, Any]]:
                 },
             ]
         )
+    for spec in specs:
+        annotations = _TOOL_ANNOTATIONS.get(spec["name"])
+        if annotations is None:
+            # Fail loudly rather than silently advertising an unclassified tool: an
+            # unannotated write action is exactly the bug this table exists to prevent, and
+            # the earlier state - no annotations on anything - is proof it happens silently
+            # if nothing catches it.
+            raise RuntimeError(f"{spec['name']!r} has no entry in _TOOL_ANNOTATIONS")
+        spec["annotations"] = {"title": spec["name"], **annotations}
     return specs
 
 
@@ -491,6 +557,9 @@ def build_mcp_router(
     auth: AuthManager,
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
+
+    def writes_allowed() -> bool:
+        return _writes_allowed(storage.data_dir)
 
     def _call_tool(name: str, args: dict[str, Any], *, allow_writes: bool = True) -> Any:
         def _require_writes() -> None:
@@ -503,7 +572,7 @@ def build_mcp_router(
                 raise ValueError(
                     "This is the read-only connector URL. Use the full-access URL from "
                     "Synapse Settings to write files, run commands or dispatch work.")
-            if not _writes_allowed():
+            if not writes_allowed():
                 raise ValueError(
                     "Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
 
@@ -584,11 +653,11 @@ def build_mcp_router(
                     {"id": p.id, "name": p.name, "kind": p.kind, "status": p.status.value, "path": p.path}
                     for p in projects
                 ],
-                "writes_enabled": _writes_allowed(),
+                "writes_enabled": writes_allowed(),
                 "hint": "Use synapse_get_project_records for project decisions and synapse_get_skill_pack for reusable AI instructions.",
             }
         if name == "synapse_add_project_idea":
-            if not _writes_allowed():
+            if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
             project_id = str(args.get("project_id", "")).strip()
             title = str(args.get("title", "")).strip()
@@ -601,7 +670,7 @@ def build_mcp_router(
                 adr = records.create_adr(conn, project_id, ProjectAdrCreate(title=title))
             return adr.model_dump(mode="json")
         if name == "synapse_capture_note":
-            if not _writes_allowed():
+            if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
             from .capture import CaptureDestination, CaptureRequest, capture
 
@@ -620,7 +689,7 @@ def build_mcp_router(
                 result = capture(conn, storage.data_dir, req)
             return result.model_dump(mode="json")
         if name == "synapse_create_squad":
-            if not _writes_allowed():
+            if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
             project_id = str(args.get("project_id", "")).strip()
             name_arg = str(args.get("name", "")).strip()
@@ -639,7 +708,7 @@ def build_mcp_router(
                 )
             return squad.model_dump(mode="json")
         if name == "synapse_add_work_item":
-            if not _writes_allowed():
+            if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
             squad_id = str(args.get("squad_id", "")).strip()
             title = str(args.get("title", "")).strip()
@@ -871,7 +940,7 @@ def build_mcp_router(
                         + (
                             "Drive tools (create squad / add work item / capture note) are ENABLED; "
                             "launch a work item via REST POST /agent-work-items/{id}/launch."
-                            if _writes_allowed()
+                            if writes_allowed()
                             else "Read-only (set SYNAPSE_MCP_ALLOW_WRITES=1 to enable drive tools)."
                         )
                     ),
@@ -882,7 +951,7 @@ def build_mcp_router(
         if isinstance(method, str) and method.startswith("notifications/"):
             return None  # client notifications need no response
         if method == "tools/list":
-            return _ok(msg_id, {"tools": _tool_specs(allow_writes)})
+            return _ok(msg_id, {"tools": _tool_specs(writes_allowed() and allow_writes)})
         if method == "tools/call":
             name = (params or {}).get("name", "")
             args = (params or {}).get("arguments") or {}
@@ -939,11 +1008,15 @@ def build_mcp_router(
     return router
 
 
-def build_mcp_info_router(registry: ToolRegistry, auth: AuthManager) -> APIRouter:
+def build_mcp_info_router(storage: Storage, registry: ToolRegistry,
+                          auth: AuthManager) -> APIRouter:
     """Authed (/api/v1) helper so the desktop UI can show + copy the ready-made
     claude.ai connector URL without the user hand-assembling token + tunnel."""
 
     router = APIRouter(tags=["mcp"])
+
+    def writes_allowed() -> bool:
+        return _writes_allowed(storage.data_dir)
 
     @router.get("/mcp/connector", response_model=None)
     async def connector_info(request: Request) -> dict[str, Any]:
@@ -967,8 +1040,8 @@ def build_mcp_info_router(registry: ToolRegistry, auth: AuthManager) -> APIRoute
         # can write files, run commands and dispatch coding work on this machine.
         read_only_url = f"{connector_url}?mode=read" if connector_url else None
         return {
-            "read_only": not _writes_allowed(),
-            "writes_enabled": _writes_allowed(),
+            "read_only": not writes_allowed(),
+            "writes_enabled": writes_allowed(),
             "bound_port": port,
             "mcp_path": mcp_path,
             "local_url": f"http://127.0.0.1:{port}{mcp_path}",

@@ -711,7 +711,7 @@ def build_app(
     app.include_router(build_mcp_router(storage, tool_registry, auth))
     # Authed helper so the desktop UI can show + copy the ready-made connector URL.
     app.include_router(
-        build_mcp_info_router(tool_registry, auth),
+        build_mcp_info_router(storage, tool_registry, auth),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

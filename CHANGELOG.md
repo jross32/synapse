@@ -10,6 +10,34 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.164] - 2026-08-18
+
+### Fixed
+- **Every MCP tool was unannotated, so ChatGPT treated all of them as write actions
+  needing confirmation - including the ones that only read.** Per OpenAI's own docs, a tool
+  with no `annotations.readOnlyHint` is a pessimistic default: treated as a write action.
+  None of the 24 tools carried one. Every tool now declares `readOnlyHint`, and the
+  genuinely dangerous ones (`synapse_run_command`, `synapse_http`, `synapse_call_mcp_tool`)
+  are marked `destructiveHint: true` rather than softened to slip past a client's safety
+  layer - a client asking for confirmation before those run is correct, not a bug.
+  `test_mcp_tool_annotations.py` checks each classification against what the handler
+  actually does, not just that a value is present.
+
+- **`_writes_allowed()` hardcoded `repo_root() / "data"` instead of the daemon's actual
+  configured data directory.** Silently wrong for any daemon started with a non-default
+  `--data-dir`, and caught by a new test that set `mcp_writes_enabled=False` in an isolated
+  scratch data dir and watched a write tool succeed anyway - it was reading the real repo's
+  config instead. `_writes_allowed(data_dir)` now requires the caller to say which
+  directory, with no silent fallback to get wrong again; both routers thread
+  `storage.data_dir` through explicitly. A dead, never-actually-called duplicate of
+  `_require_writes` (shadowed by a local one with the same name) is removed.
+
+### Changed
+- **One connector URL instead of two.** The same link now switches between read-only and
+  full access as the toggle in Settings is flipped, rather than being two separate links to
+  remember. `?mode=read` still exists for handing someone a link that stays read-only
+  regardless of the toggle - documented as one line, not a second card.
+
 ## [0.1.163] - 2026-08-18
 
 ### Fixed

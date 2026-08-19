@@ -760,30 +760,33 @@ export function PhoneAccessPanel(): JSX.Element {
             </SectionCard>
 
             <SectionCard
-              title='Connect to Claude (MCP connector)'
-              subtitle='Two links: a read-only one that is safe to hand out, and a full-access one that lets an AI write files, run commands and dispatch coding work on this machine.'
+              title='Connect to Claude / ChatGPT (MCP connector)'
+              subtitle='One link. The toggle below decides what it can do right now - flip it and the same URL switches between read-only and full access, no new link to re-paste.'
               icon={Sparkles}
             >
               {mcpInfo?.connector_url ? (
                 <div className='space-y-3'>
                   <span className='text-xs text-muted-foreground'>
                     Paste into claude.ai or ChatGPT &rarr; Settings &rarr; Connectors &rarr; Add custom connector.
+                    In ChatGPT this needs <strong>Developer mode</strong> turned on before write tools will run, not
+                    just be listed.
                   </span>
 
                   <div className='flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-4'>
                     <div>
-                      <p className='text-sm font-medium text-foreground'>Allow writing and running code</p>
+                      <p className='text-sm font-medium text-foreground'>Full access</p>
                       <p className='mt-1 text-xs text-muted-foreground'>
-                        When on, the full-access URL below can create files, run commands, drive the desktop and
-                        dispatch coding work. Turn it off and both URLs become read-only. Saved on this machine, so
-                        it survives a restart.
+                        On (default): the link below can create files, run commands, drive the desktop through
+                        Reflex, and dispatch coding work. Off: the same link drops to read-only - it can look at
+                        projects, notes and activity, and nothing else. Saved on this machine, so it survives a
+                        restart.
                       </p>
                     </div>
                     <button
                       type='button'
                       role='switch'
                       aria-checked={mcpInfo.writes_enabled}
-                      aria-label='Allow MCP clients to write and run code'
+                      aria-label='Full access for this connector URL'
                       disabled={busy === 'mcp-writes'}
                       onClick={() => void toggleMcpWrites(!mcpInfo.writes_enabled)}
                       className={[
@@ -800,44 +803,30 @@ export function PhoneAccessPanel(): JSX.Element {
                     </button>
                   </div>
 
-                  <div className='space-y-2 rounded-2xl border border-border/70 bg-background/55 p-4'>
+                  <div
+                    className={[
+                      'space-y-2 rounded-2xl border p-4',
+                      mcpInfo.writes_enabled
+                        ? 'border-emerald-500/40 bg-emerald-500/[0.06]'
+                        : 'border-sky-500/40 bg-sky-500/10',
+                    ].join(' ')}
+                  >
                     <div className='flex flex-wrap items-center gap-2'>
                       <Badge
                         variant='outline'
-                        className='rounded-full border-sky-500/40 bg-sky-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-sky-200'
+                        className={[
+                          'rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.14em]',
+                          mcpInfo.writes_enabled
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                            : 'border-sky-500/40 bg-sky-500/10 text-sky-200',
+                        ].join(' ')}
                       >
-                        Read-only
+                        {mcpInfo.writes_enabled ? 'Full access' : 'Read-only'}
                       </Badge>
                       <span className='text-xs text-muted-foreground'>
-                        Looks at projects, notes and activity. Cannot change anything.
-                      </span>
-                    </div>
-                    <code className='block break-all font-mono text-xs text-foreground'>
-                      {mcpInfo.read_only_url ?? `${mcpInfo.connector_url}?mode=read`}
-                    </code>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={() => void copy(mcpInfo.read_only_url ?? `${mcpInfo.connector_url}?mode=read`)}
-                    >
-                      <Copy className='h-4 w-4' />
-                      {justCopied === (mcpInfo.read_only_url ?? `${mcpInfo.connector_url}?mode=read`)
-                        ? 'Copied'
-                        : 'Copy read-only URL'}
-                    </Button>
-                  </div>
-
-                  <div className='space-y-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.06] p-4'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                      <Badge
-                        variant='outline'
-                        className='rounded-full border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200'
-                      >
-                        {mcpInfo.writes_enabled ? 'Full access' : 'Full access (disabled)'}
-                      </Badge>
-                      <span className='text-xs text-muted-foreground'>
-                        Writes files, runs commands, drives the desktop through Reflex, and dispatches coding work to
-                        codex / gemini / local models.
+                        {mcpInfo.writes_enabled
+                          ? 'Writes files, runs commands, drives the desktop through Reflex, and dispatches coding work.'
+                          : 'Looks at projects, notes and activity. Cannot change anything right now.'}
                       </span>
                     </div>
                     <code className='block break-all font-mono text-xs text-foreground'>
@@ -845,28 +834,23 @@ export function PhoneAccessPanel(): JSX.Element {
                     </code>
                     <Button type='button' onClick={() => void copy(mcpInfo.connector_url!)}>
                       <Copy className='h-4 w-4' />
-                      {justCopied === mcpInfo.connector_url ? 'Copied' : 'Copy full-access URL'}
+                      {justCopied === mcpInfo.connector_url ? 'Copied' : 'Copy connector URL'}
                     </Button>
-                    {!mcpInfo.writes_enabled && (
-                      <p className='text-xs text-amber-200/90'>
-                        This link is served read-only until the daemon starts with{' '}
-                        <code className='font-mono'>SYNAPSE_MCP_ALLOW_WRITES=1</code>.
-                      </p>
-                    )}
                   </div>
 
                   <div className='flex items-start gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100'>
                     <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
                     <p>
-                      Both URLs carry your daemon token &mdash; treat them like passwords, and only while the Cloudtap
-                      tunnel above is open. The full-access link can do anything you can do on this machine, so hand out
-                      the read-only one unless you specifically want an AI writing code here.
+                      This URL carries your daemon token &mdash; treat it like a password, and only while the
+                      Cloudtap tunnel above is open. Flipping the toggle changes what it can do immediately, for
+                      anyone already using it. To hand someone a link that stays read-only regardless of this
+                      toggle, add <code className='font-mono'>?mode=read</code> to the end of it.
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className='rounded-2xl border border-dashed border-border/70 bg-secondary/20 px-5 py-6 text-center text-sm text-muted-foreground'>
-                  Open a WAN tunnel above, then the ready-to-paste claude.ai connector URL will appear here.
+                  Open a WAN tunnel above, then the ready-to-paste connector URL will appear here.
                 </div>
               )}
             </SectionCard>
