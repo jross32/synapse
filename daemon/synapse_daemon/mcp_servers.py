@@ -38,6 +38,14 @@ WEB_SCRAPER_MCP_PORT = 12000
 WEB_SCRAPER_DEFAULT_URL = f"http://127.0.0.1:{WEB_SCRAPER_MCP_PORT}/mcp"
 REFLEX_SERVER_ID = "reflex"
 REFLEX_SHARED_PORT_ENV_NAMES = {"REFLEX_HEALTH_PORT", "OS_BRIDGE_HEALTH_PORT"}
+# Reflex's stdio child also opens a tiny side-channel health server when launched with
+# --http (mcp-server.js:startHealthServer) -- JSON status only, never the MCP protocol
+# itself, so it's safe for every concurrent session to attempt the same well-known port.
+# The server gracefully skips binding (rather than crashing) if a sibling session already
+# owns it, so this is purely a "is at least one Reflex instance alive" signal, not a
+# per-session one -- see the EADDRINUSE handling in mcp-server.js.
+REFLEX_HEALTH_PORT = 11300
+REFLEX_HEALTH_URL = f"http://127.0.0.1:{REFLEX_HEALTH_PORT}/health"
 _MCP_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 _ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -347,7 +355,12 @@ def reflex_install_request(source_path: Path) -> McpServerInstallRequest:
         ),
         transport=McpTransport.STDIO,
         command="node",
-        args=[str(Path(source_path) / "mcp-server.js")],
+        # --http additionally opens the side-channel health server on REFLEX_HEALTH_PORT so
+        # McpServerManager.status() can report a genuine CONNECTED/not-running state for
+        # Reflex instead of a static "launched by your AI when needed" -- the actual MCP
+        # protocol still only runs over stdio, so this changes nothing about how a session
+        # talks to Reflex, only whether Synapse can see that one is alive.
+        args=[str(Path(source_path) / "mcp-server.js"), "--http"],
         env={},
     )
 
@@ -716,6 +729,18 @@ class McpServerManager:
 
     async def status(self, server: McpServer) -> tuple[McpServerStatus, str | None]:
         if server.transport == McpTransport.STDIO:
+            if server.id == REFLEX_SERVER_ID:
+                # Reflex's actual control plane is still stdio (one child per AI session,
+                # deliberately not a shared daemon -- see ensure_bootstrap_reflex), but its
+                # --http launch arg opens a side-channel health port any running instance
+                # answers on. A real reachability check here, same shape as an http server's,
+                # rather than the static "launched when needed" every other stdio server gets.
+                if await self._port_open(REFLEX_HEALTH_URL):
+                    return McpServerStatus.CONNECTED, None
+                return (
+                    McpServerStatus.STDIO_READY,
+                    "Not currently running — launched by your AI when needed.",
+                )
             return McpServerStatus.STDIO_READY, "Launched by your AI when needed."
         if not server.url:
             return McpServerStatus.STOPPED, "No URL configured."

@@ -106,3 +106,63 @@ def test_every_write_tool_response_carries_a_real_result_not_a_stub(tmp_path, cl
     payload = json.loads(result["content"][0]["text"])
     assert isinstance(payload, list) and len(payload) >= 1
     assert {"runtime", "usable_now", "cost_usd_today"} <= set(payload[0])
+
+
+def test_playbook_tools_are_readable_even_with_writes_off(tmp_path, clean_env):
+    """synapse_list_playbooks / synapse_get_playbook are read-only -- they must work
+    regardless of the write toggle, exactly like the other always-advertised read tools."""
+    from synapse_daemon import playbooks as pb
+
+    client, token = _harness(tmp_path, writes_enabled=False)
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    with storage.transaction() as conn:
+        pb.upsert_playbook(conn, playbook_id="demo", title="Demo", summary="s", steps=["a", "b"])
+
+    listed = json.loads(_call(client, token, "synapse_list_playbooks", {})["content"][0]["text"])
+    assert any(p["id"] == "demo" and p["step_count"] == 2 for p in listed)
+
+    got = json.loads(_call(client, token, "synapse_get_playbook", {"playbook_id": "demo"})["content"][0]["text"])
+    assert got["steps"] == ["a", "b"]
+    assert got["status"] == "healthy"
+
+
+def test_reporting_playbook_status_when_writes_are_off_is_refused_and_does_not_persist(tmp_path, clean_env):
+    from synapse_daemon import playbooks as pb
+
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    with storage.transaction() as conn:
+        pb.upsert_playbook(conn, playbook_id="demo", title="Demo", summary="", steps=["a"])
+
+    client_ro, token_ro = _harness(tmp_path, writes_enabled=False)
+    refused = _call(client_ro, token_ro, "synapse_report_playbook_status",
+                    {"playbook_id": "demo", "status": "broken", "note": "UI changed"})
+    assert refused.get("isError") is True
+
+    unchanged = pb.get_playbook(storage.conn, "demo")
+    assert unchanged.status == pb.PlaybookStatus.HEALTHY  # the refused call left no trace
+
+
+def test_reporting_playbook_status_when_writes_are_on_actually_persists(tmp_path, clean_env):
+    from synapse_daemon import playbooks as pb
+
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    with storage.transaction() as conn:
+        pb.upsert_playbook(conn, playbook_id="demo", title="Demo", summary="", steps=["a"])
+
+    client_rw, token_rw = _harness(tmp_path, writes_enabled=True)
+    reported = _call(client_rw, token_rw, "synapse_report_playbook_status",
+                     {"playbook_id": "demo", "status": "needs_attention", "note": "button moved"})
+    payload = json.loads(reported["content"][0]["text"])
+    assert payload["status"] == "needs_attention"
+    assert payload["status_note"] == "button moved"
+
+    # Re-read independently of the tool-call response, off the same underlying storage,
+    # so this proves a real write landed rather than an in-memory echo of what was sent.
+    reread = pb.get_playbook(storage.conn, "demo")
+    assert reread.status == pb.PlaybookStatus.NEEDS_ATTENTION
+    assert reread.status_note == "button moved"

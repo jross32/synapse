@@ -10,6 +10,40 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.165] - 2026-08-19
+
+### Added
+- **AI-facing playbooks** (`daemon/synapse_daemon/playbooks.py`, migration `033_playbooks.sql`):
+  step-by-step procedures for driving something outside this codebase (the first one:
+  how to actually get ChatGPT to call the Synapse MCP connector's tools from its own Chat
+  tab, learned by hand this session). Steps are semantic, never pixel coordinates. Each
+  playbook carries a `healthy` / `needs_attention` / `broken` status any executing AI can
+  read (`synapse_list_playbooks`, `synapse_get_playbook`) or update
+  (`synapse_report_playbook_status`) - so a UI change on the far end shows up as
+  "needs_attention" for the next AI instead of a silent, repeated failure. Re-seeding the
+  built-in playbook on every daemon startup refreshes its content but never resets a status
+  an AI already reported.
+- Reflex now reports a genuine `connected` status (same badge/styling as Web Scraper)
+  instead of a static "launched by your AI when needed". Its stdio launch now includes
+  `--http`, which opens a small side-channel health server (JSON status only, never the
+  MCP protocol itself - the actual control plane stays per-session stdio, unchanged) that
+  `McpServerManager.status()` now genuinely reachability-checks for Reflex specifically.
+  `mcp-server.js`'s health server also gained an `EADDRINUSE` handler so multiple
+  concurrent Reflex sessions attempting the same health port no longer crash - the first
+  one binds it, the rest skip gracefully.
+
+### Fixed (verified this session)
+- ChatGPT genuinely calling Synapse MCP tools from a normal Chat-tab session (not the
+  separate "Work" surface) was unverified until now. Live-tested through the actual
+  connector: `synapse_write_file` wrote a real Python file to disk (content verified
+  byte-for-byte independently), and `synapse_call_mcp_tool` reached the `reflex` server
+  live - listing all 103 tools, reading real-time desktop state (`get_active_window`), and
+  creating a real directory on disk (`create_directory`, independently verified). Root
+  cause of the earlier confusion: attaching a connector via a chat's "..." menu doesn't
+  reliably make the model call it - only a plugin's dedicated "View plugin detail" page's
+  "Try in chat" button does, and that button defaults into ChatGPT's separate "Work"
+  surface (its own, often-exhausted usage limit) rather than the normal Chat tab.
+
 ## [0.1.164] - 2026-08-18
 
 ### Fixed

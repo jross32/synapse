@@ -201,7 +201,9 @@ def test_ensure_bootstrap_reflex_creates_isolated_stdio_server(tmp_path: Path) -
     assert server.id == "reflex"
     assert server.transport == McpTransport.STDIO
     assert server.command == "node"
-    assert server.args == [str(checkout / "mcp-server.js")]
+    # --http opens Reflex's side-channel health server so status() can report a real
+    # CONNECTED/not-running state instead of a static "launched when needed".
+    assert server.args == [str(checkout / "mcp-server.js"), "--http"]
     assert server.enabled is True
     assert server.autorun is False
     assert server.env == {}
@@ -243,7 +245,7 @@ def test_startup_discovers_and_bootstraps_reflex(tmp_path: Path, monkeypatch) ->
         pass
 
     stored = mcp.get_server(storage.conn, "reflex")
-    assert stored.args == [str(checkout / "mcp-server.js")]
+    assert stored.args == [str(checkout / "mcp-server.js"), "--http"]
     assert stored.enabled is True
     assert stored.autorun is False
 
@@ -368,6 +370,54 @@ def test_status_http_stopped_when_nothing_listening() -> None:
     sock.close()
     status, _ = asyncio.run(mgr.status(_server(transport=McpTransport.HTTP, url=f"http://127.0.0.1:{port}/mcp")))
     assert status == McpServerStatus.STOPPED
+
+
+def test_status_stdio_reflex_is_connected_when_health_port_listening(monkeypatch) -> None:
+    """Reflex is stdio (per-session isolation, see ensure_bootstrap_reflex's docstring), but
+    unlike a generic stdio server it should get a REAL reachability check via its --http
+    side-channel health port, the same way an http-transport server does."""
+    mgr = McpServerManager()
+
+    async def run() -> tuple[McpServerStatus, str | None]:
+        server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        monkeypatch.setattr(mcp, "REFLEX_HEALTH_URL", f"http://127.0.0.1:{port}/health")
+        try:
+            return await mgr.status(_server(id="reflex", transport=McpTransport.STDIO, command="node"))
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    status, detail = asyncio.run(run())
+    assert status == McpServerStatus.CONNECTED
+    assert detail is None
+
+
+def test_status_stdio_reflex_is_not_ready_when_health_port_not_listening(monkeypatch) -> None:
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()  # definitely-closed port -- nothing is answering there
+    monkeypatch.setattr(mcp, "REFLEX_HEALTH_URL", f"http://127.0.0.1:{port}/health")
+
+    mgr = McpServerManager()
+    status, detail = asyncio.run(
+        mgr.status(_server(id="reflex", transport=McpTransport.STDIO, command="node"))
+    )
+    assert status == McpServerStatus.STDIO_READY
+    assert detail == "Not currently running — launched by your AI when needed."
+
+
+def test_status_stdio_non_reflex_server_unaffected_by_reflex_health_check(monkeypatch) -> None:
+    """A generic stdio server (e.g. filesystem, memory) must keep the old static status --
+    the health-port check is Reflex-specific, not a change to every stdio server."""
+    monkeypatch.setattr(mcp, "REFLEX_HEALTH_URL", "http://127.0.0.1:1/health")  # would refuse
+    mgr = McpServerManager()
+    status, detail = asyncio.run(
+        mgr.status(_server(id="filesystem", transport=McpTransport.STDIO, command="npx"))
+    )
+    assert status == McpServerStatus.STDIO_READY
+    assert detail == "Launched by your AI when needed."
 
 
 def test_build_mcp_config_filters_and_shapes() -> None:

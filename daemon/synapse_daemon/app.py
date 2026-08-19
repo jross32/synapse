@@ -599,6 +599,14 @@ def build_app(
             except Exception:  # pragma: no cover - defensive boot logging
                 log.exception("Reflex bootstrap failed unexpectedly.")
 
+        try:
+            from . import playbooks as _playbooks
+
+            with storage.transaction() as conn:
+                _playbooks.ensure_bootstrap_chatgpt_connector_playbook(conn)
+        except Exception:  # pragma: no cover - defensive boot logging
+            log.exception("Playbook bootstrap failed unexpectedly.")
+
         if bootstrapped_server is not None:
             try:
                 reconcile_web_scraper_project(

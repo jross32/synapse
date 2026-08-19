@@ -215,6 +215,8 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     # Looks up a work item and returns the REST call that starts it - it does not spawn
     # anything itself (see the handler), so it genuinely is read-only despite the name.
     "synapse_launch_work_item": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_playbooks": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_playbook": {"readOnlyHint": True, "idempotentHint": True},
     # -- additive writes: create a new record, never delete or overwrite an existing one --
     "synapse_add_project_idea": {"readOnlyHint": False, "destructiveHint": False,
                                  "idempotentHint": False},
@@ -224,6 +226,8 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                              "idempotentHint": False},
     "synapse_add_work_item": {"readOnlyHint": False, "destructiveHint": False,
                               "idempotentHint": False},
+    "synapse_report_playbook_status": {"readOnlyHint": False, "destructiveHint": False,
+                                       "idempotentHint": False},
     # -- writes that can overwrite or replace content that already exists --
     "synapse_delegate_module": {"readOnlyHint": False, "destructiveHint": True,
                                 "idempotentHint": False, "openWorldHint": True},
@@ -316,6 +320,28 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                 "squads created, work handed off, ideas filed to the review inbox)."
             ),
             "inputSchema": empty,
+        },
+        {
+            "name": "synapse_list_playbooks",
+            "description": (
+                "List AI-facing playbooks -- step-by-step procedures for driving something outside "
+                "this codebase (e.g. configuring a third-party web UI), each with a healthy / "
+                "needs_attention / broken status. Call this before attempting a task you suspect "
+                "already has a known procedure."
+            ),
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_get_playbook",
+            "description": "Read one playbook's full steps, status, and status note.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "playbook_id": {"type": "string", "description": "Playbook id, e.g. chatgpt-connector-setup."}
+                },
+                "required": ["playbook_id"],
+                "additionalProperties": False,
+            },
         },
     ]
     # The caller is responsible for combining "does the server allow writes right now"
@@ -537,6 +563,26 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "additionalProperties": False,
                     },
                 },
+                {
+                    "name": "synapse_report_playbook_status",
+                    "description": (
+                        "Report the outcome of following a playbook: healthy if every step matched what "
+                        "was actually on screen/in the tool, needs_attention if a step no longer matches "
+                        "(include what you saw instead in note), broken if the whole approach no longer "
+                        "works. This is how a playbook stays trustworthy for the next AI instead of going "
+                        "silently stale."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "playbook_id": {"type": "string"},
+                            "status": {"type": "string", "enum": ["healthy", "needs_attention", "broken"]},
+                            "note": {"type": "string", "description": "What you observed, especially for needs_attention/broken."},
+                        },
+                        "required": ["playbook_id", "status"],
+                        "additionalProperties": False,
+                    },
+                },
             ]
         )
     for spec in specs:
@@ -634,6 +680,17 @@ def build_mcp_router(
                 }
                 for n in _activity.list_notifications(storage.conn, limit=20)
             ]
+        if name == "synapse_list_playbooks":
+            from . import playbooks as _playbooks
+
+            return [p.model_dump(mode="json") for p in _playbooks.list_playbooks(storage.conn)]
+        if name == "synapse_get_playbook":
+            from . import playbooks as _playbooks
+
+            playbook_id = str(args.get("playbook_id", "")).strip()
+            if not playbook_id:
+                raise ValueError("playbook_id is required")
+            return _playbooks.get_playbook(storage.conn, playbook_id).model_dump(mode="json")
         if name == "synapse_get_project_records":
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown
@@ -913,6 +970,24 @@ def build_mcp_router(
             return speak(server, "tools/call",
                          {"name": tool, "arguments": args.get("arguments") or {}},
                          timeout)
+
+        if name == "synapse_report_playbook_status":
+            _require_writes()
+            from . import playbooks as _playbooks
+
+            playbook_id = str(args.get("playbook_id", "")).strip()
+            status_arg = str(args.get("status", "")).strip()
+            if not playbook_id or not status_arg:
+                raise ValueError("playbook_id and status are required")
+            with storage.transaction() as conn:
+                result = _playbooks.record_verification(
+                    conn,
+                    playbook_id,
+                    status=_playbooks.PlaybookStatus(status_arg),
+                    note=args.get("note"),
+                    verified_by="mcp_connector",
+                )
+            return result.model_dump(mode="json")
 
         raise ValueError(f"Unknown tool: {name}")
 
