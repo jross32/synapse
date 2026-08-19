@@ -41,6 +41,12 @@ class CoderRuntime(str, Enum):
     COPILOT = "copilot"
     GEMINI = "gemini"
     LOCAL = "local"
+    CHATGPT_WEB = "chatgpt_web"
+    """Not a CLI -- driven by chatgpt_browser_runtime.py via a live, signed-in browser tab.
+
+    Deliberately outside headless_argv()/write_module()'s subprocess.run() contract (there is
+    no argv for a browser session), and deliberately outside DEFAULT_LADDER below until it has
+    been proven live end to end -- see chatgpt_browser_runtime.py's module docstring for why."""
 
 
 DEFAULT_LADDER: tuple[CoderRuntime, ...] = (
@@ -51,6 +57,10 @@ DEFAULT_LADDER: tuple[CoderRuntime, ...] = (
     CoderRuntime.LOCAL,
 )
 """Best first, free last.
+
+CHATGPT_WEB is intentionally absent: it isn't a subprocess call like the rest of this ladder,
+it needs a one-time human login into its browser profile before it can run at all, and it
+hasn't been exercised live yet. See chatgpt_browser_runtime.py.
 
 Gemini sits below the paid trio and above the local models on purpose. It is not as strong
 as Claude or Codex on this kind of work, so it is a *last paid resort* rather than a

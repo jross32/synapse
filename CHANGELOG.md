@@ -10,6 +10,33 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.168] - 2026-08-19
+
+### Added
+- **A real, autonomous ChatGPT-web coder runtime.** `chatgpt_browser_runtime.py` drives a
+  live, already-signed-in `chatgpt.com` tab via Playwright the same way a human does: types
+  a prompt (using Shift+Enter for line breaks -- a bare newline sends the message prematurely
+  on the real UI, proven directly this session), waits for the send/stop button to flip back
+  to "send" (with a separate stall timeout for the known "frozen tab" failure mode, not just
+  an overall timeout), and reads the reply back. Registered as `CoderRuntime.CHATGPT_WEB` in
+  `coder_runtimes.py`, mirroring the same `RuntimeResult` contract every other rung uses.
+  Deliberately left out of `DEFAULT_LADDER` for now: it needs a one-time human login into its
+  Playwright profile before it can run unattended, and it hasn't been exercised live yet --
+  not an account-risk hedge, ordinary "don't ship untested code to the default path"
+  discipline. Runs fully autonomously once that one-time login exists.
+- **Third AI-facing playbook: `chatgpt-workflow-design-notes`.** An append-only living log
+  (distinct from the other two operating-procedure playbooks) for ideas, gaps, and decisions
+  about evolving the ChatGPT<->Synapse workflow itself, seeded with today's findings: the MCP
+  connector is genuinely full-access with zero per-client filtering, a list of subsystems that
+  exist but have no MCP tool yet (search, Quality OS, the MCP-server marketplace, project
+  AI-memory read-back), confirmation that multiple simultaneous ChatGPT conversations already
+  work today against the same connector with no code changes, and the ChatGPT-web-runtime
+  decision above.
+- **`chatgpt-autonomous-app-build` playbook amended** with an early step distinguishing the
+  separate local-Ollama scaffold/blueprint system from ChatGPT building something itself via
+  `synapse_write_file` (a real point of confusion this session), and noting that ChatGPT's own
+  native web browsing is available alongside Synapse's web-scraper MCP tool.
+
 ## [0.1.167] - 2026-08-19
 
 ### Added

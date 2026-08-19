@@ -25,6 +25,7 @@ from .time_utils import to_iso, utc_now
 
 CHATGPT_CONNECTOR_PLAYBOOK_ID = "chatgpt-connector-setup"
 CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID = "chatgpt-autonomous-app-build"
+CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID = "chatgpt-workflow-design-notes"
 
 
 class PlaybookStatus(str, Enum):
@@ -224,6 +225,15 @@ def ensure_bootstrap_chatgpt_autonomous_build_playbook(conn: sqlite3.Connection)
         "Prerequisite: follow the chatgpt-connector-setup playbook first if it isn't already "
         "healthy. This playbook assumes a working connector attached in the normal Chat tab "
         "with writes enabled.",
+        "Two things worth knowing before you brief it, both sources of real confusion the first "
+        "time this was run: (1) if this codebase also has a 'scaffold'/'blueprint' system "
+        "(local Ollama models coding small pieces for testing/benchmarking, see scaffold/runner.py) "
+        "-- that is a different subsystem entirely. ChatGPT building an app itself via "
+        "synapse_write_file never touches it and shouldn't be confused with it when reviewing "
+        "what actually got built. (2) ChatGPT Plus has its own native web browsing/search built "
+        "into the product, separate from and complementary to Synapse's web-scraper MCP tool -- "
+        "say explicitly in the brief that both are fair game, since it may otherwise assume only "
+        "the MCP tool counts as 'real' research.",
         "Open ONE new, dedicated chat for this build (via the connector's plugin page -> "
         "'Try in chat' -> switch to Chat tab) -- don't reuse an unrelated existing chat. "
         "ChatGPT titles the chat from the first message, so a focused brief gives you a "
@@ -284,6 +294,67 @@ def ensure_bootstrap_chatgpt_autonomous_build_playbook(conn: sqlite3.Connection)
             "tests, real git history. The two load-bearing moves: an explicit brief that names "
             "the forbidden delegation tools outright, and never trusting a 'done' summary "
             "without independently re-checking it yourself."
+        ),
+        steps=steps,
+    )
+
+
+def ensure_bootstrap_chatgpt_workflow_notes_playbook(conn: sqlite3.Connection) -> Playbook:
+    """Seed a living, append-only design-notes playbook -- unlike the other two, this is NOT an
+    operating procedure. It's where ideas, gaps, and decisions about evolving the ChatGPT<->Synapse
+    workflow itself get written down so they survive between sessions instead of living only in
+    one conversation's memory.
+
+    Content-only via upsert_playbook, same re-seed-safe pattern as the other two -- but since
+    this one is meant to grow over time, treat future re-seeds here as append-only in spirit:
+    extend the steps list, don't shrink it."""
+
+    steps = [
+        "Purpose: append-only running log of ideas, gaps, and decisions for evolving the "
+        "ChatGPT<->Synapse workflow itself -- not an operating procedure (those stay in "
+        "chatgpt-connector-setup and chatgpt-autonomous-app-build). Add a new dated bullet when "
+        "a session surfaces confusion, a missing capability, or a workflow idea worth "
+        "remembering; don't prune old entries without explicit review.",
+        "2026-08-19: Audited MCP tool exposure -- confirmed the connector is genuinely "
+        "full-access (27 tools including run_command, read_file/write_file anywhere, "
+        "delegate_module, call_mcp_tool proxying to other registered servers like reflex) with "
+        "zero per-client filtering; Claude Desktop, ChatGPT, and curl with the same token get an "
+        "identical catalog. The only lever is the connector URL suffix (?mode=read) and the "
+        "boot_config.mcp_writes_enabled flag, not client identity.",
+        "2026-08-19: Gaps found -- subsystems that exist in the codebase but have no MCP tool at "
+        "all: universal search (search.py/routes_search.py), Quality OS (quality_os.py), the "
+        "MCP-server marketplace itself (routes_mcp_servers.py -- install/start/stop other MCP "
+        "servers), and a dedicated read-back tool for project AI-memory (.synapse-ai-context.md "
+        "is write-only via capture_note today). Squad management is add-only too -- no "
+        "update/remove/reassign tools. Worth closing incrementally.",
+        "2026-08-19: The 5-rung coder runtime ladder (claude -> codex -> copilot -> gemini -> "
+        "local, in coder_runtimes.py) is fully implemented and shared between squads and the "
+        "scaffold blueprint builder -- more complete than an earlier design doc assumed. ChatGPT "
+        "is not a rung: unlike the others it has no CLI/headless entry point, so it can't be "
+        "subprocess.run()'d the way claude/codex/copilot/gemini/local are.",
+        "2026-08-19: Decision -- built chatgpt_browser_runtime.py, a real Playwright-driven "
+        "runtime that types into and reads back from an actual chatgpt.com tab (persistent "
+        "authenticated browser context), added as CoderRuntime.CHATGPT_WEB. Left OUT of "
+        "DEFAULT_LADDER for now -- not as an account-risk hedge, but because it hadn't been "
+        "live-tested end to end yet (needs a one-time human login into the Playwright profile "
+        "first). A squad can already select it explicitly by name; promote it into the default "
+        "ladder once proven live.",
+        "2026-08-19: Confirmed running MULTIPLE simultaneous ChatGPT conversations against the "
+        "same connector already works today with zero new code -- /mcp/{token} is fully "
+        "stateless per-request, no session object, no single-session assumption anywhere. "
+        "Several manually-opened tabs, each its own chat, can already act as parallel workers; "
+        "the only thing missing for that to be orchestrated rather than manual is the same "
+        "browser-runtime piece above, generalized to N tabs.",
+    ]
+    return upsert_playbook(
+        conn,
+        playbook_id=CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID,
+        title="ChatGPT-Synapse workflow: design notes and open ideas",
+        summary=(
+            "Append-only running log of ideas, gaps, and decisions for making the "
+            "ChatGPT-through-Synapse coding workflow itself more capable over time. Not a "
+            "how-to -- operating steps stay in chatgpt-connector-setup and "
+            "chatgpt-autonomous-app-build."
         ),
         steps=steps,
     )

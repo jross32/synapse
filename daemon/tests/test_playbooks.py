@@ -144,3 +144,46 @@ def test_reseeding_the_build_playbook_preserves_a_reported_status(tmp_path):
 
     assert reseeded.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
     assert reseeded.status_note == "OpenAI changed the plugin detail page layout"
+
+
+def test_build_playbook_distinguishes_scaffold_from_self_build(tmp_path):
+    """The gap that caused real user confusion: the local-model scaffold system and ChatGPT
+    building something itself via synapse_write_file are unrelated, but nothing said so."""
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        seeded = playbooks.ensure_bootstrap_chatgpt_autonomous_build_playbook(conn)
+
+    joined = " ".join(seeded.steps).lower()
+    assert "scaffold" in joined
+    assert "native web browsing" in joined or "native" in joined
+
+
+def test_bootstrap_chatgpt_workflow_notes_playbook_seeds_real_entries(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        seeded = playbooks.ensure_bootstrap_chatgpt_workflow_notes_playbook(conn)
+
+    assert seeded.id == playbooks.CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID
+    assert len(seeded.steps) >= 5
+    joined = " ".join(seeded.steps).lower()
+    assert "append-only" in joined
+    assert "coder_runtimes" in joined
+    assert "chatgpt_web" in joined
+
+
+def test_reseeding_the_workflow_notes_playbook_preserves_a_reported_status(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        playbooks.ensure_bootstrap_chatgpt_workflow_notes_playbook(conn)
+    with storage.transaction() as conn:
+        playbooks.record_verification(
+            conn,
+            playbooks.CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID,
+            status=playbooks.PlaybookStatus.NEEDS_ATTENTION,
+            note="entries need review",
+        )
+    with storage.transaction() as conn:
+        reseeded = playbooks.ensure_bootstrap_chatgpt_workflow_notes_playbook(conn)
+
+    assert reseeded.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
+    assert reseeded.status_note == "entries need review"
