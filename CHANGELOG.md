@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.166] - 2026-08-19
+
+### Fixed
+- **The Electron startup-recovery window could get permanently stuck** after an interrupted
+  restart, even once the daemon and interface underneath were fully healthy. Root cause:
+  `loadRestartMarker()` falls back to a synthetic SYN-BOOT-301 progress object (its `desktop`
+  stage permanently marked `error`) when the saved `data/restart-progress.json` marker is
+  missing, malformed, or more than ten minutes old. The recovery path cleared the stale
+  marker *file* correctly, but kept layering subsequent stage updates onto that same
+  in-memory object -- and `finishRestartWindow()` only auto-closes once every stage reads
+  `success`, which a permanently-errored stage can never do. `electron/main.ts` now starts a
+  fresh `startup`-kind progress object after handling an invalid marker, the same shape as an
+  ordinary cold boot, so the window can reach all-success and close itself normally.
+- Reproduced live: triggering `POST /system/restart` against a bare (non-Electron-supervised)
+  daemon process left exactly this kind of orphaned marker; the next Electron launch showed
+  the stuck "Synapse needs attention" / SYN-BOOT-301 window indefinitely. Confirmed fixed
+  after the patch: clean relaunch, no leftover `restart-progress.json`, Electron/Vite/daemon
+  processes all healthy.
+
 ## [0.1.165] - 2026-08-19
 
 ### Added

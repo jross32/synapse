@@ -1191,6 +1191,19 @@ app.whenReady().then(async () => {
     showRestartWindow(restoredRestart);
     if (restoredRestart.errorCode) {
       clearRestartMarker();
+      // `restoredRestart` is permanently error-flagged on its 'desktop' stage (that is
+      // what makes it the SYN-BOOT-301 fallback). finishRestartWindow() only auto-closes
+      // once every stage reads 'success', so if startup kept layering updates onto this
+      // same object, that stage could never turn green and this window would never close
+      // on its own -- even once the real app is healthy and running behind it. Start a
+      // fresh, clean progress trail instead, same shape as an ordinary cold boot.
+      currentRestartProgress = createRestartProgress(
+        'startup',
+        `startup-${Date.now().toString(36)}-${process.pid}`,
+        'startup'
+      );
+      setRestartStage('desktop', 'success', 'The Synapse desktop process is running.');
+      setRestartStage('daemon', 'active', 'Starting Synapse services…');
     } else {
       setRestartStage('stop', 'success', 'The previous Synapse processes have exited.');
       setRestartStage('desktop', 'success', 'The new Synapse desktop process is running.');
