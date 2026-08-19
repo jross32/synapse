@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.167] - 2026-08-19
+
+### Added
+- **Second AI-facing playbook: `chatgpt-autonomous-app-build`.** Captures the brief structure,
+  verification discipline, and check-in pacing that got ChatGPT to build a complete,
+  independently-verified app (FlipLedger, a clothes-resale tracker) end to end through the
+  connector with zero delegation to another coding runtime -- real scraped pricing data, a
+  real self-caught bug fix via Reflex, real passing tests, real git history. Encodes the two
+  load-bearing moves: naming the forbidden delegation tools outright in the brief, and never
+  trusting a "done" summary without independently re-checking it (re-run the tests yourself,
+  read the actual files, `git log` yourself). Also records two known, non-fixable gotchas so
+  nobody re-diagnoses them from scratch: the ChatGPT tab can freeze mid-long-generation
+  (recover via a fresh tab to the same chat URL) and new-connector creation can 424 transiently
+  on OpenAI's own endpoint even when the MCP server is completely healthy.
+
 ## [0.1.166] - 2026-08-19
 
 ### Fixed

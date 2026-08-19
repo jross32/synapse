@@ -111,3 +111,36 @@ def test_bootstrap_chatgpt_connector_playbook_seeds_real_steps(tmp_path):
     # from the recorded steps, the playbook has stopped encoding the lesson it exists for.
     assert "try in chat" in joined
     assert "work" in joined and "chat" in joined
+
+
+def test_bootstrap_chatgpt_autonomous_build_playbook_seeds_real_steps(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        seeded = playbooks.ensure_bootstrap_chatgpt_autonomous_build_playbook(conn)
+
+    assert seeded.id == playbooks.CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID
+    assert len(seeded.steps) >= 5
+    joined = " ".join(seeded.steps).lower()
+    # The load-bearing rule (name the forbidden delegation tools outright) and the
+    # verification discipline (don't trust a "done" summary) -- proven live on FlipLedger.
+    assert "synapse_delegate_module" in joined
+    assert "independently" in joined
+    assert "create-project" in joined  # the known gap, so nobody re-discovers it by surprise
+
+
+def test_reseeding_the_build_playbook_preserves_a_reported_status(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        playbooks.ensure_bootstrap_chatgpt_autonomous_build_playbook(conn)
+    with storage.transaction() as conn:
+        playbooks.record_verification(
+            conn,
+            playbooks.CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID,
+            status=playbooks.PlaybookStatus.NEEDS_ATTENTION,
+            note="OpenAI changed the plugin detail page layout",
+        )
+    with storage.transaction() as conn:
+        reseeded = playbooks.ensure_bootstrap_chatgpt_autonomous_build_playbook(conn)
+
+    assert reseeded.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
+    assert reseeded.status_note == "OpenAI changed the plugin detail page layout"
