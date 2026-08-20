@@ -784,9 +784,38 @@ def build_mcp_router(
             return work_item.model_dump(mode="json")
         if name == "synapse_runtime_status":
             _require_writes()
+            from . import ai_executions as _ai_executions
             from . import coder_runtimes as _cr
 
-            return [r.model_dump(mode="json") for r in _cr.preflight()]
+            # preflight()'s cooldown is in-memory and deliberately forgets exhaustion on every
+            # daemon restart (coder_runtimes.py's own docstring: "a restart should re-probe
+            # rather than inherit a stale belief that a tier is dead"). That is the right
+            # default for the squad/blueprint dispatcher this was built for -- one wasted call
+            # is cheap. It is the wrong default for an external caller like this MCP tool: right
+            # after a restart it reports usable_now=True for a runtime the durable,
+            # evidence-backed ai_runtime_capacity ledger still remembers as quota_exhausted from
+            # a real provider error. Merge that durable evidence in so a caller sees both.
+            durable = {c.runtime_id: c for c in _ai_executions.list_capacity(storage.conn)}
+            _STALE_STATES = {
+                _ai_executions.RuntimeCapacityState.QUOTA_EXHAUSTED,
+                _ai_executions.RuntimeCapacityState.AUTH_REQUIRED,
+                _ai_executions.RuntimeCapacityState.DISABLED,
+                _ai_executions.RuntimeCapacityState.OFFLINE,
+            }
+            out = []
+            for status in _cr.preflight():
+                capacity = durable.get(status.runtime)
+                if status.usable_now and capacity is not None and capacity.state in _STALE_STATES:
+                    status.usable_now = False
+                    evidence = (f" as of {capacity.evidence_at.isoformat()}"
+                                if capacity.evidence_at else "")
+                    status.note = (
+                        f"durable evidence ledger records {capacity.state.value}{evidence} "
+                        f"({capacity.reason_code or 'no reason given'}) -- overriding the "
+                        f"post-restart cooldown, which had no memory of this yet"
+                    )
+                out.append(status.model_dump(mode="json"))
+            return out
 
         if name == "synapse_list_blueprints":
             _require_writes()

@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.169] - 2026-08-20
+
+### Fixed
+- **`synapse_runtime_status` reported a runtime as usable right after a daemon restart even
+  when it was actually quota-exhausted.** `coder_runtimes.preflight()`'s cooldown tracking is
+  in-memory by design and deliberately forgets exhaustion on every restart (the squad/blueprint
+  dispatcher this serves treats one wasted call as cheap). That's the wrong default for this
+  MCP tool: a caller right after a restart saw `usable_now: true` for a runtime the durable,
+  evidence-backed `ai_runtime_capacity` ledger still remembered as `quota_exhausted` from a
+  real provider error minutes earlier. Found live: a ChatGPT session called
+  `synapse_runtime_status` through the connector and got the stale, optimistic answer while
+  `/api/v1/ai/runtimes` showed the real exhausted state side by side. The MCP tool's handler
+  now merges the durable capacity ledger in and overrides `usable_now` (with an explanatory
+  note) whenever it disagrees with the fresher-but-less-informed in-memory cooldown.
+
+Changed:
+- `daemon/synapse_daemon/mcp_connector.py`: `synapse_runtime_status` handler merges
+  `ai_executions.list_capacity()` into `coder_runtimes.preflight()`'s results.
+- `daemon/tests/test_mcp_full_access_end_to_end.py`: new regression test seeding a durable
+  quota-exhausted row and asserting the merged tool output reflects it.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.168 -> 0.1.169.
+
 ## [0.1.168] - 2026-08-19
 
 ### Added

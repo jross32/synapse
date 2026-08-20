@@ -108,6 +108,42 @@ def test_every_write_tool_response_carries_a_real_result_not_a_stub(tmp_path, cl
     assert {"runtime", "usable_now", "cost_usd_today"} <= set(payload[0])
 
 
+def test_runtime_status_defers_to_durable_evidence_over_a_fresh_restart(tmp_path, clean_env):
+    """Reproduces a real discrepancy found live: right after a daemon restart,
+    coder_runtimes.preflight()'s in-memory cooldown has no memory of anything, so it reports
+    a runtime as usable even though the durable ai_runtime_capacity ledger still holds real
+    provider evidence that it's quota-exhausted. The MCP tool must not expose the more
+    optimistic, less-informed answer when better evidence already exists."""
+    from synapse_daemon import ai_executions
+    from synapse_daemon.storage import Storage
+
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    with storage.transaction() as conn:
+        ai_executions.set_operator_capacity(
+            conn, "claude", state=ai_executions.RuntimeCapacityState.QUOTA_EXHAUSTED,
+            note="usage limit reached (test)")
+
+    from synapse_daemon import boot_config
+    cfg = boot_config.load(tmp_path / "data")
+    cfg.mcp_writes_enabled = True
+    boot_config.save(tmp_path / "data", cfg)
+
+    from fastapi.testclient import TestClient
+    from synapse_daemon.app import build_app
+    from synapse_daemon.ws import EventBus
+
+    app = build_app(storage, EventBus())
+    client, token = TestClient(app), app.state.auth.local_token
+
+    result = _call(client, token, "synapse_runtime_status", {})
+    payload = json.loads(result["content"][0]["text"])
+    claude = next(r for r in payload if r["runtime"] == "claude")
+    assert claude["usable_now"] is False
+    assert "quota_exhausted" in claude["note"]
+
+
 def test_playbook_tools_are_readable_even_with_writes_off(tmp_path, clean_env):
     """synapse_list_playbooks / synapse_get_playbook are read-only -- they must work
     regardless of the write toggle, exactly like the other always-advertised read tools."""
