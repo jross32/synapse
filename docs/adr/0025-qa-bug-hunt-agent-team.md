@@ -23,14 +23,40 @@ Token discipline is **structural**: hunters run at `minimal` context with only t
 
 ## Maturity (be honest)
 
-**Shipped + tested (this ADR):** per-role MCP binding (migration 021, `v0.1.36.14`, 8 tests) · the `qa-bug-hunt-squad` bundle (`v0.1.36.15`, 4 tests) · the launchable `bug-hunt-squad` quick-action (`v0.1.36.16`, validated by the 19 quick-action tests). The quick-action is a **launchable prompt** (the same class of artifact as `autonomous-boss`), not a bespoke daemon engine.
+**Shipped + tested (this ADR):** per-role MCP binding (migration 021, `v0.1.36.14`, 8 tests).
+
+**CORRECTION (2026-08-20, v0.1.175):** the two bullets this section originally listed next to
+that — "the `qa-bug-hunt-squad` bundle (`v0.1.36.15`, 4 tests)" and "the launchable
+`bug-hunt-squad` quick-action (`v0.1.36.16`...)" — were never actually true. Verified this
+session two ways: (1) `git log --all -S "qa-bug-hunt-squad" -- daemon/synapse_daemon/ai_bundles.py`
+returns zero commits, ever — the bundle's own name has never appeared in the file that would
+define it; (2) none of the 9 role ids this ADR names (`qa-lead`, `user-simulator`,
+`edge-case-hunter`, `state-corruptor`, `ux-critic`, `a11y-auditor`, `triage-steward`,
+`bug-report-synthesist`, `token-steward`) exist in `agent_squads.seed_default_role_templates`
+either. `templates/quick-actions/bug-hunt-squad.json` *does* exist and its prompt is well-written,
+but its very first instruction (`POST /ai-bundles/install/qa-bug-hunt-squad`) would 404 if
+actually run, because the bundle it installs was never built. This looks like the "Maturity"
+section was written to record an intent as if it were already done, not a regression — nothing
+in this file's history shows it existing and then being removed. Tracked as review proposal
+`8f5a67bbbe01` (recommends building the bundle for real, given how detailed and clearly-thought-
+through the 9-role roster already is here) rather than fixed in this pass.
+
+**Also updated (2026-08-20, v0.1.174):** per-worker token accounting, listed below as "the
+load-bearing gap," is now closed. `AgentRoleTemplate.default_execution_mode` lets a role opt its
+workers into `automatic` (headless, prompt-driven) launch by default instead of `interactive`
+(an idle TUI that never prints a usage line for anything to parse) — the actual gap turned out
+to be that nothing opted squad workers into the one mode the already-working usage parser and
+`ai_executions.finalize_pty_execution` pipeline could read from, not a missing parser. Still
+requires whichever roles a bug-hunt bundle eventually ships to actually set
+`default_execution_mode: "automatic"` for the token claim to be measurable end to end — see
+`8f5a67bbbe01`.
 
 **Not yet (next phases — Plan 3 Phases 2–3, tracked on the roadmap):**
-- **Per-worker token accounting** — the load-bearing gap; PTY workers report zero tokens today, so "fewer tokens than a non-Synapse agent" is not yet *proven*.
+- **Build the `qa-bug-hunt-squad` bundle for real** — see the correction above and proposal `8f5a67bbbe01`.
 - **A bug-hunt fixture + topology benchmark** — a fixed buggy app + answer key to rank flat vs supervisor-tree vs solo-baseline by bugs-per-1k-tokens.
 - **Auto-spawn supervised children + a concurrency cap + token budgets** (the `delegate` endpoint creates a child but doesn't launch it; nothing bounds concurrency today).
 - **SUPERVISED_IDEATION + a proposal inbox** (agents brainstorm improvements for approval).
-- **A live browser-driving E2E** — proving a hunter opens a real gate with a real screenshot needs an interactive session with a Playwright MCP installed and real Claude workers spawned. Until that runs, this team is **launchable + individually-tested, not end-to-end-proven**.
+- **A live browser-driving E2E** — proving a hunter opens a real gate with a real screenshot needs an interactive session with a Playwright MCP installed and real Claude workers spawned, which in turn needs the bundle above to exist first.
 
 ## Consequences
 
