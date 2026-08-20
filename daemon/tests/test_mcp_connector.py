@@ -121,6 +121,46 @@ def test_tools_call_unknown_project_is_tool_error(tmp_path: Path) -> None:
     assert result["isError"] is True
 
 
+def test_tools_call_get_project_ai_context(tmp_path: Path) -> None:
+    """The read-back half of synapse_capture_note -- a write with no way to read it back."""
+    from synapse_daemon import ai_context_memory
+
+    client, token = _harness(tmp_path)
+    storage = client.app.state.storage
+    ai_context_memory.ensure_ai_context_file(storage.data_dir, "demo-project", "Demo Project")
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_get_project_ai_context", "arguments": {"project_id": "demo-project"}},
+    )
+    result = res.json()["result"]
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert "# Project: Demo Project" in text
+    assert '"exists": true' in text
+
+
+def test_tools_call_get_project_ai_context_missing_file(tmp_path: Path) -> None:
+    """A project that has never been written to has no file yet -- that is not an error."""
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_get_project_ai_context", "arguments": {"project_id": "demo-project"}},
+    )
+    result = res.json()["result"]
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert '"exists": false' in text
+
+
+def test_tools_call_get_project_ai_context_unknown_project_is_tool_error(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_get_project_ai_context", "arguments": {"project_id": "nope"}},
+    )
+    assert res.json()["result"]["isError"] is True
+
+
 def test_tools_call_web_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from synapse_daemon import local_agent
 

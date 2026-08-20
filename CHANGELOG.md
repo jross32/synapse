@@ -10,6 +10,37 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.172] - 2026-08-20
+
+### Added
+- **`synapse_get_project_ai_context` MCP tool.** `synapse_capture_note` has written to a
+  project's shared AI memory (`.synapse-ai-context.md`) since it shipped, but nothing could
+  read it back over MCP -- a write with no matching read, named explicitly as a gap in the
+  same 0.1.168 playbook note that named the now-closed `search` gap ("a dedicated read-back
+  tool for project AI-memory (.synapse-ai-context.md is write-only via capture_note
+  today)"). The new tool wraps the existing `ai_context_memory.ai_context_path`/
+  `ai_context_metadata` helpers directly (no REST route needed, same shape as
+  `synapse_web_search` wrapping `local_agent.web_search`) and returns path/exists/size/
+  last_modified plus the capped file content. Annotated `readOnlyHint: true`, ungated (like
+  `synapse_get_project_records`, not behind the full-access URL) -- reading a project's own
+  notes is no more sensitive than reading its ADRs/backlog, which are already unrestricted.
+  A missing file (a project nobody has captured a note to yet) returns `exists: false`
+  rather than an error; an unknown project id still 404s as a tool error.
+  Of the four subsystems the 0.1.168 note listed as having no MCP tool, this closes the
+  third (after `search` in 0.1.170). Quality OS (`quality_summary()`, already a
+  zero-argument existing function) is next in line. The MCP-server marketplace's gap is the
+  mutating half (install/start/stop other MCP servers) and needs an explicit decision about
+  how much autonomous control to hand a remote AI before any code gets written -- it stays
+  open on purpose.
+
+Changed:
+- `daemon/synapse_daemon/mcp_connector.py`: new `synapse_get_project_ai_context` schema,
+  annotation entry, and handler.
+- `daemon/tests/test_mcp_tool_annotations.py`: added to `EXPECTED_READ_ONLY`.
+- `daemon/tests/test_mcp_connector.py`: three new tests -- file exists, file missing (not an
+  error), and unknown project (is an error).
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.171 -> 0.1.172.
+
 ## [0.1.171] - 2026-08-20
 
 ### Added

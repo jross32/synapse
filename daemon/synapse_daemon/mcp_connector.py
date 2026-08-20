@@ -202,6 +202,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_get_context": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_projects": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_records": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_project_ai_context": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_tools": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_quick_actions": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_skill_packs": {"readOnlyHint": True, "idempotentHint": True},
@@ -273,6 +274,23 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": {
                 "type": "object",
                 "properties": {"project_id": {"type": "string", "description": "The project id (kebab-case)."}},
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_get_project_ai_context",
+            "description": (
+                "Read a project's shared AI memory (.synapse-ai-context.md) -- the running "
+                "notes/objectives/session log that synapse_capture_note writes to. Call this "
+                "before starting work on a project so you pick up where the last AI left off."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "The project id (kebab-case)."},
+                    "max_chars": {"type": "integer", "description": "Default 40000."},
+                },
                 "required": ["project_id"],
                 "additionalProperties": False,
             },
@@ -717,6 +735,18 @@ def build_mcp_router(
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown
             return records.get_records(storage.conn, project_id).model_dump(mode="json")
+        if name == "synapse_get_project_ai_context":
+            project_id = str(args.get("project_id", "")).strip()
+            projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown
+            from . import ai_context_memory
+
+            meta = ai_context_memory.ai_context_metadata(storage.data_dir, project_id)
+            limit = int(args.get("max_chars") or 40000)
+            if not meta["exists"]:
+                return {**meta, "content": "", "truncated": False}
+            path = ai_context_memory.ai_context_path(storage.data_dir, project_id)
+            text = path.read_text(encoding="utf-8", errors="replace")
+            return {**meta, "content": text[:limit], "truncated": len(text) > limit}
         if name == "synapse_get_context":
             projects = projects_module.list_projects(storage.conn)
             squad_list = squads.list_squads(storage.conn)

@@ -18,6 +18,7 @@ EXPECTED_READ_ONLY = {
     "synapse_get_context",
     "synapse_list_projects",
     "synapse_get_project_records",
+    "synapse_get_project_ai_context",
     "synapse_list_tools",
     "synapse_list_quick_actions",
     "synapse_list_skill_packs",
