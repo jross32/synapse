@@ -196,6 +196,25 @@ def test_tools_call_web_search_failure_is_tool_error(tmp_path: Path, monkeypatch
     assert res.json()["result"]["isError"] is True
 
 
+def test_tools_call_quality_summary(tmp_path: Path) -> None:
+    """A real failing contract run must show up in the summary, not just an empty shape."""
+    client, token = _harness(tmp_path)
+    seeded = client.post(
+        "/api/v1/ui-contracts/project-detail-close-button/run",
+        json={"subject_type": "ai_case", "subject_id": "case-mcp",
+              "verdict": "fail", "label": "MCP quality summary test"},
+        headers={"X-Synapse-Token": token},
+    )
+    assert seeded.status_code == 200, seeded.text
+
+    res = _rpc(client, token, "tools/call", {"name": "synapse_quality_summary", "arguments": {}})
+    result = res.json()["result"]
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert '"open_count": 1' in text
+    assert "case-mcp" in text
+
+
 def test_unknown_method(tmp_path: Path) -> None:
     client, token = _harness(tmp_path)
     res = _rpc(client, token, "bogus/method")

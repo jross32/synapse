@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.173] - 2026-08-20
+
+### Added
+- **`synapse_quality_summary` MCP tool.** Closes the fourth and final subsystem the 0.1.168
+  playbook note listed as having no MCP tool at all (after search in 0.1.170 and AI-memory
+  read-back in 0.1.172). Wraps the existing zero-argument `quality_os.quality_summary(conn)`
+  -- already used internally by `routes_ai.py`'s `/ai/context` digest -- and returns open
+  gate counts, which are blocking, the most recently failing UI contracts, and the latest
+  browser-proof evidence. Placed in the always-available (ungated) tool set alongside
+  `synapse_list_sessions`/`synapse_recent_activity`, since UI-quality state carries no more
+  sensitivity than the activity feed. Test seeds a real failing contract run through the
+  REST API first, so the assertion is against actual gate data, not an empty shape.
+
+  The MCP-server marketplace remains the one subsystem still without a tool, on purpose --
+  its gap is the mutating half (install/start/stop other MCP servers), which needs an
+  explicit decision about how much autonomous control to hand a remote AI before any code
+  gets written, not a quiet wrapper.
+
+Changed:
+- `daemon/synapse_daemon/mcp_connector.py`: new `synapse_quality_summary` schema,
+  annotation entry, and handler; imports `quality_os`.
+- `daemon/tests/test_mcp_tool_annotations.py`: added to `EXPECTED_READ_ONLY`.
+- `daemon/tests/test_mcp_connector.py`: new test seeding a real failing UI-contract run via
+  REST, then asserting the MCP tool's summary reflects it.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.172 -> 0.1.173.
+
 ## [0.1.172] - 2026-08-20
 
 ### Added

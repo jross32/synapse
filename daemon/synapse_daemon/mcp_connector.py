@@ -32,6 +32,7 @@ from . import __version__
 from . import agent_squads as squads
 from . import project_records as records
 from . import projects as projects_module
+from . import quality_os
 from .auth import AuthManager
 from .errors import SynapseError
 from .quick_actions import load_templates
@@ -210,6 +211,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_list_agent_squads": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_sessions": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_recent_activity": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_quality_summary": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_runtime_status": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_blueprints": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_mcp_tools": {"readOnlyHint": True, "idempotentHint": True},
@@ -340,6 +342,16 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "description": (
                 "Recent AI-activity feed: what the AIs driving Synapse just did (sessions connecting, "
                 "squads created, work handed off, ideas filed to the review inbox)."
+            ),
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_quality_summary",
+            "description": (
+                "Quality OS digest: open UI-quality gates (which are blocking), the most recently "
+                "failing UI contracts, and the latest browser-proof evidence. Call this before "
+                "claiming a UI change is done -- a gate opened by a real failure stays open until "
+                "a passing contract run closes it."
             ),
             "inputSchema": empty,
         },
@@ -720,6 +732,8 @@ def build_mcp_router(
                 }
                 for n in _activity.list_notifications(storage.conn, limit=20)
             ]
+        if name == "synapse_quality_summary":
+            return quality_os.quality_summary(storage.conn)
         if name == "synapse_list_playbooks":
             from . import playbooks as _playbooks
 

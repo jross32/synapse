@@ -26,6 +26,7 @@ EXPECTED_READ_ONLY = {
     "synapse_list_agent_squads",
     "synapse_list_sessions",
     "synapse_recent_activity",
+    "synapse_quality_summary",
     "synapse_runtime_status",
     "synapse_list_blueprints",
     "synapse_list_mcp_tools",
