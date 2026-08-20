@@ -82,6 +82,11 @@ class AgentRoleTemplate(BaseModel):
     # MCP servers this role's workers receive (ADR-0025): None -> all enabled
     # (backward-compatible default); [] -> none; [ids] -> only those.
     mcp_server_ids: list[str] | None = None
+    # Execution mode a launch falls back to when the caller doesn't specify one (ADR-0025
+    # follow-up). None preserves today's behavior: interactive, same as before this field
+    # existed. Lets a role opt its workers into automatic (headless, prompt-driven) launch
+    # by default, which is the only mode the token-usage parser can read anything from.
+    default_execution_mode: AgentExecutionMode | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -99,6 +104,7 @@ class AgentRoleTemplateCreate(BaseModel):
     enabled: bool = True
     sort_order: int = 0
     mcp_server_ids: list[str] | None = None
+    default_execution_mode: AgentExecutionMode | None = None
 
 
 class AgentRoleTemplateUpdate(BaseModel):
@@ -113,6 +119,7 @@ class AgentRoleTemplateUpdate(BaseModel):
     enabled: bool | None = None
     sort_order: int | None = None
     mcp_server_ids: list[str] | None = None
+    default_execution_mode: AgentExecutionMode | None = None
 
 
 class AgentSquad(BaseModel):
@@ -203,7 +210,10 @@ class AgentWorkItemLaunchRequest(BaseModel):
     rows: int = Field(default=24, ge=1, le=300)
     cols: int = Field(default=80, ge=1, le=500)
     open_in_tab: bool = True
-    execution_mode: AgentExecutionMode = AgentExecutionMode.INTERACTIVE
+    # None means "no explicit request" -- distinct from an explicit "interactive", so the
+    # launch handler can fall back to the role's default_execution_mode before finally
+    # defaulting to interactive itself (ADR-0025 follow-up).
+    execution_mode: AgentExecutionMode | None = None
     authority: AgentExecutionAuthority = AgentExecutionAuthority.WORKSPACE
     timeout_seconds: int = Field(default=1800, ge=30, le=86400)
     source: AuditSource = AuditSource.DESKTOP
@@ -268,6 +278,11 @@ def _row_to_role(row: sqlite3.Row) -> AgentRoleTemplate:
         mcp_server_ids=(
             _loads_list_or_none(row["mcp_server_ids_json"])
             if "mcp_server_ids_json" in row.keys()
+            else None
+        ),
+        default_execution_mode=(
+            AgentExecutionMode(row["default_execution_mode"])
+            if "default_execution_mode" in row.keys() and row["default_execution_mode"]
             else None
         ),
         created_at=from_iso(row["created_at"]),
@@ -660,8 +675,8 @@ def create_role_template(
         INSERT INTO agent_role_templates (
             id, name, description, preferred_runtimes_json, default_visibility,
             context_mode, role_tier, can_delegate, prompt_preamble_md, enabled, sort_order,
-            mcp_server_ids_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            mcp_server_ids_json, default_execution_mode, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             payload.id,
@@ -676,6 +691,7 @@ def create_role_template(
             1 if payload.enabled else 0,
             payload.sort_order,
             json.dumps(payload.mcp_server_ids) if payload.mcp_server_ids is not None else None,
+            payload.default_execution_mode.value if payload.default_execution_mode else None,
             to_iso(now),
             to_iso(now),
         ),
@@ -699,7 +715,7 @@ def update_role_template(
         UPDATE agent_role_templates
         SET name = ?, description = ?, preferred_runtimes_json = ?, default_visibility = ?,
             context_mode = ?, role_tier = ?, can_delegate = ?, prompt_preamble_md = ?, enabled = ?,
-            sort_order = ?, mcp_server_ids_json = ?, updated_at = ?
+            sort_order = ?, mcp_server_ids_json = ?, default_execution_mode = ?, updated_at = ?
         WHERE id = ?
         """,
         (
@@ -714,6 +730,7 @@ def update_role_template(
             1 if updated.enabled else 0,
             updated.sort_order,
             json.dumps(updated.mcp_server_ids) if updated.mcp_server_ids is not None else None,
+            updated.default_execution_mode.value if updated.default_execution_mode else None,
             to_iso(now),
             role_id,
         ),

@@ -10,6 +10,48 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.174] - 2026-08-20
+
+### Added
+- **`default_execution_mode` on agent role templates** -- closes ADR-0025's own named
+  "load-bearing gap": PTY-spawned squad workers reported zero tokens, because nothing
+  actually launched them in `automatic` (headless, prompt-driven) mode by default, only
+  `interactive` (an idle TUI a human drives by hand, which never prints a usage line for
+  anything to parse). Scoping this before touching code found the fix was NOT "build a
+  usage parser" -- `runtime_usage.py`'s parsers and `ai_executions.finalize_pty_execution`
+  already read usage from automatic-mode PTY output correctly, proven end to end by an
+  existing test (`test_agent_squads.py`'s automatic-launch coverage). The actual gap was
+  one layer up: every launch path (quick-actions, `/delegate`) falls through to the
+  `interactive` default because nothing opts a role in.
+  A role can now set `default_execution_mode: "automatic"`; a launch request's own
+  `execution_mode` still wins when given explicitly, so nothing about today's behavior
+  changes for any existing role -- this is pure opt-in infrastructure. New migration
+  `034_role_default_execution_mode.sql` (nullable column, `NULL` = today's behavior
+  exactly). No default role was switched over in this change -- deliberately: flipping a
+  role's default execution behavior is a real UX change (a worker a human expected to be
+  able to watch/drive interactively would instead run headless), so that's left for
+  whoever actually wires it into the qa-bug-hunt-squad roles or another automatic-shaped
+  workflow to decide explicitly, not something to default silently.
+  Separately found and NOT fixed here (flagged to the review inbox instead): the
+  `templates/quick-actions/bug-hunt-squad.json` prompt references
+  `POST /ai-bundles/install/qa-bug-hunt-squad` and role ids like `edge-case-hunter`/
+  `user-simulator` that do not exist anywhere in `ai_bundles.py` or `agent_squads.py` --
+  that quick-action would 404 if actually run today. A real, separate bug from the
+  token-accounting gap.
+
+Changed:
+- `daemon/synapse_daemon/migrations/034_role_default_execution_mode.sql`: new, additive.
+- `daemon/synapse_daemon/agent_squads.py`: `default_execution_mode` field on
+  `AgentRoleTemplate`/`Create`/`Update`, row mapper, and the create/update SQL.
+- `daemon/synapse_daemon/routes_agent_squads.py`: `AgentWorkItemLaunchRequest.execution_mode`
+  is now `AgentExecutionMode | None` (None = no explicit request, distinct from an explicit
+  "interactive"); the launch handler resolves request -> role default -> interactive once,
+  right after the role is fetched, and every downstream use reads that resolved value.
+- `daemon/tests/test_agent_squads.py`: two new tests -- a role default reaching a real
+  launch (argv included) when the request specifies nothing, and an explicit request
+  overriding the role default.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.173 -> 0.1.174.
+
 ## [0.1.173] - 2026-08-20
 
 ### Added

@@ -639,6 +639,13 @@ def build_agent_squads_router(
                     )
             project = projects_module.get(conn, squad.project_id)
             role = squads.get_role_template(conn, work_item.assigned_role_id or squad.lead_role_id or "planner")
+            # An explicit request always wins; absent that, a role can opt its workers into
+            # automatic by default (ADR-0025 follow-up) -- interactive if neither says
+            # otherwise, exactly today's behavior.
+            execution_mode = (
+                body.execution_mode or role.default_execution_mode
+                or squads.AgentExecutionMode.INTERACTIVE
+            )
             # Layer in the worker's personality (ADR-0018 MW3) so two same-role
             # workers differ. A deleted/missing personality must not block launch.
             personality = None
@@ -748,7 +755,7 @@ def build_agent_squads_router(
                 authority=body.authority.value,
                 ttl_seconds=(
                     body.timeout_seconds + 300
-                    if body.execution_mode == squads.AgentExecutionMode.AUTOMATIC
+                    if execution_mode == squads.AgentExecutionMode.AUTOMATIC
                     else 86_400
                 ),
                 work_item_id=work_item.id,
@@ -781,7 +788,7 @@ def build_agent_squads_router(
                 "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id).resolve()),
                 "SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT": AI_CONTEXT_DIRECTION_PROMPT,
             })
-            if body.execution_mode == squads.AgentExecutionMode.AUTOMATIC:
+            if execution_mode == squads.AgentExecutionMode.AUTOMATIC:
                 argv = _automatic_worker_argv(
                     argv,
                     runtime=chosen_runtime,
@@ -822,7 +829,7 @@ def build_agent_squads_router(
                 metadata={
                     "squad_id": squad.id,
                     "role_id": role.id,
-                    "execution_mode": body.execution_mode.value,
+                    "execution_mode": execution_mode.value,
                     "mcp_server_ids_configured": attached_mcp_server_ids,
                 },
             )
@@ -921,7 +928,7 @@ def build_agent_squads_router(
                 "role_id": role.id,
                 "session_id": work_item.pty_session_id,
                 "runtime": chosen_runtime,
-                "execution_mode": body.execution_mode.value,
+                "execution_mode": execution_mode.value,
                 "authority": body.authority.value,
                 "timeout_seconds": body.timeout_seconds,
                 "mcp_server_ids": attached_mcp_server_ids,
@@ -939,7 +946,7 @@ def build_agent_squads_router(
                     "mcp_server_ids": attached_mcp_server_ids,
                 },
             )
-        if body.execution_mode == squads.AgentExecutionMode.AUTOMATIC:
+        if execution_mode == squads.AgentExecutionMode.AUTOMATIC:
             presence_task = asyncio.create_task(
                 _maintain_worker_presence(
                     storage,
@@ -967,7 +974,7 @@ def build_agent_squads_router(
             "role_prompt_file": str(prompt_file),
             "project_id": project.id,
             "project_name": project.name,
-            "execution_mode": body.execution_mode.value,
+            "execution_mode": execution_mode.value,
             "authority": body.authority.value,
             "timeout_seconds": body.timeout_seconds,
             "coordination_session_id": coordination_session.id,

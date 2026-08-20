@@ -680,6 +680,104 @@ def test_automatic_launch_uses_absolute_prompt_and_mcp_paths(
         assert rollup["total_tokens"] == 49_912
 
 
+def test_role_default_execution_mode_is_used_when_launch_does_not_specify_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-0025's load-bearing gap: PTY workers report zero tokens because nothing opts
+    them into automatic mode by default. A role can now do that itself."""
+    app, client = _harness(tmp_path)
+    captured: dict[str, object] = {}
+
+    async def _fake_spawn(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            session_id=kwargs["session_id"],
+            exit_code=None,
+            summary=lambda: SimpleNamespace(
+                session_id=kwargs["session_id"],
+                argv=kwargs["argv"],
+                cwd=kwargs["cwd"],
+                rows=kwargs["rows"],
+                cols=kwargs["cols"],
+                started_at="now",
+                exit_code=None,
+                alive=True,
+                project_id=kwargs["project_id"],
+            ),
+        )
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        role = c.patch(
+            "/api/v1/agent-role-templates/implementer",
+            json={"default_execution_mode": "automatic"},
+        )
+        assert role.status_code == 200, role.text
+        assert role.json()["default_execution_mode"] == "automatic"
+
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        # No execution_mode in the launch payload -- the role's default must supply it.
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "codex", "open_in_tab": False},
+        )
+        assert launched.status_code == 200, launched.text
+        body = launched.json()
+
+    assert body["execution_mode"] == "automatic", (
+        "the role's default_execution_mode should have been used since the launch "
+        "request didn't specify one")
+    assert captured["argv"][1] == "exec", (
+        "automatic mode should have reached the spawned argv, not just the response body")
+
+
+def test_explicit_launch_request_overrides_the_role_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    captured: dict[str, object] = {}
+
+    async def _fake_spawn(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            session_id=kwargs["session_id"],
+            exit_code=None,
+            summary=lambda: SimpleNamespace(
+                session_id=kwargs["session_id"], argv=kwargs["argv"], cwd=kwargs["cwd"],
+                rows=kwargs["rows"], cols=kwargs["cols"], started_at="now",
+                exit_code=None, alive=True, project_id=kwargs["project_id"],
+            ),
+        )
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", _fake_spawn)
+    monkeypatch.setattr(agent_squads, "resolve_command", lambda command: command)
+
+    with client as c:
+        role = c.patch(
+            "/api/v1/agent-role-templates/implementer",
+            json={"default_execution_mode": "automatic"},
+        )
+        assert role.status_code == 200, role.text
+
+        squad = _create_squad(c)
+        item = _create_work_item(c, squad["id"], assigned_role_id="implementer")
+        # Explicit "interactive" in the request must win over the role's "automatic" default.
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={"preferred_runtime": "codex", "open_in_tab": False,
+                  "execution_mode": "interactive"},
+        )
+        assert launched.status_code == 200, launched.text
+        body = launched.json()
+
+    assert body["execution_mode"] == "interactive"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("starting_status", "expected_status", "expects_update"),
