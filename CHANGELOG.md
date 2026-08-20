@@ -10,6 +10,32 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.170] - 2026-08-20
+
+### Added
+- **`synapse_web_search` MCP tool.** The only way to reach the public internet through the
+  connector before this was `synapse_http`, which is deliberately restricted to
+  localhost/private addresses (it exists to reach the web scraper on :12345 and Synapse's own
+  API, not the open web). That left search as a named, known gap in the MCP surface (called
+  out explicitly in the 0.1.168 changelog note about the ChatGPT-web coder runtime playbook:
+  "a list of subsystems that exist but have no MCP tool yet (search, Quality OS, ...)"). The
+  new tool reuses `local_agent.web_search` (already shipped, unused by any MCP tool until now)
+  -- DuckDuckGo's HTML endpoint, no API key needed -- and returns numbered title+URL results.
+  Annotated `readOnlyHint: true, openWorldHint: true`: the first tool in this file to carry
+  both, since it genuinely cannot change state anywhere but does reach the public internet
+  (`synapse_http`'s `openWorldHint: false` reflects the opposite tradeoff -- it can write, but
+  only locally). Gated behind the full-access URL (`_require_writes()`), same as
+  `synapse_read_file` -- both are part of the "full access" surface by classification, not
+  because either mutates anything.
+
+Changed:
+- `daemon/synapse_daemon/mcp_connector.py`: new `synapse_web_search` tool -- schema, annotation
+  entry, and handler delegating to `local_agent.web_search`; imports `local_agent`.
+- `daemon/tests/test_mcp_tool_annotations.py`: added to `EXPECTED_READ_ONLY`.
+- `daemon/tests/test_mcp_connector.py`: two new tests -- a successful search (mocked) and a
+  search failure surfacing as `isError: true` rather than a transport error.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.169 -> 0.1.170.
+
 ## [0.1.169] - 2026-08-20
 
 ### Fixed

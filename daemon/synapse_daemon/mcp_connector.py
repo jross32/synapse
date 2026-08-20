@@ -19,6 +19,7 @@ import json
 import os
 from pathlib import Path
 
+from . import local_agent
 from . import mcp_servers
 from .runtime_paths import repo_root
 from .runtime_resolution import resolve_command
@@ -243,6 +244,9 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                             "idempotentHint": False, "openWorldHint": True},
     "synapse_http": {"readOnlyHint": False, "destructiveHint": True,
                      "idempotentHint": False, "openWorldHint": False},
+    # Reaches the public internet (unlike synapse_http, which is local-only), but it cannot
+    # change anything on this machine or anywhere else -- it only returns search results.
+    "synapse_web_search": {"readOnlyHint": True, "idempotentHint": False, "openWorldHint": True},
     "synapse_call_mcp_tool": {"readOnlyHint": False, "destructiveHint": True,
                               "idempotentHint": False, "openWorldHint": True},
 }
@@ -525,6 +529,24 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "timeout_seconds": {"type": "integer", "description": "Default 60."},
                         },
                         "required": ["url"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_web_search",
+                    "description": (
+                        "Search the public web (DuckDuckGo, no API key needed) and get back numbered "
+                        "title + URL results. This is how you look something up that isn't already on "
+                        "this machine -- current docs, an error message, a library's API. Follow a "
+                        "result with synapse_http (localhost/private only) or synapse_run_command "
+                        "(e.g. curl) to actually fetch a page's contents."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query."},
+                        },
+                        "required": ["query"],
                         "additionalProperties": False,
                     },
                 },
@@ -967,6 +989,16 @@ def build_mcp_router(
                         "body": exc.read().decode("utf-8", "replace")[:8000]}
             except Exception as exc:  # noqa: BLE001
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+        if name == "synapse_web_search":
+            _require_writes()
+            query = str(args.get("query", "")).strip()
+            if not query:
+                raise ValueError("query is required")
+            result = local_agent.web_search(query)
+            if result.startswith("ERROR:"):
+                raise ValueError(result)
+            return {"query": query, "results": result}
 
         if name in ("synapse_list_mcp_tools", "synapse_call_mcp_tool"):
             _require_writes()

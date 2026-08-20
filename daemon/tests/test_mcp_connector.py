@@ -121,6 +121,41 @@ def test_tools_call_unknown_project_is_tool_error(tmp_path: Path) -> None:
     assert result["isError"] is True
 
 
+def test_tools_call_web_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from synapse_daemon import local_agent
+
+    monkeypatch.setattr(
+        local_agent, "web_search",
+        lambda query: f"1. Example Domain\n   https://example.com/?q={query}",
+    )
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_web_search", "arguments": {"query": "synapse mcp"}},
+    )
+    result = res.json()["result"]
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert "example.com" in text
+
+
+def test_tools_call_web_search_failure_is_tool_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A search failure (timeout, DNS, DuckDuckGo blocking) must surface as isError, not a 500."""
+    from synapse_daemon import local_agent
+
+    monkeypatch.setattr(
+        local_agent, "web_search",
+        lambda query: "ERROR: search failed: URLError: timed out",
+    )
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_web_search", "arguments": {"query": "anything"}},
+    )
+    assert res.status_code == 200
+    assert res.json()["result"]["isError"] is True
+
+
 def test_unknown_method(tmp_path: Path) -> None:
     client, token = _harness(tmp_path)
     res = _rpc(client, token, "bogus/method")
