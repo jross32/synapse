@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.171] - 2026-08-20
+
+### Added
+- **A wall-clock deadline on scaffold piece retries (Phase B of the coder-runtime-ladder
+  plan).** `build_blueprint`'s retry loop was already bounded by `max_attempts` (a count);
+  it had no way to say "keep retrying until 6am" for an overnight batch, which the plan
+  called for and the codebase didn't have. Added `deadline_seconds: float | None = None` --
+  checked once per loop iteration against the elapsed time since the piece's own attempts
+  began, and structured so it can only ever refuse to *start* a retry, never cancel one
+  already running, and never skip the first attempt regardless of the deadline's value.
+  Wired through `BuildRequest.deadline_seconds` in the `/blueprints/{id}/build` REST
+  endpoint alongside the existing `max_attempts`, so it's reachable from the actual build
+  API, not just from a Python caller of `build_blueprint` directly.
+  Audited while resolving Phase B/C/D status against the plan doc at
+  `.claude/plans/improve-it-so-we-expressive-bee.md`: Phases A, C, and D turned out to
+  already be fully shipped (v0.1.144-v0.1.148), leaving this deadline as the one genuine
+  gap worth filling now. (The plan's other Phase B ask -- queuing a build through "the
+  existing scheduler" -- doesn't correspond to anything in this codebase; no
+  scheduler/cron/queue module exists here, so that's a real feature to design, not a
+  missed wiring.)
+
+Changed:
+- `daemon/synapse_daemon/scaffold/runner.py`: new `deadline_seconds` param on
+  `build_blueprint`; retry-loop guard; a note recorded on early stop.
+- `daemon/synapse_daemon/routes_blueprints.py`: `BuildRequest.deadline_seconds`, passed
+  through to `build_blueprint`.
+- `daemon/tests/test_scaffold_scenarios.py`: new test asserting a 0-second deadline still
+  runs the first attempt but refuses a retry.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.170 -> 0.1.171.
+
 ## [0.1.170] - 2026-08-20
 
 ### Added

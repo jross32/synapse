@@ -563,6 +563,35 @@ def test_a_retry_starts_from_a_clean_workspace(tmp_path, monkeypatch):
         "failures no model could fix")
 
 
+def test_a_wall_clock_deadline_stops_retrying_but_never_cancels_the_first_attempt(
+        tmp_path, monkeypatch):
+    """An overnight batch has a fixed window, not a fixed attempt budget."""
+    import synapse_daemon.local_pipeline as lp
+    from synapse_daemon.scaffold.runner import build_blueprint
+
+    calls = {"n": 0}
+
+    def always_wrong(spec: str, *a, **k) -> str:
+        if "Write a test for that code" in spec:
+            return "from thing import *\n\nassert value() == 1\nprint('OK')\n"
+        calls["n"] += 1
+        return "def value():\n    return 0\n"
+
+    monkeypatch.setattr(lp, "generate_code", always_wrong)
+    # A zero-second deadline is already "passed" by the time the second iteration checks it,
+    # without needing to mock time.time() - real elapsed time is never negative.
+    result = _run_async(build_blueprint(
+        _one_piece_blueprint(), workspace=tmp_path, max_repairs=0, ladder=LOCAL_ONLY,
+        max_attempts=100, deadline_seconds=0))
+
+    piece = result.pieces[0]
+    assert not piece.passed
+    assert calls["n"] == 1, (
+        "a 0-second deadline must still let the first attempt run to completion - only a "
+        f"*retry* is refused - but the generator was called {calls['n']} times")
+    assert any("deadline reached" in note for note in result.notes), result.notes
+
+
 def test_resampling_is_off_for_a_runtime_with_no_sampler_to_turn_up(tmp_path, monkeypatch):
     """The resample ladder answers greedy determinism. A billed CLI has neither."""
     import synapse_daemon.local_pipeline as lp

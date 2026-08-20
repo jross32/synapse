@@ -429,6 +429,7 @@ async def build_blueprint(
     vocabulary: dict[str, str] | None = None,
     ladder: tuple[coder_runtimes.CoderRuntime, ...] = coder_runtimes.DEFAULT_LADDER,
     max_attempts: int = 1,
+    deadline_seconds: float | None = None,
     targeted_repair: bool = True,
     advisory_model_test: bool = True,
     runtime_profiles: dict[coder_runtimes.CoderRuntime,
@@ -441,6 +442,13 @@ async def build_blueprint(
     three correct signatures to six across four repairs and was still improving when the
     budget ran out. The recurring-error guard stops a stuck loop long before this ceiling, so
     a generous budget costs nothing when it is not needed.
+
+    ``deadline_seconds`` bounds a piece's retries by wall clock instead of count, for an
+    overnight batch queued against a fixed window rather than a fixed attempt budget. It
+    never cancels an attempt already in flight and never skips the first attempt - only a
+    *retry* is refused once the deadline has passed - so a slow-but-working first attempt is
+    never abandoned mid-run. ``None`` (the default) means no deadline, matching prior
+    behaviour exactly.
     """
     # Rewritten into this build's domain nouns before anything reads it, so the spec, the
     # contract, the scenario and the flow that attacks the result all say the same word.
@@ -501,6 +509,14 @@ async def build_blueprint(
         decision = None
         attempt = 0
         while attempt < max(1, max_attempts):
+            if (deadline_seconds is not None and attempt > 0
+                    and time.time() - piece_started >= deadline_seconds):
+                # attempt > 0 means a first attempt already ran, so the deadline only ever
+                # refuses to START a retry - it cannot cut one off mid-flight.
+                result.notes.append(
+                    f"{piece.name}: stopped after {attempt} attempt(s), "
+                    f"{deadline_seconds:.0f}s deadline reached")
+                break
             attempt += 1
             decision = coder_runtimes.pick(ladder)
             if not decision.chosen:

@@ -38,6 +38,10 @@ class BuildRequest(BaseModel):
     stateful module about one run in five, and a fresh attempt costs only time nobody is
     waiting on.
     """
+    deadline_seconds: float | None = None
+    """Also bound retries by wall clock, for a fixed overnight window rather than a fixed
+    attempt count. Never cancels an attempt already running - only refuses to START another
+    retry once the deadline has passed. Leave unset for no deadline (attempt count only)."""
 
 
 class RegisterRequest(BaseModel):
@@ -177,6 +181,7 @@ def build_blueprints_router(storage: Any, data_dir: Path) -> APIRouter:
             bp, workspace=ws, coder_model=payload.model,
             max_repairs=max(0, min(payload.max_repairs, 20)),
             ladder=ladder,
-            max_attempts=max(1, min(payload.max_attempts, 20)))
+            max_attempts=max(1, min(payload.max_attempts, 20)),
+            deadline_seconds=payload.deadline_seconds)
 
     return router
