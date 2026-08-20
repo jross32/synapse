@@ -606,6 +606,7 @@ def build_app(
                 _playbooks.ensure_bootstrap_chatgpt_connector_playbook(conn)
                 _playbooks.ensure_bootstrap_chatgpt_autonomous_build_playbook(conn)
                 _playbooks.ensure_bootstrap_chatgpt_workflow_notes_playbook(conn)
+                _playbooks.ensure_bootstrap_token_lean_delegation_playbook(conn)
         except Exception:  # pragma: no cover - defensive boot logging
             log.exception("Playbook bootstrap failed unexpectedly.")
 

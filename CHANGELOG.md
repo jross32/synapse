@@ -10,6 +10,33 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.175] - 2026-08-20
+
+### Added
+- **`token-lean-delegation` playbook** -- documents the pattern this session started using to
+  keep the orchestrating AI's own token spend low: scope a unit precisely, delegate the actual
+  implementation to a cheaper path (local Ollama via `coder_runtimes`/`synapse_delegate_module`,
+  or ChatGPT UI via the Synapse connector), then review like a code reviewer instead of writing
+  every diff itself. Captures the real gotchas discovered the hard way setting this up live: the
+  Cloudflare quick-tunnel URL rotates on every daemon restart and there is no way to edit an
+  existing ChatGPT connector's server URL in place (only rename/disconnect/delete) -- so a
+  reconnect after a restart means creating a fresh connector, always against
+  `GET /api/v1/remote-access`'s current `wan.public_url`, never a URL seen in an earlier log
+  line or turn (using a stale one produces a 424 that looks identical to the unrelated,
+  already-documented transient 424 in `chatgpt-autonomous-app-build`). Also documents two
+  browser-automation pitfalls hit live this session: typing a long URL via synthesized
+  keystrokes can silently drop its last character (use a direct form-value/JS set and verify
+  length instead), and a "new chat" composer can carry stale draft text across navigation that
+  silently prepends to the next thing typed into it (verify it's empty first).
+
+Changed:
+- `daemon/synapse_daemon/playbooks.py`: new `ensure_bootstrap_token_lean_delegation_playbook`
+  + `TOKEN_LEAN_DELEGATION_PLAYBOOK_ID`.
+- `daemon/synapse_daemon/app.py`: seeds the new playbook alongside the existing three at startup.
+- `daemon/tests/test_playbooks.py`: two new tests -- real steps seeded, reseed preserves a
+  reported status.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.174 -> 0.1.175.
+
 ## [0.1.174] - 2026-08-20
 
 ### Added

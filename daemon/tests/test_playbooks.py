@@ -158,6 +158,41 @@ def test_build_playbook_distinguishes_scaffold_from_self_build(tmp_path):
     assert "native web browsing" in joined or "native" in joined
 
 
+def test_bootstrap_token_lean_delegation_playbook_seeds_real_steps(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        seeded = playbooks.ensure_bootstrap_token_lean_delegation_playbook(conn)
+
+    assert seeded.id == playbooks.TOKEN_LEAN_DELEGATION_PLAYBOOK_ID
+    assert len(seeded.steps) >= 5
+    joined = " ".join(seeded.steps).lower()
+    # The load-bearing gotchas found the hard way this session -- if any is missing, the
+    # playbook has stopped encoding the lesson it exists for.
+    assert "remote-access" in joined  # always read the CURRENT tunnel URL, never a stale one
+    assert "no way to edit an existing connector" in joined
+    assert "coder_runtimes" in joined or "synapse_delegate_module" in joined
+
+
+def test_reseeding_the_delegation_playbook_preserves_a_reported_status(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        playbooks.ensure_bootstrap_token_lean_delegation_playbook(conn)
+    with storage.transaction() as conn:
+        playbooks.record_verification(
+            conn,
+            playbooks.TOKEN_LEAN_DELEGATION_PLAYBOOK_ID,
+            status=playbooks.PlaybookStatus.NEEDS_ATTENTION,
+            note="Cloudflare shipped a stable free-tier tunnel option, re-check the URL note",
+        )
+    with storage.transaction() as conn:
+        reseeded = playbooks.ensure_bootstrap_token_lean_delegation_playbook(conn)
+
+    assert reseeded.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
+    assert reseeded.status_note == (
+        "Cloudflare shipped a stable free-tier tunnel option, re-check the URL note"
+    )
+
+
 def test_bootstrap_chatgpt_workflow_notes_playbook_seeds_real_entries(tmp_path):
     storage = _storage(tmp_path)
     with storage.transaction() as conn:

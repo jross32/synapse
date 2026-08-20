@@ -26,6 +26,7 @@ from .time_utils import to_iso, utc_now
 CHATGPT_CONNECTOR_PLAYBOOK_ID = "chatgpt-connector-setup"
 CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID = "chatgpt-autonomous-app-build"
 CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID = "chatgpt-workflow-design-notes"
+TOKEN_LEAN_DELEGATION_PLAYBOOK_ID = "token-lean-delegation"
 
 
 class PlaybookStatus(str, Enum):
@@ -294,6 +295,98 @@ def ensure_bootstrap_chatgpt_autonomous_build_playbook(conn: sqlite3.Connection)
             "tests, real git history. The two load-bearing moves: an explicit brief that names "
             "the forbidden delegation tools outright, and never trusting a 'done' summary "
             "without independently re-checking it yourself."
+        ),
+        steps=steps,
+    )
+
+
+def ensure_bootstrap_token_lean_delegation_playbook(conn: sqlite3.Connection) -> Playbook:
+    """Seed the playbook for keeping an orchestrating AI's own token spend low on autonomous
+    Synapse work, by delegating implementation rather than writing it all in its own turn.
+
+    Depends on chatgpt-connector-setup already being healthy for the ChatGPT-UI path -- this
+    playbook assumes a working connector, not how to get one."""
+
+    steps = [
+        "Purpose: on an indefinite/long-running autonomous Synapse session, keep the "
+        "orchestrating AI's own token spend low by delegating the actual implementation "
+        "instead of writing every diff itself. The orchestrator's job narrows to: scope the "
+        "unit precisely, hand it to a cheap path, then review like a code reviewer -- read the "
+        "diff, run the tests, don't regenerate what a delegate already got right.",
+        "Two delegation paths, pick by shape of the task. (a) LOCAL: for a small, "
+        "well-defined, single-module task, use coder_runtimes.write_module / the "
+        "synapse_delegate_module MCP tool -- free, but the free tier's own measured pass rate "
+        "is roughly one attempt in five (see ADR-0035/0036), so it suits an overnight batch "
+        "more than an interactive wait. (b) CHATGPT UI: for anything bigger, more novel, or "
+        "that benefits from ChatGPT's own reasoning about design tradeoffs (a redesign, a "
+        "cross-cutting fix, something needing live verification) -- see "
+        "chatgpt-autonomous-app-build for the full brief-writing and verification discipline; "
+        "this playbook covers the delegation-setup and pacing pieces that discipline assumes.",
+        "Before delegating to ChatGPT, confirm the connector is actually reachable: "
+        "GET /api/v1/remote-access on the running daemon and read wan.public_url plus "
+        "wan.verification.health_ok -- do NOT reuse a tunnel URL you saw in an earlier log "
+        "line or an earlier turn. The Cloudflare quick-tunnel URL rotates on every daemon "
+        "restart, and using a stale one is a real, confirmed failure mode: it produces a 424 "
+        "from OpenAI's own connector-creation endpoint that looks identical to the unrelated, "
+        "genuinely-transient 424 already documented in chatgpt-autonomous-app-build -- the "
+        "first thing to check is not 'retry later', it's 'is this even the current URL'.",
+        "ChatGPT's custom-connector UI has NO way to edit an existing connector's server URL "
+        "in place (checked the '...' menu and the plugin detail page directly -- only "
+        "rename/edit-description/disconnect/delete exist). After a daemon restart rotates the "
+        "tunnel, the old connector cannot be repointed -- create a fresh one via Plugins -> "
+        "the '+' next to the search box -> fill Name/Description/Server URL/Authentication: "
+        "No Auth -> check the risk-acknowledgment box -> Create -> Connect -> set its "
+        "Permissions to 'Allow all actions (ELEVATED RISK)'. A genuinely stable URL (a named "
+        "Cloudflare tunnel instead of the ephemeral quick-tunnel) would remove this whole "
+        "problem, but setting one up needs the operator's own Cloudflare account login -- that "
+        "crosses into 'authenticate on the user's behalf', which stays off-limits regardless "
+        "of how much autonomy has been granted. Flag it as a real improvement for the operator "
+        "to do themselves rather than attempting it.",
+        "Because reconnecting costs real setup effort, restart the daemon judiciously during a "
+        "delegation-heavy stretch -- batch commits between restarts rather than restarting "
+        "reflexively after each one, even when the operator has granted standing permission to "
+        "restart freely.",
+        "When typing into ChatGPT's Server URL field (or any long/exact-value field), do NOT "
+        "use a plain synthesized keystroke-by-keystroke type action -- it has silently dropped "
+        "the last character of a long URL before, producing a 424 that looks like a server "
+        "problem but is actually a truncated URL. Use the browser tool's direct form-value "
+        "setter, or set the DOM value via JS and dispatch input/change events, then read the "
+        "value back and compare length/content before submitting.",
+        "Before typing a NEW message into an existing project's 'new chat' composer, verify "
+        "it is actually empty first (read its innerText, don't just trust that navigating to "
+        "the project URL gives a blank box) -- stale draft text can persist across navigation "
+        "and silently prepend itself to what you type next, sending a corrupted or unintended "
+        "message. If it's not empty, select-all and delete before typing.",
+        "For a long, structured brief (multiple paragraphs, numbered lists), don't type it "
+        "with literal newline characters via a synthesized keystroke action -- a bare Enter "
+        "mid-string can be interpreted as 'send' and fire the message early, before you're "
+        "done composing it. Insert the full text at once via the browser tool's direct "
+        "JS/execCommand insertion into the focused composer instead, which respects an "
+        "already-attached connector mention pill and does not synthesize real keydown events.",
+        "Multiple simultaneous ChatGPT conversations against the same connector already work "
+        "with zero extra setup -- the MCP endpoint is stateless per request. Use this to run "
+        "more than one delegated task in parallel (separate chats in the same project), rather "
+        "than serializing everything through one conversation.",
+        "Pace dispatches -- ChatGPT's own rate limiting (a rolling multi-hour message quota "
+        "plus a separate burst/frequency limiter) has been hit more than once this way. Sending "
+        "a small number of substantial, well-scoped briefs and letting each run for real "
+        "minutes is sustainable; firing many small messages back-to-back is not.",
+        "The orchestrator's remaining job after dispatch is real review, not trust: read the "
+        "actual diff, run the actual test suite from a shell, check the actual git log -- same "
+        "verification discipline as chatgpt-autonomous-app-build, applied to every delegated "
+        "unit, not just full-app builds.",
+    ]
+    return upsert_playbook(
+        conn,
+        playbook_id=TOKEN_LEAN_DELEGATION_PLAYBOOK_ID,
+        title="Delegate implementation to minimize the orchestrating AI's own token usage",
+        summary=(
+            "How to keep an autonomous Synapse session's own token spend low by handing "
+            "implementation work to a cheaper path (local models via coder_runtimes, or "
+            "ChatGPT UI via the Synapse connector) instead of writing every diff in the "
+            "orchestrator's own turn -- including the real connector-reconnection gotchas "
+            "(the tunnel URL rotates on restart, ChatGPT has no in-place URL edit) discovered "
+            "the hard way in 2026-08."
         ),
         steps=steps,
     )
