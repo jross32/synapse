@@ -99,3 +99,18 @@ benchmarks/app-build/probe-storage*/
 benchmarks/app-build/*/_test_*.py
 benchmarks/app-build/*/_check_*.py
 benchmarks/app-build/*/_scenario_*.py
+
+# Per-arm workspaces from the ladder/Phase C/Phase D benchmark scripts (phase_c_batch.py,
+# prove_ladder_rungs.py, prove_fallback.py, delegate_*.py, bench.py) -- each arm's generated
+# module + db + __pycache__ lands in its own directory here. The finding is what's committed
+# (PHASE_C_RESULTS.md, phase_d_result.json, CHANGELOG.md); these are the raw scratch behind
+# it and were piling up untracked instead of being ignored.
+benchmarks/app-build/ladder-*/
+benchmarks/app-build/phase-c-*/
+benchmarks/app-build/delegated/
+benchmarks/delegation/ws-*/
+benchmarks/delegation/delegated/
+
+# save_blueprint() writes to blueprints_dir()/<id>/blueprint.json; a bare root-level copy is
+# always a stray from an ad-hoc script run with the wrong cwd/root, never source.
+/blueprint.json
