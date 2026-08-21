@@ -10,6 +10,50 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.179] - 2026-08-21
+
+### Added
+- **Persistent Cloudflare Tunnel (`synapse.whatapc.com`), replacing the per-restart random
+  quick-tunnel hostname.** Justin's explicit ask: stop having to recreate the ChatGPT/claude.ai
+  connector every time the daemon restarts. Root cause: `cloudflared tunnel --url` ("quick
+  tunnel", what Cloudtap's WAN auto-start already used) issues a brand-new random
+  `*.trycloudflare.com` hostname on every run -- any live connector pointed at the old one
+  breaks and has to be manually recreated, and a freshly created hostname can also take a
+  while to become reachable from an external consumer's own network path even after
+  recreating it (observed live this session: confirmed externally reachable via a fetch from
+  a different network origin, while a ChatGPT session still got `mcp_network_error` for a few
+  minutes -- consistent with propagation lag on a brand-new hostname, not a real outage).
+  A named tunnel has a hostname that never changes across restarts, which removes both costs
+  at once.
+  Justin connected his own `whatapc.com` domain (registered at GoDaddy, previously used for a
+  Shopify store + Microsoft 365 email, not currently in active use for the store) to a new
+  Cloudflare account, keeping the email-related DNS records (`MX`, `autodiscover`, `msoid`,
+  `lyncdiscover`, SIP `SRV`, SPF/domain-verification `TXT`) exactly as scanned/imported --
+  none were touched or need to be, and this was confirmed by direct DNS lookup after the
+  nameserver cutover (`MX` still resolves to `whatapc-com.mail.protection.outlook.com`). DNSSEC
+  was off, so no propagation conflict there either. A zone-file backup was downloaded before
+  the nameserver change as a precaution.
+  `cloudflared tunnel login` / `tunnel create synapse` / `tunnel route dns synapse
+  synapse.whatapc.com` set up the tunnel and DNS route; `C:\Users\justi\.cloudflared\config.yml`
+  routes `synapse.whatapc.com` to `http://localhost:7878`. Verified end to end before treating
+  it as done: both `tools/list` and `tools/call` succeed through the new hostname (confirmed
+  locally and from a separate external network origin), and the ChatGPT connector itself
+  successfully fetched live tool schemas through it.
+  `scripts/dev.ps1` now has a `Start-PersistentTunnel` helper (idempotent -- detects an
+  already-running `cloudflared tunnel run synapse` process rather than starting a duplicate)
+  called alongside `Start-DaemonWatchdog` in both `-DaemonOnly` and the full-stack launch path,
+  so the same tunnel comes up automatically on every future restart rather than requiring a
+  manual step. `wan_auto_start` was turned off via `PATCH /api/v1/system/network` now that this
+  replaces Cloudtap's quick-tunnel for that role, so the daemon no longer opens a redundant
+  second tunnel on boot.
+  A new ChatGPT connector ("Synapse") was created pointed at the stable URL and given full
+  ("Allow all actions") permissions, replacing the disposable "Synapse Live N" series from
+  earlier in the session -- this one should not need to be recreated again.
+
+Changed:
+- `scripts/dev.ps1`: new `Start-PersistentTunnel` helper, called from both `Start-DaemonOnly`
+  and the full-stack launch loop.
+
 ## [0.1.178] - 2026-08-21
 
 ### Added

@@ -219,6 +219,35 @@ function Start-DaemonWatchdog {
   Write-Host "-> Daemon watchdog armed (polls /api/v1/health, auto-restarts after 3 consecutive failures)"
 }
 
+function Start-PersistentTunnel {
+  # Named Cloudflare Tunnel (synapse.whatapc.com) -- replaces the daemon's own
+  # Cloudtap quick-tunnel, which gets a brand-new random hostname every restart
+  # (real cost paid repeatedly: every restart broke any live MCP connector,
+  # requiring it to be manually recreated, sometimes with a real propagation
+  # delay before external consumers could reach the new hostname). This tunnel
+  # keeps the same hostname across restarts, so a connector pointed at it never
+  # needs to change. wan_auto_start was turned off via PATCH /api/v1/system/network
+  # once this was set up, so the daemon no longer opens a redundant quick tunnel.
+  # Setup (one-time, already done): `cloudflared tunnel login`, `cloudflared
+  # tunnel create synapse`, `cloudflared tunnel route dns synapse
+  # synapse.whatapc.com`, and C:\Users\justi\.cloudflared\config.yml routing
+  # that hostname to http://localhost:7878.
+  #
+  # Idempotent: skips starting a second tunnel process if one is already running.
+  $existing = Get-CimInstance Win32_Process -Filter "Name='cloudflared.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine.Contains('tunnel run synapse') }
+  if ($existing) {
+    Write-Host "-> Persistent Cloudflare tunnel already running (PID $(($existing | Select-Object -First 1).ProcessId))"
+    return
+  }
+  if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
+    Write-Host "-> cloudflared not found on PATH; skipping persistent tunnel"
+    return
+  }
+  Start-Process -FilePath 'cloudflared' -ArgumentList @('tunnel', 'run', 'synapse') -WindowStyle Hidden | Out-Null
+  Write-Host "-> Persistent Cloudflare tunnel started (synapse.whatapc.com)"
+}
+
 function Start-DaemonOnly {
   $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
   if ($BindLan) {
@@ -233,6 +262,7 @@ $env:SYNAPSE_MCP_ALLOW_WRITES = '1'
   Write-Host "-> Starting daemon (foreground): python $($daemonArgs -join ' ')"
   Write-Host ""
   Start-DaemonWatchdog -Port 7878
+  Start-PersistentTunnel
   & python @daemonArgs
   exit $LASTEXITCODE
 }
@@ -265,6 +295,7 @@ do {
         -Process $daemonProc `
         -LogPath $daemonLog
       Start-DaemonWatchdog -Port 7878
+      Start-PersistentTunnel
     }
 
     Write-Host "-> Compiling Electron main -> dist-electron/"
