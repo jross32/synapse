@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.176] - 2026-08-21
+
+### Fixed
+- **Home page's "Needs attention" panel showed a raw `Failed to fetch` with no way to recover
+  without a full page reload.** `refreshInsights` (renderer/pages/Home.tsx) already caught
+  fetch failures via `Promise.allSettled` and set a local error string, but the error surfaced
+  the raw `Error.message` (literally "Failed to fetch" for a network failure) and had no retry
+  action -- unlike the sibling `projectsError` block in the same file, which already had a
+  proper "Couldn't load your projects" card with a Retry button. Gave the insights error the
+  same treatment: friendlier fixed messages instead of the raw browser error text, and a Retry
+  button that re-runs the fetch. `refreshInsights` moved out of the effect it lived in so the
+  button can call it directly (a plain function is fine here -- the setters it calls are
+  React's stable setState identities, so a call landing after unmount is a harmless no-op, same
+  risk profile the file already accepts elsewhere).
+  Verified: `tsc --noEmit` clean, live render confirmed no console errors and the happy path
+  unchanged. Did not specifically trigger the error state live (would need simulating a real
+  fetch failure) -- noting that honestly rather than claiming full UI verification.
+
+Changed:
+- `renderer/pages/Home.tsx`: `refreshInsights` lifted out of its `useEffect`, friendlier error
+  messages, new `retryInsights` handler, Retry button next to the insights error.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.175 -> 0.1.176.
+
 ## [0.1.175] - 2026-08-20
 
 ### Added

@@ -97,31 +97,36 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
     });
   }, [recentEvents]);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Not cancellation-guarded on unmount: the setters below are React's stable setState
+  // identities, so a call landing after unmount is a harmless no-op (same risk profile as
+  // handleLaunch below), and living outside the effect lets the Retry button call it directly.
+  async function refreshInsights(): Promise<void> {
+    const [inboxRes, reportRes] = await Promise.allSettled([
+      getReviewInbox(),
+      getAiHealthReport(),
+    ]);
 
-    async function refreshInsights(): Promise<void> {
-      const [inboxRes, reportRes] = await Promise.allSettled([
-        getReviewInbox(),
-        getAiHealthReport(),
-      ]);
-      if (cancelled) return;
-
-      const errors: string[] = [];
-      if (inboxRes.status === 'fulfilled') {
-        setReviewInbox(inboxRes.value);
-      } else {
-        errors.push(inboxRes.reason instanceof Error ? inboxRes.reason.message : 'Could not load review inbox.');
-      }
-      if (reportRes.status === 'fulfilled') {
-        setHealthReport(reportRes.value);
-      } else {
-        errors.push(reportRes.reason instanceof Error ? reportRes.reason.message : 'Could not load health report.');
-      }
-      setInsightsError(errors.length ? errors.join(' ') : null);
-      setInsightsLoading(false);
+    const errors: string[] = [];
+    if (inboxRes.status === 'fulfilled') {
+      setReviewInbox(inboxRes.value);
+    } else {
+      errors.push("Couldn't load the review inbox.");
     }
+    if (reportRes.status === 'fulfilled') {
+      setHealthReport(reportRes.value);
+    } else {
+      errors.push("Couldn't load the health report.");
+    }
+    setInsightsError(errors.length ? errors.join(' ') : null);
+    setInsightsLoading(false);
+  }
 
+  function retryInsights(): void {
+    setInsightsLoading(true);
+    void refreshInsights();
+  }
+
+  useEffect(() => {
     void refreshInsights();
     const interval = window.setInterval(() => {
       void refreshInsights();
@@ -136,10 +141,10 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
       }
     });
     return () => {
-      cancelled = true;
       window.clearInterval(interval);
       unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribeRaw]);
 
   const attentionCount =
@@ -271,9 +276,14 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
           </div>
 
           {insightsError && (
-            <p role='alert' className='text-xs text-destructive'>
-              {insightsError}
-            </p>
+            <div className='flex items-center justify-between gap-3'>
+              <p role='alert' className='text-xs text-destructive'>
+                {insightsError}
+              </p>
+              <Button variant='outline' size='sm' onClick={retryInsights}>
+                Retry
+              </Button>
+            </div>
           )}
 
           {insightsLoading && !reviewInbox ? (
