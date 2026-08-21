@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.180] - 2026-08-21
+
+### Fixed
+- **`scripts/daemon-watchdog.ps1` could silently die instead of restarting a wedged daemon --
+  found live, the same day it shipped, by a real production trigger.** Two delegated ChatGPT
+  sessions running heavy `npm test` suites as managed child processes drove real CPU
+  contention (82% load observed), which intermittently starved the daemon's event loop long
+  enough to fail 3 consecutive health checks. The watchdog correctly detected this and logged
+  "restarting" -- then the whole watchdog process vanished with no further log line, no
+  relaunch, and the old (still-unresponsive) daemon process left completely unprotected. Root
+  cause: `$ErrorActionPreference = 'Stop'` is script-wide, but the restart path
+  (`taskkill` / `Start-Process`) and the main loop itself had no try/catch anywhere -- a single
+  exception (this machine promotes native-command non-zero exit codes to terminating errors)
+  propagated all the way out and killed the script. Fixed with try/catch around each risky step
+  in `Restart-WedgedDaemon` (a failure there now logs and keeps trying rather than propagating)
+  plus a defense-in-depth try/catch around the entire main loop body, so no unexpected error
+  anywhere can silently take the watchdog down again. Re-verified against a second real trigger
+  minutes later: full cycle completed correctly (3/3 failures -> killed the old PID -> relaunched
+  -> confirmed healthy), unlike the first attempt.
+  Separately confirmed as a genuine non-bug during the same investigation: the underlying
+  CPU-contention-driven flapping itself is not a Synapse defect -- it is expected behavior when
+  a managed test suite (reattached by `process_manager` on every daemon start) competes for CPU
+  with the daemon's own event loop on this one machine. Worth a future look (a more generous
+  health-check timeout, or de-prioritizing managed test-runner children) but out of scope for
+  this fix, which is specifically about the watchdog's own reliability.
+  The persistent Cloudflare Tunnel from v0.1.179 needed zero manual intervention through two
+  real restarts during this incident -- confirming its whole purpose held up under a genuine,
+  unplanned trigger, not just the planned verification.
+
 ## [0.1.179] - 2026-08-21
 
 ### Added

@@ -97,7 +97,20 @@ function Restart-WedgedDaemon {
   Add-Content -Path $logPath -Value ""
   Add-Content -Path $logPath -Value "=== WATCHDOG RESTART: PID $OwnerPid stopped responding to /api/v1/health, killed and relaunched ==="
 
-  & taskkill /PID $OwnerPid /T /F 2>&1 | Out-Null
+  # Each step gets its own try/catch, not just the caller's. A restart attempt is
+  # already the exceptional path; a failure *inside* it must not also take down
+  # the watchdog itself -- that happened for real on 2026-08-21: taskkill failed
+  # (this machine's native-command exit codes get promoted to terminating errors
+  # under $ErrorActionPreference = 'Stop' on newer PowerShell), the uncaught
+  # exception propagated past this function with no catch anywhere above it, and
+  # the whole watchdog process silently exited -- leaving the daemon not just
+  # un-restarted but with NOTHING watching it afterward. The daemon happened to
+  # recover on its own that time; it would not have if it had been a real wedge.
+  try {
+    & taskkill /PID $OwnerPid /T /F 2>&1 | Out-Null
+  } catch {
+    Write-WatchdogLog "taskkill against PID $OwnerPid failed: $($_.Exception.Message) -- attempting relaunch anyway"
+  }
   Start-Sleep -Milliseconds 500
 
   $daemonArgs = @('-m', 'synapse_daemon', '--port', "$Port", '--data-dir', $DataDir)
@@ -106,10 +119,15 @@ function Restart-WedgedDaemon {
   }
   $argsJoined = $daemonArgs -join ' '
   $wrapped = "python $argsJoined >> `"$logPath`" 2>&1"
-  $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d', '/c', $wrapped) `
-    -WorkingDirectory $root -WindowStyle Hidden -PassThru
-  Write-WatchdogLog "relaunched daemon as PID $($proc.Id)"
-  return $proc.Id
+  try {
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d', '/c', $wrapped) `
+      -WorkingDirectory $root -WindowStyle Hidden -PassThru
+    Write-WatchdogLog "relaunched daemon as PID $($proc.Id)"
+    return $proc.Id
+  } catch {
+    Write-WatchdogLog "relaunch failed: $($_.Exception.Message) -- will retry from the next health check"
+    return $null
+  }
 }
 
 Write-WatchdogLog "started -- watching port $Port every ${IntervalSeconds}s (threshold: $FailureThreshold consecutive failures, ${HealthTimeoutSeconds}s timeout per check)"
@@ -131,40 +149,54 @@ $graceOwnerPid = $null
 while ($true) {
   Start-Sleep -Seconds $IntervalSeconds
 
-  $inGrace = $graceOwnerPid -and ((Get-Date) -lt $graceDeadline)
-  $ownerPid = Get-DaemonProcessId -Port $Port
+  # Defense in depth on top of Restart-WedgedDaemon's own try/catch: nothing in
+  # this loop should ever be able to take the whole watchdog down silently.
+  # $exitRequested distinguishes a deliberate `exit 0` (daemon stopped on
+  # purpose) from just falling through after an unexpected error -- only the
+  # former should actually stop the loop.
+  $exitRequested = $false
+  try {
+    $inGrace = $graceOwnerPid -and ((Get-Date) -lt $graceDeadline)
+    $ownerPid = Get-DaemonProcessId -Port $Port
 
-  if (-not $ownerPid) {
-    if ($inGrace) {
-      $stillBooting = Get-Process -Id $graceOwnerPid -ErrorAction SilentlyContinue
-      if ($stillBooting) {
-        continue
+    if (-not $ownerPid) {
+      if ($inGrace) {
+        $stillBooting = Get-Process -Id $graceOwnerPid -ErrorAction SilentlyContinue
+        if ($stillBooting) {
+          continue
+        }
+        Write-WatchdogLog "relaunched process (PID $graceOwnerPid) exited during startup and never bound port $Port -- treating as intentional stop, watchdog exiting"
+        $exitRequested = $true
+      } else {
+        Write-WatchdogLog "no process listening on port $Port -- daemon appears intentionally stopped, watchdog exiting"
+        $exitRequested = $true
       }
-      Write-WatchdogLog "relaunched process (PID $graceOwnerPid) exited during startup and never bound port $Port -- treating as intentional stop, watchdog exiting"
-      exit 0
+    } else {
+      $graceOwnerPid = $null
+
+      if (Test-DaemonHealthy -Port $Port -TimeoutSeconds $HealthTimeoutSeconds) {
+        if (-not $wasHealthy) {
+          Write-WatchdogLog "daemon healthy again (PID $ownerPid)"
+        }
+        $consecutiveFailures = 0
+        $wasHealthy = $true
+      } else {
+        $wasHealthy = $false
+        $consecutiveFailures += 1
+        Write-WatchdogLog "health check failed ($consecutiveFailures/$FailureThreshold) for PID $ownerPid"
+
+        if ($consecutiveFailures -ge $FailureThreshold) {
+          $graceOwnerPid = Restart-WedgedDaemon -Port $Port -OwnerPid $ownerPid
+          $graceDeadline = (Get-Date).AddSeconds($GraceSeconds)
+          $consecutiveFailures = 0
+        }
+      }
     }
-    Write-WatchdogLog "no process listening on port $Port -- daemon appears intentionally stopped, watchdog exiting"
+  } catch {
+    Write-WatchdogLog "unexpected error in watch loop, continuing: $($_.Exception.Message)"
+  }
+
+  if ($exitRequested) {
     exit 0
-  }
-
-  $graceOwnerPid = $null
-
-  if (Test-DaemonHealthy -Port $Port -TimeoutSeconds $HealthTimeoutSeconds) {
-    if (-not $wasHealthy) {
-      Write-WatchdogLog "daemon healthy again (PID $ownerPid)"
-    }
-    $consecutiveFailures = 0
-    $wasHealthy = $true
-    continue
-  }
-
-  $wasHealthy = $false
-  $consecutiveFailures += 1
-  Write-WatchdogLog "health check failed ($consecutiveFailures/$FailureThreshold) for PID $ownerPid"
-
-  if ($consecutiveFailures -ge $FailureThreshold) {
-    $graceOwnerPid = Restart-WedgedDaemon -Port $Port -OwnerPid $ownerPid
-    $graceDeadline = (Get-Date).AddSeconds($GraceSeconds)
-    $consecutiveFailures = 0
   }
 }
