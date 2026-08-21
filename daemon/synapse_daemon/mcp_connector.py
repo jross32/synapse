@@ -212,6 +212,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_list_sessions": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_recent_activity": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_quality_summary": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_watch_repo": {"readOnlyHint": True, "idempotentHint": False},
     "synapse_runtime_status": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_blueprints": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_mcp_tools": {"readOnlyHint": True, "idempotentHint": True},
@@ -519,6 +520,25 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "properties": {
                             "path": {"type": "string", "description": "Absolute path."},
                             "max_chars": {"type": "integer", "description": "Default 40000."},
+                        },
+                        "required": ["path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_watch_repo",
+                    "description": (
+                        "Wait for a git repo's working tree to change (up to timeout_seconds, max 120), "
+                        "then return what changed. For waiting on delegated work -- another AI session, "
+                        "a background build -- without re-checking on a fixed schedule: hold one call "
+                        "open instead of spending a full turn every time you check in. Call again if it "
+                        "times out with changed=false and you still want to wait."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "Absolute path inside a git working tree."},
+                            "timeout_seconds": {"type": "number", "description": "Default 60, max 120."},
                         },
                         "required": ["path"],
                         "additionalProperties": False,
@@ -982,6 +1002,17 @@ def build_mcp_router(
             text = target.read_text(encoding="utf-8", errors="replace")
             return {"path": str(target), "chars": len(text),
                     "truncated": len(text) > limit, "content": text[:limit]}
+
+        if name == "synapse_watch_repo":
+            _require_writes()
+            from . import repo_watch as _repo_watch
+
+            target = Path(str(args.get("path", "")).strip()).expanduser()
+            if not target.is_dir():
+                raise ValueError(f"No such directory: {target}")
+            timeout = float(args.get("timeout_seconds") or _repo_watch.DEFAULT_TIMEOUT_SECONDS)
+            result = _repo_watch.wait_for_repo_change_sync(target, timeout_seconds=timeout)
+            return result.model_dump(mode="json")
 
         if name == "synapse_write_file":
             _require_writes()

@@ -31,6 +31,7 @@ EXPECTED_READ_ONLY = {
     "synapse_list_blueprints",
     "synapse_list_mcp_tools",
     "synapse_read_file",
+    "synapse_watch_repo",
     "synapse_launch_work_item",  # looks up + returns instructions, does not itself launch
     "synapse_web_search",  # reaches the public internet, but changes nothing anywhere
 }

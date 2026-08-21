@@ -215,6 +215,36 @@ def test_tools_call_quality_summary(tmp_path: Path) -> None:
     assert "case-mcp" in text
 
 
+def test_tools_call_watch_repo_times_out_cleanly_on_an_unchanged_repo(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("git not installed")
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=tmp_path, check=True)
+
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_watch_repo", "arguments": {"path": str(tmp_path), "timeout_seconds": 1}},
+    )
+    result = res.json()["result"]
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert '"changed": false' in text
+
+
+def test_tools_call_watch_repo_unknown_path_is_tool_error(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_watch_repo", "arguments": {"path": str(tmp_path / "nope"), "timeout_seconds": 1}},
+    )
+    assert res.json()["result"]["isError"] is True
+
+
 def test_unknown_method(tmp_path: Path) -> None:
     client, token = _harness(tmp_path)
     res = _rpc(client, token, "bogus/method")

@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.177] - 2026-08-21
+
+### Added
+- **`synapse_watch_repo` MCP tool + `POST /api/v1/watch/repo`.** A bounded server-side
+  long-poll (default 60s, max 120s) that waits for a git repo's `git status --porcelain` to
+  change, then returns what changed -- built directly from a real need this session: an AI
+  waiting on delegated work (another AI session through a connector, a background build)
+  shouldn't have to burn a full context-gathering turn every time it checks in. One call held
+  open costs far less than repeated full checks, and only produces something worth acting on
+  when a real change actually happened.
+  New module `repo_watch.py` ships both an async version (`wait_for_repo_change`, used by the
+  REST route) and a blocking one (`wait_for_repo_change_sync`, used by the MCP tool --
+  `mcp_connector._call_tool` is not async, matching the existing convention that tools like
+  `synapse_run_command` already block their calling thread for the call's duration).
+  Known, honest gap: only git-tracked paths are supported -- a non-git directory returns an
+  error rather than silently timing out forever. A generic mtime-walk fallback for non-git
+  paths is real future work, not built here because nothing this session needed to watch was
+  outside a git repo.
+
+Changed:
+- `daemon/synapse_daemon/repo_watch.py`: new module.
+- `daemon/synapse_daemon/routes_watch.py`: new REST route.
+- `daemon/synapse_daemon/app.py`: mounts the new router.
+- `daemon/synapse_daemon/mcp_connector.py`: new `synapse_watch_repo` schema, annotation, handler.
+- `daemon/tests/test_repo_watch.py`, `test_routes_watch.py`: new, cover the async/sync module
+  functions directly and the REST route.
+- `daemon/tests/test_mcp_connector.py`, `test_mcp_tool_annotations.py`: MCP-layer coverage for
+  the new tool.
+- `package.json`, `pyproject.toml`, `daemon/synapse_daemon/__init__.py`: 0.1.176 -> 0.1.177.
+
 ## [0.1.176] - 2026-08-21
 
 ### Fixed

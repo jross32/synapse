@@ -46,6 +46,7 @@ from .routes_agent_squads import (
 )
 from .routes_audit import build_audit_router
 from .routes_files import build_files_router
+from .routes_watch import build_watch_router
 from .routes_imports import build_imports_router
 from .routes_marketplace import build_marketplace_router
 from .routes_quick_actions import build_quick_actions_router
@@ -429,6 +430,14 @@ def build_app(
     # ADR-0003 Phase A files (v0.1.30): per-project + shared uploads.
     app.include_router(
         build_files_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Bounded server-side long-poll for real file changes in a git repo (v0.1.177):
+    # lets an AI wait on delegated work with one held-open call instead of re-checking
+    # on a timer -- see repo_watch.py for why this exists.
+    app.include_router(
+        build_watch_router(),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
