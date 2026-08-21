@@ -10,6 +10,35 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.181] - 2026-08-21
+
+### Fixed
+- **`scripts/daemon-watchdog.ps1`'s v0.1.180 fix was itself incomplete -- found by continuing to
+  watch the same live incident rather than declaring victory after the first repair.** The
+  defense-in-depth try/catch added in v0.1.180 correctly kept the watchdog process alive, but
+  it revealed a second bug hiding behind the first: `Restart-WedgedDaemon` wrote its
+  `=== WATCHDOG RESTART ===` marker into `data/daemon-runtime.log` *before* calling `taskkill`,
+  and that `Add-Content` call was throwing (`The process cannot access the file ... because it
+  is being used by another process` -- the still-alive wedged daemon holds its own open write
+  handle on that same log via its `>>` redirect). Because that write had no try/catch of its
+  own, the exception aborted `Restart-WedgedDaemon` immediately -- meaning `taskkill` and the
+  relaunch never ran at all, every single restart attempt, even though the outer catch made it
+  *look* like the watchdog was working (it kept logging "restarting" every cycle). The daemon
+  stayed down for several minutes across repeated failed cycles as a result -- a real, current
+  outage caught and fixed live, not a hypothetical.
+  Fixed by reordering (log the marker *after* `taskkill`, once the old process's handle is
+  actually released) and wrapping that write in its own try/catch too, matching every other
+  step in this function -- a logging failure must never be able to skip the actual recovery
+  action that follows it. Verified against the real, still-active incident: killed both the
+  stuck watchdog and the wedged daemon manually, relaunched clean via `scripts/dev.ps1
+  -DaemonOnly` (which starts the newly-fixed watchdog automatically), confirmed the fresh
+  daemon healthy both locally and through the persistent tunnel with zero manual tunnel/connector
+  changes needed.
+  Also confirmed during this same incident, for the record: two delegated ChatGPT sessions
+  running `npm test` as daemon-managed child processes drove the underlying CPU contention that
+  triggered all of this (82% system load) -- filed as a separate, lower-priority proposal (not
+  a bug in this fix) rather than addressed here.
+
 ## [0.1.180] - 2026-08-21
 
 ### Fixed

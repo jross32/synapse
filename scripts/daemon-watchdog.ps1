@@ -94,8 +94,6 @@ function Restart-WedgedDaemon {
   param([int]$Port, [int]$OwnerPid)
 
   Write-WatchdogLog "daemon on port $Port (PID $OwnerPid) failed $FailureThreshold consecutive health checks -- restarting"
-  Add-Content -Path $logPath -Value ""
-  Add-Content -Path $logPath -Value "=== WATCHDOG RESTART: PID $OwnerPid stopped responding to /api/v1/health, killed and relaunched ==="
 
   # Each step gets its own try/catch, not just the caller's. A restart attempt is
   # already the exceptional path; a failure *inside* it must not also take down
@@ -112,6 +110,20 @@ function Restart-WedgedDaemon {
     Write-WatchdogLog "taskkill against PID $OwnerPid failed: $($_.Exception.Message) -- attempting relaunch anyway"
   }
   Start-Sleep -Milliseconds 500
+
+  # Logged here, after the kill, not before: the old process holds an open write
+  # handle on this same log file (its own >> redirect), and Add-Content can lose
+  # the race for that handle while the old process is still alive -- confirmed
+  # live 2026-08-21, throwing *before* taskkill ever ran meant the actual kill +
+  # relaunch below never executed at all, even though the outer try/catch kept
+  # the watchdog loop itself alive. Best-effort now: a failure to write this
+  # marker must never skip the relaunch that follows.
+  try {
+    Add-Content -Path $logPath -Value ""
+    Add-Content -Path $logPath -Value "=== WATCHDOG RESTART: PID $OwnerPid stopped responding to /api/v1/health, killed and relaunched ==="
+  } catch {
+    Write-WatchdogLog "could not write restart marker to $logPath (non-fatal): $($_.Exception.Message)"
+  }
 
   $daemonArgs = @('-m', 'synapse_daemon', '--port', "$Port", '--data-dir', $DataDir)
   if ($BindLan) {
