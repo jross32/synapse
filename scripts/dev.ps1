@@ -201,6 +201,24 @@ function Wait-HttpReady {
   throw "$Label did not become ready within ${TimeoutSeconds}s.`n$tail"
 }
 
+function Start-DaemonWatchdog {
+  param([int]$Port = 7878)
+
+  # Detached, hidden, non-blocking. Self-terminates once this daemon process
+  # is gone (see the header comment in daemon-watchdog.ps1) -- nothing here
+  # needs to remember to stop it.
+  $watchdogScript = Join-Path $PSScriptRoot 'daemon-watchdog.ps1'
+  $watchdogArgs = @(
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchdogScript,
+    '-Port', "$Port", '-DataDir', 'data'
+  )
+  if ($BindLan) {
+    $watchdogArgs += '-BindLan'
+  }
+  Start-Process -FilePath 'powershell' -ArgumentList $watchdogArgs -WindowStyle Hidden | Out-Null
+  Write-Host "-> Daemon watchdog armed (polls /api/v1/health, auto-restarts after 3 consecutive failures)"
+}
+
 function Start-DaemonOnly {
   $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
   if ($BindLan) {
@@ -214,6 +232,7 @@ $env:SYNAPSE_MCP_ALLOW_WRITES = '1'
 
   Write-Host "-> Starting daemon (foreground): python $($daemonArgs -join ' ')"
   Write-Host ""
+  Start-DaemonWatchdog -Port 7878
   & python @daemonArgs
   exit $LASTEXITCODE
 }
@@ -245,6 +264,7 @@ do {
         -TimeoutSeconds 30 `
         -Process $daemonProc `
         -LogPath $daemonLog
+      Start-DaemonWatchdog -Port 7878
     }
 
     Write-Host "-> Compiling Electron main -> dist-electron/"

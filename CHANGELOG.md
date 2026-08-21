@@ -10,6 +10,46 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.178] - 2026-08-21
+
+### Added
+- **Daemon watchdog (`scripts/daemon-watchdog.ps1`).** Found live this session: the daemon
+  wedged (event loop stopped serving requests) while staying alive at the OS level -- process
+  running, port still LISTENING -- for 25+ minutes before anyone noticed, silently blocking
+  every MCP connector call the whole time. `Get-Process` and `netstat` both say "fine" in that
+  state; only a real HTTP round-trip against `/api/v1/health` reveals it. Filed and immediately
+  fixed as review proposal `d8e50063a990` rather than left for later, per standing instruction
+  that a significant reliability gap found in passing gets fixed on the spot, not just filed.
+  The watchdog polls `/api/v1/health` every 30s (configurable) and force-restarts the daemon
+  after 3 consecutive failures, identifying the daemon process by which PID owns the port
+  (same pattern `dev.ps1`'s `Clear-StalePort` already uses) rather than trusting a PID it
+  remembered, so it works correctly even across a restart it did not itself trigger.
+  Self-terminating by design: if nothing is listening on the port at all, it assumes the
+  daemon was stopped on purpose (Ctrl+C, taskkill, script exit) and exits quietly rather than
+  fighting an intentional shutdown -- nothing has to remember to stop it.
+  `scripts/dev.ps1` now spawns it automatically alongside the daemon in both `-DaemonOnly` and
+  the full-stack launch path.
+  Verified against a *real* reproduction, not just a syntax check: a disposable Python process
+  that binds the port and never responds (faithfully reproducing the actual incident's
+  connect-timeout symptom) on a scratch port, confirming detect -> kill -> relaunch ->
+  healthy-again actually works end to end, and that a clean stop still self-terminates the
+  watchdog. That test caught a real bug before it shipped -- the first version restarted the
+  wedged process correctly, then saw no listener on its very next poll (the fresh daemon was
+  still mid-boot, hadn't bound the port yet) and immediately self-terminated, leaving the
+  just-recovered daemon completely unprotected. Fixed with a grace window after a
+  watchdog-triggered restart that checks the relaunched process's liveness by PID rather than
+  by port state, since the port genuinely is not bound yet during that window.
+  Known, honest tradeoff: restarting the daemon opens a new Cloudtap WAN tunnel with a new
+  random hostname (existing, unrelated daemon behavior) -- any live MCP connector pointed at
+  the old tunnel needs to be recreated after a watchdog-triggered restart. A wedged daemon is
+  already fully unreachable to that connector either way; recovering automatically, even at
+  that cost, beats staying wedged indefinitely.
+
+Changed:
+- `scripts/daemon-watchdog.ps1`: new module.
+- `scripts/dev.ps1`: new `Start-DaemonWatchdog` helper, called from both `Start-DaemonOnly` and
+  the full-stack launch loop right after the daemon becomes ready.
+
 ## [0.1.177] - 2026-08-21
 
 ### Added
