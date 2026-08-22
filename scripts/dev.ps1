@@ -248,6 +248,21 @@ function Start-PersistentTunnel {
   Write-Host "-> Persistent Cloudflare tunnel started (synapse.whatapc.com)"
 }
 
+function Start-TunnelWatchdog {
+  # Companion to Start-DaemonWatchdog: watches the cloudflared process itself,
+  # not the daemon. Nothing previously restarted the tunnel if it crashed or
+  # went stale while the daemon stayed perfectly healthy locally -- meaning
+  # every MCP connector could go dark with no automatic recovery at all. See
+  # scripts/tunnel-watchdog.ps1 for the detection/recovery details.
+  $watchdogScript = Join-Path $PSScriptRoot 'tunnel-watchdog.ps1'
+  $watchdogArgs = @(
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchdogScript,
+    '-Port', '7878'
+  )
+  Start-Process -FilePath 'powershell' -ArgumentList $watchdogArgs -WindowStyle Hidden | Out-Null
+  Write-Host "-> Tunnel watchdog armed (checks synapse.whatapc.com, auto-restarts cloudflared after 3 consecutive failures)"
+}
+
 function Start-DaemonOnly {
   $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
   if ($BindLan) {
@@ -263,6 +278,7 @@ $env:SYNAPSE_MCP_ALLOW_WRITES = '1'
   Write-Host ""
   Start-DaemonWatchdog -Port 7878
   Start-PersistentTunnel
+  Start-TunnelWatchdog
   & python @daemonArgs
   exit $LASTEXITCODE
 }
@@ -296,6 +312,7 @@ do {
         -LogPath $daemonLog
       Start-DaemonWatchdog -Port 7878
       Start-PersistentTunnel
+      Start-TunnelWatchdog
     }
 
     Write-Host "-> Compiling Electron main -> dist-electron/"

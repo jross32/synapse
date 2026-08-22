@@ -10,6 +10,27 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.182] - 2026-08-22
+
+### Added
+- **`scripts/tunnel-watchdog.ps1`** -- companion to the daemon watchdog, closing the other real
+  gap for leaving Synapse running unattended for multiple days: nothing previously restarted
+  the persistent Cloudflare Tunnel (`cloudflared tunnel run synapse`) if it crashed. The daemon
+  could stay perfectly healthy locally while every MCP connector went completely dark, with no
+  automatic recovery and no signal other than a person noticing. Checks two distinct failure
+  modes every 45s: the `cloudflared` process itself missing (restarts immediately, no threshold
+  -- an absent process is unambiguous), and the process alive but the public URL not actually
+  answering for 3 consecutive checks (a stale/stuck tunnel, mirroring how the daemon's own
+  wedge was invisible to a plain process-liveness check). Self-terminates if the daemon itself
+  isn't running at all, matching `daemon-watchdog.ps1`'s existing convention -- assumes an
+  intentional stop rather than fighting it. Wired into `scripts/dev.ps1` via a new
+  `Start-TunnelWatchdog` helper, called alongside `Start-PersistentTunnel` in both
+  `-DaemonOnly` and the full-stack launch path.
+  Verified against a real kill, not just a syntax check: force-killed the live `cloudflared`
+  process, confirmed the watchdog detected it missing on its very next check and relaunched it
+  automatically, confirmed `synapse.whatapc.com` was answering correctly again within seconds
+  -- zero manual intervention.
+
 ## [0.1.181] - 2026-08-21
 
 ### Fixed
