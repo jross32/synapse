@@ -34,7 +34,7 @@ param(
   [int]$IntervalSeconds = 30,
   [int]$FailureThreshold = 3,
   [int]$HealthTimeoutSeconds = 5,
-  [int]$GraceSeconds = 25
+  [int]$GraceSeconds = 60
 )
 
 $ErrorActionPreference = 'Stop'
@@ -157,6 +157,18 @@ $wasHealthy = $true
 # unprotected. Confirmed fixed against a real relaunch before this shipped.
 $graceDeadline = [DateTime]::MinValue
 $graceOwnerPid = $null
+# Second layer of the same protection: even outside grace, a single "nothing
+# listening" observation is NOT reliable proof of an intentional stop -- confirmed
+# live 2026-08-24 on the sibling tunnel-watchdog.ps1 bug, then found here too. The
+# relaunch wrapper is `cmd.exe /d /c "python ... >> log"`, so $graceOwnerPid tracks
+# the cmd.exe PID, not python's -- and since $GraceSeconds could still expire before
+# Python finishes binding under load (worse, the old default of 25s was even LESS
+# than $IntervalSeconds=30s, so grace covered zero check cycles in practice), a slow
+# startup would immediately read as "intentionally stopped" and the watchdog would
+# exit for good, leaving the daemon completely unprotected afterward. Require the
+# same consecutive-check threshold already used for health-check failures before
+# concluding this is real.
+$consecutiveAbsent = 0
 
 while ($true) {
   Start-Sleep -Seconds $IntervalSeconds
@@ -180,11 +192,16 @@ while ($true) {
         Write-WatchdogLog "relaunched process (PID $graceOwnerPid) exited during startup and never bound port $Port -- treating as intentional stop, watchdog exiting"
         $exitRequested = $true
       } else {
-        Write-WatchdogLog "no process listening on port $Port -- daemon appears intentionally stopped, watchdog exiting"
-        $exitRequested = $true
+        $consecutiveAbsent += 1
+        Write-WatchdogLog "no process listening on port $Port ($consecutiveAbsent/$FailureThreshold) -- may just be a slow restart"
+        if ($consecutiveAbsent -ge $FailureThreshold) {
+          Write-WatchdogLog "port $Port absent for $consecutiveAbsent consecutive checks -- daemon appears intentionally stopped, watchdog exiting"
+          $exitRequested = $true
+        }
       }
     } else {
       $graceOwnerPid = $null
+      $consecutiveAbsent = 0
 
       if (Test-DaemonHealthy -Port $Port -TimeoutSeconds $HealthTimeoutSeconds) {
         if (-not $wasHealthy) {

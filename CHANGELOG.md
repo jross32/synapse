@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.184] - 2026-08-24
+
+### Fixed
+- **`scripts/daemon-watchdog.ps1`** -- the sibling of the v0.1.183 tunnel-watchdog fix, found live
+  the same day on the daemon-watchdog itself: `$GraceSeconds` (25) was actually *less* than
+  `$IntervalSeconds` (30), so the post-restart grace window structurally covered zero check
+  cycles -- by the time the first check after a restart ran, grace had already expired, and a
+  single "nothing listening yet" observation (the relaunched daemon just hadn't finished binding
+  the port) immediately read as an intentional stop and the watchdog exited for good, leaving the
+  daemon completely unprotected. Confirmed happening for real under today's memory pressure (see
+  the same day's daemon-wedging/memory-pressure investigation). Fixed with the same pattern as
+  tunnel-watchdog.ps1: `$GraceSeconds` raised to 60 (safely above `$IntervalSeconds`), and the
+  non-grace "nothing listening" branch now requires `$FailureThreshold` consecutive absent checks
+  before concluding an intentional stop, instead of exiting on the very first one.
+
 ## [0.1.183] - 2026-08-24
 
 ### Fixed
