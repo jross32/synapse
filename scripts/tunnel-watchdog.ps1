@@ -124,6 +124,7 @@ Write-TunnelWatchdogLog "started -- watching tunnel '$TunnelName' every ${Interv
 
 $consecutiveFailures = 0
 $wasReachable = $true
+$consecutiveAbsent = 0
 
 while ($true) {
   Start-Sleep -Seconds $IntervalSeconds
@@ -131,9 +132,20 @@ while ($true) {
   $exitRequested = $false
   try {
     if (-not (Get-DaemonListening -Port $Port)) {
-      Write-TunnelWatchdogLog "no daemon listening on port $Port -- Synapse appears intentionally stopped, tunnel watchdog exiting"
-      $exitRequested = $true
+      # A single missed check here is NOT reliable evidence of an intentional shutdown --
+      # confirmed live 2026-08-24: the daemon can be mid-restart-cycle (daemon-watchdog killing
+      # and relaunching a wedged process, a 1-2s gap) at the exact moment this check lands, and
+      # exiting on that false signal orphans the tunnel with nothing watching it afterward. Require
+      # the same consecutive-failure discipline as the reachability check below before concluding
+      # this is real, not a one-off restart-window coincidence.
+      $consecutiveAbsent += 1
+      Write-TunnelWatchdogLog "no daemon listening on port $Port ($consecutiveAbsent/$FailureThreshold) -- may just be mid-restart"
+      if ($consecutiveAbsent -ge $FailureThreshold) {
+        Write-TunnelWatchdogLog "daemon absent for $consecutiveAbsent consecutive checks -- Synapse appears intentionally stopped, tunnel watchdog exiting"
+        $exitRequested = $true
+      }
     } else {
+      $consecutiveAbsent = 0
       $tunnelPid = Get-TunnelProcessId -TunnelName $TunnelName
       $reachable = Test-TunnelReachable -Url $PublicUrl -TimeoutSeconds $CheckTimeoutSeconds
 

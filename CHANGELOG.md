@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.183] - 2026-08-24
+
+### Fixed
+- **`scripts/tunnel-watchdog.ps1`** -- closed a real false-positive self-termination bug found
+  live: the watchdog treated a single "nothing listening on port 7878" observation as proof
+  Synapse was intentionally stopped and exited permanently, orphaning the tunnel with nothing
+  watching it afterward. In practice the daemon-watchdog's own restart cycle (killing a wedged
+  daemon process and relaunching it) creates a brief 1-2s gap where the port isn't listening --
+  a gap the tunnel-watchdog's 45s-interval check can land inside purely by coincidence. Confirmed
+  happening for real 2026-08-24 (`02:14:46 ... tunnel watchdog exiting`), leaving the persistent
+  tunnel unwatched for over 40 minutes until caught and manually relaunched. Fix: the "daemon
+  absent" check now requires the same `FailureThreshold` consecutive-check discipline already
+  used for the reachability check (default 3 checks, ~135s) before concluding an intentional
+  shutdown, instead of exiting on the very first miss.
+
 ## [0.1.182] - 2026-08-22
 
 ### Added
