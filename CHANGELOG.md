@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.187] - 2026-08-25
+
+### Fixed
+- **`daemon/synapse_daemon/chatgpt_browser_runtime.py`** -- sending a prompt through this rung
+  trusted a `type()`/`page.keyboard.press("Enter")` call succeeding as proof the message actually
+  reached ChatGPT. A stale or unfocused composer (e.g. right after a navigation) can silently accept
+  neither the typed text nor the Enter press while both calls still report success with no error --
+  confirmed happening for real driving this exact chatgpt.com UI in a sibling project's build loop
+  (a different toolset, same underlying page): a "continue" nudge appeared to work, but the composer
+  never actually received the text, leaving both sides idle with no visible failure until noticed by
+  hand. Left unverified, `run_prompt()` would then wait up to the full `DEFAULT_TIMEOUT_SECONDS`
+  (20 minutes) for a reply that was never going to arrive, because nothing was ever sent. Fixed with
+  `_send_and_confirm_started()`: every send is now verified twice -- before, by reading the
+  composer's actual content back and comparing it against what was typed (`_typed_text_landed()`,
+  tolerant of contenteditable whitespace/line-break normalization but not of the composer coming
+  back empty or drastically truncated), and shortly after, by polling (bounded to
+  `SEND_VERIFY_TIMEOUT_SECONDS`, 12s) for the stop button to appear or the composer to clear. A
+  failed send retries once from a cleared composer (`MAX_SEND_ATTEMPTS`) before `run_prompt()` gives
+  up with a clear diagnostic -- surfacing a real failure in seconds instead of silently waiting the
+  full reply timeout. 13/13 tests pass, including two new fake-page-driven regression tests proving
+  a send is never trusted on an empty/stale composer and Enter is never pressed on unverified content.
+
 ## [0.1.186] - 2026-08-25
 
 ### Fixed

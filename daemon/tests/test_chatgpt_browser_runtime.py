@@ -51,6 +51,113 @@ def test_chatgpt_web_is_a_real_runtime_but_excluded_from_the_default_ladder():
     assert coder_runtimes.CoderRuntime.CHATGPT_WEB not in coder_runtimes.DEFAULT_LADDER
 
 
+def test_typed_text_landed_true_for_matching_content():
+    assert runtime._typed_text_landed("hello world", "hello world") is True
+
+
+def test_typed_text_landed_true_for_whitespace_normalized_content():
+    """Contenteditable can represent line breaks differently than the source string --
+    only real content loss should fail this, not formatting differences."""
+    assert runtime._typed_text_landed("line one\nline two", "line one line two") is True
+
+
+def test_typed_text_landed_false_for_empty_composer():
+    """The exact real-world failure this function exists to catch: `type()` reported success
+    but the composer is completely empty afterward -- nothing actually landed."""
+    assert runtime._typed_text_landed("a real prompt that was typed", "") is False
+
+
+def test_typed_text_landed_false_for_drastically_truncated_content():
+    assert runtime._typed_text_landed("a" * 100, "a" * 10) is False
+
+
+def test_typed_text_landed_true_for_empty_prompt():
+    assert runtime._typed_text_landed("", "") is True
+
+
+class _FakeLocator:
+    def __init__(self, *, count: int = 0, text: str = ""):
+        self._count = count
+        self._text = text
+
+    async def count(self):
+        return self._count
+
+    async def inner_text(self):
+        return self._text
+
+    async def click(self):
+        pass
+
+    @property
+    def first(self):
+        return self
+
+
+class _FakeSendKeyboard:
+    def __init__(self, page: "_FakeSendPage"):
+        self._page = page
+
+    async def type(self, text):
+        self._page.typed.append(text)
+
+    async def press(self, key):
+        self._page.keys_pressed.append(key)
+        if key == "Enter":
+            self._page._sent = True  # noqa: SLF001 - cooperating test double
+
+
+class _FakeSendPage:
+    """Minimal fake driving `_send_and_confirm_started` without a real browser.
+
+    `composer_text_after_type` simulates what actually landed in the composer once
+    `_type_multiline` "finishes" (the real bug: this can silently stay empty even though
+    typing reported no error). `stop_visible_after_send` simulates whether the stop button
+    ever appears once Enter is pressed.
+    """
+
+    def __init__(self, *, composer_text_after_type: str, stop_visible_after_send: bool):
+        self._composer_text_after_type = composer_text_after_type
+        self._stop_visible_after_send = stop_visible_after_send
+        self._sent = False
+        self.keys_pressed: list[str] = []
+        self.typed: list[str] = []
+        self.keyboard = _FakeSendKeyboard(self)
+
+    def locator(self, selector: str):
+        if selector == runtime._COMPOSER_SELECTOR:
+            if not self._sent:
+                return _FakeLocator(text=self._composer_text_after_type)
+            # Real ChatGPT clears the composer once a message is accepted.
+            return _FakeLocator(text="")
+        if selector == runtime._STOP_BUTTON_SELECTOR:
+            return _FakeLocator(count=1 if (self._sent and self._stop_visible_after_send) else 0)
+        raise AssertionError(f"unexpected selector: {selector}")
+
+
+def test_send_and_confirm_started_succeeds_when_composer_clears_and_stop_appears():
+    import asyncio
+
+    page = _FakeSendPage(composer_text_after_type="a real prompt", stop_visible_after_send=True)
+    outcome = asyncio.run(runtime._send_and_confirm_started(page, "a real prompt"))
+
+    assert outcome is None
+    assert "Enter" in page.keys_pressed
+
+
+def test_send_and_confirm_started_fails_fast_when_composer_stayed_empty_after_typing():
+    """The exact real-world bug: `type()` looked fine but nothing landed. Must be caught
+    BEFORE Enter is ever pressed -- never send blindly."""
+    import asyncio
+
+    page = _FakeSendPage(composer_text_after_type="", stop_visible_after_send=True)
+    outcome = asyncio.run(runtime._send_and_confirm_started(page, "a real prompt"))
+
+    assert outcome is not None
+    assert "did not match" in outcome
+    assert "Enter" not in page.keys_pressed  # never sent an empty/failed composer
+
+
 def test_type_multiline_splits_on_shift_enter_not_enter():
     """The load-bearing fix this module exists for: a literal newline must never become a
     bare Enter (which sends prematurely in the real UI), only Shift+Enter (which does not)."""

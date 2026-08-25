@@ -19,6 +19,15 @@ Learned by hand this session, driving the real chatgpt.com UI end to end to buil
   playbooks already document). A stall timeout, not just an overall timeout, catches that: if
   the assistant's message stops growing for a while, something is stuck even though the
   process itself hasn't crashed.
+* Sending is not self-evident from a `type()`/`press("Enter")` call succeeding -- both can
+  report success while the text never actually reached the composer (e.g. a stale locator
+  right after a navigation). Left unverified, that means silently waiting the full
+  DEFAULT_TIMEOUT_SECONDS for a reply that was never going to come, because nothing was ever
+  sent. Confirmed for real driving this exact UI (RackPilot's build loop, a sibling project
+  using a different toolset -- see workflow-chatgpt-delegated-builds.md section 2c). Every
+  send here is verified both before (composer content read back and compared to what was
+  typed) and shortly after (stop button or cleared composer, within seconds, not minutes) --
+  see `_send_and_confirm_started()`.
 
 NOT wired into coder_runtimes.DEFAULT_LADDER yet. Every other rung is a stateless subprocess
 call against a CLI that's either installed or isn't; this one drives a *specific, already
@@ -46,6 +55,21 @@ STALL_TIMEOUT_SECONDS = 180.0
 """No growth in the reply for this long, with no stop button visible, means stuck -- not slow."""
 
 POLL_INTERVAL_SECONDS = 2.0
+
+SEND_VERIFY_TIMEOUT_SECONDS = 12.0
+"""How long to wait, right after pressing Enter, for visible proof the send actually
+registered (composer cleared and/or the stop button appeared) -- found the hard way in a
+sibling project driving the same chatgpt.com UI via a different toolset (RackPilot's build
+loop, see workflow-chatgpt-delegated-builds.md section 2c): a `type()` call can report
+success while the composer silently never received the text, so the follow-up Enter sends
+nothing. Waiting the full DEFAULT_TIMEOUT_SECONDS to discover that is much too slow -- this
+catches it in seconds so a caller can retry instead of sitting idle for up to 20 minutes."""
+
+MAX_SEND_ATTEMPTS = 2
+"""Retry the whole type-and-send sequence once before giving up, in case the first attempt
+hit a transient focus/render glitch (e.g. right after a navigation) rather than a real
+problem -- retrying also clears any stale leftover text first, so a retry never appends onto
+a failed prior attempt's partial content."""
 
 _SEND_BUTTON_SELECTOR = 'button[data-testid="send-button"]'
 _STOP_BUTTON_SELECTOR = 'button[data-testid="stop-button"], button[aria-label*="Stop" i]'
@@ -81,6 +105,83 @@ async def _type_multiline(page: Any, text: str) -> None:
             await page.keyboard.type(line)
         if i < len(lines) - 1:
             await page.keyboard.press("Shift+Enter")
+
+
+async def _composer_text(page: Any) -> str:
+    """Read back what the composer actually contains right now.
+
+    A contenteditable's placeholder ("Ask ChatGPT") is CSS-rendered, not real DOM text, so an
+    empty result here reliably means "nothing landed", not "showing a placeholder" -- this is
+    what lets a caller tell the two apart without guessing.
+    """
+    try:
+        return await page.locator(_COMPOSER_SELECTOR).first.inner_text()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _typed_text_landed(typed: str, readback: str) -> bool:
+    """Whether the composer's actual content is consistent with what was just typed.
+
+    Exact matching is too strict -- a contenteditable can normalize whitespace/line-break
+    representation differently than the source string. This only needs to catch the real
+    failure modes found in practice: the composer ending up completely empty (nothing landed
+    at all) or drastically short (typing got interrupted partway through) after a `type()`
+    call that itself reported success with no error.
+    """
+    typed_norm = "".join(typed.split())
+    readback_norm = "".join(readback.split())
+    if not typed_norm:
+        return True
+    if not readback_norm:
+        return False
+    return len(readback_norm) >= 0.5 * len(typed_norm)
+
+
+async def _clear_composer(page: Any) -> None:
+    """Select-all and delete, so a retry never appends onto stale leftover content from a
+    prior failed attempt -- the same contamination the delegated-build playbooks warn about
+    when a human drives this exact UI by hand."""
+    composer = page.locator(_COMPOSER_SELECTOR).first
+    await composer.click()
+    await page.keyboard.press("ControlOrMeta+A")
+    await page.keyboard.press("Delete")
+
+
+async def _send_and_confirm_started(page: Any, prompt: str) -> str | None:
+    """Type the prompt, send it, and confirm generation actually started.
+
+    Returns None on success, or a short diagnostic string on failure (the caller decides
+    whether to retry). Two things are verified before this trusts that the send happened --
+    never a `type()`/`press()` return value alone, since both can report success while
+    nothing actually reached the page:
+    1. Pre-send: the composer's real content, read back from the page, is consistent with
+       what was just typed.
+    2. Post-send: within SEND_VERIFY_TIMEOUT_SECONDS, either the stop button appears or the
+       composer clears -- proof the message was accepted, not just that Enter was pressed
+       into a page that silently ignored it.
+    """
+    await _clear_composer(page)
+    await _type_multiline(page, prompt)
+
+    landed = await _composer_text(page)
+    if not _typed_text_landed(prompt, landed):
+        return f"composer content after typing did not match the prompt ({len(landed)} chars read back)"
+
+    await page.keyboard.press("Enter")
+
+    deadline = time.time() + SEND_VERIFY_TIMEOUT_SECONDS
+    while time.time() < deadline:
+        stop_visible = await page.locator(_STOP_BUTTON_SELECTOR).count()
+        remaining = await _composer_text(page)
+        if stop_visible or not remaining.strip():
+            return None
+        await asyncio.sleep(0.5)
+
+    return (
+        "no sign the send registered (no stop button, composer still has content) within "
+        f"{SEND_VERIFY_TIMEOUT_SECONDS:g}s"
+    )
 
 
 async def _wait_for_reply(page: Any, *, timeout: float) -> str | None:
@@ -159,18 +260,23 @@ async def run_prompt(
                 await page.goto(
                     conversation_url or "https://chatgpt.com/", wait_until="domcontentloaded")
 
-                composer = page.locator(_COMPOSER_SELECTOR).first
-                await composer.click()
-                await _type_multiline(page, prompt)
-                await page.keyboard.press("Enter")
+                send_error: str | None = None
+                for _attempt in range(1, MAX_SEND_ATTEMPTS + 1):
+                    send_error = await _send_and_confirm_started(page, prompt)
+                    if send_error is None:
+                        break
 
-                reply_text = await _wait_for_reply(page, timeout=timeout)
-                if reply_text is None:
+                if send_error is not None:
                     result.error = (
-                        f"no reply within {timeout:g}s (stalled, or generation never started)")
+                        f"failed to send prompt after {MAX_SEND_ATTEMPTS} attempt(s): {send_error}")
                 else:
-                    result.ok = True
-                    result.source = reply_text
+                    reply_text = await _wait_for_reply(page, timeout=timeout)
+                    if reply_text is None:
+                        result.error = (
+                            f"no reply within {timeout:g}s (stalled, or generation never started)")
+                    else:
+                        result.ok = True
+                        result.source = reply_text
             finally:
                 await ctx.close()
     except Exception as exc:  # noqa: BLE001
