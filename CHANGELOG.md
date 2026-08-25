@@ -10,6 +10,31 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.192] - 2026-08-25
+
+### Changed
+- **`renderer/components/DiscoveryDialog.tsx`** -- "Scan for projects" always started with a blank
+  root folder, so nothing on disk was found until the user remembered to type a path in by hand.
+  The root now defaults to whichever directory the MOST already-registered projects have in common
+  (in practice, a dev-projects home like `C:\Users\justi`), computed from what Synapse already
+  knows rather than needing a new IPC call to the OS. Real symptom this closes: RackPilot, sitting
+  right under that same home directory, was never found by a scan because the root field gave no
+  hint that a scan there would ever find anything.
+  Two real bugs found and fixed on the way to landing this cleanly:
+  1. The first implementation used a strict "every project must share this exact prefix with the
+     first one" comparison -- a single registered project with a relative path
+     (`data\projects\scratch`) zeroed the whole computation out to empty, even though 29 of the
+     other 30 projects agreed perfectly. Replaced with a majority vote over each project's first
+     three path segments, so one outlier can no longer blank out an otherwise-obvious answer.
+  2. The first wiring used a `useEffect` that recomputed the default only when its dependencies
+     changed; both of its runs happened to land before the daemon's initial project list had
+     finished loading (which always starts empty while that request is in flight), and it never
+     got a further chance to recompute correctly. Replaced with a plain render-time `useMemo`,
+     which has no such race since it recalculates from whatever `projects` the current render
+     already has.
+  `tsc --noEmit` clean; live-verified against the real running dev server + daemon (30+ real
+  registered projects) before and after each fix to confirm exactly what each one changed.
+
 ## [0.1.191] - 2026-08-25
 
 ### Fixed

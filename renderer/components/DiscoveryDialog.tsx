@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { FolderSearch, Loader2 } from 'lucide-react';
 
 import { importProjects, scanForProjects, type ImportItem } from '@shared/discovery-client';
+import { useDaemon } from '@shared/daemon-context';
 import type { DetectedProject } from '@shared/generated-types';
 import { kindMeta } from '@shared/project-kinds';
 import { cn } from '@shared/utils';
@@ -16,6 +17,40 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Modal } from './ui/modal';
+
+/** The directory (drive + first 3 path segments, e.g. `C:\Users\justi`) that
+ * the MOST registered projects have in common -- inferred from what
+ * Synapse already knows rather than needing a new IPC call to the OS for a
+ * home-directory path. Deliberately a mode (majority wins), not a strict
+ * everyone-must-share-a-prefix comparison: found live 2026-08-25 that a
+ * single outlier registered with a relative path ("Quick-action
+ * scratchpad", `data\projects\scratch`) zeroed out a first-item-vs-
+ * everyone-else prefix comparison completely, even though 29 of the other
+ * 30 projects agreed perfectly on `C:\Users\justi`. One odd entry should
+ * never be able to blank out an otherwise-obvious answer -- a project
+ * living squarely under that home dir (RackPilot) was never found by a
+ * scan because nobody had typed the root in by hand, and this field
+ * defaulting to empty every time is exactly why nobody thought to. */
+export function commonParentDir(paths: string[], depth = 3): string {
+  const isAbsolute = (p: string) => /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('/');
+  const splitPath = (p: string) => p.split(/[\\/]+/).filter(Boolean);
+  const counts = new Map<string, { count: number; original: string[] }>();
+  for (const p of paths) {
+    if (!isAbsolute(p)) continue;
+    const segs = splitPath(p);
+    if (segs.length < depth) continue;
+    const prefix = segs.slice(0, depth);
+    const key = prefix.join('\\').toLowerCase();
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { count: 1, original: prefix });
+  }
+  let best: { count: number; original: string[] } | null = null;
+  for (const entry of counts.values()) {
+    if (!best || entry.count > best.count) best = entry;
+  }
+  return best ? best.original.join('\\') : '';
+}
 
 export interface DiscoveryDialogProps {
   open: boolean;
@@ -43,8 +78,24 @@ const STACK_TONE: Record<string, string> = {
 };
 
 export function DiscoveryDialog({ open, onClose, onImported }: DiscoveryDialogProps): JSX.Element | null {
+  const { projects } = useDaemon();
   const [phase, setPhase] = useState<Phase>('input');
-  const [root, setRoot] = useState('');
+  // `null` = no explicit override yet -> derive from the registry (below).
+  // A real string (including "") once the user has typed/cleared the
+  // field, so their choice always wins over the computed guess.
+  //
+  // This is a plain render-time useMemo, not a useEffect reacting to
+  // `projects` changing -- found live that the effect version could get
+  // stuck permanently blank: both of its early runs happened to land
+  // before DaemonProvider's initial project fetch resolved (its first
+  // render always starts from an empty list while that request is in
+  // flight), and it never got a later chance to recompute. A memo has no
+  // such race -- it recalculates from whatever `projects` the CURRENT
+  // render actually has, every render, so there is no "too early" moment
+  // for it to get stuck on.
+  const [rootOverride, setRootOverride] = useState<string | null>(null);
+  const defaultRoot = useMemo(() => commonParentDir(projects.map((p) => p.path)), [projects]);
+  const root = rootOverride ?? defaultRoot;
   const [depth, setDepth] = useState('2');
   const [rows, setRows] = useState<Row[]>([]);
   const [scanRoot, setScanRoot] = useState('');
@@ -111,6 +162,9 @@ export function DiscoveryDialog({ open, onClose, onImported }: DiscoveryDialogPr
     setPhase('input');
     setRows([]);
     setError(null);
+    // Each fresh open re-derives the default from the registry's current
+    // state, rather than carrying forward whatever the user last typed.
+    setRootOverride(null);
   }
 
   function toggle(path: string): void {
@@ -146,7 +200,7 @@ export function DiscoveryDialog({ open, onClose, onImported }: DiscoveryDialogPr
           <span className='text-sm text-muted-foreground'>Folder to scan</span>
           <Input
             value={root}
-            onChange={(e) => setRoot(e.target.value)}
+            onChange={(e) => setRootOverride(e.target.value)}
             placeholder='Leave blank to scan your home folder'
           />
         </label>
