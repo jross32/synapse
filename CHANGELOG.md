@@ -10,6 +10,25 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.186] - 2026-08-25
+
+### Fixed
+- **`electron/main.ts`** -- dev-mode's window creation raced Vite's own startup and had zero retry
+  on the initial load. `dev.ps1`'s `Wait-HttpReady` check confirms Vite is reachable before
+  launching Electron, but that check and `mainWindow.loadURL('http://localhost:5173')` are two
+  separate HTTP requests moments apart -- a dev server can still refuse a connection in that gap.
+  A single failed `loadURL` used to be permanent: `did-fail-load` set `SYN-BOOT-201` immediately,
+  the window (created with `show: false`) never showed or reached `ready-to-show`/`did-finish-load`,
+  and the *separate* 45s interface-readiness timer then also fired `SYN-BOOT-202` -- two diagnostics
+  for what was really just Vite not being reachable yet, with the console showing nothing past
+  "-> Launching Electron" the whole time. Reproduced live: running `node node_modules/electron/cli.js .`
+  in isolation while Vite wasn't up yet produced the exact `ERR_CONNECTION_REFUSED` failure with no
+  retry. Fixed with `loadDevServerWithRetry()` -- up to 5 attempts, 750ms apart, retrying only on
+  `ERR_CONNECTION_REFUSED`/`ERR_EMPTY_RESPONSE`; a real non-transient failure (Vite never starts,
+  wrong port) still exhausts the retries and reports `SYN-BOOT-201` normally. Verified live via a
+  fresh `dev.ps1 -AppOnly` run: the Electron window loaded and showed the full Home dashboard on the
+  first attempt with the fix in place.
+
 ## [0.1.185] - 2026-08-25
 
 ### Fixed

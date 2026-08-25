@@ -791,7 +791,7 @@ function createWindow(): void {
   mainWindow.webContents.once('did-finish-load', markInterfaceReady);
 
   const loadPromise = isDev
-    ? mainWindow.loadURL('http://localhost:5173')
+    ? loadDevServerWithRetry(mainWindow, 'http://localhost:5173')
     : mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   void loadPromise.catch((error) => {
     console.error('Failed to load Synapse interface:', error);
@@ -803,6 +803,43 @@ function createWindow(): void {
       error instanceof Error ? error.message : String(error)
     );
   });
+}
+
+// Dev mode races Electron's window creation against Vite's own startup: the
+// wrapper's `Wait-HttpReady` check in dev.ps1 confirms Vite is reachable before
+// launching Electron, but that confirmation and this `loadURL` call are two
+// separate HTTP requests moments apart, and a dev server can still refuse a
+// connection in that gap (briefly rebuilding, a transient WinError, etc.).
+// A single failed attempt used to be permanent: `did-fail-load` set SYN-BOOT-201
+// immediately, the window never showed, and the *separate* 45s readiness timer
+// then also fired SYN-BOOT-202 -- two diagnostics for what was really just Vite
+// not being reachable yet. Retry a few times with a short backoff before
+// surfacing either error; a real, non-transient failure (Vite never starts,
+// wrong port, etc.) will still exhaust the retries and report normally.
+async function loadDevServerWithRetry(
+  window: BrowserWindow,
+  url: string,
+  attempts = 5,
+  delayMs = 750
+): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await window.loadURL(url);
+      return;
+    } catch (error) {
+      const isLastAttempt = attempt === attempts;
+      const isConnectionIssue =
+        error instanceof Error && /ERR_CONNECTION_REFUSED|ERR_EMPTY_RESPONSE/.test(error.message);
+      if (isLastAttempt || !isConnectionIssue) {
+        throw error;
+      }
+      console.warn(
+        `[synapse] dev server not reachable yet (attempt ${attempt}/${attempts}), retrying in ${delayMs}ms:`,
+        error.message
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 }
 
 function createTray(): void {
