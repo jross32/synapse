@@ -10,6 +10,36 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.188] - 2026-08-25
+
+### Changed
+- **`renderer/components/ProjectTile.tsx`, `renderer/components/ProjectDetailModal.tsx`** -- the
+  Apps page's project tiles were reported as "very long" (each showing kind/group/tags, description,
+  a cmd/port/disk/cpu-ram metadata table, an error box, and two full rows of action buttons inline),
+  forcing endless scrolling to see more than a couple of apps at once. Tiles are now short --
+  name, path, status, pin, and the two actions people reach for constantly (Launch/Stop, Open in
+  browser) -- with everything else (Edit/Logs/Delete, Open folder/VS Code/Terminal/AI OS/Workbench/
+  Files, kind/group/tags, description, disk size, cpu/ram) moved into `ProjectDetailModal`, which
+  already opened on a tile click; the modal gained a new action bar to hold what moved there.
+  Measured live: tiles dropped from ~250-350px+ to ~120-133px tall.
+
+### Fixed
+- **Same files** -- "Open in browser" was reported missing on some registered apps with no
+  indication why. Root cause: the button was wrapped in `project.expected_port !== null &&`, so a
+  project added without an expected port (the field is optional in "Add Project") silently never
+  got the button at all, with nothing telling the user that port was the reason. The button is now
+  always rendered and only *disabled*, with a tooltip naming the exact fix ("No expected port set
+  for this project -- open its details and Edit to set one, then this button will work.") -- and
+  correctly enabled with the right localhost URL once a port is set and the app is running (live-
+  verified against two real registered apps, one with a port and one deliberately without).
+  Separately, a real app (RackPilot, a sibling project) was found completely absent from the
+  registry -- registered directly via `POST /api/v1/projects` (id `rackpilot`, port 5089) rather
+  than through the UI, confirming both the registration path and the new tile/button behavior work
+  end to end for a genuinely new project, not just the 32 already in the registry.
+  Typecheck clean (`tsc --noEmit`); no dedicated renderer test suite exists yet to extend, so
+  verified live against the running dev server + daemon instead (Vite HMR on `:5173`, daemon on
+  `:7878`, 32 real registered projects).
+
 ## [0.1.187] - 2026-08-25
 
 ### Fixed

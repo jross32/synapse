@@ -20,8 +20,11 @@ import {
   FolderOpen,
   HardDrive,
   Hash,
+  Paperclip,
   Pin,
+  Sparkles,
   Tag,
+  TerminalSquare,
 } from 'lucide-react';
 
 import {
@@ -45,6 +48,20 @@ export interface ProjectDetailModalProps {
   project: Project | null;
   resources?: ResourceSnapshot;
   onClose: () => void;
+  /** Everything below moved here from the tile (v0.1.188) so the tile card
+   * could stay short -- all optional so this modal still renders sensibly
+   * if a caller only wants the read-only detail view. */
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onViewLogs?: () => void;
+  onOpenFolder?: () => void;
+  onOpenInVscode?: () => void;
+  onOpenInTerminal?: () => void;
+  onOpenInAiOs?: () => void;
+  onOpenInWorkbench?: () => void;
+  onOpenFiles?: () => void;
+  isRunning?: boolean;
+  isTransitioning?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -59,6 +76,17 @@ export function ProjectDetailModal({
   project,
   resources,
   onClose,
+  onEdit,
+  onDelete,
+  onViewLogs,
+  onOpenFolder,
+  onOpenInVscode,
+  onOpenInTerminal,
+  onOpenInAiOs,
+  onOpenInWorkbench,
+  onOpenFiles,
+  isRunning,
+  isTransitioning,
 }: ProjectDetailModalProps): JSX.Element | null {
   const [disk, setDisk] = useState<ProjectDiskUsage | null>(null);
 
@@ -239,6 +267,106 @@ export function ProjectDetailModal({
           + read uploaded files directly.
         </p>
       </div>
+
+      {/* Actions -- moved here from the tile (v0.1.188) so the tile card
+          could stay short. Management actions first, then OS-integration
+          quick-opens. Each is optional so the modal degrades gracefully if
+          a caller renders it read-only. */}
+      {(onEdit || onViewLogs || onDelete) && (
+        <div className='flex flex-wrap gap-2 border-t border-border pt-3'>
+          {onEdit && (
+            <Button variant='outline' size='sm' onClick={onEdit}>
+              Edit
+            </Button>
+          )}
+          {onViewLogs && (
+            <Button variant='outline' size='sm' onClick={onViewLogs}>
+              Logs
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant='ghost'
+              size='sm'
+              disabled={isRunning || isTransitioning}
+              title={isRunning ? 'Stop the project before deleting.' : 'Delete'}
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          )}
+        </div>
+      )}
+
+      {(onOpenFolder || onOpenInVscode || onOpenInTerminal || onOpenInAiOs || onOpenInWorkbench || onOpenFiles) && (
+        <div className='flex flex-wrap gap-1'>
+          {onOpenFolder && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              onClick={onOpenFolder}
+            >
+              <FolderOpen className='h-3.5 w-3.5' /> Open folder
+            </Button>
+          )}
+          {onOpenInVscode && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              title='Open this project in VS Code'
+              onClick={onOpenInVscode}
+            >
+              <Code2 className='h-3.5 w-3.5' /> Open in VS Code
+            </Button>
+          )}
+          {onOpenInTerminal && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              title='Open a terminal in this project'
+              onClick={onOpenInTerminal}
+            >
+              <TerminalSquare className='h-3.5 w-3.5' /> Terminal
+            </Button>
+          )}
+          {onOpenInAiOs && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              title='Open this project in the AI Operating System case board'
+              onClick={onOpenInAiOs}
+            >
+              <Sparkles className='h-3.5 w-3.5' /> Open in AI OS
+            </Button>
+          )}
+          {onOpenInWorkbench && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              title='Open a coder session (claude / codex / shell) pre-cd into this project'
+              onClick={onOpenInWorkbench}
+            >
+              <Sparkles className='h-3.5 w-3.5' /> Open in workbench
+            </Button>
+          )}
+          {onOpenFiles && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2 text-xs text-muted-foreground'
+              title='Files attached to this project (uploads + session transcripts)'
+              onClick={onOpenFiles}
+            >
+              <Paperclip className='h-3.5 w-3.5' /> Files
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Footer: schema dump for power users + AI */}
       <details className='rounded-md border border-border bg-secondary/30 p-2 text-xs'>
