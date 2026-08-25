@@ -28,6 +28,19 @@ Learned by hand this session, driving the real chatgpt.com UI end to end to buil
   send here is verified both before (composer content read back and compared to what was
   typed) and shortly after (stop button or cleared composer, within seconds, not minutes) --
   see `_send_and_confirm_started()`.
+* A conversation can hit ChatGPT's own hard length ceiling ("You've reached the maximum
+  length for this conversation, but you can keep talking by starting a new chat.") -- a
+  PERMANENT condition, not a stall: nothing this module can do makes that conversation accept
+  another message again. Confirmed for real the same night as the point above, on the same
+  sibling project's build thread, right after dozens of turns and hundreds of tool calls.
+  Critically, the platform's own "Start new chat" button does NOT preserve context -- it just
+  opens a brand-new conversation with the caller's last message pre-filled as a courtesy, with
+  no memory of anything that came before. The only way to continue with context intact is
+  "Branch in new chat" from a specific message (hover it -> More actions -> Branch in new
+  chat) -- a manual UI action this module detects but does not automate (see
+  `conversation_length_limit_reached()`); automating the branch itself was attempted by hand
+  this same night with an interactive browser tool and proved unreliable enough (silent
+  no-ops on a heavily-loaded tab) that it isn't shipped here without being provable live.
 
 NOT wired into coder_runtimes.DEFAULT_LADDER yet. Every other rung is a stateless subprocess
 call against a CLI that's either installed or isn't; this one drives a *specific, already
@@ -75,6 +88,24 @@ _SEND_BUTTON_SELECTOR = 'button[data-testid="send-button"]'
 _STOP_BUTTON_SELECTOR = 'button[data-testid="stop-button"], button[aria-label*="Stop" i]'
 _COMPOSER_SELECTOR = '#prompt-textarea, div[contenteditable="true"]'
 _ASSISTANT_MESSAGE_SELECTOR = '[data-message-author-role="assistant"]'
+
+_LENGTH_LIMIT_TEXT = "reached the maximum length for this conversation"
+"""Substring of OpenAI's own message when a conversation hits its hard length ceiling. Lower-
+cased to match case-insensitively against the page's own text."""
+
+
+async def conversation_length_limit_reached(page: Any) -> bool:
+    """Whether this conversation has hit ChatGPT's hard length ceiling and can no longer accept
+    new messages -- a distinct, PERMANENT failure mode, unlike a stall or a slow reply that
+    will eventually resolve. Checking this explicitly turns what would otherwise be a wasted
+    DEFAULT_TIMEOUT_SECONDS wait (or a pointless retry loop) into an immediate, actionable
+    error that names the real problem instead of "no reply" / "stalled".
+    """
+    try:
+        text = await page.locator("body").inner_text()
+    except Exception:  # noqa: BLE001
+        return False
+    return _LENGTH_LIMIT_TEXT in text.lower()
 
 
 def profile_available(profile_dir: Path) -> bool:
@@ -161,6 +192,13 @@ async def _send_and_confirm_started(page: Any, prompt: str) -> str | None:
        composer clears -- proof the message was accepted, not just that Enter was pressed
        into a page that silently ignored it.
     """
+    if await conversation_length_limit_reached(page):
+        return (
+            "conversation has hit ChatGPT's maximum length and can no longer accept messages -- "
+            "branch to a new conversation (hover a message -> More actions -> Branch in new "
+            "chat) before continuing"
+        )
+
     await _clear_composer(page)
     await _type_multiline(page, prompt)
 
@@ -197,6 +235,9 @@ async def _wait_for_reply(page: Any, *, timeout: float) -> str | None:
     last_growth = time.time()
 
     while time.time() < deadline:
+        if await conversation_length_limit_reached(page):
+            break  # permanent condition -- no point waiting out the rest of the timeout
+
         stop_visible = await page.locator(_STOP_BUTTON_SELECTOR).count()
         messages = page.locator(_ASSISTANT_MESSAGE_SELECTOR)
         count = await messages.count()
@@ -272,8 +313,18 @@ async def run_prompt(
                 else:
                     reply_text = await _wait_for_reply(page, timeout=timeout)
                     if reply_text is None:
-                        result.error = (
-                            f"no reply within {timeout:g}s (stalled, or generation never started)")
+                        if await conversation_length_limit_reached(page):
+                            result.error = (
+                                "conversation has hit ChatGPT's maximum length and can no longer "
+                                "accept messages -- branch to a new conversation (hover a "
+                                "message -> More actions -> Branch in new chat) before "
+                                "continuing; this module does not automate that step"
+                            )
+                        else:
+                            result.error = (
+                                f"no reply within {timeout:g}s "
+                                "(stalled, or generation never started)"
+                            )
                     else:
                         result.ok = True
                         result.source = reply_text

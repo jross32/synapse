@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.189] - 2026-08-25
+
+### Added
+- **`daemon/synapse_daemon/chatgpt_browser_runtime.py`** -- a conversation can hit ChatGPT's own
+  hard length ceiling ("You've reached the maximum length for this conversation, but you can keep
+  talking by starting a new chat.") -- a PERMANENT condition, not a stall or a slow reply, confirmed
+  happening for real the same night as v0.1.187's fix, on the same sibling project's build thread
+  (RackPilot), after 30+ turns and hundreds of tool calls. Left undetected, `run_prompt()` would
+  wait out the full `DEFAULT_TIMEOUT_SECONDS` (20 minutes) for a reply a maxed-out conversation can
+  never send, reporting only a generic "no reply" timeout that gives no hint of the real cause.
+  Added `conversation_length_limit_reached()`, checked both before a send is attempted (in
+  `_send_and_confirm_started()`, so a dead conversation is never typed into) and during the reply
+  wait (in `_wait_for_reply()`, so the wait ends immediately instead of running out the clock) --
+  the resulting `RuntimeResult.error` now names the real problem and the fix ("branch to a new
+  conversation... before continuing") instead of a misleading "stalled" message.
+  Deliberately does NOT automate the actual branch -- that's a human/Claude-driven browser action
+  ("Branch in new chat": hover a message -> More actions -> Branch in new chat) attempted by hand
+  the same night with an interactive browser tool and found unreliable enough on a heavily-loaded
+  tab (silent no-ops) that it isn't shipped here without being provable live first. 16/16 targeted
+  tests pass (3 new), full daemon suite 1129/1130 (the one failure is `test_skill_catalog_...` --
+  pre-existing/unrelated, caused by an untracked "stock-hunter" skill pack from a different
+  in-flight thread, confirmed dirty before this change touched anything).
+
 ## [0.1.188] - 2026-08-25
 
 ### Changed

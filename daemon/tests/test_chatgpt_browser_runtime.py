@@ -116,9 +116,16 @@ class _FakeSendPage:
     ever appears once Enter is pressed.
     """
 
-    def __init__(self, *, composer_text_after_type: str, stop_visible_after_send: bool):
+    def __init__(
+        self,
+        *,
+        composer_text_after_type: str,
+        stop_visible_after_send: bool,
+        length_limit_reached: bool = False,
+    ):
         self._composer_text_after_type = composer_text_after_type
         self._stop_visible_after_send = stop_visible_after_send
+        self._length_limit_reached = length_limit_reached
         self._sent = False
         self.keys_pressed: list[str] = []
         self.typed: list[str] = []
@@ -132,6 +139,14 @@ class _FakeSendPage:
             return _FakeLocator(text="")
         if selector == runtime._STOP_BUTTON_SELECTOR:
             return _FakeLocator(count=1 if (self._sent and self._stop_visible_after_send) else 0)
+        if selector == "body":
+            text = (
+                "You've reached the maximum length for this conversation, but you can keep "
+                "talking by starting a new chat."
+                if self._length_limit_reached
+                else "ordinary page text with no limit banner"
+            )
+            return _FakeLocator(text=text)
         raise AssertionError(f"unexpected selector: {selector}")
 
 
@@ -156,6 +171,44 @@ def test_send_and_confirm_started_fails_fast_when_composer_stayed_empty_after_ty
     assert outcome is not None
     assert "did not match" in outcome
     assert "Enter" not in page.keys_pressed  # never sent an empty/failed composer
+
+
+def test_conversation_length_limit_reached_true_when_banner_present():
+    import asyncio
+
+    page = _FakeSendPage(
+        composer_text_after_type="irrelevant",
+        stop_visible_after_send=False,
+        length_limit_reached=True,
+    )
+    assert asyncio.run(runtime.conversation_length_limit_reached(page)) is True
+
+
+def test_conversation_length_limit_reached_false_for_ordinary_page():
+    import asyncio
+
+    page = _FakeSendPage(composer_text_after_type="irrelevant", stop_visible_after_send=False)
+    assert asyncio.run(runtime.conversation_length_limit_reached(page)) is False
+
+
+def test_send_and_confirm_started_fails_fast_on_length_limit_without_typing():
+    """A maxed-out conversation is a PERMANENT condition -- must be caught before ever
+    attempting to type or press Enter, not discovered later via a composer/stop-button
+    mismatch that would misleadingly suggest a transient send failure."""
+    import asyncio
+
+    page = _FakeSendPage(
+        composer_text_after_type="a real prompt",
+        stop_visible_after_send=True,
+        length_limit_reached=True,
+    )
+    outcome = asyncio.run(runtime._send_and_confirm_started(page, "a real prompt"))
+
+    assert outcome is not None
+    assert "maximum length" in outcome
+    assert "Branch in new chat" in outcome
+    assert page.typed == []  # never even attempted to type into a dead conversation
+    assert "Enter" not in page.keys_pressed
 
 
 def test_type_multiline_splits_on_shift_enter_not_enter():
