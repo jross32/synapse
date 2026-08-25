@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .errors import invalid, not_found
 from .models import AuditSource
@@ -24,6 +25,7 @@ from . import projects as projects_module
 from .process_manager import ProcessManager
 from .projects import Project, ProjectUpdate
 from .storage import Storage
+from .ws import EventBus
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +85,7 @@ class ListResponse(BaseModel):
 def build_projects_router(
     storage: Storage,
     pm: ProcessManager,
+    bus: EventBus,
 ) -> APIRouter:
     router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -117,6 +120,12 @@ def build_projects_router(
                 result="success",
                 details={"path_created": path_created},
             ))
+        # A project can be registered by a caller other than the one Apps
+        # page a human currently has open (this route, a discovery scan, a
+        # ChatGPT import, or a direct API call) -- without this, an already-
+        # open window's project list only ever picked up a new registration
+        # on its next manual reload, since nothing told it one had appeared.
+        await bus.publish(event_name("project", "created"), {"id": created.id, "name": created.name})
         return projects_module.model_dump_for_client(created)
 
     @router.patch("/{project_id}", response_model=None)
@@ -131,6 +140,7 @@ def build_projects_router(
                 result="success",
                 details=payload.model_dump(exclude_none=True),
             ))
+        await bus.publish(event_name("project", "updated"), {"id": project_id})
         return projects_module.model_dump_for_client(updated)
 
     @router.delete("/{project_id}", status_code=204)
@@ -144,6 +154,7 @@ def build_projects_router(
                 source=AuditSource.DESKTOP,
                 result="success",
             ))
+        await bus.publish(event_name("project", "deleted"), {"id": project_id})
 
     @router.post("/{project_id}/launch", response_model=None)
     async def launch_one(project_id: str, payload: ActionRequest | None = None) -> dict:

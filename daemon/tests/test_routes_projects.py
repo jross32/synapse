@@ -157,6 +157,62 @@ def test_create_via_post_can_create_missing_directory(tmp_path: Path) -> None:
         storage.close()
 
 
+def test_create_via_post_publishes_project_created_event(tmp_path: Path) -> None:
+    """Registering a project through any caller other than the currently-open
+    Apps page (this route directly, a discovery scan, a ChatGPT import) used
+    to leave an already-open window's project list stale until its next
+    manual reload -- nothing ever told it a new project had appeared. The
+    fix is this event; this test proves it's actually published, not just
+    that the create itself still works (test_create_via_post_returns_201
+    already covers that)."""
+    client, storage, bus, _ = _harness(tmp_path)
+    try:
+        project_path = tmp_path / "new-app"
+        project_path.mkdir()
+        payload = {
+            "id": "new-app",
+            "name": "New App",
+            "path": str(project_path),
+            "launch_cmd": "python -V",
+        }
+        before_id = bus.last_event_id
+        with client as c:
+            res = c.post("/api/v1/projects", json=payload)
+            assert res.status_code == 201
+        published = [e.name for e in bus.replay_since(before_id)]
+        assert "v1.project.created" in published
+    finally:
+        storage.close()
+
+
+def test_patch_publishes_project_updated_event(tmp_path: Path) -> None:
+    client, storage, bus, _ = _harness(tmp_path)
+    try:
+        _seed_probe(storage, tmp_path)
+        before_id = bus.last_event_id
+        with client as c:
+            res = c.patch("/api/v1/projects/probe", json={"name": "Renamed Probe"})
+            assert res.status_code == 200
+        published = [e.name for e in bus.replay_since(before_id)]
+        assert "v1.project.updated" in published
+    finally:
+        storage.close()
+
+
+def test_delete_publishes_project_deleted_event(tmp_path: Path) -> None:
+    client, storage, bus, _ = _harness(tmp_path)
+    try:
+        _seed_probe(storage, tmp_path)
+        before_id = bus.last_event_id
+        with client as c:
+            res = c.delete("/api/v1/projects/probe")
+            assert res.status_code == 204
+        published = [e.name for e in bus.replay_since(before_id)]
+        assert "v1.project.deleted" in published
+    finally:
+        storage.close()
+
+
 def test_create_duplicate_returns_conflict(tmp_path: Path) -> None:
     client, storage, *_ = _harness(tmp_path)
     try:

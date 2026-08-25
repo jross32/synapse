@@ -349,7 +349,7 @@ def build_app(
 
     # Mount the REST routers under /api/v1.
     app.include_router(
-        build_projects_router(storage, process_manager),
+        build_projects_router(storage, process_manager, bus),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

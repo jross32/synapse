@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.191] - 2026-08-25
+
+### Fixed
+- **`daemon/synapse_daemon/routes_projects.py`, `daemon/synapse_daemon/app.py`** -- a project
+  registered, edited, or deleted through any means other than the currently-open Apps page's own
+  form (a direct API call, a future discovery-scan/import path) never appeared in an already-open
+  window until its next manual reload. Root cause: `POST/PATCH/DELETE /projects` never published a
+  `v1.project.*` WebSocket event, and the renderer's `DaemonProvider` only refreshes its project
+  list in response to one. Real symptom hit live: RackPilot was registered via a direct
+  `POST /api/v1/projects` call and did not appear in an already-open Synapse window. Now
+  `create_one`/`patch_one`/`delete_one` publish `v1.project.created` / `.updated` / `.deleted`
+  after each mutation, via the same `EventBus` + `event_name()` pattern already used by process
+  launch/stop events elsewhere. 16/16 route tests pass, including 3 new ones proving each event is
+  actually published (not just that the underlying CRUD still works).
+
 ## [0.1.190] - 2026-08-25
 
 ### Changed
