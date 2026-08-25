@@ -122,6 +122,31 @@ async def test_successful_tunnel_parses_public_url() -> None:
     await tool.shutdown()
 
 
+async def test_api_trycloudflare_error_line_is_not_mistaken_for_the_tunnel_url() -> None:
+    """A failed quick-tunnel request (e.g. mid network outage) prints cloudflared's
+    own control-plane URL (`api.trycloudflare.com`) in an error line before the real
+    tunnel banner. That must never be parsed as the assigned public URL -- regression
+    for a real bug where WAN auto-start locked onto that error line and reported a
+    "live" tunnel that actually pointed at Cloudflare's real API (HTTP 405 on every
+    request) instead of the local daemon."""
+    tool = CloudtapTool(EventBus())
+    proc = _FakeProc(
+        [
+            b"failed to request quick Tunnel: connect to https://api.trycloudflare.com/tunnel failed, retrying\n",
+            _url_line(),
+        ]
+    )
+    with patch("shutil.which", return_value="cloudflared"), patch(
+        "asyncio.create_subprocess_exec", _fake_exec_seq(proc)
+    ):
+        state = await tool.run_action("tunnel", {"port": 8080})
+
+    assert state.status == EntityStatus.LAUNCHED
+    item = state.items[0]
+    assert item.result["public_url"] == "https://demo-tunnel.trycloudflare.com"
+    await tool.shutdown()
+
+
 async def test_multiple_tunnels_open_concurrently() -> None:
     tool = CloudtapTool(EventBus())
     p1 = _FakeProc([_url_line("first")])

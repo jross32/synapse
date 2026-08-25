@@ -41,7 +41,12 @@ from . import ToolHandler
 log = logging.getLogger(__name__)
 
 # cloudflared prints the public URL inside a boxed banner on stderr.
-_URL_RE = re.compile(r"https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com")
+# `api.trycloudflare.com` is Cloudflare's own fixed control-plane hostname, used
+# internally when cloudflared requests a new quick tunnel -- it shows up in
+# cloudflared's own output (e.g. in an error line) if that request fails, most
+# commonly during a network outage. It must never be mistaken for the assigned
+# tunnel hostname, so it's the one subdomain this regex explicitly excludes.
+_URL_RE = re.compile(r"https://(?!api\.trycloudflare\.com)[a-z0-9][a-z0-9-]*\.trycloudflare\.com")
 
 # How long to wait for cloudflared to hand back a URL before giving up.
 URL_WAIT_TIMEOUT_SECONDS = 25.0

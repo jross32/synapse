@@ -10,6 +10,26 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.185] - 2026-08-25
+
+### Fixed
+- **`daemon/synapse_daemon/tools/cloudtap.py`** -- the URL regex Cloudtap uses to parse the public
+  tunnel hostname out of `cloudflared`'s output (`_URL_RE`) could match `api.trycloudflare.com`,
+  Cloudflare's own fixed control-plane hostname, instead of the real assigned tunnel hostname.
+  `cloudflared` prints that URL in its own output when a quick-tunnel request to Cloudflare's API
+  fails (most commonly during a network outage) -- the old regex, being unanchored, grabbed the
+  *first* `https://*.trycloudflare.com` match in the stream, which could be that error line rather
+  than the real boxed-banner URL. The tunnel was then reported "live" pointing at Cloudflare's real
+  API, which returns HTTP 405 on every request -- found live via WAN auto-start's
+  `/api/v1/remote-access` verification reporting `"failure_code":"http_status","failure_message":
+  "HTTP 405 from https://api.trycloudflare.com/api/v1/health"` after a real internet outage.
+  Fixed by excluding the exact `api.trycloudflare.com` hostname from the regex via a negative
+  lookahead -- real tunnel hostnames are always random multi-word subdomains and will never
+  literally be `api`. Added a regression test
+  (`test_api_trycloudflare_error_line_is_not_mistaken_for_the_tunnel_url`) that reproduces the
+  exact failure sequence (an error line mentioning the API URL, followed by the real banner) and
+  asserts the real hostname is still correctly picked up.
+
 ## [0.1.184] - 2026-08-24
 
 ### Fixed
