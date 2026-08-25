@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.190] - 2026-08-25
+
+### Changed
+- **`renderer/pages/Apps.tsx`** -- the project list defaulted to alphabetical (pinned first, then
+  by name), which meant an app used constantly all day could sit below one touched once months ago
+  just because of its name. Now sorts by whichever is more recent of `last_transition_at` (a launch
+  or stop) and `updated_at` (an Edit-dialog save, a pin toggle, etc.) -- pinned projects still float
+  to the top, then most-recent-activity-first.
+
+### Fixed
+- **`renderer/components/ui/modal.tsx`** -- clicking outside a modal (the project detail view, the
+  project form, confirm dialogs, etc.) did not close it, even though the component's own backdrop-
+  click handler looked correct on read. Root-caused live: a genuine native `click` event fires and
+  bubbles correctly on the backdrop element (confirmed with a plain `addEventListener` directly on
+  the node), but React's own synthetic `onClick` on that same element was never invoked for the
+  identical click (confirmed by reading the handler straight off the DOM node's current React props
+  and wrapping it -- the wrapper was never called). Rather than chase React's internal delegation
+  further, backdrop-click-to-close now uses a native `addEventListener`, the same proven-reliable
+  pattern this component already used for its Escape-key handling. Live-verified via real (CDP-
+  driven, not JS-dispatched) clicks: closes on a genuine outside click, stays open on a click inside
+  the panel -- both confirmed before and after the fix to isolate the regression precisely.
+
 ## [0.1.189] - 2026-08-25
 
 ### Added

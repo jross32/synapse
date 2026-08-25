@@ -112,12 +112,26 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
     }
   }
 
-  // Pinned projects float to the top, then alphabetical.
+  // Pinned projects float to the top, then most-recent-activity first
+  // (v0.1.190) -- whichever is more recent of `last_transition_at` (a
+  // launch or stop) and `updated_at` (an Edit-dialog save, a pin toggle,
+  // etc.), so a project you just launched OR just edited surfaces at the
+  // top either way. Previously alphabetical, which meant an app you'd
+  // been actively using all day could sit below one you touched once six
+  // months ago just because its name came first.
   const sorted = useMemo(
     () =>
       [...projects].sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        return a.name.localeCompare(b.name);
+        const aRecency = Math.max(
+          new Date(a.last_transition_at).getTime(),
+          new Date(a.updated_at).getTime()
+        );
+        const bRecency = Math.max(
+          new Date(b.last_transition_at).getTime(),
+          new Date(b.updated_at).getTime()
+        );
+        return bRecency - aRecency;
       }),
     [projects]
   );

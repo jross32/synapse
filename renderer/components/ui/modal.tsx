@@ -41,6 +41,7 @@ export function Modal({
   children,
 }: ModalProps): JSX.Element | null {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const backdropRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
@@ -98,13 +99,30 @@ export function Modal({
       }
     }
 
+    // Backdrop-click-to-close is a native listener, not a React `onClick`
+    // prop, deliberately -- found live that React's synthetic dispatch can
+    // silently fail to invoke a delegated `onClick` on this exact element
+    // even though the real native click event demonstrably fires and
+    // bubbles correctly (confirmed directly: a plain `addEventListener`
+    // on the same node fired every time; React's own handler, read straight
+    // off the fiber's current props, was never called for the identical
+    // click). Rather than chase React's internal delegation further, this
+    // uses the same proven-reliable native-listener pattern the Escape
+    // handler right above it already uses, so the fix doesn't depend on
+    // understanding the exact root cause to be trustworthy.
+    function onBackdropClick(e: MouseEvent) {
+      if (dismissable && e.target === backdropRef.current) onClose();
+    }
+
     window.addEventListener('keydown', onKey);
+    backdropRef.current?.addEventListener('click', onBackdropClick);
     // Defer to next tick so React's commit completes and children are
     // measurable before we ask querySelectorAll for focusables.
     const focusTimer = window.setTimeout(focusFirstInPanel, 0);
 
     return () => {
       window.removeEventListener('keydown', onKey);
+      backdropRef.current?.removeEventListener('click', onBackdropClick);
       window.clearTimeout(focusTimer);
       // Restore focus to whatever opened the modal, unless the user has
       // deliberately moved focus somewhere else meanwhile.
@@ -134,13 +152,11 @@ export function Modal({
 
   return (
     <div
+      ref={backdropRef}
       role='dialog'
       aria-modal='true'
       aria-labelledby={labelledBy}
       className='fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm'
-      onClick={(e) => {
-        if (dismissable && e.target === e.currentTarget) onClose();
-      }}
     >
       <div
         ref={panelRef}
