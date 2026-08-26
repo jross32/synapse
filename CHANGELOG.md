@@ -10,6 +10,19 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.199] - 2026-08-26
+
+### Fixed
+- **Home featured-app launch status reconciliation** (`renderer/pages/Home.tsx`) -- when a launch
+  request fails, Home now immediately refetches that project's authoritative backend state and
+  upserts it into the renderer's local project list. This fixes the real RackPilot case where port
+  5089 was already served by a process started outside the daemon: the backend correctly marked the
+  project `launched` before returning the conflict, but the card stayed `not running` because the
+  catch path only rendered the error. The original launch error remains visible if the reconciliation
+  read itself fails, so a secondary read cannot hide the primary failure. Renderer-only; no daemon
+  restart is required.
+
+
 ## [0.1.198] - 2026-08-26
 
 ### Fixed

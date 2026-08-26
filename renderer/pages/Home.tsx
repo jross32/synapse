@@ -22,7 +22,7 @@ import {
 
 import { useDaemon } from '@shared/daemon-context';
 import { getAiHealthReport, type AiHealthReport } from '@shared/ai-client';
-import { launchProject } from '@shared/projects-client';
+import { getProject, launchProject } from '@shared/projects-client';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import type { Project } from '@shared/generated-types';
 import type { NavigationIntent } from '@shared/nav';
@@ -162,6 +162,11 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
       upsertProjectLocal(await launchProject(project.id));
     } catch (err) {
       setLaunchError(`Couldn't launch ${project.name}: ${(err as Error).message}`);
+      try {
+        upsertProjectLocal(await getProject(project.id));
+      } catch {
+        // Keep the original launch error visible if the reconciliation read also fails.
+      }
     } finally {
       setLaunchBusyId(null);
     }
