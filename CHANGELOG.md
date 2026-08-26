@@ -10,6 +10,24 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.194] - 2026-08-25
+
+### Fixed
+- **`daemon/synapse_daemon/mcp_connector.py`** -- the actual, confirmed root cause of the
+  daemon "wedge" as hit through the MCP connector (claude.ai / ChatGPT): `POST /mcp/{token}`
+  called the fully synchronous `_handle()` dispatch chain directly with no `await`, no
+  `asyncio.to_thread`. `synapse_run_command` (the tool an AI coding agent actually uses to run
+  shell commands) calls a plain blocking `subprocess.run(..., timeout=<up to 900s>)` inside
+  that chain -- so any write/coding command froze the entire daemon event loop, including its
+  own health endpoint, for however long the command took. Read-only tool calls were fast
+  enough that this went unnoticed; anything that ran a real command (tests, git, builds -- the
+  exact things a coding agent's connector is for) reliably froze the daemon and 502'd every
+  other in-flight request. This is the v0.1.193 fix's actual missing piece: that release fixed
+  a real but secondary bug in `ProcessManager.launch()` (Synapse's own "Launch project"
+  button); this one fixes the tool a remote AI connector actually calls. Fixed by offloading
+  the whole `_handle()` call to a worker thread via `asyncio.to_thread` in `mcp_post`, so a
+  long-running command no longer blocks any other request.
+
 ## [0.1.193] - 2026-08-25
 
 ### Fixed

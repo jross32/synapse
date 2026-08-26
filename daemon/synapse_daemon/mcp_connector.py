@@ -15,6 +15,7 @@ to implement directly beside the REST API.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -1199,14 +1200,24 @@ def build_mcp_router(
         # stays read-only while the operator's own link can still drive the machine.
         allow_writes = request.query_params.get("mode", "").strip().lower() != "read"
 
+        # Off the event loop thread. `_handle` is synchronous all the way down, and
+        # `synapse_run_command` inside it calls a plain blocking `subprocess.run` with a
+        # timeout of up to 900s -- called straight from this coroutine, that froze every
+        # other request the daemon was serving (including its own health checks) for
+        # however long the command took. This is the confirmed cause of the daemon
+        # "wedge": read-only tool calls stayed fast enough not to notice, but any write
+        # command routed through here (which is exactly what a coding agent's connector
+        # calls) reliably froze the daemon until the command finished.
         if isinstance(payload, list):
-            responses = [r for r in (_handle(m, allow_writes) for m in payload)
-                         if r is not None]
+            handled = await asyncio.gather(
+                *(asyncio.to_thread(_handle, m, allow_writes) for m in payload)
+            )
+            responses = [r for r in handled if r is not None]
             if not responses:
                 return Response(status_code=202)
             return JSONResponse(responses)
 
-        response = _handle(payload, allow_writes)
+        response = await asyncio.to_thread(_handle, payload, allow_writes)
         if response is None:
             return Response(status_code=202)
         return JSONResponse(response)
