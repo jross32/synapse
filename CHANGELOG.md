@@ -10,6 +10,34 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.197] - 2026-08-26
+
+### Added
+- **`synapse_run_command_async` + `synapse_get_command_result`** (`daemon/synapse_daemon/mcp_connector.py`).
+  `synapse_run_command` blocks the whole HTTP request for as long as the underlying shell
+  command runs (up to its own timeout). Every hop between a remote caller (ChatGPT, claude.ai)
+  and this daemon -- a Cloudflare Tunnel's own edge, in Justin's case -- has its own gateway
+  timeout, commonly well under two minutes for a single proxied request. A command that runs
+  past that gets its connection killed by the middle hop with a bare `502`, indistinguishable
+  from the daemon itself being down, even though the daemon is fine and the command may finish
+  successfully seconds later. Confirmed happening live: NabSignal's ChatGPT build thread hit a
+  `502` finalizing a release (a combined CHANGELOG + compile/diff-hygiene command); Synapse's
+  own daemon process never restarted and was fully healthy again within seconds -- a materially
+  different signature from the actual wedge bugs fixed in v0.1.193/v0.1.194, which needed a real
+  restart to recover. `synapse_run_command_async` starts the command on a background thread and
+  returns a `job_id` immediately regardless of how long the command takes; `synapse_get_command_result`
+  polls for the outcome (`running` with elapsed time, or `done` with the same `ok`/`exit_code`/
+  `stdout`/`stderr` shape `synapse_run_command` already returns). No single HTTP request has to
+  stay open for the command's actual duration anymore, so no proxy/tunnel timeout can kill it.
+
+### Changed
+- **`synapse_run_command`**'s own `timeout_seconds` is now hard-capped at 90s (previously 900s)
+  regardless of what's requested. A command that would have run past the old cap now reliably
+  hits this function's own existing graceful `TimeoutExpired` handling -- a clean, fast
+  `{"ok": false, "timed_out": true, ...}` response -- well before any realistic proxy/tunnel
+  timeout could kill the connection first. Its description now points to
+  `synapse_run_command_async` for anything that might run long.
+
 ## [0.1.196] - 2026-08-26
 
 ### Fixed

@@ -18,6 +18,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
+import uuid
 from pathlib import Path
 
 from . import boot_config
@@ -25,6 +27,7 @@ from . import local_agent
 from . import mcp_servers
 from .runtime_paths import repo_root
 from .runtime_resolution import resolve_command
+from .time_utils import from_iso, to_iso, utc_now
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
@@ -248,6 +251,14 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     #    bug to route around. --
     "synapse_run_command": {"readOnlyHint": False, "destructiveHint": True,
                             "idempotentHint": False, "openWorldHint": True},
+    # Same risk profile as synapse_run_command (arbitrary shell) -- it just returns
+    # immediately with a job_id instead of blocking the HTTP request for the command's
+    # full duration, so a slow command can never get killed by a tunnel/proxy's own
+    # gateway timeout partway through (that read as an opaque 502 with no way to tell
+    # whether the daemon or the command was actually the problem).
+    "synapse_run_command_async": {"readOnlyHint": False, "destructiveHint": True,
+                                  "idempotentHint": False, "openWorldHint": True},
+    "synapse_get_command_result": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_http": {"readOnlyHint": False, "destructiveHint": True,
                      "idempotentHint": False, "openWorldHint": False},
     # Reaches the public internet (unlike synapse_http, which is local-only), but it cannot
@@ -501,16 +512,64 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "This is what makes a remote chat able to actually DO things here: create folders "
                         "anywhere, git clone/commit, npm install, run tests, start a project. Default shell "
                         "is PowerShell on Windows. Blocking, so keep commands under the timeout - start "
-                        "long-running servers with a project launch instead."
+                        "long-running servers with a project launch instead. This call blocks the whole "
+                        "HTTP request for as long as the command runs, which risks a tunnel/proxy's own "
+                        "gateway timeout (commonly under two minutes) killing the connection with a bare "
+                        "502 on anything slow, even though the command may still be running fine. For any "
+                        "command that might run long (a full test suite, a build, anything you're not sure "
+                        "will finish in a few seconds), use synapse_run_command_async instead and poll "
+                        "synapse_get_command_result -- it never risks that failure mode."
                     ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "command": {"type": "string", "description": "The command line to run."},
                             "cwd": {"type": "string", "description": "Absolute working directory. Defaults to the Synapse repo."},
-                            "timeout_seconds": {"type": "integer", "description": "Default 120, max 900."},
+                            "timeout_seconds": {"type": "integer", "description": "Default 120, capped at 90 regardless -- see the description above."},
                         },
                         "required": ["command"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_run_command_async",
+                    "description": (
+                        "Start a shell command in the background and return a job_id immediately, "
+                        "without waiting for it to finish. Poll synapse_get_command_result(job_id) to get "
+                        "the outcome. Use this instead of synapse_run_command for anything that might run "
+                        "for more than a few seconds (test suites, builds, multi-step scripts) -- this call "
+                        "always returns in milliseconds, so it can never be killed by a tunnel/proxy's own "
+                        "gateway timeout the way a long-blocking synapse_run_command call can, which is "
+                        "what causes an otherwise-healthy daemon to look like it 502'd. Same command "
+                        "semantics as synapse_run_command (PowerShell on Windows) otherwise."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "command": {"type": "string", "description": "The command line to run."},
+                            "cwd": {"type": "string", "description": "Absolute working directory. Defaults to the Synapse repo."},
+                            "timeout_seconds": {"type": "integer", "description": "Max time the command itself is allowed to run for, once started. Default 120, max 1800."},
+                        },
+                        "required": ["command"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_get_command_result",
+                    "description": (
+                        "Check the status/result of a command started with synapse_run_command_async. "
+                        "Returns status:\"running\" (with how long it's been running) while still in "
+                        "progress, or status:\"done\" plus the same ok/exit_code/stdout/stderr shape "
+                        "synapse_run_command returns once it finishes. Poll this every few seconds rather "
+                        "than once -- there's no way to block-and-wait here on purpose, since blocking is "
+                        "exactly the failure mode the async split exists to avoid."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "job_id": {"type": "string", "description": "The job_id returned by synapse_run_command_async."},
+                        },
+                        "required": ["job_id"],
                         "additionalProperties": False,
                     },
                 },
@@ -669,6 +728,64 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             raise RuntimeError(f"{spec['name']!r} has no entry in _TOOL_ANNOTATIONS")
         spec["annotations"] = {"title": spec["name"], **annotations}
     return specs
+
+
+# ── async command jobs ───────────────────────────────────────────────────────
+#
+# synapse_run_command blocks the HTTP request for as long as the underlying shell
+# command takes (up to 900s). Every hop the request passes through on its way back to a
+# remote caller -- a reverse proxy, a Cloudflare Tunnel's own edge, a load balancer --
+# typically has a considerably shorter gateway timeout of its own (commonly ~100s for a
+# single proxied HTTP request). A command that runs longer than THAT gets its connection
+# killed by the middle hop with a bare 502, indistinguishable from the daemon itself being
+# down, even though the daemon is fine and the command may go on to finish successfully.
+# synapse_run_command_async / synapse_get_command_result exist so a command's actual
+# duration never has to fit inside any proxy's timeout: the "start" call returns in
+# milliseconds regardless of how long the command takes, and the caller polls for the
+# result the same way it already does for other long-running work in this app.
+_command_jobs: dict[str, dict[str, Any]] = {}
+_COMMAND_JOB_MAX_AGE_SECONDS = 3600  # prune finished jobs after an hour so this never grows unbounded
+
+# synapse_run_command's own hard ceiling -- see the comment at its call site for why this is
+# far below the 900s it used to allow.
+_SYNC_RUN_TIMEOUT_MAX = 90
+
+
+def _prune_old_command_jobs() -> None:
+    now = utc_now()
+    stale = [
+        job_id
+        for job_id, job in _command_jobs.items()
+        if job["status"] != "running"
+        and (now - job["_finished_at_dt"]).total_seconds() > _COMMAND_JOB_MAX_AGE_SECONDS
+    ]
+    for job_id in stale:
+        _command_jobs.pop(job_id, None)
+
+
+def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float) -> None:
+    import subprocess
+
+    try:
+        done = subprocess.run(shell_argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+        result = {
+            "ok": done.returncode == 0,
+            "exit_code": done.returncode,
+            "stdout": (done.stdout or "")[-20000:],
+            "stderr": (done.stderr or "")[-8000:],
+        }
+    except subprocess.TimeoutExpired:
+        result = {"ok": False, "timed_out": True, "detail": f"did not finish within {timeout}s"}
+    except Exception as exc:  # noqa: BLE001 -- report it through the job, not an unhandled thread crash
+        result = {"ok": False, "error": str(exc)}
+    job = _command_jobs.get(job_id)
+    if job is None:  # pruned or the daemon restarted mid-run; nothing left to update
+        return
+    finished_at = utc_now()
+    job["status"] = "done"
+    job["finished_at"] = to_iso(finished_at)
+    job["_finished_at_dt"] = finished_at
+    job["result"] = result
 
 
 def build_mcp_router(
@@ -977,7 +1094,15 @@ def build_mcp_router(
             command = str(args.get("command", "")).strip()
             if not command:
                 raise ValueError("command is required")
-            timeout = min(int(args.get("timeout_seconds") or 120), 900)
+            # Capped well under a typical proxy/tunnel gateway timeout (commonly ~100s for a
+            # single proxied request), not at the 900s this tool used to allow. A command that
+            # runs longer than the old cap risked the connection getting killed by a middle hop
+            # with a bare 502 before this function's own graceful TimeoutExpired handling below
+            # ever got a chance to run -- capping here means a slow command now reliably surfaces
+            # as the clean, fast "timed_out" response a few lines down instead. Anything that
+            # genuinely needs to run longer should use synapse_run_command_async instead, which
+            # has no such ceiling because it never holds the HTTP request open in the first place.
+            timeout = min(int(args.get("timeout_seconds") or 120), _SYNC_RUN_TIMEOUT_MAX)
             cwd = str(args.get("cwd") or repo_root())
             shell_argv = (["powershell", "-NoProfile", "-Command", command]
                           if _sys.platform == "win32" else ["bash", "-lc", command])
@@ -994,6 +1119,58 @@ def build_mcp_router(
                 "stderr": (done.stderr or "")[-8000:],
                 "cwd": cwd,
             }
+
+        if name == "synapse_run_command_async":
+            _require_writes()
+            import sys as _sys
+
+            command = str(args.get("command", "")).strip()
+            if not command:
+                raise ValueError("command is required")
+            timeout = min(int(args.get("timeout_seconds") or 120), 1800)
+            cwd = str(args.get("cwd") or repo_root())
+            shell_argv = (["powershell", "-NoProfile", "-Command", command]
+                          if _sys.platform == "win32" else ["bash", "-lc", command])
+            job_id = uuid.uuid4().hex[:12]
+            _command_jobs[job_id] = {
+                "status": "running",
+                "command": command,
+                "cwd": cwd,
+                "started_at": to_iso(utc_now()),
+            }
+            _prune_old_command_jobs()
+            threading.Thread(
+                target=_run_command_job_thread,
+                args=(job_id, shell_argv, cwd, timeout),
+                daemon=True,
+            ).start()
+            return {
+                "job_id": job_id,
+                "status": "running",
+                "note": "Poll synapse_get_command_result with this job_id. This call itself always "
+                        "returns immediately regardless of how long the command takes.",
+            }
+
+        if name == "synapse_get_command_result":
+            _require_writes()
+            job_id = str(args.get("job_id", "")).strip()
+            if not job_id:
+                raise ValueError("job_id is required")
+            job = _command_jobs.get(job_id)
+            if job is None:
+                raise ValueError(
+                    f"Unknown job_id: {job_id!r} (it may have expired -- results are kept for "
+                    f"{_COMMAND_JOB_MAX_AGE_SECONDS}s after completion -- or the daemon restarted "
+                    "since the command was started)."
+                )
+            if job["status"] == "running":
+                started = from_iso(job["started_at"])
+                return {
+                    "job_id": job_id,
+                    "status": "running",
+                    "running_for_seconds": round((utc_now() - started).total_seconds(), 1),
+                }
+            return {"job_id": job_id, "status": "done", "cwd": job["cwd"], **job["result"]}
 
         if name == "synapse_read_file":
             _require_writes()

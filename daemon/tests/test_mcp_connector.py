@@ -89,6 +89,7 @@ def test_read_only_url_never_advertises_a_write_tool(tmp_path: Path, monkeypatch
     assert "synapse_list_projects" in names
     assert "synapse_add_project_idea" not in names
     assert "synapse_run_command" not in names
+    assert "synapse_run_command_async" not in names
 
 
 def test_tools_call_list_projects(tmp_path: Path) -> None:
@@ -393,3 +394,74 @@ def test_recent_activity_returns_the_feed(tmp_path: Path) -> None:
         res = _rpc(c, token, "tools/call", {"name": "synapse_recent_activity", "arguments": {}})
         rows = json.loads(res.json()["result"]["content"][0]["text"])
         assert any(r["kind"] == "session.connected" for r in rows), rows
+
+
+# -- synapse_run_command_async / synapse_get_command_result -------------------
+#
+# These exist so a slow command never has to hold its HTTP request open for the
+# command's full duration -- see mcp_connector.py's module docstring on
+# _command_jobs for why that matters (a tunnel/proxy's own gateway timeout killing
+# the connection reads as an opaque 502 indistinguishable from the daemon being down).
+
+def test_run_command_async_returns_immediately_then_pollable_to_done(tmp_path: Path, monkeypatch) -> None:
+    import json
+    import time
+
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    started = _rpc(client, token, "tools/call", {
+        "name": "synapse_run_command_async",
+        "arguments": {"command": "echo hello-async"},
+    })
+    assert started.status_code == 200, started.text
+    started_result = started.json()["result"]
+    assert started_result["isError"] is False, started_result
+    payload = json.loads(started_result["content"][0]["text"])
+    assert payload["status"] == "running"
+    job_id = payload["job_id"]
+    assert job_id
+
+    # The start call must return near-instantly regardless of command duration -- that's
+    # the entire point. Poll for completion rather than asserting a fixed sleep.
+    deadline = time.monotonic() + 10
+    final = None
+    while time.monotonic() < deadline:
+        polled = _rpc(client, token, "tools/call", {
+            "name": "synapse_get_command_result",
+            "arguments": {"job_id": job_id},
+        })
+        result = json.loads(polled.json()["result"]["content"][0]["text"])
+        if result["status"] == "done":
+            final = result
+            break
+        assert result["status"] == "running"
+        assert "running_for_seconds" in result
+        time.sleep(0.2)
+
+    assert final is not None, "command did not finish within the test's poll window"
+    assert final["ok"] is True
+    assert final["exit_code"] == 0
+    assert "hello-async" in final["stdout"]
+
+
+def test_get_command_result_unknown_job_id_errors(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    res = _rpc(client, token, "tools/call", {
+        "name": "synapse_get_command_result",
+        "arguments": {"job_id": "not-a-real-job-id"},
+    })
+    result = res.json()["result"]
+    assert result["isError"] is True
+    assert "Unknown job_id" in result["content"][0]["text"]
+
+
+def test_run_command_async_requires_writes(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "0")
+    client, token = _harness(tmp_path)
+    res = _rpc(client, token, "tools/call", {
+        "name": "synapse_run_command_async",
+        "arguments": {"command": "echo nope"},
+    })
+    result = res.json()["result"]
+    assert result["isError"] is True
