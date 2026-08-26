@@ -201,8 +201,44 @@ function Wait-HttpReady {
   throw "$Label did not become ready within ${TimeoutSeconds}s.`n$tail"
 }
 
+function Get-RunningWatchdogPid {
+  # Neither watchdog self-registers a lock file or checks for a sibling before
+  # launching, and both are detached (Start-Process -WindowStyle Hidden) so
+  # they survive independently of whatever process tree spawned them -- every
+  # restart of *this* script, across a whole session, silently added another
+  # one on top of any still running from an earlier restart rather than
+  # replacing it. Confirmed live 2026-08-26: after a normal night of restarts
+  # plus a real internet outage that repeatedly knocked the tunnel down, SEVEN
+  # separate tunnel-watchdog.ps1 processes (and seven daemon-watchdog.ps1
+  # processes) were all running at once, independently racing each other to
+  # "fix" the same tunnel -- which is exactly what produced the double-PID
+  # "relaunched as PID X" / "relaunched as PID Y" log lines within the same
+  # second: two watchdogs both saw the process missing and both relaunched it.
+  # A process-presence check here, matching how the watchdogs themselves
+  # detect their own targets, is the fix: don't start a second one if one is
+  # already alive.
+  param([string]$ScriptName)
+  try {
+    $procs = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue
+  } catch {
+    return $null
+  }
+  foreach ($p in $procs) {
+    if ("$($p.CommandLine)".ToLower().Contains($ScriptName.ToLower())) {
+      return $p.ProcessId
+    }
+  }
+  return $null
+}
+
 function Start-DaemonWatchdog {
   param([int]$Port = 7878)
+
+  $existing = Get-RunningWatchdogPid -ScriptName 'daemon-watchdog.ps1'
+  if ($existing) {
+    Write-Host "-> Daemon watchdog already running (PID $existing) -- not starting a duplicate"
+    return
+  }
 
   # Detached, hidden, non-blocking. Self-terminates once this daemon process
   # is gone (see the header comment in daemon-watchdog.ps1) -- nothing here
@@ -254,6 +290,12 @@ function Start-TunnelWatchdog {
   # went stale while the daemon stayed perfectly healthy locally -- meaning
   # every MCP connector could go dark with no automatic recovery at all. See
   # scripts/tunnel-watchdog.ps1 for the detection/recovery details.
+  $existing = Get-RunningWatchdogPid -ScriptName 'tunnel-watchdog.ps1'
+  if ($existing) {
+    Write-Host "-> Tunnel watchdog already running (PID $existing) -- not starting a duplicate"
+    return
+  }
+
   $watchdogScript = Join-Path $PSScriptRoot 'tunnel-watchdog.ps1'
   $watchdogArgs = @(
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchdogScript,

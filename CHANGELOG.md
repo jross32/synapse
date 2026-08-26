@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.198] - 2026-08-26
+
+### Fixed
+- **`scripts/dev.ps1`** -- `Start-DaemonWatchdog` and `Start-TunnelWatchdog` unconditionally
+  spawned a new detached, hidden watchdog process on every restart, with no check for
+  whether one from an earlier restart was still alive. Both watchdogs survive independently
+  of the daemon/Electron process tree they were started alongside (that's the whole point --
+  they need to outlive a wedged/killed daemon to be able to restart it), so they were never
+  cleaned up by a normal restart either -- they just accumulated, one more pair every time.
+  Confirmed live: after a night of restarts plus a real internet outage that repeatedly
+  knocked the named tunnel down, **7 separate `tunnel-watchdog.ps1` processes and 7 separate
+  `daemon-watchdog.ps1` processes** were all running simultaneously, independently racing
+  each other to "fix" the same tunnel -- which is exactly what produced pairs of
+  `relaunched cloudflared as PID X` / `... as PID Y` log lines landing in the same second:
+  two (or more) watchdogs each saw the process missing and each relaunched it, leaving
+  multiple redundant `cloudflared tunnel run synapse` processes live at once. Fixed by adding
+  `Get-RunningWatchdogPid`, checked before either `Start-*Watchdog` function launches a new
+  process; if a matching one is already alive, it logs that and returns instead of starting
+  a duplicate. Live-verified: killed all 14 accumulated watchdog processes plus the duplicate
+  cloudflared process, did a full clean restart, confirmed exactly one daemon-watchdog and
+  one tunnel-watchdog process this time.
+
 ## [0.1.197] - 2026-08-26
 
 ### Added
