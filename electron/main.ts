@@ -427,7 +427,7 @@ function formatDaemonStartupError(prefix: string): Error {
   return new Error(`${prefix}${exitInfo}${tail}`);
 }
 
-async function waitForDaemon(timeoutMs = 15_000): Promise<void> {
+async function waitForDaemon(timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await probeHealth()) return;

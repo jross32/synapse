@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.193] - 2026-08-25
+
+### Fixed
+- **`daemon/synapse_daemon/process_manager.py`** -- `ProcessManager.launch()` called
+  `self._spawn()` (a synchronous `subprocess.Popen(shell=True, ...)`) directly on the event
+  loop thread instead of offloading it like `stop()` already does for `_terminate_tree`. On
+  Windows, `shell=True` spawns `cmd.exe` via `CreateProcess`, which real-time antivirus
+  scanning can stall for several seconds under load -- long enough to freeze every other
+  request the daemon was serving (health checks, MCP tool calls, the ChatGPT connector) for
+  the duration. This is the confirmed root cause of the recurring "daemon wedge": launching
+  any managed project reproducibly froze the daemon, which then 502'd on every call routed
+  through the tunnel (ChatGPT could still see read-only state that had already returned, but
+  any request that needed a fresh round trip -- including its own next coding action --
+  hung until the freeze cleared or the daemon was killed and restarted). Fixed by wrapping
+  the spawn in `asyncio.to_thread`, matching `stop()`'s existing pattern.
+- **`electron/main.ts`** -- `waitForDaemon()`'s default timeout was 15000ms, matching the
+  daemon's own typical cold-start time (`Listening` to `Application startup complete`) with
+  essentially no margin. Under any real machine load the tray's "Restart" health-check
+  window could expire before the daemon actually became healthy, surfacing `SYN-BOOT-102`
+  ("did not become healthy in time") even though the daemon went on to start successfully a
+  few seconds later. Raised the default to 30000ms for real margin.
+
 ## [0.1.192] - 2026-08-25
 
 ### Changed

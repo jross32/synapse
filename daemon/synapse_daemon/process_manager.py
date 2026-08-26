@@ -191,7 +191,15 @@ class ProcessManager:
             return
 
         try:
-            proc = self._spawn(project.path, project.launch_cmd, project.env, log_file)
+            # Off the event loop thread. subprocess.Popen(shell=True) on Windows spawns
+            # cmd.exe via CreateProcess, which real-time AV scanning can stall for
+            # multiple seconds - long enough on a loaded box to freeze every other
+            # request this daemon is serving (health checks, MCP tool calls, the
+            # ChatGPT connector) for the duration. stop()'s _terminate_tree already
+            # ran off-thread for the same reason; launch() was the one path that didn't.
+            proc = await asyncio.to_thread(
+                self._spawn, project.path, project.launch_cmd, project.env, log_file
+            )
         except OSError as exc:
             log_file.close()
             await self._fail(
