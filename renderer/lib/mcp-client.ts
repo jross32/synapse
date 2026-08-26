@@ -12,6 +12,8 @@ export interface McpConnectorInfo {
   local_url: string;
   tunnel_url: string | null;
   tunnel_open: boolean;
+  tunnel_source: 'public_hostname' | 'cloudtap' | 'none';
+  public_hostname: string | null;
   connector_url: string | null;
   read_only_url: string | null;
 }

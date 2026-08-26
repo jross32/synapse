@@ -20,6 +20,7 @@ import json
 import os
 from pathlib import Path
 
+from . import boot_config
 from . import local_agent
 from . import mcp_servers
 from .runtime_paths import repo_root
@@ -1245,18 +1246,33 @@ def build_mcp_info_router(storage: Storage, registry: ToolRegistry,
         token = auth.local_token or ""
         port = int(getattr(request.app.state, "bound_port", 7878) or 7878)
         mcp_path = f"/mcp/{token}"
+
+        # A user-configured stable hostname (e.g. a named cloudflared tunnel the operator
+        # runs themselves, pointed at this port from outside Synapse entirely) wins over
+        # Cloudtap's own ephemeral quick-tunnel. Cloudtap's URL rotates on every daemon
+        # restart, which broke the one thing this endpoint exists for: a connector link
+        # that ChatGPT/Claude can be configured with ONCE. Synapse has no way to detect
+        # such a tunnel automatically (it isn't Cloudtap's own child process), so it has
+        # to be told -- see PATCH /api/v1/system/network's `public_hostname` field.
+        public_hostname = boot_config.load(storage.data_dir).public_hostname
         tunnel_url: str | None = None
-        try:
-            registry.get_manifest("cloudtap")  # raises if cloudtap absent
-            state = registry.get_state("cloudtap")
-            item = next(
-                (i for i in state.items if i.result.get("local_port") == port),
-                None,
-            )
-            if item is not None:
-                tunnel_url = item.result.get("public_url")
-        except Exception:  # noqa: BLE001 -- cloudtap optional / not installed
-            tunnel_url = None
+        tunnel_source = "none"
+        if public_hostname:
+            tunnel_url = f"https://{public_hostname}"
+            tunnel_source = "public_hostname"
+        else:
+            try:
+                registry.get_manifest("cloudtap")  # raises if cloudtap absent
+                state = registry.get_state("cloudtap")
+                item = next(
+                    (i for i in state.items if i.result.get("local_port") == port),
+                    None,
+                )
+                if item is not None:
+                    tunnel_url = item.result.get("public_url")
+                    tunnel_source = "cloudtap" if tunnel_url else "none"
+            except Exception:  # noqa: BLE001 -- cloudtap optional / not installed
+                tunnel_url = None
         connector_url = f"{tunnel_url.rstrip('/')}{mcp_path}" if tunnel_url else None
         # Two links on purpose. The read-only one is safe to paste anywhere; the full one
         # can write files, run commands and dispatch coding work on this machine.
@@ -1269,6 +1285,8 @@ def build_mcp_info_router(storage: Storage, registry: ToolRegistry,
             "local_url": f"http://127.0.0.1:{port}{mcp_path}",
             "tunnel_url": tunnel_url,
             "tunnel_open": bool(tunnel_url),
+            "tunnel_source": tunnel_source,
+            "public_hostname": public_hostname,
             "connector_url": connector_url,
             "read_only_url": read_only_url,
         }

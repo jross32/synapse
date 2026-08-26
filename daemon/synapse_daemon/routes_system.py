@@ -94,11 +94,14 @@ def _detect_lan_ips() -> list[str]:
 
 
 class NetworkPatch(BaseModel):
-    # Both optional so a caller can toggle just one knob (e.g. the WAN switch sends
-    # only `wan_auto_start`). A field left None is untouched.
+    # All optional so a caller can toggle just one knob (e.g. the WAN switch sends
+    # only `wan_auto_start`). A field left None is untouched. `public_hostname` uses
+    # the empty string, not None, to mean "clear it" -- None already means "don't
+    # touch this field" for every other knob here, so it can't also mean "clear."
     bind_lan: bool | None = None
     wan_auto_start: bool | None = None
     mcp_writes_enabled: bool | None = None
+    public_hostname: str | None = None
 
 
 class RestartRequest(BaseModel):
@@ -222,6 +225,7 @@ class RemoteAccessNetwork(BaseModel):
     bind_lan_persisted: bool
     wan_auto_start: bool = True
     mcp_writes_enabled: bool = True
+    public_hostname: str | None = None
     bound_host: str
     bound_port: int
     lan_ips: list[str]
@@ -285,6 +289,7 @@ def _network_status(request: Request, data_dir: Path) -> dict[str, Any]:
         "bind_lan_persisted": cfg.bind_lan,
         "wan_auto_start": cfg.wan_auto_start,
         "mcp_writes_enabled": cfg.mcp_writes_enabled,
+        "public_hostname": cfg.public_hostname,
         "bound_host": live_host,
         "bound_port": port,
         "lan_ips": lan_ips,
@@ -319,7 +324,19 @@ def _probe_remote_url(
 ) -> tuple[bool, str | None, str | None]:
     request = urllib.request.Request(
         url,
-        headers={"Accept": "application/json, text/html;q=0.9, */*;q=0.8"},
+        headers={
+            "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
+            # Cloudflare's bot protection blocks Python's default "Python-urllib/x.y"
+            # User-Agent outright (confirmed live: identical request, only the UA
+            # changed, 200 -> 403) -- affects any public_hostname or Cloudtap tunnel
+            # sitting behind Cloudflare, which is the common case this probe exists
+            # to verify. A plain browser-shaped UA is enough to pass; this probe
+            # only ever reads a health/mobile-shell response, nothing UA-sensitive.
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+        },
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
@@ -527,6 +544,34 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
             expires_at=pairing_code["expires_at"] if pairing_code else None,
         )
 
+        if network.public_hostname:
+            # The operator told Synapse about a stable hostname they already route to
+            # this port themselves -- verify and report on THAT instead of Cloudtap's
+            # own ephemeral tunnel, which this hostname is meant to replace. No
+            # "just opened" warmup grace here: a named tunnel someone runs standing up
+            # cold on every daemon restart isn't the failure mode this hostname exists
+            # to route around, so an error here should just be a real error.
+            public_url = f"https://{network.public_hostname}"
+            verification = await _verify_public_tunnel(public_url)
+            wan = RemoteAccessWan(
+                available=True,
+                active=True,
+                public_url=public_url,
+                local_port=network.bound_port,
+                label="Custom hostname",
+                verification=verification,
+            )
+            return RemoteAccessResponse(
+                computer_name=_computer_name(),
+                network=network,
+                pairing_code=code_status,
+                paired_devices=[
+                    RemoteAccessDevice.model_validate(device)
+                    for device in auth.list_devices()
+                ],
+                wan=wan,
+            )
+
         cloudtap_available, cloudtap_state = _cloudtap_entry(request)
         daemon_tunnel = None
         stray_tunnel = None
@@ -615,7 +660,7 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
         payload: NetworkPatch, request: Request
     ) -> dict[str, Any]:
         cfg = boot_config.load(data_dir)
-        changes: dict[str, dict[str, bool]] = {}
+        changes: dict[str, dict[str, Any]] = {}
         if payload.bind_lan is not None and payload.bind_lan != cfg.bind_lan:
             changes["bind_lan"] = {"previous": cfg.bind_lan, "current": payload.bind_lan}
             cfg.bind_lan = payload.bind_lan
@@ -627,6 +672,15 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
             changes["mcp_writes_enabled"] = {"previous": cfg.mcp_writes_enabled,
                                              "current": payload.mcp_writes_enabled}
             cfg.mcp_writes_enabled = payload.mcp_writes_enabled
+        if payload.public_hostname is not None:
+            # "" clears it; None (the default, i.e. omitted) leaves it untouched -- see
+            # the field's own docstring in NetworkPatch for why a string field needs a
+            # distinct "clear" sentinel where a bool field doesn't.
+            new_hostname = boot_config.normalize_hostname(payload.public_hostname)
+            if new_hostname != cfg.public_hostname:
+                changes["public_hostname"] = {"previous": cfg.public_hostname,
+                                              "current": new_hostname}
+                cfg.public_hostname = new_hostname
         if changes:
             boot_config.save(data_dir, cfg)
             with storage.transaction() as conn:
@@ -651,7 +705,7 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
             "bind_lan_persisted": cfg.bind_lan,
             "wan_auto_start": cfg.wan_auto_start,
             "mcp_writes_enabled": cfg.mcp_writes_enabled,
-        "mcp_writes_enabled": cfg.mcp_writes_enabled,
+            "public_hostname": cfg.public_hostname,
             "bound_host": live_host,
             "restart_required": cfg.bind_lan != (live_host == LAN_HOST),
         }

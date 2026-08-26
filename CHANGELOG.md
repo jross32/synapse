@@ -10,6 +10,53 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.196] - 2026-08-26
+
+### Fixed
+- **`daemon/synapse_daemon/routes_system.py`** -- `_probe_remote_url()` (the health/mobile-
+  shell verification behind both Cloudtap's WAN status and the new `public_hostname`
+  feature from v0.1.195) sent no `User-Agent`, so Python's default `Python-urllib/x.y`
+  went out on every request. Found live immediately after configuring `public_hostname`
+  to a real, working, already-verified-by-curl named tunnel: Synapse reported
+  `HTTP 403` from a health endpoint that `curl` reached fine seconds earlier. Isolated to
+  the User-Agent specifically -- an otherwise-identical request differing only in UA went
+  200 with curl's UA and 403 with Python's default. This is Cloudflare's own bot
+  protection blocking a well-known non-browser UA string at the edge, not anything wrong
+  with the tunnel or the daemon's reachability -- but it made the verification useless for
+  any hostname sitting behind Cloudflare, which is the exact case this feature exists for.
+  Fixed by sending a normal browser-shaped `User-Agent`.
+
+## [0.1.195] - 2026-08-26
+
+### Added
+- **New setting: `public_hostname`** (`daemon/synapse_daemon/boot_config.py`, exposed via
+  `PATCH /api/v1/system/network`, UI in `renderer/components/PhoneAccessPanel.tsx`). Lets
+  an operator who already runs their own stable tunnel or reverse proxy to this daemon (a
+  named cloudflared tunnel, for example) tell Synapse its hostname once. When set, it is
+  used instead of Cloudtap's own auto-generated quick-tunnel for both the MCP connector URL
+  (`GET /api/v1/mcp/connector`) and the remote-access WAN status/verification
+  (`GET /api/v1/remote-access`) -- Cloudtap's tunnel gets a brand new random
+  `*.trycloudflare.com` hostname on every daemon restart, which made the "Connect to
+  Claude / ChatGPT" connector URL something you had to re-copy and re-paste into ChatGPT's
+  connector settings after every restart. Synapse has no way to detect an externally-run
+  named tunnel automatically (it isn't Cloudtap's own child process, so there was nothing
+  to autodetect from) -- this makes it explicit instead. Settings UI gets a "Public
+  hostname (optional)" field right in the MCP connector section, with Save/Clear and a
+  status line showing which source (your hostname vs. Cloudtap vs. none) is currently
+  active.
+
+### Fixed
+- **`renderer/lib/system-client.ts`** -- `patchMcpWrites()` (the "Full access" toggle for
+  the MCP connector) passed an already-`JSON.stringify`'d body into `apiFetch`, which
+  stringifies its `body` argument itself -- double-encoding it into a JSON string literal
+  the server's `NetworkPatch` model can't parse as an object. Every click of that toggle
+  in Settings failed against this call shape. Fixed by passing the plain object, matching
+  every other `patch*` function in this file.
+- **`daemon/synapse_daemon/routes_system.py`** -- `PATCH /system/network`'s response body
+  had a duplicated `mcp_writes_enabled` key (harmless in Python -- the second silently won
+  -- but a sign the block had been edited carelessly before); cleaned up while adding
+  `public_hostname` to the same response.
+
 ## [0.1.194] - 2026-08-25
 
 ### Fixed

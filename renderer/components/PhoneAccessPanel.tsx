@@ -35,7 +35,7 @@ import { canRestart, openExternal, restartApp } from '@shared/electron-bridge';
 import { runToolAction } from '@shared/tools-client';
 import {
   patchNetworkBindLan,
-  patchNetworkWanAutoStart, patchMcpWrites,
+  patchNetworkWanAutoStart, patchMcpWrites, patchPublicHostname,
 } from '@shared/system-client';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -64,6 +64,8 @@ export function PhoneAccessPanel(): JSX.Element {
   const [banner, setBanner] = useState<string | null>(null);
   const [reconnectPreview, setReconnectPreview] = useState<ReconnectPreview | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const [hostnameInput, setHostnameInput] = useState('');
+  const [hostnameDirty, setHostnameDirty] = useState(false);
   const seenEventId = useRef(0);
 
   async function refresh(): Promise<void> {
@@ -128,6 +130,11 @@ export function PhoneAccessPanel(): JSX.Element {
     }
     void refresh();
   }, [recentEvents, status]);
+
+  useEffect(() => {
+    if (hostnameDirty) return;
+    setHostnameInput(mcpInfo?.public_hostname ?? '');
+  }, [mcpInfo?.public_hostname, hostnameDirty]);
 
   const preferredPairUrl = useMemo(() => {
     if (!status) return null;
@@ -203,6 +210,20 @@ export function PhoneAccessPanel(): JSX.Element {
       await refresh();
     } catch (err) {
       setError((err as Error).message || 'Could not update WAN auto-start.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function savePublicHostname(hostname: string): Promise<void> {
+    setBusy('public-hostname');
+    setError(null);
+    try {
+      await patchPublicHostname(hostname);
+      setHostnameDirty(false);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message || 'Could not save the public hostname.');
     } finally {
       setBusy(null);
     }
@@ -764,6 +785,62 @@ export function PhoneAccessPanel(): JSX.Element {
               subtitle='One link. The toggle below decides what it can do right now - flip it and the same URL switches between read-only and full access, no new link to re-paste.'
               icon={Sparkles}
             >
+              <div className='mb-4 space-y-2 rounded-2xl border border-border/70 bg-background/55 p-4'>
+                <p className='text-sm font-medium text-foreground'>Public hostname (optional)</p>
+                <p className='text-xs text-muted-foreground'>
+                  If you already run your own stable tunnel or reverse proxy to this daemon (e.g. a named
+                  cloudflared tunnel), set its hostname here. The connector URL below will use it instead of
+                  Cloudtap&apos;s auto-generated tunnel, which gets a new random address every restart.
+                </p>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <input
+                    type='text'
+                    inputMode='url'
+                    spellCheck={false}
+                    autoCapitalize='off'
+                    autoCorrect='off'
+                    placeholder='e.g. synapse.example.com'
+                    value={hostnameInput}
+                    onChange={(event) => {
+                      setHostnameDirty(true);
+                      setHostnameInput(event.target.value);
+                    }}
+                    className='min-w-0 flex-1 rounded-xl border border-border/70 bg-secondary/30 px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-primary/60'
+                  />
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    disabled={busy === 'public-hostname'}
+                    onClick={() => void savePublicHostname(hostnameInput)}
+                  >
+                    {busy === 'public-hostname' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : null}
+                    Save
+                  </Button>
+                  {mcpInfo?.public_hostname && (
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='text-destructive hover:bg-destructive/10'
+                      disabled={busy === 'public-hostname'}
+                      onClick={() => void savePublicHostname('')}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                {mcpInfo && (
+                  <p className='text-xs text-muted-foreground'>
+                    {mcpInfo.tunnel_source === 'public_hostname'
+                      ? 'Using your custom hostname above.'
+                      : mcpInfo.tunnel_source === 'cloudtap'
+                        ? "Using Cloudtap's auto-generated tunnel -- set a hostname above to use your own instead."
+                        : 'No tunnel is open yet, so no connector URL can be built.'}
+                  </p>
+                )}
+              </div>
+
               {mcpInfo?.connector_url ? (
                 <div className='space-y-3'>
                   <span className='text-xs text-muted-foreground'>
