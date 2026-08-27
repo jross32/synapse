@@ -243,6 +243,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             log_level=args.log_level,
             access_log=False,           # daemon writes its own audit log
             lifespan="on",
+            # Without this, Server.shutdown()'s wait_for has no timeout (defaults to None) and
+            # _wait_tasks_to_complete() loops forever if even one ASGI task never completes --
+            # confirmed live 2026-08-27: the daemon hung indefinitely mid-shutdown twice, process
+            # alive but listener gone, never recovering on its own. This bounds that wait so
+            # uvicorn force-cancels remaining tasks and actually exits.
+            timeout_graceful_shutdown=10,
         )
     finally:
         pm.shutdown()
