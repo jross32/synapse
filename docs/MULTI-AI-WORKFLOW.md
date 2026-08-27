@@ -145,6 +145,15 @@ the *cause* of version collisions, not the fix.
   short handoff note when you finish** so the next agent — possibly a different
   CLI — picks up the thread. This file is the authoritative place two concurrent
   agents agree on lanes, numbering, and commit order.
+- **Durable peer-AI rooms (ADR-0037):** when independent AIs need an ongoing
+  shared conversation instead of only a final handoff, use a project-scoped collaboration
+  room on top of the canonical session registry. Register/resume your normal session first,
+  join with that session id, read the returned goal/summary/peer/message catch-up, then post
+  only explicit status/question/answer/decision/handoff messages. Cursor-sync from
+  `latest_message_id` after each collaboration turn; WebSocket clients see
+  `v1.collaboration.*` live. Rooms communicate -- they do not replace file lanes, squads,
+  project memory, ADRs, or review gates. Never put credentials, secrets, or hidden
+  chain-of-thought in a room.
 - **Build for the AI, not just the human (AGENTS.md Golden rule).** Every new
   capability must be a daemon REST endpoint, advertised in `endpoints_for_ai`
   (`routes_ai.py` → `GET /api/v1/ai/context`), and documented in
