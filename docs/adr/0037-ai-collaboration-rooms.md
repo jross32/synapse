@@ -85,7 +85,7 @@ Write-enabled connector only:
 
 ## Persistence
 
-Migration 035 adds:
+Migration 036 adds:
 
 - `collaboration_rooms`
 - `collaboration_room_members`
