@@ -25,11 +25,16 @@
 # hostname never changes across a restart of *this* watchdog's own logic --
 # that is the whole point of the named tunnel over the old quick-tunnel.
 #
-# Self-terminating by design, same rule as daemon-watchdog.ps1: if the daemon
-# itself is not running at all (nothing listening on -Port), this assumes
-# Synapse was stopped on purpose and exits quietly rather than fighting an
-# intentional shutdown. Running a tunnel with nothing behind it to proxy to
-# would be pointless anyway.
+# Self-terminating by design, same rule as daemon-watchdog.ps1, WITH the same
+# one-extra-window patience added 2026-08-27: if the daemon isn't listening,
+# this could be Synapse stopped on purpose, or it could be daemon-watchdog.ps1
+# mid its own (now automatic) recovery from an unexplained daemon exit -- the
+# two look identical from here. So on first reaching the absence threshold,
+# this resets and keeps watching for one more full threshold window rather than
+# exiting immediately; only a SECOND consecutive threshold-crossing with no
+# daemon sighting in between is treated as a real, sustained stop. Running a
+# tunnel with nothing behind it to proxy to would still be pointless, but it's
+# cheap to wait one more cycle before concluding that's actually the situation.
 #
 # Run standalone or let dev.ps1 spawn it automatically alongside the daemon:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tunnel-watchdog.ps1
@@ -125,6 +130,10 @@ Write-TunnelWatchdogLog "started -- watching tunnel '$TunnelName' every ${Interv
 $consecutiveFailures = 0
 $wasReachable = $true
 $consecutiveAbsent = 0
+# Mirrors daemon-watchdog.ps1's $autoRestartOnAbsenceUsed: reset to $false the
+# moment the daemon is seen listening again, so a recurring mystery-death still
+# gets a full extra window of patience every time it happens.
+$extendedGraceUsed = $false
 
 while ($true) {
   Start-Sleep -Seconds $IntervalSeconds
@@ -141,11 +150,18 @@ while ($true) {
       $consecutiveAbsent += 1
       Write-TunnelWatchdogLog "no daemon listening on port $Port ($consecutiveAbsent/$FailureThreshold) -- may just be mid-restart"
       if ($consecutiveAbsent -ge $FailureThreshold) {
-        Write-TunnelWatchdogLog "daemon absent for $consecutiveAbsent consecutive checks -- Synapse appears intentionally stopped, tunnel watchdog exiting"
-        $exitRequested = $true
+        if (-not $extendedGraceUsed) {
+          $extendedGraceUsed = $true
+          $consecutiveAbsent = 0
+          Write-TunnelWatchdogLog "daemon absent for $FailureThreshold consecutive checks -- giving it one more full window in case daemon-watchdog is mid its own auto-recovery, not exiting yet"
+        } else {
+          Write-TunnelWatchdogLog "daemon absent again with no sighting in between -- already used this cycle's extra patience, treating as a real intentional stop, tunnel watchdog exiting"
+          $exitRequested = $true
+        }
       }
     } else {
       $consecutiveAbsent = 0
+      $extendedGraceUsed = $false
       $tunnelPid = Get-TunnelProcessId -TunnelName $TunnelName
       $reachable = Test-TunnelReachable -Url $PublicUrl -TimeoutSeconds $CheckTimeoutSeconds
 

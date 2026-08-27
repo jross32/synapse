@@ -12,11 +12,22 @@
 # full-stack loop) or by hand:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/daemon-watchdog.ps1
 #
-# Self-terminating by design: if no process is listening on -Port at all, this
-# assumes the daemon was stopped on purpose (Ctrl+C, taskkill, script exit) and
-# exits quietly rather than trying to resurrect an intentionally-stopped daemon.
-# That means nothing needs to remember to kill the watchdog when the daemon
-# stops -- it notices on its own next poll.
+# Self-terminating by design, WITH one automatic recovery attempt first: if no
+# process is listening on -Port, this could be an intentional stop (Ctrl+C,
+# taskkill, script exit) -- but it could also be the daemon dying on its own for
+# an unknown reason, which happened for real and repeatedly on 2026-08-27 (five
+# times in one session, ~15-45 minutes apart, the daemon serving fine each time
+# right up until it silently exited). A genuine intentional stop and a mystery
+# self-exit look identical from here: "port absent, no explanation". So on first
+# detecting absence, this now attempts ONE automatic relaunch (same as a wedged-
+# daemon restart) rather than assuming intent immediately. That retry budget
+# resets the moment the daemon is next seen healthy -- so a real recurring
+# mystery-death gets relaunched every time it happens, but if the daemon dies
+# again without ever coming back healthy in between (a real crash-loop, or a
+# human stopping it right after this watchdog's own restart), THAT second
+# disappearance is treated as intentional and this exits for good. That means
+# nothing needs to remember to kill the watchdog after a genuine, sustained stop
+# -- it still notices and steps aside on its own within one extra restart cycle.
 #
 # NOTE: restarting the daemon opens a brand-new Cloudtap WAN tunnel with a new
 # random hostname (this is existing, unrelated daemon behavior, not something
@@ -90,6 +101,28 @@ function Test-DaemonHealthy {
   }
 }
 
+function Start-Daemon {
+  # Shared launch step for both recovery paths (kill-and-relaunch a wedged
+  # daemon, and relaunch-with-nothing-to-kill after an unexplained disappearance).
+  # Isolated in its own try/catch for the same reason as the rest of this script:
+  # a launch failure must never propagate up and silently kill the watchdog loop.
+  $daemonArgs = @('-m', 'synapse_daemon', '--port', "$Port", '--data-dir', $DataDir)
+  if ($BindLan) {
+    $daemonArgs += '--bind-lan'
+  }
+  $argsJoined = $daemonArgs -join ' '
+  $wrapped = "python $argsJoined >> `"$logPath`" 2>&1"
+  try {
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d', '/c', $wrapped) `
+      -WorkingDirectory $root -WindowStyle Hidden -PassThru
+    Write-WatchdogLog "relaunched daemon as PID $($proc.Id)"
+    return $proc.Id
+  } catch {
+    Write-WatchdogLog "relaunch failed: $($_.Exception.Message) -- will retry from the next health check"
+    return $null
+  }
+}
+
 function Restart-WedgedDaemon {
   param([int]$Port, [int]$OwnerPid)
 
@@ -125,21 +158,21 @@ function Restart-WedgedDaemon {
     Write-WatchdogLog "could not write restart marker to $logPath (non-fatal): $($_.Exception.Message)"
   }
 
-  $daemonArgs = @('-m', 'synapse_daemon', '--port', "$Port", '--data-dir', $DataDir)
-  if ($BindLan) {
-    $daemonArgs += '--bind-lan'
-  }
-  $argsJoined = $daemonArgs -join ' '
-  $wrapped = "python $argsJoined >> `"$logPath`" 2>&1"
+  return Start-Daemon
+}
+
+function Restart-AbsentDaemon {
+  # Nothing to kill here -- the port is already unowned. Just relaunch and log a
+  # marker distinct from the wedged-daemon path so the log honestly reflects
+  # which recovery path fired.
+  Write-WatchdogLog "no process on port $Port after $consecutiveAbsent consecutive checks -- attempting one automatic relaunch before assuming this was intentional"
   try {
-    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d', '/c', $wrapped) `
-      -WorkingDirectory $root -WindowStyle Hidden -PassThru
-    Write-WatchdogLog "relaunched daemon as PID $($proc.Id)"
-    return $proc.Id
+    Add-Content -Path $logPath -Value ""
+    Add-Content -Path $logPath -Value "=== WATCHDOG RESTART: port $Port unexpectedly unowned, relaunching (auto-recovery attempt) ==="
   } catch {
-    Write-WatchdogLog "relaunch failed: $($_.Exception.Message) -- will retry from the next health check"
-    return $null
+    Write-WatchdogLog "could not write restart marker to $logPath (non-fatal): $($_.Exception.Message)"
   }
+  return Start-Daemon
 }
 
 Write-WatchdogLog "started -- watching port $Port every ${IntervalSeconds}s (threshold: $FailureThreshold consecutive failures, ${HealthTimeoutSeconds}s timeout per check)"
@@ -169,6 +202,12 @@ $graceOwnerPid = $null
 # same consecutive-check threshold already used for health-check failures before
 # concluding this is real.
 $consecutiveAbsent = 0
+# Tracks whether this watchdog has already used its one auto-relaunch-on-absence
+# attempt since the daemon was last confirmed healthy. Reset to $false the moment
+# a health check succeeds, so a recurring mystery-death (the 2026-08-27 pattern)
+# gets a fresh retry every time -- only two disappearances IN A ROW with no
+# healthy check in between reads as a real, sustained stop.
+$autoRestartOnAbsenceUsed = $false
 
 while ($true) {
   Start-Sleep -Seconds $IntervalSeconds
@@ -195,8 +234,15 @@ while ($true) {
         $consecutiveAbsent += 1
         Write-WatchdogLog "no process listening on port $Port ($consecutiveAbsent/$FailureThreshold) -- may just be a slow restart"
         if ($consecutiveAbsent -ge $FailureThreshold) {
-          Write-WatchdogLog "port $Port absent for $consecutiveAbsent consecutive checks -- daemon appears intentionally stopped, watchdog exiting"
-          $exitRequested = $true
+          if (-not $autoRestartOnAbsenceUsed) {
+            $autoRestartOnAbsenceUsed = $true
+            $graceOwnerPid = Restart-AbsentDaemon
+            $graceDeadline = (Get-Date).AddSeconds($GraceSeconds)
+            $consecutiveAbsent = 0
+          } else {
+            Write-WatchdogLog "port $Port absent again with no healthy check in between -- already used this cycle's auto-relaunch, treating as a real intentional stop, watchdog exiting"
+            $exitRequested = $true
+          }
         }
       }
     } else {
@@ -209,6 +255,7 @@ while ($true) {
         }
         $consecutiveFailures = 0
         $wasHealthy = $true
+        $autoRestartOnAbsenceUsed = $false
       } else {
         $wasHealthy = $false
         $consecutiveFailures += 1
