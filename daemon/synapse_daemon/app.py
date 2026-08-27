@@ -38,6 +38,7 @@ from .runtime_paths import bundled_dist_dir, bundled_mobile_dir, bundled_tools_d
 from .routes_ai import build_ai_router
 from .routes_ai_bundles import build_ai_bundles_router
 from .routes_ai_factory import build_ai_factory_router
+from .chatgpt_child_agents import ChatGPTBrowserPool
 from .routes_agent_squads import (
     WorkerPresenceRegistry,
     WorkerTimeoutRegistry,
@@ -71,6 +72,7 @@ from .routes_activity import build_activity_router
 from .routes_capture import build_capture_router
 from .routes_coordination import build_coordination_router
 from .routes_collaboration_rooms import build_collaboration_rooms_router
+from .routes_chatgpt_workers import build_chatgpt_workers_router
 from .routes_token_ledger import build_token_ledger_router
 from .routes_thread_presence import build_thread_presence_router
 from .routes_installed_pages import build_installed_pages_router
@@ -413,6 +415,8 @@ def build_app(
     app.state.worker_timeout_registry = worker_timeout_registry
     worker_presence_registry = WorkerPresenceRegistry()
     app.state.worker_presence_registry = worker_presence_registry
+    chatgpt_child_pool = ChatGPTBrowserPool(storage.data_dir)
+    app.state.chatgpt_child_pool = chatgpt_child_pool
     app.include_router(
         build_pty_router(pty_manager),
         prefix=API_PREFIX,
@@ -488,6 +492,7 @@ def build_app(
             lambda: f"http://127.0.0.1:{getattr(app.state, 'bound_port', 7878)}/api/v1",
             worker_timeout_registry,
             worker_presence_registry,
+            chatgpt_child_pool,
         ),
         prefix=API_PREFIX,
         dependencies=[token_guard],
@@ -554,6 +559,11 @@ def build_app(
     # Project-scoped AI collaboration rooms -- explicit peer messages + presence (ADR-0037).
     app.include_router(
         build_collaboration_rooms_router(storage, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    app.include_router(
+        build_chatgpt_workers_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -770,6 +780,7 @@ def build_app(
     async def _cancel_worker_timeouts() -> None:
         worker_timeout_registry.cancel_all()
         worker_presence_registry.cancel_all()
+        await chatgpt_child_pool.close()
 
     app.router.on_shutdown.append(_cancel_worker_timeouts)
 

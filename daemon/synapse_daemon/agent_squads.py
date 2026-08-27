@@ -216,6 +216,10 @@ class AgentWorkItemLaunchRequest(BaseModel):
     execution_mode: AgentExecutionMode | None = None
     authority: AgentExecutionAuthority = AgentExecutionAuthority.WORKSPACE
     timeout_seconds: int = Field(default=1800, ge=30, le=86400)
+    # Same-work-item retries resume their existing ChatGPT UI chat automatically.
+    # A distinct related work item may opt into the same worker by naming the
+    # work item whose conversation should be reused. Never infer this semantically.
+    reuse_chat_from_work_item_id: str | None = None
     source: AuditSource = AuditSource.DESKTOP
 
 

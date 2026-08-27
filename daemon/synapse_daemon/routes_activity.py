@@ -20,6 +20,9 @@ from fastapi import APIRouter, Query
 from . import activity
 from . import agent_squads as squads
 from . import coordination as coord
+from . import chatgpt_worker_chats
+from . import collaboration_rooms
+from . import projects as projects_module
 from . import connection_codes
 from . import token_ledger
 from .api_versions import event_name
@@ -34,8 +37,26 @@ def build_activity_router(storage: Storage, bus: EventBus | None = None) -> APIR
 
     def _session_view(session: coord.AgentSession) -> dict[str, Any]:
         connection = connection_codes.get(session.connection_code)
+        project_name = None
+        if session.project_id:
+            try:
+                project_name = projects_module.get(storage.conn, session.project_id).name
+            except Exception:
+                project_name = session.project_id
+        worker_chat = None
+        row = storage.conn.execute(
+            "SELECT id FROM chatgpt_worker_chats WHERE last_session_id = ? "
+            "ORDER BY last_used_at DESC LIMIT 1",
+            (session.id,),
+        ).fetchone()
+        if row is not None:
+            worker_chat = chatgpt_worker_chats.get_chat(
+                storage.conn, str(row["id"])
+            ).model_dump(mode="json")
         return {
             **session.model_dump(mode="json"),
+            "project_name": project_name,
+            "chatgpt_worker": worker_chat,
             "connection_help": {
                 "title": connection.title,
                 "explanation": connection.explanation,
@@ -189,9 +210,29 @@ def build_activity_router(storage: Storage, bus: EventBus | None = None) -> APIR
             squad_ids=[str(view["squad"]["id"]) for view in squad_views],
             limit=300,
         )
+        worker_chats = []
+        collaboration = []
+        if session.project_id:
+            worker_chats = [
+                item.model_dump(mode="json")
+                for item in chatgpt_worker_chats.list_chats(
+                    storage.conn,
+                    project_id=session.project_id,
+                    include_archived=True,
+                )
+                if item.owner_session_id == session.id
+            ]
+            collaboration = [
+                room.model_dump(mode="json")
+                for room in collaboration_rooms.list_rooms(
+                    storage.conn, project_id=session.project_id
+                )
+            ]
         return {
             "session": _session_view(session),
             "squads": squad_views,
+            "chatgpt_workers": worker_chats,
+            "collaboration_rooms": collaboration,
             "notifications": notifications,
             "journal": [event.model_dump(mode="json") for event in journal],
             "goals": [

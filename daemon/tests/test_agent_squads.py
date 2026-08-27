@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from synapse_daemon import agent_squads, routes_agent_squads
+from synapse_daemon import agent_squads, chatgpt_child_agents, coordination, routes_agent_squads
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -1416,3 +1416,126 @@ def test_gemini_automatic_launch_maps_authority_to_approval_mode(tmp_path: Path)
         # Headless, or a spawned worker waits forever for a human.
         assert "--prompt" in argv
         assert "explicit handoff" in argv[-1]
+
+
+def test_chatgpt_parent_forces_online_chat_child_and_never_spawns_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    with app.state.storage.transaction() as conn:
+        parent = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="demo-project",
+                runtime_id="chatgpt",
+                agent_label="GPT-5.6 Sol parent",
+                task="Own the child-agent squad",
+            ),
+        )
+
+    monkeypatch.setattr(
+        routes_agent_squads.activity_module,
+        "_owner_session_id_for_squad",
+        lambda _conn, _squad_id: parent.id,
+    )
+
+    async def fake_run_child(
+        worker_id: str,
+        prompt: str,
+        *,
+        timeout: float,
+        conversation_url: str | None = None,
+        desired_title: str = "",
+    ):
+        assert worker_id
+        assert conversation_url is None
+        assert "Review" in desired_title
+        assert "ChatGPT UI child-agent rules" in prompt
+        assert "Do not delegate work to Claude, Codex, Copilot, Gemini" in prompt
+        assert timeout == 180
+        return chatgpt_child_agents.ChatGPTChildResult(
+            worker_id=worker_id,
+            ok=True,
+            reply="ChatGPT UI child finished the review.",
+            conversation_url="https://chatgpt.com/c/child-proof",
+        )
+
+    monkeypatch.setattr(app.state.chatgpt_child_pool, "run_child", fake_run_child)
+
+    async def forbidden_pty_spawn(**_kwargs):
+        raise AssertionError("ChatGPT child must never spawn a CLI/PTy runtime")
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", forbidden_pty_spawn)
+
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(
+            c,
+            squad["id"],
+            title="Review with a ChatGPT UI child",
+            assigned_role_id="reviewer",
+        )
+
+        rejected = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={
+                "preferred_runtime": "codex",
+                "execution_mode": "automatic",
+                "timeout_seconds": 180,
+                "open_in_tab": False,
+            },
+        )
+        assert rejected.status_code == 409, rejected.text
+        assert rejected.json()["code"] == "agent_runtime.conflict"
+        assert rejected.json()["details"]["required_runtime"] == "chatgpt_web"
+
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={
+                "execution_mode": "automatic",
+                "timeout_seconds": 180,
+                "open_in_tab": False,
+            },
+        )
+        assert launched.status_code == 200, launched.text
+        payload = launched.json()
+        assert payload["runtime"] == "chatgpt_web"
+        assert payload["browser_runtime"] is True
+        assert payload["worker_chat_id"]
+        assert "Review" in payload["worker_chat_title"]
+        assert payload["worker_chat_reused"] is False
+
+        deadline = time.time() + 2
+        current = None
+        while time.time() < deadline:
+            current = c.get(
+                f"/api/v1/agent-squads/{squad['id']}"
+            ).json()["work_items"][0]
+            if current["status"] != "running":
+                break
+            time.sleep(0.02)
+
+        assert current is not None
+        assert current["status"] == "handoff"
+        assert current["preferred_runtime"] == "chatgpt_web"
+        assert current["summary_md"] == "ChatGPT UI child finished the review."
+        worker = c.get(f"/api/v1/chatgpt-workers/{payload['worker_chat_id']}")
+        assert worker.status_code == 200, worker.text
+        worker_body = worker.json()
+        assert worker_body["status"] == "idle"
+        assert worker_body["conversation_url"] == "https://chatgpt.com/c/child-proof"
+        assert item["id"] in worker_body["work_item_ids"]
+
+        children = c.get(
+            "/api/v1/coordination/sessions",
+            params={"project_id": "demo-project", "include_gone": True},
+        ).json()
+        web_children = [
+            session
+            for session in children
+            if session["parent_session_id"] == parent.id
+            and session["runtime_id"] == "chatgpt_web"
+        ]
+        assert len(web_children) == 1
+        assert web_children[0]["seq"] is None
