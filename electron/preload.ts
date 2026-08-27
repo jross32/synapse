@@ -11,6 +11,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 const DAEMON_BASE = 'http://localhost:7878';
 
 contextBridge.exposeInMainWorld('synapse', {
+  /** Tell the main process React completed its first renderer commit. */
+  reportRendererReady: (): void => ipcRenderer.send('synapse:renderer-ready'),
+
   /** UI version string baked into the Electron bundle. */
   version: (): string => process.env.npm_package_version ?? '',
 
@@ -56,6 +59,7 @@ contextBridge.exposeInMainWorld('synapse', {
 declare global {
   interface Window {
     synapse: {
+      reportRendererReady: () => void;
       version: () => string;
       daemonBase: () => string;
       daemonWsBase: () => string;

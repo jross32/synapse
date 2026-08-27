@@ -1,6 +1,6 @@
 // Synapse app shell -- grouped hubs, installed pages, and responsive desktop/mobile nav.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp } from 'lucide-react';
 
 import { DaemonProvider, useDaemon } from '@shared/daemon-context';
@@ -39,6 +39,7 @@ import {
 import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
+import { reportRendererReady } from '@shared/electron-bridge';
 import { CaptureButton } from './components/CaptureButton';
 import { NotificationCenter } from './components/NotificationCenter';
 import { CommandPalette } from './components/CommandPalette';
@@ -48,20 +49,45 @@ import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
 import { HomePage } from './pages/Home';
-import { LiveViewPage } from './pages/LiveView';
-import { AppsPage } from './pages/Apps';
-import { ToolsPage } from './pages/Tools';
-import { AiCodingPage } from './pages/AiCoding';
-import { AiFactoryPage } from './pages/AiFactory';
-import { WhatsnewPage } from './pages/Whatsnew';
-import { SettingsPage } from './pages/Settings';
-import { WebScraperPage } from './pages/WebScraper';
-import { McpServerPage } from './pages/McpServerPage';
+
+const LiveViewPage = lazy(() =>
+  import('./pages/LiveView').then((module) => ({ default: module.LiveViewPage }))
+);
+const AppsPage = lazy(() =>
+  import('./pages/Apps').then((module) => ({ default: module.AppsPage }))
+);
+const ToolsPage = lazy(() =>
+  import('./pages/Tools').then((module) => ({ default: module.ToolsPage }))
+);
+const AiCodingPage = lazy(() =>
+  import('./pages/AiCoding').then((module) => ({ default: module.AiCodingPage }))
+);
+const AiFactoryPage = lazy(() =>
+  import('./pages/AiFactory').then((module) => ({ default: module.AiFactoryPage }))
+);
+const WhatsnewPage = lazy(() =>
+  import('./pages/Whatsnew').then((module) => ({ default: module.WhatsnewPage }))
+);
+const SettingsPage = lazy(() =>
+  import('./pages/Settings').then((module) => ({ default: module.SettingsPage }))
+);
+const WebScraperPage = lazy(() =>
+  import('./pages/WebScraper').then((module) => ({ default: module.WebScraperPage }))
+);
+const McpServerPage = lazy(() =>
+  import('./pages/McpServerPage').then((module) => ({ default: module.McpServerPage }))
+);
 
 export default function App(): JSX.Element {
   const mobileRoute = isMobileRoute();
   const [authMode, setAuthMode] = useState<RuntimeAuthMode | 'booting'>('booting');
   const handlingUnauthorized = useRef(false);
+
+  // Report a real renderer milestone: React completed its first commit.
+  // Browser/Playwright runs have no Electron preload bridge, so this is a no-op there.
+  useEffect(() => {
+    reportRendererReady();
+  }, []);
 
   useEffect(() => {
     applyTheme(getStoredTheme());
@@ -170,6 +196,14 @@ function PortablePreferencesBridge(): null {
   }, [profile, refreshProfile]);
 
   return null;
+}
+
+function RouteFallback(): JSX.Element {
+  return (
+    <div className='flex min-h-[240px] items-center justify-center text-sm text-muted-foreground'>
+      Loading this Synapse view...
+    </div>
+  );
 }
 
 function BootSplash(): JSX.Element {
@@ -466,9 +500,10 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               mobileRoute && 'pb-44'
             )}
           >
-            {route.kind === 'core' && route.page === 'home' && (
-              <HomePage onNavigate={navigate} />
-            )}
+            <Suspense fallback={<RouteFallback />}>
+              {route.kind === 'core' && route.page === 'home' && (
+                <HomePage onNavigate={navigate} />
+              )}
             {route.kind === 'core' && route.page === 'apps' && (
               <AppsPage initialSection={appsSection} />
             )}
@@ -515,6 +550,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
                 }
               />
             )}
+            </Suspense>
           </div>
         </main>
 

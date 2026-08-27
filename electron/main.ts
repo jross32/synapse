@@ -706,19 +706,46 @@ async function applyBootstrapAiBundles(): Promise<void> {
 // ── window + tray ─────────────────────────────────────────────────────────
 function createWindow(): void {
   let interfaceReady = false;
-  // A cold development restart may need to rebuild the renderer before the
-  // first document can load. Keep the packaged-app diagnostic tight, but do
-  // not flash a false SYN-BOOT-202 while Vite is still legitimately warming.
-  const interfaceReadyTimeoutMs = isDev ? 45_000 : 20_000;
-  const interfaceReadyTimer = setTimeout(() => {
-    if (interfaceReady || !currentRestartProgress) return;
-    setRestartStage(
-      'interface',
-      'error',
-      `The interface did not become ready within ${interfaceReadyTimeoutMs / 1000} seconds.`,
-      'SYN-BOOT-202'
-    );
-  }, interfaceReadyTimeoutMs);
+  let interfaceDocumentLoaded = false;
+  let interfaceReadyTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // SYN-BOOT-202 is a post-load renderer-readiness diagnostic. It previously
+  // started before BrowserWindow navigation, so a slow but healthy Vite transform
+  // pass could consume the whole budget and be mislabeled as "loaded but not ready."
+  const rendererReadyTimeoutMs = 20_000;
+
+  const clearInterfaceReadyTimer = (): void => {
+    if (interfaceReadyTimer !== null) {
+      clearTimeout(interfaceReadyTimer);
+      interfaceReadyTimer = null;
+    }
+  };
+
+  const markInterfaceReady = (): void => {
+    if (interfaceReady) return;
+    interfaceReady = true;
+    clearInterfaceReadyTimer();
+    mainWindow?.show();
+    setRestartStage('interface', 'success', 'The Synapse interface is loaded and visible.');
+    finishRestartWindow();
+  };
+
+  const armRendererReadyTimeout = (): void => {
+    if (interfaceReady || !interfaceDocumentLoaded || interfaceReadyTimer !== null) return;
+    interfaceReadyTimer = setTimeout(() => {
+      interfaceReadyTimer = null;
+      if (interfaceReady || !currentRestartProgress) return;
+      setRestartStage(
+        'interface',
+        'error',
+        'The interface document loaded, but the renderer did not report ready within ' +
+          rendererReadyTimeoutMs / 1000 +
+          ' seconds.',
+        'SYN-BOOT-202'
+      );
+    }, rendererReadyTimeoutMs);
+  };
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -737,19 +764,25 @@ function createWindow(): void {
     },
   });
 
-  // Contract #2 — hide-to-tray, only the tray menu's Quit actually exits.
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
     }
   });
+
+  const onRendererReady = (event: Electron.IpcMainEvent): void => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+    markInterfaceReady();
+  };
+  ipcMain.on('synapse:renderer-ready', onRendererReady);
+
   mainWindow.on('closed', () => {
+    ipcMain.removeListener('synapse:renderer-ready', onRendererReady);
     mainWindow = null;
-    clearTimeout(interfaceReadyTimer);
+    clearInterfaceReadyTimer();
   });
 
-  // External links open in the user's browser, not in an Electron window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
@@ -758,37 +791,24 @@ function createWindow(): void {
   mainWindow.webContents.on(
     'did-fail-load',
     (_event, code, description, validatedURL, isMainFrame) => {
-      if (code === -3) return; // navigation superseded/aborted
-      // `did-fail-load` fires for subframes too. Live View's app preview iframes a
-      // Synapse-launched project on localhost, so a project that simply isn't running
-      // would otherwise mark the whole interface stage failed with SYN-BOOT-201 -- a
-      // false red on a perfectly healthy restart. Only the top-level document decides
-      // whether the interface loaded.
+      if (code === -3) return;
       if (!isMainFrame) return;
       setRestartStage(
         'interface',
         'error',
-        `Interface load failed (${code}).`,
+        'Interface load failed (' + code + ').',
         'SYN-BOOT-201',
-        validatedURL ? `${description} (${validatedURL})` : description
+        validatedURL ? description + ' (' + validatedURL + ')' : description
       );
     }
   );
 
-  const markInterfaceReady = (): void => {
-    if (interfaceReady) return;
-    interfaceReady = true;
-    clearTimeout(interfaceReadyTimer);
-    mainWindow?.show();
-    setRestartStage('interface', 'success', 'The Synapse interface is loaded and visible.');
-    finishRestartWindow();
-  };
-  // `ready-to-show` is the preferred first-paint signal. Development restarts
-  // can occasionally finish navigation without emitting it while the window is
-  // initially hidden, so a successful document load is an idempotent fallback.
-  // Register both before navigation begins so neither event can be missed.
-  mainWindow.once('ready-to-show', markInterfaceReady);
-  mainWindow.webContents.once('did-finish-load', markInterfaceReady);
+  // Document completion only starts the 202 clock. The React tree must send the
+  // explicit preload IPC signal before the interface is considered ready.
+  mainWindow.webContents.once('did-finish-load', () => {
+    interfaceDocumentLoaded = true;
+    armRendererReadyTimeout();
+  });
 
   const loadPromise = isDev
     ? loadDevServerWithRetry(mainWindow, 'http://localhost:5173')

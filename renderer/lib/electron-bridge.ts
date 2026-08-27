@@ -4,6 +4,7 @@
 // (Vite dev / Playwright), where window.synapse is undefined.
 
 interface SynapseBridge {
+  reportRendererReady?: () => void;
   version: () => string;
   daemonBase: () => string;
   daemonWsBase: () => string;
@@ -19,6 +20,10 @@ interface SynapseBridge {
 
 function bridge(): SynapseBridge | null {
   return (window as unknown as { synapse?: SynapseBridge }).synapse ?? null;
+}
+
+export function reportRendererReady(): void {
+  bridge()?.reportRendererReady?.();
 }
 
 export function hasElectronBridge(): boolean {
