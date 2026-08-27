@@ -736,7 +736,7 @@ def build_app(
     # /api/v1 and NOT behind the global token guard -- claude.ai POSTs to
     # https://<cloudtap-tunnel>/mcp/<token> and the path token is the secret
     # (validated inside the router). Read-only by default.
-    app.include_router(build_mcp_router(storage, tool_registry, auth))
+    app.include_router(build_mcp_router(storage, tool_registry, auth, bus))
     # Authed helper so the desktop UI can show + copy the ready-made connector URL.
     app.include_router(
         build_mcp_info_router(storage, tool_registry, auth),
