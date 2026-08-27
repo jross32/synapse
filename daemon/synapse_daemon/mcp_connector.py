@@ -637,7 +637,7 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "url": {"type": "string"},
                             "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "description": "Default GET."},
                             "json_body": {"type": "object", "description": "Optional JSON request body."},
-                            "timeout_seconds": {"type": "integer", "description": "Default 60."},
+                            "timeout_seconds": {"type": "integer", "description": "Default 60, capped at 90 regardless -- this blocks a shared worker thread for the full duration, so a large value here can stall other tool calls."},
                         },
                         "required": ["url"],
                         "additionalProperties": False,
@@ -690,7 +690,7 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "server": {"type": "string", "description": "Server id, e.g. reflex"},
                             "tool": {"type": "string", "description": "Tool name on that server."},
                             "arguments": {"type": "object", "description": "Arguments for that tool."},
-                            "timeout_seconds": {"type": "integer", "description": "Default 120."},
+                            "timeout_seconds": {"type": "integer", "description": "Default 120, capped at 90 regardless -- this blocks a shared worker thread for the full duration, so a large value here can stall other tool calls."},
                         },
                         "required": ["server", "tool"],
                         "additionalProperties": False,
@@ -749,6 +749,15 @@ _COMMAND_JOB_MAX_AGE_SECONDS = 3600  # prune finished jobs after an hour so this
 # synapse_run_command's own hard ceiling -- see the comment at its call site for why this is
 # far below the 900s it used to allow.
 _SYNC_RUN_TIMEOUT_MAX = 90
+
+# synapse_http and synapse_call_mcp_tool/synapse_list_mcp_tools have the same failure mode as
+# synapse_run_command above: each blocks a shared asyncio.to_thread worker for however long the
+# caller's timeout_seconds says, with no ceiling. Six concurrent MCP sessions each issuing one
+# uncapped call is enough to exhaust that shared executor, which then silently stalls every other
+# MCP tool dispatch -- including trivial ones -- with no error and no visibility (confirmed live
+# 2026-08-26: exactly this symptom, root-caused after Cloudflare tunnel + daemon health both ruled
+# out). Same ceiling as synapse_run_command for the same reason.
+_BLOCKING_CALL_TIMEOUT_MAX = 90
 
 
 def _prune_old_command_jobs() -> None:
@@ -1235,7 +1244,8 @@ def build_mcp_router(
                 headers={"Content-Type": "application/json"} if data else {})
             try:
                 with urllib.request.urlopen(
-                        request, timeout=int(args.get("timeout_seconds") or 60)) as resp:
+                        request,
+                        timeout=min(int(args.get("timeout_seconds") or 60), _BLOCKING_CALL_TIMEOUT_MAX)) as resp:
                     return {"ok": True, "status": resp.status,
                             "body": resp.read().decode("utf-8", "replace")[:40000]}
             except urllib.error.HTTPError as exc:
@@ -1269,7 +1279,7 @@ def build_mcp_router(
                 raise ValueError(
                     f"{server_id} uses {server.transport} transport, which is not proxied.")
 
-            timeout = int(args.get("timeout_seconds") or 120)
+            timeout = min(int(args.get("timeout_seconds") or 120), _BLOCKING_CALL_TIMEOUT_MAX)
             speak = _http_mcp if server.transport == "http" else _stdio_mcp
             if name == "synapse_list_mcp_tools":
                 reply = speak(server, "tools/list", {}, timeout)
