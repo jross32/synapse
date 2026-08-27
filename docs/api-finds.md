@@ -71,6 +71,7 @@ These two endpoints exist specifically to help an AI understand what it is looki
 - `tools` — installed tools with id, name, version, runnable, description, and action list
 - `sessions` — live PTY sessions (session_id, argv, cwd, started_at, exit_code)
 - `agent_squads` — all squads with embedded work items
+- `collaboration_rooms` — open project-scoped peer-AI rooms (goal, pinned summary, status)
 - `ai_cases` — all AI OS cases with status, phase, blocking gate count
 - `coder_threads` — all coder threads across all projects with last message preview
 - `benchmark_runs` — benchmark runs with attempt gate count
@@ -165,6 +166,11 @@ Daemon replies `{"type": "pong"}`.
 | `v1.coordination.session_heartbeat` | complete session: id, task, last_intent, status, connection, timestamps |
 | `v1.coordination.session_ended` | session_id |
 | `v1.coordination.lane_*` | lane details |
+| `v1.collaboration.room_created` | room |
+| `v1.collaboration.room_updated` | room |
+| `v1.collaboration.room_joined` | room_id, project_id, session_id |
+| `v1.collaboration.message_posted` | room_id, message |
+| `v1.collaboration.room_left` | room_id, session_id |
 | `v1.profile.updated` | fields |
 | `v1.profile.sync.updated` | sync state |
 | `v1.service_connection.updated` | provider |
@@ -566,6 +572,41 @@ If any gates have `status=open` and `blocking=true`, you cannot complete.
 | DELETE | `/project-versions/{id}` | Delete version entry |
 
 ### 5K. Multi-AI Coordination
+
+### Collaboration rooms (ADR-0037)
+
+Rooms are the durable peer-to-peer collaboration layer on top of the canonical
+`agent_sessions` presence registry. They do **not** spawn workers and they do not
+capture private hidden chain-of-thought.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/collaboration/rooms?project_id=<id>` | List open rooms (optionally include archived). |
+| `POST` | `/collaboration/rooms` | Create a project-scoped room with goal + optional pinned summary. |
+| `PATCH` | `/collaboration/rooms/{room_id}` | Update name/goal/summary/status. |
+| `POST` | `/collaboration/rooms/{room_id}/join` | Join with an existing session id and receive the complete catch-up packet. |
+| `POST` | `/collaboration/rooms/{room_id}/messages` | Post an explicit message/status/handoff/decision/question/answer. |
+| `GET` | `/collaboration/rooms/{room_id}/sync?after_message_id=<cursor>` | Read presence + only messages newer than a cursor (0 = recent tail). |
+| `DELETE` | `/collaboration/rooms/{room_id}/members/{session_id}` | Leave while preserving history. |
+
+Room membership must match the session's registered project. Live room presence is
+derived from the same 90-second `agent_sessions` heartbeat/stale truth used by
+coordination, so there is no second presence system to drift.
+
+REST and MCP room writes publish `v1.collaboration.*` events to the existing EventBus.
+A WebSocket client therefore sees room activity live. The current Synapse MCP transport
+is request/response rather than server-push, so MCP-only AIs should call
+`synapse_sync_collaboration_room` when joining/resuming and after collaboration turns.
+
+MCP discovery:
+- read-only: `synapse_list_collaboration_rooms`, `synapse_sync_collaboration_room`
+- write-enabled: `synapse_create_collaboration_room`,
+  `synapse_join_collaboration_room`, `synapse_post_collaboration_message`,
+  `synapse_leave_collaboration_room`
+
+Never put credentials, secrets, or hidden chain-of-thought in a room. Share deliberate
+reasoning summaries, evidence, decisions, questions, blockers and handoffs instead.
+
 
 Designed for multiple AI agents running concurrently to avoid file conflicts.
 **Use these when working alongside another AI session on the same project.**

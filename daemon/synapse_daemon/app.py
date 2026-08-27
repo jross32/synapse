@@ -70,6 +70,7 @@ from .routes_search import build_search_router
 from .routes_activity import build_activity_router
 from .routes_capture import build_capture_router
 from .routes_coordination import build_coordination_router
+from .routes_collaboration_rooms import build_collaboration_rooms_router
 from .routes_token_ledger import build_token_ledger_router
 from .routes_installed_pages import build_installed_pages_router
 from .routes_mcp_servers import build_mcp_servers_router
@@ -248,6 +249,7 @@ def build_app(
                 "benchmarks": "benchmarks",
                 "ai-bundles": "AI bundles",
                 "capture": "project memory capture",
+                "collaboration": "AI collaboration rooms",
             }
             label = labels.get(root, root.replace("-", " "))
             succeeded = response.status_code < 400
@@ -257,7 +259,7 @@ def build_app(
                 else _activity.ActivityJournalCategory.SEARCH
                 if root == "search"
                 else _activity.ActivityJournalCategory.SQUAD
-                if root in {"agent-squads", "agent-work-items"}
+                if root in {"agent-squads", "agent-work-items", "collaboration"}
                 else _activity.ActivityJournalCategory.TOOL
             )
             status = (
@@ -548,6 +550,12 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    # Project-scoped AI collaboration rooms -- explicit peer messages + presence (ADR-0037).
+    app.include_router(
+        build_collaboration_rooms_router(storage, bus),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
     # Per-work-item token accounting -- squad-worker token roll-up (ADR-0025).
     app.include_router(
         build_token_ledger_router(storage),
@@ -728,7 +736,7 @@ def build_app(
     # /api/v1 and NOT behind the global token guard -- claude.ai POSTs to
     # https://<cloudtap-tunnel>/mcp/<token> and the path token is the secret
     # (validated inside the router). Read-only by default.
-    app.include_router(build_mcp_router(storage, tool_registry, auth))
+    app.include_router(build_mcp_router(storage, tool_registry, auth, bus))
     # Authed helper so the desktop UI can show + copy the ready-made connector URL.
     app.include_router(
         build_mcp_info_router(storage, tool_registry, auth),
