@@ -35,6 +35,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__
 from . import agent_squads as squads
+from . import collaboration_rooms as collaboration_rooms_module
 from . import project_records as records
 from . import projects as projects_module
 from . import quality_os
@@ -44,6 +45,8 @@ from .quick_actions import load_templates
 from . import skill_packs
 from .storage import Storage
 from .tools_registry import ToolRegistry
+from .api_versions import event_name
+from .ws import EventBus
 
 # A recent MCP protocol revision. We echo the client's requested version when
 # it sends one (forward-compatible), else fall back to this.
@@ -215,6 +218,8 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_get_skill_pack": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_agent_squads": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_sessions": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_collaboration_rooms": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_sync_collaboration_room": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_recent_activity": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_quality_summary": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_watch_repo": {"readOnlyHint": True, "idempotentHint": False},
@@ -236,6 +241,14 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                              "idempotentHint": False},
     "synapse_add_work_item": {"readOnlyHint": False, "destructiveHint": False,
                               "idempotentHint": False},
+    "synapse_create_collaboration_room": {"readOnlyHint": False, "destructiveHint": False,
+                                          "idempotentHint": False},
+    "synapse_join_collaboration_room": {"readOnlyHint": False, "destructiveHint": False,
+                                        "idempotentHint": False},
+    "synapse_post_collaboration_message": {"readOnlyHint": False, "destructiveHint": False,
+                                           "idempotentHint": False},
+    "synapse_leave_collaboration_room": {"readOnlyHint": False, "destructiveHint": False,
+                                         "idempotentHint": False},
     "synapse_report_playbook_status": {"readOnlyHint": False, "destructiveHint": False,
                                        "idempotentHint": False},
     # -- writes that can overwrite or replace content that already exists --
@@ -352,6 +365,39 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
         {
+            "name": "synapse_list_collaboration_rooms",
+            "description": (
+                "List durable AI collaboration rooms. Rooms are project-scoped shared channels layered "
+                "on the existing Synapse session/presence system; they do not spawn workers."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Optional project id filter."},
+                    "include_archived": {"type": "boolean", "description": "Default false."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_sync_collaboration_room",
+            "description": (
+                "Catch up on one collaboration room: pinned goal/summary, current members/presence, "
+                "and recent or cursor-new explicit messages. Call this when joining/resuming and "
+                "periodically while collaborating; Synapse WebSocket clients receive the same changes live."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "room_id": {"type": "string"},
+                    "after_message_id": {"type": "integer", "minimum": 0, "description": "Return only messages newer than this cursor; default 0 returns the recent tail."},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Default 50."},
+                },
+                "required": ["room_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "synapse_recent_activity",
             "description": (
                 "Recent AI-activity feed: what the AIs driving Synapse just did (sessions connecting, "
@@ -460,6 +506,73 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "assigned_role_id": {"type": "string", "description": "Role id, e.g. 'implementer' / 'reviewer'."},
                         },
                         "required": ["squad_id", "title"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_create_collaboration_room",
+                    "description": (
+                        "Create a durable project-scoped AI collaboration room. This only creates shared "
+                        "coordination state; it never launches or controls an AI process."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "goal_md": {"type": "string"},
+                            "summary_md": {"type": "string", "description": "Pinned catch-up summary for late joiners."},
+                            "created_by_session_id": {"type": "string", "description": "Optional existing Synapse session id."},
+                        },
+                        "required": ["project_id", "name"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_join_collaboration_room",
+                    "description": (
+                        "Join an existing room using an already-registered Synapse session. Returns the "
+                        "full catch-up packet immediately: room goal/summary, current peer presence and recent messages."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "room_id": {"type": "string"},
+                            "session_id": {"type": "string"},
+                            "role_label": {"type": "string", "description": "Optional room-specific role, e.g. backend/tester/reviewer."},
+                        },
+                        "required": ["room_id", "session_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_post_collaboration_message",
+                    "description": (
+                        "Post an explicit peer collaboration message to a room. Kinds support status, "
+                        "question/answer, decision and handoff. Never post private hidden chain-of-thought or secrets."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "room_id": {"type": "string"},
+                            "session_id": {"type": "string"},
+                            "body_md": {"type": "string"},
+                            "kind": {"type": "string", "enum": ["message", "status", "handoff", "decision", "question", "answer"], "description": "Default message."},
+                        },
+                        "required": ["room_id", "session_id", "body_md"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_leave_collaboration_room",
+                    "description": "Leave a collaboration room while preserving its durable message history.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "room_id": {"type": "string"},
+                            "session_id": {"type": "string"},
+                        },
+                        "required": ["room_id", "session_id"],
                         "additionalProperties": False,
                     },
                 },
@@ -801,8 +914,19 @@ def build_mcp_router(
     storage: Storage,
     registry: ToolRegistry,
     auth: AuthManager,
+    bus: EventBus | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
+    event_loop: asyncio.AbstractEventLoop | None = None
+
+    def _emit_collaboration_event(verb: str, payload: dict[str, Any]) -> None:
+        """Best-effort bridge from the connector worker thread to the daemon event loop."""
+        if bus is None or event_loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
+            bus.publish(event_name("collaboration", verb), payload),
+            event_loop,
+        )
 
     def writes_allowed() -> bool:
         return _writes_allowed(storage.data_dir)
@@ -866,6 +990,27 @@ def build_mcp_router(
                 }
                 for s in _coordination.list_all_sessions(storage.conn)[:25]
             ]
+        if name == "synapse_list_collaboration_rooms":
+            project_id = str(args.get("project_id") or "").strip() or None
+            include_archived = bool(args.get("include_archived", False))
+            return [
+                room.model_dump(mode="json")
+                for room in collaboration_rooms_module.list_rooms(
+                    storage.conn,
+                    project_id=project_id,
+                    include_archived=include_archived,
+                )
+            ]
+        if name == "synapse_sync_collaboration_room":
+            room_id = str(args.get("room_id") or "").strip()
+            if not room_id:
+                raise ValueError("room_id is required")
+            return collaboration_rooms_module.sync_room(
+                storage.conn,
+                room_id,
+                after_message_id=max(0, int(args.get("after_message_id") or 0)),
+                limit=max(1, min(int(args.get("limit") or 50), 200)),
+            ).model_dump(mode="json")
         if name == "synapse_recent_activity":
             from . import activity as _activity
 
@@ -927,6 +1072,75 @@ def build_mcp_router(
                 "writes_enabled": writes_allowed(),
                 "hint": "Use synapse_get_project_records for project decisions and synapse_get_skill_pack for reusable AI instructions.",
             }
+        if name == "synapse_create_collaboration_room":
+            _require_writes()
+            payload = collaboration_rooms_module.CollaborationRoomCreate(
+                project_id=str(args.get("project_id") or ""),
+                name=str(args.get("name") or ""),
+                goal_md=str(args.get("goal_md") or ""),
+                summary_md=str(args.get("summary_md") or ""),
+                created_by_session_id=(
+                    str(args.get("created_by_session_id") or "").strip() or None
+                ),
+            )
+            with storage.transaction() as conn:
+                room = collaboration_rooms_module.create_room(conn, payload)
+            dumped = room.model_dump(mode="json")
+            _emit_collaboration_event("room_created", {"room": dumped})
+            return dumped
+        if name == "synapse_join_collaboration_room":
+            _require_writes()
+            room_id = str(args.get("room_id") or "").strip()
+            if not room_id:
+                raise ValueError("room_id is required")
+            payload = collaboration_rooms_module.CollaborationRoomJoin(
+                session_id=str(args.get("session_id") or ""),
+                role_label=str(args.get("role_label") or ""),
+            )
+            with storage.transaction() as conn:
+                synced = collaboration_rooms_module.join_room(conn, room_id, payload)
+            dumped = synced.model_dump(mode="json")
+            _emit_collaboration_event(
+                "room_joined",
+                {
+                    "room_id": room_id,
+                    "project_id": synced.room.project_id,
+                    "session_id": payload.session_id,
+                },
+            )
+            return dumped
+        if name == "synapse_post_collaboration_message":
+            _require_writes()
+            room_id = str(args.get("room_id") or "").strip()
+            if not room_id:
+                raise ValueError("room_id is required")
+            payload = collaboration_rooms_module.CollaborationRoomPost(
+                session_id=str(args.get("session_id") or ""),
+                body_md=str(args.get("body_md") or ""),
+                kind=collaboration_rooms_module.CollaborationMessageKind(
+                    str(args.get("kind") or "message")
+                ),
+            )
+            with storage.transaction() as conn:
+                message = collaboration_rooms_module.post_message(conn, room_id, payload)
+            dumped = message.model_dump(mode="json")
+            _emit_collaboration_event(
+                "message_posted", {"room_id": room_id, "message": dumped}
+            )
+            return dumped
+        if name == "synapse_leave_collaboration_room":
+            _require_writes()
+            room_id = str(args.get("room_id") or "").strip()
+            session_id = str(args.get("session_id") or "").strip()
+            if not room_id or not session_id:
+                raise ValueError("room_id and session_id are required")
+            with storage.transaction() as conn:
+                member = collaboration_rooms_module.leave_room(conn, room_id, session_id)
+            dumped = member.model_dump(mode="json")
+            _emit_collaboration_event(
+                "room_left", {"room_id": room_id, "session_id": session_id}
+            )
+            return dumped
         if name == "synapse_add_project_idea":
             if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
@@ -1374,6 +1588,8 @@ def build_mcp_router(
 
     @router.post("/mcp/{token}", response_model=None)
     async def mcp_post(token: str, request: Request) -> Response:
+        nonlocal event_loop
+        event_loop = asyncio.get_running_loop()
         if not auth.local_token or token != auth.local_token:
             return JSONResponse(
                 _error(None, -32001, "Unauthorized"), status_code=401

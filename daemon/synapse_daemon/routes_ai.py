@@ -34,6 +34,7 @@ from . import local_models as local_models_module
 from . import ai_executions as ai_executions_module
 from . import mcp_servers as mcp_servers_module
 from . import quality_os as quality_os_module
+from . import collaboration_rooms as collaboration_rooms_module
 from .ai_context_memory import ai_context_metadata
 from .files_storage import list_for_project
 from .storage import Storage
@@ -639,6 +640,10 @@ def build_ai_router(
             "sessions": sessions,
             "ai_activity": activity_block,
             "agent_squads": agent_squads,
+            "collaboration_rooms": [
+                room.model_dump(mode="json")
+                for room in collaboration_rooms_module.list_rooms(storage.conn)[:20]
+            ],
             "ai_cases": ai_cases,
             "coder_threads": coder_threads,
             "benchmark_runs": benchmark_runs,
@@ -819,6 +824,11 @@ def build_ai_router(
                     "purpose": "coordinate with other AI sessions on this repo (ADR-0024): register presence, claim advisory file lanes, check path overlaps, detect git collisions, and get the true next-free migration/ADR number from disk",
                     "method": "GET | POST | PATCH | DELETE",
                     "path": "/api/v1/coordination/sessions | /coordination/sessions/{id} | /coordination/lanes | /coordination/overlap | /coordination/snapshot | /coordination/detect-collisions | /coordination/next-numbers",
+                },
+                {
+                    "purpose": "collaborate with peer AIs in a durable project room (ADR-0037): create/list rooms, join using an existing Synapse session, receive goal/summary/member/message catch-up, post explicit status/questions/decisions/handoffs, leave, and cursor-sync new messages",
+                    "method": "GET | POST | PATCH | DELETE",
+                    "path": "/api/v1/collaboration/rooms | /collaboration/rooms/{id} | /join | /messages | /members/{session_id} | /sync?after_message_id={cursor}",
                 },
                 {
                     "purpose": "keep the operator-facing Live View current with structured plans, deliberate reasoning summaries, decisions, actions, evidence, blockers, squad/reviewer state, MCP/tool receipts, and an editable milestone list; never send secrets or private hidden chain-of-thought",
