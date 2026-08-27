@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.199`
+`0.1.200`
+
+> **The staged coordination gate authenticates by default again (2026-08-26):**
+> `scripts/coordination-preflight.ps1 -Staged` now falls back to the trusted-local
+> `data/auth-token` when no explicit `-Token` / `SYNAPSE_LOCAL_TOKEN` is supplied. The ordinary
+> documented invocation therefore reaches `/api/v1/coordination/overlap` instead of receiving 401
+> and silently degrading to numbering-only. A real PowerShell/fake-daemon regression test proves
+> the token is sent, staged paths are checked, and the credential is not printed.
 
 > **Home launch conflicts now reconcile backend truth (2026-08-26):** the featured-app launch catch path now refetches the project after any launch failure and upserts the returned backend state. Live proof used RackPilot already listening on port 5089 outside the daemon process table: the card began `not running`, the real launch POST returned the expected 409 after marking RackPilot launched, the follow-up GET returned 200, and the same card changed to `running`; the sole 5089 listener remained the original external process. Renderer-only HMR verification; the Synapse daemon and named tunnel were not restarted or touched.
 

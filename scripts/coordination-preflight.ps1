@@ -44,6 +44,22 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
+# The documented invocation does not require callers to manually plumb the daemon token.
+# Prefer an explicit -Token / SYNAPSE_LOCAL_TOKEN, then fall back to the trusted-local
+# token file used by the rest of Synapse. Never print the token itself.
+if ([string]::IsNullOrWhiteSpace($Token)) {
+  $localTokenPath = Join-Path $repoRoot 'data/auth-token'
+  if (Test-Path -LiteralPath $localTokenPath) {
+    try {
+      $fileToken = (Get-Content -LiteralPath $localTokenPath -Raw -ErrorAction Stop).Trim()
+      if (-not [string]::IsNullOrWhiteSpace($fileToken)) { $Token = $fileToken }
+    } catch {
+      Write-Host ("Could not read the trusted-local Synapse token ({0}); coordination may be unavailable." -f `
+        $_.Exception.Message) -ForegroundColor Yellow
+    }
+  }
+}
+
 function Get-NextNumber {
   param([string]$Dir, [string]$Filter, [string]$Regex)
   $max = 0

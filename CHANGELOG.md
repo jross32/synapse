@@ -10,6 +10,20 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.200] - 2026-08-26
+
+### Fixed
+- **The staged multi-AI coordination gate authenticates itself again**
+  (`scripts/coordination-preflight.ps1`) -- the documented `-Staged` invocation previously
+  relied only on `-Token` / `SYNAPSE_LOCAL_TOKEN`; when neither was manually supplied it sent
+  no `X-Synapse-Token`, received 401 from the live daemon, and silently degraded to the numbering
+  check instead of checking file-lane overlap. It now resolves the same trusted-local
+  `data/auth-token` used by Synapse when no explicit token is present, without printing the token.
+  Added an end-to-end regression test with a temporary Git repo and authenticated fake overlap
+  endpoint that proves the normal invocation sends the token, submits the staged paths, reaches
+  the real overlap branch, and does not leak the credential.
+
+
 ## [0.1.199] - 2026-08-26
 
 ### Fixed
