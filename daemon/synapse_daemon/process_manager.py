@@ -330,10 +330,25 @@ class ProcessManager:
     # ── watcher (Contract #18 crash detection + auto-restart) ────────────
 
     async def _watch(self, project_id: str, proc: subprocess.Popen) -> None:
-        """Await a child's exit; classify it as expected vs unexpected."""
+        """Await a child's exit; classify it as expected vs unexpected.
+
+        Polls in short slices rather than one indefinite proc.wait() -- a managed child can
+        run for days, so this can't have an overall ceiling, but cancelling this task (daemon
+        shutdown) must actually free the worker thread. asyncio.to_thread(proc.wait) with no
+        timeout does not: cancelling the await doesn't stop the thread, which then blocks
+        forever exactly as long as the child (deliberately left alive) does -- confirmed live
+        2026-08-27 as the cause of the daemon hanging indefinitely after ASGI shutdown otherwise
+        completed cleanly (that stuck thread then wedges shutdown_default_executor()'s 300s join
+        and, after that, threading._shutdown() with no timeout at all).
+        """
 
         try:
-            exit_code = await asyncio.to_thread(proc.wait)
+            while True:
+                try:
+                    exit_code = await asyncio.to_thread(proc.wait, 1.0)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
         except asyncio.CancelledError:
             return
 
