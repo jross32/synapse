@@ -357,6 +357,138 @@ def test_drive_capture_note(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert res.json()["result"]["isError"] is False, res.text
 
 
+def test_collaboration_room_mcp_round_trip_and_event_bridge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    from synapse_daemon import coordination
+
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    storage = client.app.state.storage
+    with storage.transaction() as conn:
+        claude = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="demo-project",
+                runtime_id="claude",
+                agent_label="Claude",
+            ),
+        )
+        codex = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="demo-project",
+                runtime_id="codex",
+                agent_label="Codex",
+            ),
+        )
+
+    names = {
+        t["name"]
+        for t in _rpc(client, token, "tools/list").json()["result"]["tools"]
+    }
+    assert {
+        "synapse_list_collaboration_rooms",
+        "synapse_sync_collaboration_room",
+        "synapse_create_collaboration_room",
+        "synapse_join_collaboration_room",
+        "synapse_post_collaboration_message",
+        "synapse_leave_collaboration_room",
+    } <= names
+
+    created = _rpc(
+        client,
+        token,
+        "tools/call",
+        {
+            "name": "synapse_create_collaboration_room",
+            "arguments": {
+                "project_id": "demo-project",
+                "name": "Release room",
+                "goal_md": "Collaborate on the release.",
+                "created_by_session_id": claude.id,
+            },
+        },
+    ).json()["result"]
+    assert created["isError"] is False, created
+    room = json.loads(created["content"][0]["text"])
+
+    joined = _rpc(
+        client,
+        token,
+        "tools/call",
+        {
+            "name": "synapse_join_collaboration_room",
+            "arguments": {
+                "room_id": room["id"],
+                "session_id": claude.id,
+                "role_label": "backend",
+            },
+        },
+    ).json()["result"]
+    assert joined["isError"] is False, joined
+
+    posted = _rpc(
+        client,
+        token,
+        "tools/call",
+        {
+            "name": "synapse_post_collaboration_message",
+            "arguments": {
+                "room_id": room["id"],
+                "session_id": claude.id,
+                "kind": "handoff",
+                "body_md": "Routes are ready for review.",
+            },
+        },
+    ).json()["result"]
+    assert posted["isError"] is False, posted
+
+    caught_up = _rpc(
+        client,
+        token,
+        "tools/call",
+        {
+            "name": "synapse_join_collaboration_room",
+            "arguments": {
+                "room_id": room["id"],
+                "session_id": codex.id,
+                "role_label": "reviewer",
+            },
+        },
+    ).json()["result"]
+    sync = json.loads(caught_up["content"][0]["text"])
+    assert {m["session_id"] for m in sync["members"] if m["present"]} == {
+        claude.id,
+        codex.id,
+    }
+    assert sync["messages"][-1]["body_md"] == "Routes are ready for review."
+
+    event_names = [event.name for event in client.app.state.bus.replay_since(0)]
+    assert "v1.collaboration.room_created" in event_names
+    assert "v1.collaboration.room_joined" in event_names
+    assert "v1.collaboration.message_posted" in event_names
+
+
+def test_read_only_mcp_can_sync_rooms_but_cannot_join(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+    names = {
+        t["name"]
+        for t in _rpc(
+            client, token, "tools/list", url_suffix="?mode=read"
+        ).json()["result"]["tools"]
+    }
+    assert "synapse_list_collaboration_rooms" in names
+    assert "synapse_sync_collaboration_room" in names
+    assert "synapse_join_collaboration_room" not in names
+
+
+
 # -- AI activity read tools (ADR-0028 Phase 6) --------------------------------
 
 def test_activity_read_tools_are_always_available(tmp_path: Path) -> None:
