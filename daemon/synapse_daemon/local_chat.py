@@ -42,6 +42,14 @@ from .local_agent import (
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 
+# _pump()'s urlopen(timeout=600) bounds each individual socket read, not the total stream
+# duration -- as long as Ollama emits at least one line every <600s, the executor thread it
+# runs on stays alive indefinitely. That thread can't be cancelled once started (only the
+# asyncio.Task awaiting it can be), so a stream that outlives daemon shutdown wedges process
+# exit exactly like the two other unbounded-thread bugs fixed 2026-08-27. This caps the whole
+# stream's wall-clock duration regardless of how often it emits.
+MAX_STREAM_SECONDS = 240.0
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -347,13 +355,17 @@ async def stream_reply(
         queue: asyncio.Queue = asyncio.Queue()
 
         def _pump() -> None:
+            deadline = time.monotonic() + MAX_STREAM_SECONDS
             try:
                 req = urllib.request.Request(
                     f"{OLLAMA_URL}/api/chat",
                     data=json.dumps(payload).encode("utf-8"),
                     headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(req, timeout=600) as resp:
+                with urllib.request.urlopen(req, timeout=30) as resp:
                     for raw in resp:
+                        if time.monotonic() > deadline:
+                            raise TimeoutError(
+                                f"chat stream exceeded {MAX_STREAM_SECONDS:.0f}s total")
                         line = raw.decode("utf-8").strip()
                         if line:
                             queue.put_nowait(json.loads(line))

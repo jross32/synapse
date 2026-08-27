@@ -195,7 +195,15 @@ class Workspace:
         model to avoid it.
         """
         full_spec = f"{self.task_context}\n\n{spec}" if self.task_context else spec
-        code = generate_code(full_spec, model=coder_model or DEFAULT_CODER_MODEL)
+        # Deliberately shorter than generate_code()'s own 900s default: this path runs
+        # synchronously inside a live request/chat turn via asyncio.to_thread, so its
+        # blocking urlopen call is still holding an uncancellable executor thread if the
+        # daemon tries to shut down mid-call. 900s is nearly 3x the ~310s shutdown budget
+        # (10s graceful timeout + asyncio's 300s default-executor-join); a plain batch/
+        # pipeline caller that's expected to run long standalone can still ask for the
+        # full 900s explicitly.
+        code = generate_code(full_spec, model=coder_model or DEFAULT_CODER_MODEL,
+                              timeout=INTERACTIVE_CODER_TIMEOUT)
         if code.startswith("ERROR:"):
             return code
         p = self._resolve(path)
@@ -235,6 +243,9 @@ class Workspace:
 # Measured on this machine: qwen2.5-coder:3b writes correct code for every benchmark task
 # AND fits entirely in 6 GB of VRAM at ~15 tok/s. The 7B is no more correct and spills to CPU.
 DEFAULT_CODER_MODEL = "qwen2.5-coder:3b"
+
+# See write_code()'s call site for why this differs from generate_code()'s own 900s default.
+INTERACTIVE_CODER_TIMEOUT = 180.0
 
 
 def generate_code(spec: str, model: str = DEFAULT_CODER_MODEL, timeout: float = 900.0,
