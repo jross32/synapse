@@ -54,6 +54,7 @@ returns like any other rung; it's promotable into the default ladder once proven
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,45 @@ _SEND_BUTTON_SELECTOR = 'button[data-testid="send-button"]'
 _STOP_BUTTON_SELECTOR = 'button[data-testid="stop-button"], button[aria-label*="Stop" i]'
 _COMPOSER_SELECTOR = '#prompt-textarea, div[contenteditable="true"]'
 _ASSISTANT_MESSAGE_SELECTOR = '[data-message-author-role="assistant"]'
+
+_WORKED_FOR_RE = re.compile(
+    r"\bworked\s+for\s+(?:(?P<hours>\d+)h\s*)?"
+    r"(?:(?P<minutes>\d+)m\s*)?(?:(?P<seconds>\d+)s)?\b",
+    re.IGNORECASE,
+)
+
+
+def parse_worked_for_seconds(text: str) -> float | None:
+    """Parse ChatGPT/agent UI timing such as Worked for 3m 8s.
+
+    The observer treats this as a preferred display-derived duration. If the
+    UI omits it or changes format, callers fall back to the controller's
+    wall-clock measurement rather than inventing a value.
+    """
+    matches = list(_WORKED_FOR_RE.finditer(text or ""))
+    if not matches:
+        return None
+    match = matches[-1]
+    hours = int(match.group("hours") or 0)
+    minutes = int(match.group("minutes") or 0)
+    seconds = int(match.group("seconds") or 0)
+    total = hours * 3600 + minutes * 60 + seconds
+    return float(total) if total >= 0 else None
+
+
+async def extract_worked_for_seconds(page: Any) -> float | None:
+    """Best-effort read of the most recent visible Worked for UI text."""
+    try:
+        messages = page.locator(_ASSISTANT_MESSAGE_SELECTOR)
+        count = await messages.count()
+        if count:
+            value = parse_worked_for_seconds(await messages.nth(count - 1).inner_text())
+            if value is not None:
+                return value
+        return parse_worked_for_seconds(await page.locator("body").inner_text())
+    except Exception:  # noqa: BLE001 -- timing metadata must never break useful work
+        return None
+
 
 _LENGTH_LIMIT_TEXT = "reached the maximum length for this conversation"
 """Substring of OpenAI's own message when a conversation hits its hard length ceiling. Lower-

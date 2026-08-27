@@ -72,6 +72,7 @@ from .routes_capture import build_capture_router
 from .routes_coordination import build_coordination_router
 from .routes_collaboration_rooms import build_collaboration_rooms_router
 from .routes_token_ledger import build_token_ledger_router
+from .routes_thread_presence import build_thread_presence_router
 from .routes_installed_pages import build_installed_pages_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .mcp_servers import McpServerManager
@@ -559,6 +560,12 @@ def build_app(
     # Per-work-item token accounting -- squad-worker token roll-up (ADR-0025).
     app.include_router(
         build_token_ledger_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Durable AI thread presence + cumulative turn-time accounting.
+    app.include_router(
+        build_thread_presence_router(storage, bus),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

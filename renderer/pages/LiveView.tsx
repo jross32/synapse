@@ -57,6 +57,7 @@ import { cn } from '@shared/utils';
 import { AppPreview, previewUrl } from '../components/AppPreview';
 import { renderInlineBold } from '../components/InlineBold';
 import { PageHeader } from '../components/PageHeader';
+import { ThreadPresencePanel } from '../components/ThreadPresencePanel';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Modal } from '../components/ui/modal';
@@ -705,6 +706,8 @@ export function LiveViewPage(): JSX.Element {
           </div>
         }
       />
+
+      <ThreadPresencePanel />
 
       <div className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row'>
         <Card className='flex max-h-48 min-h-0 shrink-0 flex-col overflow-hidden p-0 lg:max-h-none lg:w-64'>
