@@ -21,6 +21,7 @@ project memory or a child prompt.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,8 @@ class ChatGPTChildResult:
     conversation_url: str = ""
     title_renamed: bool = False
     chatgpt_project_name: str = WORKER_PROJECT_NAME
+    wall_clock_seconds: float = 0.0
+    ui_duration_seconds: float | None = None
 
 
 def profile_dir(data_dir: Path) -> Path:
@@ -349,10 +352,12 @@ class ChatGPTBrowserPool:
         conversation_url: str | None = None,
         desired_title: str = "",
     ) -> ChatGPTChildResult:
+        started = time.monotonic()
         result = ChatGPTChildResult(worker_id=worker_id)
         start_error = await self._ensure_started()
         if start_error:
             result.error = start_error
+            result.wall_clock_seconds = round(max(0.0, time.monotonic() - started), 3)
             return result
 
         launch_url = read_connector_launch_url(self.data_dir)
@@ -408,6 +413,12 @@ class ChatGPTBrowserPool:
             result.error = f"{type(exc).__name__}: {exc}"
             return result
         finally:
+            result.wall_clock_seconds = round(max(0.0, time.monotonic() - started), 3)
+            if result.ok:
+                try:
+                    result.ui_duration_seconds = await browser_runtime.extract_worked_for_seconds(page)
+                except Exception:
+                    result.ui_duration_seconds = None
             self._pages.pop(worker_id, None)
             try:
                 await page.close()

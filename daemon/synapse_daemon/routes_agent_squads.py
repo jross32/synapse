@@ -44,6 +44,7 @@ from .api_versions import event_name
 from .auth import AuthManager
 from .audit import AuditRecord, audit
 from . import token_ledger
+from . import thread_presence
 from .errors import SynapseError, conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
@@ -335,7 +336,47 @@ def build_agent_squads_router(
         timeout_seconds: int,
     ) -> None:
         result = None
+        tracked_thread_id = ""
+        tracked_turn_id = ""
+        tracked_task_title = ""
         with storage.transaction() as conn:
+            work_item = squads.get_work_item(conn, work_item_id)
+            squad = squads.get_squad(conn, work_item.squad_id)
+            request_group = thread_presence.ensure_external_group(
+                conn,
+                squad.project_id,
+                external_group_key=f"squad:{squad.id}",
+                name=squad.name,
+                description=squad.goal_md,
+            )
+            tracked, _, _ = thread_presence.bootstrap_thread(
+                conn,
+                thread_presence.ThreadBootstrap(
+                    project_id=squad.project_id,
+                    external_thread_key=f"chatgpt-worker:{worker_chat_id}",
+                    runtime_id="chatgpt_web",
+                    source=thread_presence.ThreadSource.MANAGED_BROWSER,
+                    conversation_url=conversation_url,
+                    title=worker_chat_title,
+                    description=work_item.instructions_md,
+                    current_task=work_item.title,
+                    session_id=coordination_session_id,
+                    work_group_id=request_group.id,
+                ),
+            )
+            if tracked is None:
+                raise RuntimeError("Managed ChatGPT worker could not bootstrap thread presence.")
+            tracked_thread_id = tracked.id
+            tracked_task_title = work_item.title
+            turn = thread_presence.begin_turn(
+                conn,
+                tracked.id,
+                thread_presence.ThreadBegin(
+                    prompt_label=work_item.title,
+                    current_task=work_item.title,
+                ),
+            )
+            tracked_turn_id = turn.id
             chatgpt_worker_chats.mark_active(
                 conn,
                 worker_chat_id,
@@ -362,6 +403,15 @@ def build_agent_squads_router(
                         )
                     else:
                         updated_session = current_session
+                    if tracked_thread_id:
+                        thread_presence.heartbeat_thread(
+                            conn,
+                            tracked_thread_id,
+                            thread_presence.ThreadHeartbeat(
+                                status=thread_presence.ThreadStatus.ACTIVE,
+                                current_task=tracked_task_title,
+                            ),
+                        )
                 await bus.publish(
                     event_name("coordination", "session_heartbeat"),
                     {"session": updated_session.model_dump(mode="json")},
@@ -409,18 +459,56 @@ def build_agent_squads_router(
                 exit_code=0 if result.ok else 1,
                 work_outcome=current.status.value,
             )
+            final_conversation_url = result.conversation_url or conversation_url or ""
+            if tracked_thread_id:
+                thread_presence.heartbeat_thread(
+                    conn,
+                    tracked_thread_id,
+                    thread_presence.ThreadHeartbeat(
+                        status=thread_presence.ThreadStatus.ACTIVE,
+                        current_task=tracked_task_title,
+                        conversation_url=final_conversation_url,
+                        title=worker_chat_title,
+                    ),
+                )
+                duration = (
+                    result.ui_duration_seconds
+                    if result.ui_duration_seconds is not None
+                    else result.wall_clock_seconds
+                )
+                duration_source = (
+                    thread_presence.DurationSource.UI_DISPLAY
+                    if result.ui_duration_seconds is not None
+                    else thread_presence.DurationSource.WALL_CLOCK
+                )
+                thread_presence.finish_turn(
+                    conn,
+                    tracked_thread_id,
+                    thread_presence.ThreadFinish(
+                        turn_id=tracked_turn_id,
+                        status=(
+                            thread_presence.TurnStatus.SUCCESS
+                            if result.ok
+                            else thread_presence.TurnStatus.ERROR
+                        ),
+                        duration_seconds=max(0.0, float(duration or 0.0)),
+                        duration_source=duration_source,
+                        summary_md=(result.reply or "")[:12000],
+                        error=(result.error or "")[:8000],
+                    ),
+                )
             if result.ok:
                 chatgpt_worker_chats.mark_idle(
                     conn,
                     worker_chat_id,
-                    conversation_url=result.conversation_url or conversation_url or None,
+                    conversation_url=final_conversation_url or None,
                     title=worker_chat_title,
                 )
             else:
                 chatgpt_worker_chats.mark_failed(
                     conn,
                     worker_chat_id,
-                    conversation_url=result.conversation_url or conversation_url or None,
+                    conversation_url=final_conversation_url or None,
                 )
             try:
                 coordination.end_session(conn, coordination_session_id)

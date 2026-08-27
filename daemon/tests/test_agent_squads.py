@@ -1459,6 +1459,8 @@ def test_chatgpt_parent_forces_online_chat_child_and_never_spawns_cli(
             ok=True,
             reply="ChatGPT UI child finished the review.",
             conversation_url="https://chatgpt.com/c/child-proof",
+            wall_clock_seconds=190.0,
+            ui_duration_seconds=188.0,
         )
 
     monkeypatch.setattr(app.state.chatgpt_child_pool, "run_child", fake_run_child)
@@ -1526,6 +1528,21 @@ def test_chatgpt_parent_forces_online_chat_child_and_never_spawns_cli(
         assert worker_body["status"] == "idle"
         assert worker_body["conversation_url"] == "https://chatgpt.com/c/child-proof"
         assert item["id"] in worker_body["work_item_ids"]
+
+        timing = c.get("/api/v1/thread-presence/overview")
+        assert timing.status_code == 200, timing.text
+        timing_body = timing.json()
+        assert timing_body["counts"]["threads"] == 1
+        assert timing_body["total_work_seconds"] == 188
+        request_group = timing_body["groups"][0]
+        assert request_group["name"] == squad["name"]
+        assert request_group["external_group_key"] == f"squad:{squad['id']}"
+        assert request_group["total_work_seconds"] == 188
+        tracked_thread = request_group["threads"][0]
+        assert tracked_thread["title"] == payload["worker_chat_title"]
+        assert tracked_thread["turn_count"] == 1
+        assert tracked_thread["total_work_seconds"] == 188
+        assert tracked_thread["display_status"] == "idle"
 
         children = c.get(
             "/api/v1/coordination/sessions",

@@ -8,6 +8,7 @@
 CREATE TABLE ai_work_groups (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    external_group_key TEXT NOT NULL DEFAULT '',
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active'
@@ -19,6 +20,10 @@ CREATE TABLE ai_work_groups (
 
 CREATE INDEX idx_ai_work_groups_project
     ON ai_work_groups(project_id, updated_at DESC);
+
+CREATE UNIQUE INDEX idx_ai_work_groups_external
+    ON ai_work_groups(project_id, external_group_key)
+    WHERE external_group_key != '';
 
 CREATE TABLE ai_threads (
     id TEXT PRIMARY KEY,

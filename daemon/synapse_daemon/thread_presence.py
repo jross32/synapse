@@ -78,6 +78,7 @@ class TurnStatus(str, Enum):
 class WorkGroup(BaseModel):
     id: str
     project_id: str
+    external_group_key: str = ""
     name: str
     description: str = ""
     status: str = "active"
@@ -417,6 +418,7 @@ def create_group(
     *,
     name: str,
     description: str = "",
+    external_group_key: str = "",
 ) -> WorkGroup:
     group_id = _new_id()
     now = to_iso(utc_now())
@@ -425,11 +427,53 @@ def create_group(
         raise invalid("ai_work_group", "Group name is required.")
     conn.execute(
         "INSERT INTO ai_work_groups "
-        "(id, project_id, name, description, status, created_at, updated_at, metadata_json) "
-        "VALUES (?, ?, ?, ?, 'active', ?, ?, '{}')",
-        (group_id, project_id, clean_name, _clean(description), now, now),
+        "(id, project_id, external_group_key, name, description, status, created_at, updated_at, metadata_json) "
+        "VALUES (?, ?, ?, ?, ?, 'active', ?, ?, '{}')",
+        (group_id, project_id, _clean(external_group_key), clean_name, _clean(description), now, now),
     )
     return get_group(conn, group_id)
+
+
+def ensure_external_group(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    external_group_key: str,
+    name: str,
+    description: str = "",
+) -> WorkGroup:
+    """Get/create a stable project/request group owned by another Synapse primitive.
+
+    Managed ChatGPT workers use a squad-prefixed key so every worker in the same
+    squad contributes to one request total without semantic guessing.
+    """
+
+    key = _clean(external_group_key)
+    if not key:
+        return create_group(conn, project_id, name=name, description=description)
+    row = conn.execute(
+        "SELECT id FROM ai_work_groups WHERE project_id = ? AND external_group_key = ?",
+        (project_id, key),
+    ).fetchone()
+    if row is not None:
+        group = get_group(conn, str(row["id"]))
+        clean_name = _clean(name)
+        clean_description = _clean(description)
+        if clean_name != group.name or clean_description != group.description:
+            now = to_iso(utc_now())
+            conn.execute(
+                "UPDATE ai_work_groups SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+                (clean_name or group.name, clean_description, now, group.id),
+            )
+            group = get_group(conn, group.id)
+        return group
+    return create_group(
+        conn,
+        project_id,
+        name=name,
+        description=description,
+        external_group_key=key,
+    )
 
 
 def get_group(conn: sqlite3.Connection, group_id: str) -> WorkGroup:
@@ -443,6 +487,7 @@ def get_group(conn: sqlite3.Connection, group_id: str) -> WorkGroup:
     return WorkGroup(
         id=row["id"],
         project_id=row["project_id"],
+        external_group_key=row["external_group_key"] or "",
         name=row["name"],
         description=row["description"] or "",
         status=row["status"],
