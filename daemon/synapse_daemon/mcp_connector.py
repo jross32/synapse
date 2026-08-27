@@ -45,6 +45,8 @@ from .quick_actions import load_templates
 from . import skill_packs
 from .storage import Storage
 from .tools_registry import ToolRegistry
+from .api_versions import event_name
+from .ws import EventBus
 
 # A recent MCP protocol revision. We echo the client's requested version when
 # it sends one (forward-compatible), else fall back to this.
@@ -912,8 +914,19 @@ def build_mcp_router(
     storage: Storage,
     registry: ToolRegistry,
     auth: AuthManager,
+    bus: EventBus | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
+    event_loop: asyncio.AbstractEventLoop | None = None
+
+    def _emit_collaboration_event(verb: str, payload: dict[str, Any]) -> None:
+        """Best-effort bridge from the connector worker thread to the daemon event loop."""
+        if bus is None or event_loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
+            bus.publish(event_name("collaboration", verb), payload),
+            event_loop,
+        )
 
     def writes_allowed() -> bool:
         return _writes_allowed(storage.data_dir)
@@ -1071,7 +1084,10 @@ def build_mcp_router(
                 ),
             )
             with storage.transaction() as conn:
-                return collaboration_rooms_module.create_room(conn, payload).model_dump(mode="json")
+                room = collaboration_rooms_module.create_room(conn, payload)
+            dumped = room.model_dump(mode="json")
+            _emit_collaboration_event("room_created", {"room": dumped})
+            return dumped
         if name == "synapse_join_collaboration_room":
             _require_writes()
             room_id = str(args.get("room_id") or "").strip()
@@ -1082,9 +1098,17 @@ def build_mcp_router(
                 role_label=str(args.get("role_label") or ""),
             )
             with storage.transaction() as conn:
-                return collaboration_rooms_module.join_room(
-                    conn, room_id, payload
-                ).model_dump(mode="json")
+                synced = collaboration_rooms_module.join_room(conn, room_id, payload)
+            dumped = synced.model_dump(mode="json")
+            _emit_collaboration_event(
+                "room_joined",
+                {
+                    "room_id": room_id,
+                    "project_id": synced.room.project_id,
+                    "session_id": payload.session_id,
+                },
+            )
+            return dumped
         if name == "synapse_post_collaboration_message":
             _require_writes()
             room_id = str(args.get("room_id") or "").strip()
@@ -1098,9 +1122,12 @@ def build_mcp_router(
                 ),
             )
             with storage.transaction() as conn:
-                return collaboration_rooms_module.post_message(
-                    conn, room_id, payload
-                ).model_dump(mode="json")
+                message = collaboration_rooms_module.post_message(conn, room_id, payload)
+            dumped = message.model_dump(mode="json")
+            _emit_collaboration_event(
+                "message_posted", {"room_id": room_id, "message": dumped}
+            )
+            return dumped
         if name == "synapse_leave_collaboration_room":
             _require_writes()
             room_id = str(args.get("room_id") or "").strip()
@@ -1108,9 +1135,12 @@ def build_mcp_router(
             if not room_id or not session_id:
                 raise ValueError("room_id and session_id are required")
             with storage.transaction() as conn:
-                return collaboration_rooms_module.leave_room(
-                    conn, room_id, session_id
-                ).model_dump(mode="json")
+                member = collaboration_rooms_module.leave_room(conn, room_id, session_id)
+            dumped = member.model_dump(mode="json")
+            _emit_collaboration_event(
+                "room_left", {"room_id": room_id, "session_id": session_id}
+            )
+            return dumped
         if name == "synapse_add_project_idea":
             if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
@@ -1558,6 +1588,8 @@ def build_mcp_router(
 
     @router.post("/mcp/{token}", response_model=None)
     async def mcp_post(token: str, request: Request) -> Response:
+        nonlocal event_loop
+        event_loop = asyncio.get_running_loop()
         if not auth.local_token or token != auth.local_token:
             return JSONResponse(
                 _error(None, -32001, "Unauthorized"), status_code=401
