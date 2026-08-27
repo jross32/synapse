@@ -20,6 +20,7 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from . import coordination as coord
+from . import collaboration_rooms as collaboration_rooms_module
 from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .runtime_paths import repo_root
@@ -112,6 +113,9 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
                     },
                 ),
             )
+            auto_collaboration = collaboration_rooms_module.ensure_project_collaboration(
+                conn, session.id
+            )
         # The "an AI connected" signal (ADR-0028): the notification projector + Live View
         # key off this enriched payload.
         await _emit(
@@ -129,8 +133,24 @@ def build_coordination_router(storage: Storage, bus: EventBus | None = None) -> 
                 "connection_code": session.connection_code,
             },
         )
+        if auto_collaboration is not None and bus is not None:
+            await bus.publish(
+                event_name("collaboration", "room_auto_joined"),
+                {
+                    "room_id": auto_collaboration.sync.room.id,
+                    "project_id": auto_collaboration.sync.room.project_id,
+                    "session_id": session.id,
+                    "created": auto_collaboration.created,
+                    "joined_session_ids": auto_collaboration.joined_session_ids,
+                },
+            )
         return {
             **session.model_dump(mode="json"),
+            "auto_collaboration": (
+                auto_collaboration.model_dump(mode="json")
+                if auto_collaboration is not None
+                else None
+            ),
             # True when an existing session was re-attached rather than a new one
             # created, so a returning agent can tell it kept its identity.
             "resumed": resumed,

@@ -13,8 +13,11 @@ from fastapi import APIRouter, Request
 from . import activity as activity_module
 from . import agent_squads as squads
 from . import coder_runtimes
+from . import chatgpt_child_agents
+from . import chatgpt_worker_chats
 from . import ai_executions
 from . import coordination
+from . import collaboration_rooms as collaboration_rooms_module
 from . import mcp_servers as mcp_servers_module
 from . import personalities as personalities_module
 from . import projects as projects_module
@@ -309,6 +312,7 @@ def build_agent_squads_router(
     api_base: Callable[[], str],
     timeout_registry: WorkerTimeoutRegistry,
     presence_registry: WorkerPresenceRegistry,
+    chatgpt_pool: chatgpt_child_agents.ChatGPTBrowserPool,
 ) -> APIRouter:
     router = APIRouter(tags=["agent-squads"])
     # Storage currently owns one SQLite connection. Serializing the short
@@ -316,6 +320,136 @@ def build_agent_squads_router(
     # still releasing the DB transaction before the awaited PTY spawn. Other
     # endpoints (including heartbeats) remain free to transact during spawn.
     launch_lock = asyncio.Lock()
+    chatgpt_tasks: dict[str, asyncio.Task[None]] = {}
+
+    async def _run_chatgpt_child(
+        *,
+        work_item_id: str,
+        session_id: str,
+        coordination_session_id: str,
+        execution_id: str,
+        worker_chat_id: str,
+        worker_chat_title: str,
+        conversation_url: str,
+        prompt: str,
+        timeout_seconds: int,
+    ) -> None:
+        result = None
+        with storage.transaction() as conn:
+            chatgpt_worker_chats.mark_active(
+                conn,
+                worker_chat_id,
+                session_id=coordination_session_id,
+                conversation_url=conversation_url or None,
+                title=worker_chat_title,
+            )
+        try:
+            run_task = asyncio.create_task(
+                chatgpt_pool.run_child(
+                    session_id,
+                    prompt,
+                    timeout=timeout_seconds,
+                    conversation_url=conversation_url or None,
+                    desired_title=worker_chat_title,
+                )
+            )
+            while not run_task.done():
+                with storage.transaction() as conn:
+                    current_session = coordination.get_session(conn, coordination_session_id)
+                    if current_session.status != coordination.AgentSessionStatus.GONE:
+                        updated_session = coordination.heartbeat_session(
+                            conn, coordination_session_id, coordination.AgentSessionHeartbeat()
+                        )
+                    else:
+                        updated_session = current_session
+                await bus.publish(
+                    event_name("coordination", "session_heartbeat"),
+                    {"session": updated_session.model_dump(mode="json")},
+                )
+                try:
+                    result = await asyncio.wait_for(asyncio.shield(run_task), timeout=30.0)
+                except asyncio.TimeoutError:
+                    continue
+                break
+            if result is None:
+                result = await run_task
+        except asyncio.CancelledError:
+            await chatgpt_pool.cancel(session_id)
+            result = chatgpt_child_agents.ChatGPTChildResult(
+                worker_id=session_id, error="ChatGPT UI child was stopped by the operator."
+            )
+        except Exception as exc:  # noqa: BLE001
+            result = chatgpt_child_agents.ChatGPTChildResult(
+                worker_id=session_id, error=f"{type(exc).__name__}: {exc}"
+            )
+        finally:
+            chatgpt_tasks.pop(work_item_id, None)
+
+        with storage.transaction() as conn:
+            current = squads.get_work_item(conn, work_item_id)
+            if current.status == squads.AgentWorkItemStatus.RUNNING:
+                if result.ok:
+                    current = squads.handoff_work_item(
+                        conn,
+                        work_item_id,
+                        squads.AgentWorkItemHandoffRequest(
+                            status=squads.AgentWorkItemStatus.HANDOFF,
+                            summary_md=result.reply or "ChatGPT UI child completed without reply text.",
+                            source=squads.AuditSource.AUTO,
+                        ),
+                    )
+                else:
+                    current = squads.block_running_work_item(
+                        conn, work_item_id, result.error or "ChatGPT UI child failed."
+                    )
+            finalized_execution = ai_executions.finalize_pty_execution(
+                conn,
+                pty_session_id=session_id,
+                output=(result.reply or result.error).encode("utf-8", errors="replace"),
+                exit_code=0 if result.ok else 1,
+                work_outcome=current.status.value,
+            )
+            if result.ok:
+                chatgpt_worker_chats.mark_idle(
+                    conn,
+                    worker_chat_id,
+                    conversation_url=result.conversation_url or conversation_url or None,
+                    title=worker_chat_title,
+                )
+            else:
+                chatgpt_worker_chats.mark_failed(
+                    conn,
+                    worker_chat_id,
+                    conversation_url=result.conversation_url or conversation_url or None,
+                )
+            try:
+                coordination.end_session(conn, coordination_session_id)
+            except Exception:  # already ended by a stop/race
+                pass
+        await bus.publish(
+            event_name("agent_work_item", "updated"),
+            {"work_item": current.model_dump(mode="json")},
+        )
+        await bus.publish(
+            event_name("agent_run", "ended"),
+            {
+                "work_item_id": current.id,
+                "squad_id": current.squad_id,
+                "session_id": session_id,
+                "status": current.status.value,
+                "execution_id": finalized_execution.id if finalized_execution else execution_id,
+                "accounting_state": (
+                    finalized_execution.accounting_state if finalized_execution else "unreported"
+                ),
+                "worker_chat_id": worker_chat_id,
+                "worker_chat_title": worker_chat_title,
+                "conversation_url": result.conversation_url or conversation_url or None,
+            },
+        )
+        await bus.publish(
+            event_name("coordination", "session_ended"),
+            {"session_id": coordination_session_id},
+        )
 
     async def _enforce_worker_timeout(
         *,
@@ -503,7 +637,11 @@ def build_agent_squads_router(
         live_items = [
             item
             for item in items
-            if item.pty_session_id and manager.get(item.pty_session_id) is not None
+            if item.pty_session_id
+            and (
+                manager.get(item.pty_session_id) is not None
+                or item.id in chatgpt_tasks
+            )
         ]
         # Block before termination. PTY finalization is asynchronous and may
         # otherwise win the race and convert a killed process into "completed".
@@ -520,6 +658,12 @@ def build_agent_squads_router(
                 continue
             timeout_registry.cancel(item.id)
             presence_registry.cancel(item.id)
+            web_task = chatgpt_tasks.get(item.id)
+            if web_task is not None:
+                web_task.cancel()
+                await chatgpt_pool.cancel(item.pty_session_id)
+                closed.append((item.id, item.pty_session_id))
+                continue
             if await manager.close(item.pty_session_id):
                 closed.append((item.id, item.pty_session_id))
         with storage.transaction() as conn:
@@ -654,13 +798,36 @@ def build_agent_squads_router(
                     personality = personalities_module.get_personality(conn, work_item.personality_id)
                 except Exception:
                     personality = None
+            parent_session_id = activity_module._owner_session_id_for_squad(conn, squad.id)
+            parent_session = (
+                coordination.get_session(conn, parent_session_id)
+                if parent_session_id
+                else None
+            )
+            chatgpt_parent = bool(
+                parent_session
+                and parent_session.runtime_id in {"chatgpt", "chatgpt_web"}
+            )
             explicitly_requested = body.preferred_runtime or work_item.preferred_runtime
-            chosen_runtime = squads.pick_runtime(role, explicitly_requested)
+            if chatgpt_parent:
+                if explicitly_requested and explicitly_requested != "chatgpt_web":
+                    raise conflict(
+                        "agent_runtime",
+                        "This squad is owned by ChatGPT. Child agents are ChatGPT UI online chats only; "
+                        f"runtime {explicitly_requested!r} is not allowed and no CLI fallback will be used.",
+                        runtime_id=explicitly_requested,
+                        required_runtime="chatgpt_web",
+                        parent_session_id=parent_session_id,
+                    )
+                chosen_runtime = "chatgpt_web"
+                execution_mode = squads.AgentExecutionMode.AUTOMATIC
+            else:
+                chosen_runtime = squads.pick_runtime(role, explicitly_requested)
             capacity = {
                 item.runtime_id: item
                 for item in ai_executions.list_capacity(conn)
             }
-            if explicitly_requested is None:
+            if explicitly_requested is None and not chatgpt_parent:
                 candidates = role.preferred_runtimes or [chosen_runtime]
                 chosen_runtime = next(
                     (
@@ -686,7 +853,7 @@ def build_agent_squads_router(
                         if selected_capacity.evidence_at else None
                     ),
                 )
-            argv = squads.argv_for_runtime(chosen_runtime)
+            argv = [] if chosen_runtime == "chatgpt_web" else squads.argv_for_runtime(chosen_runtime)
             runtime_mcp_env: dict[str, str] = {}
             installed_mcp_servers = mcp_servers_module.list_servers(storage.conn)
             allowed_mcp_ids = None if role.mcp_server_ids is None else set(role.mcp_server_ids)
@@ -712,6 +879,22 @@ def build_agent_squads_router(
                 mcp_config_path, runtime_mcp_env = _write_copilot_mcp_config(storage, role)
                 if mcp_config_path is not None:
                     argv = [*argv, f"--additional-mcp-config=@{mcp_config_path}"]
+            worker_chat = None
+            worker_chat_reused = False
+            worker_chat_title = ""
+            if chosen_runtime == "chatgpt_web":
+                worker_chat_title = (
+                    f"{role.name} ? {project.name} ? {work_item.title}"
+                )[:160]
+                worker_chat, worker_chat_reused = chatgpt_worker_chats.resolve_for_launch(
+                    conn,
+                    work_item_id=work_item.id,
+                    project_id=project.id,
+                    owner_session_id=parent_session_id,
+                    role_id=role.id,
+                    title=worker_chat_title,
+                    reuse_from_work_item_id=body.reuse_chat_from_work_item_id,
+                )
             session_id = squads._new_id()
             prompt_file = write_role_prompt(
                 data_dir=storage.data_dir,
@@ -736,18 +919,24 @@ def build_agent_squads_router(
             # inside that session instead of as another top-level row. The owner link is
             # already durable: the squad-created receipt carries the caller's
             # X-Synapse-Session (activity._owner_session_id_for_squad).
-            parent_session_id = activity_module._owner_session_id_for_squad(conn, squad.id)
             coordination_session = coordination.register_session(
                 conn,
                 coordination.AgentSessionRegister(
                     project_id=project.id,
                     runtime_id=chosen_runtime,
-                    agent_label=f"{chosen_runtime.title()} · {role.name}",
+                    agent_label=(
+                        f"ChatGPT UI · {role.name}"
+                        if chosen_runtime == "chatgpt_web"
+                        else f"{chosen_runtime.title()} · {role.name}"
+                    ),
                     coder_thread_id=session_id,
                     task=work_item.title,
                     last_intent=f"Starting {work_item.title}",
                     parent_session_id=parent_session_id,
                 ),
+            )
+            auto_collaboration = collaboration_rooms_module.ensure_project_collaboration(
+                conn, coordination_session.id
             )
             worker_credential = coordination.issue_session_credential(
                 conn,
@@ -788,7 +977,10 @@ def build_agent_squads_router(
                 "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id).resolve()),
                 "SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT": AI_CONTEXT_DIRECTION_PROMPT,
             })
-            if execution_mode == squads.AgentExecutionMode.AUTOMATIC:
+            if (
+                execution_mode == squads.AgentExecutionMode.AUTOMATIC
+                and chosen_runtime != "chatgpt_web"
+            ):
                 argv = _automatic_worker_argv(
                     argv,
                     runtime=chosen_runtime,
@@ -831,8 +1023,98 @@ def build_agent_squads_router(
                     "role_id": role.id,
                     "execution_mode": execution_mode.value,
                     "mcp_server_ids_configured": attached_mcp_server_ids,
+                    "chatgpt_worker_chat_id": worker_chat.id if worker_chat else None,
                 },
             )
+        if chosen_runtime == "chatgpt_web":
+            role_prompt = prompt_file.read_text(encoding="utf-8", errors="replace")
+            child_prompt = (
+                role_prompt
+                + "\n\n## ChatGPT UI child-agent rules\n"
+                + "You are a child agent of a parent ChatGPT session. Work only in this real "
+                "chatgpt.com conversation. Use the attached Synapse connector for project/tool "
+                "actions when needed. Do not delegate work to Claude, Codex, Copilot, Gemini, "
+                "local models, APIs, or CLI coding runtimes. Return a concise, evidence-backed "
+                "handoff in your final reply; Synapse will durably attach that reply to your "
+                "work item.\n"
+            )
+            task = asyncio.create_task(
+                _run_chatgpt_child(
+                    work_item_id=work_item.id,
+                    session_id=session_id,
+                    coordination_session_id=coordination_session.id,
+                    execution_id=execution.id,
+                    worker_chat_id=worker_chat.id,
+                    worker_chat_title=worker_chat_title,
+                    conversation_url=worker_chat.conversation_url,
+                    prompt=child_prompt,
+                    timeout_seconds=body.timeout_seconds,
+                )
+            )
+            chatgpt_tasks[work_item.id] = task
+            await bus.publish(
+                event_name("coordination", "session_registered"),
+                {
+                    "session_id": coordination_session.id,
+                    "project_id": coordination_session.project_id,
+                    "seq": coordination_session.seq,
+                    "runtime_id": coordination_session.runtime_id,
+                    "agent_label": coordination_session.agent_label,
+                    "coder_thread_id": coordination_session.coder_thread_id,
+                    "task": coordination_session.task,
+                    "connection_level": coordination_session.connection_level,
+                    "connection_code": coordination_session.connection_code,
+                },
+            )
+            await bus.publish(
+                event_name("agent_work_item", "updated"),
+                {"work_item": work_item.model_dump(mode="json")},
+            )
+            await bus.publish(
+                event_name("agent_run", "started"),
+                {
+                    "squad_id": squad.id,
+                    "work_item_id": work_item.id,
+                    "role_id": role.id,
+                    "session_id": session_id,
+                    "runtime": chosen_runtime,
+                    "execution_mode": execution_mode.value,
+                    "authority": body.authority.value,
+                    "timeout_seconds": body.timeout_seconds,
+                    "mcp_server_ids": ["synapse"],
+                    "worker_chat_id": worker_chat.id,
+                    "worker_chat_title": worker_chat_title,
+                    "worker_chat_reused": worker_chat_reused,
+                },
+            )
+            return {
+                "session_id": session_id,
+                "alive": True,
+                "squad_id": squad.id,
+                "work_item_id": work_item.id,
+                "role_id": role.id,
+                "runtime": chosen_runtime,
+                "role_prompt_file": str(prompt_file),
+                "project_id": project.id,
+                "project_name": project.name,
+                "execution_mode": execution_mode.value,
+                "authority": body.authority.value,
+                "timeout_seconds": body.timeout_seconds,
+                "coordination_session_id": coordination_session.id,
+                "execution_id": execution.id,
+                "browser_runtime": True,
+                "worker_chat_id": worker_chat.id,
+                "worker_chat_title": worker_chat_title,
+                "worker_chat_reused": worker_chat_reused,
+                "conversation_url": worker_chat.conversation_url or None,
+                "collaboration_room": (
+                    auto_collaboration.sync.model_dump(mode="json")
+                    if auto_collaboration is not None
+                    else None
+                ),
+                "readiness": chatgpt_child_agents.readiness(storage.data_dir),
+            }
+
         # PTY startup can await platform work. Never hold the daemon's shared
         # SQLite transaction across that await: simultaneous squad launches or
         # a routine heartbeat would otherwise attempt BEGIN on the same live

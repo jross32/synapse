@@ -33,6 +33,23 @@ export interface ActivityFeed {
   unread_count: number;
 }
 
+export interface ChatGPTWorkerChat {
+  id: string;
+  project_id: string;
+  owner_session_id: string | null;
+  last_session_id: string | null;
+  role_id: string | null;
+  chatgpt_project_name: string;
+  conversation_url: string;
+  title: string;
+  status: 'starting' | 'active' | 'idle' | 'failed' | 'archived';
+  archived_reason: string;
+  created_at: string;
+  last_used_at: string;
+  archived_at: string | null;
+  work_item_ids: string[];
+}
+
 export interface ActivitySession {
   id: string;
   /** Operator-facing number. `null` for a worker nested under a main AI --
@@ -44,6 +61,8 @@ export interface ActivitySession {
   children?: ActivitySession[];
   child_count?: number;
   project_id: string | null;
+  project_name?: string | null;
+  chatgpt_worker?: ChatGPTWorkerChat | null;
   runtime_id: string;
   agent_label: string;
   coder_thread_id: string | null;
@@ -141,6 +160,8 @@ export interface ActivityGoal {
 export interface ActivitySessionDetail {
   session: ActivitySession;
   squads: ActivitySquadView[];
+  chatgpt_workers: ChatGPTWorkerChat[];
+  collaboration_rooms: Array<Record<string, unknown>>;
   notifications: ActivityNotification[];
   journal: ActivityJournalEvent[];
   goals: ActivityGoal[];
