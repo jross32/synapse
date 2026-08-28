@@ -42,8 +42,14 @@ def test_version_bump_updates_crlf_python_versions_and_preserves_unicode(tmp_pat
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-    bumped = json.loads((root / "package.json").read_text(encoding="utf-8-sig"))
+    package_after = (root / "package.json").read_text(encoding="utf-8-sig")
+    bumped = json.loads(package_after)
     assert bumped["version"] == "1.2.4"
+    expected_package = (root / "package.json").read_text(encoding="utf-8-sig").replace(
+        '"version": "1.2.4"', '"version": "1.2.3"', 1
+    )
+    original_package = json.dumps(package, indent=2) + "\n"
+    assert expected_package == original_package
     assert bumped["description"] == package["description"]
     assert bumped["scripts"]["dev"] == package["scripts"]["dev"]
     assert 'version = "1.2.4"' in (root / "pyproject.toml").read_text(encoding="utf-8-sig")

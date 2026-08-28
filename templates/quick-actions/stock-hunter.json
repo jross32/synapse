@@ -1,0 +1,10 @@
+{
+  "id": "stock-hunter",
+  "name": "Stock Hunter",
+  "description": "Screen a broad stock universe, verify fundamentals and catalysts, and rank Buy / Watch / Avoid candidates.",
+  "prompt": "Use the installed Synapse skill pack `stock-hunter`. Read its instructions through Synapse, use the direct Web Scraper MCP plus current web/primary sources, run the bounded breadth-to-depth funnel, preserve an evidence ledger, and run the bundled deterministic scorer before ranking any stock. Never promise guaranteed returns. Distinguish reported fundamentals from market estimates and AI inference. Prefer primary filings/IR for reported numbers and date-stamp all time-sensitive claims.",
+  "icon": "trending-up",
+  "category": "workflows",
+  "tags": ["stocks", "investing", "screening", "research", "web-scraper"],
+  "default_argv": ["codex"]
+}

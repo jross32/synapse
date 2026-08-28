@@ -96,7 +96,7 @@
       "status": "shipped",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0032",
-      "summary": "Install immutable, AI-discoverable workflow skills through AI Bundles without disabling direct tools. Super Internet Digger v2 is the first pack, with reusable same-model benchmark controls and scoped 4x claim gates instead of unmeasured marketing promises."
+      "summary": "Install immutable, AI-discoverable workflow skills through AI Bundles without disabling direct tools. Super Internet Digger v2 provides benchmarked permission-aware research, and Stock Hunter adds an evidence-gated equity screening/deep-dive workflow with deterministic helper tooling."
     },
     {
       "id": "observable-synapse-restart",

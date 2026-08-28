@@ -103,9 +103,18 @@ if ($Set) {
   $newVersion = "$($parts[0]).$($parts[1]).$($parts[2])"
 }
 
-# Update package.json
-$pkg.version = $newVersion
-Write-Utf8NoBom -Path $packageJsonPath -Value ($pkg | ConvertTo-Json -Depth 50)
+# Update only the top-level package version without reparsing/reserializing the file.
+# ConvertTo-Json rewrites escape representation and formatting, which created noisy
+# package.json diffs even when the only intended change was the version.
+$packageContent = Read-Utf8 $packageJsonPath
+$packagePattern = '(?m)^(\s*"version"\s*:\s*")[^"\r\n]+("\s*,?\s*)$'
+$packageContent = [regex]::Replace(
+  $packageContent,
+  $packagePattern,
+  { param($m) $m.Groups[1].Value + $newVersion + $m.Groups[2].Value },
+  1
+)
+Write-Utf8NoBom -Path $packageJsonPath -Value $packageContent.TrimEnd("`r", "`n")
 
 # Update pyproject.toml (only the [project] version line)
 $pyContent = Read-Utf8 $pyprojectPath

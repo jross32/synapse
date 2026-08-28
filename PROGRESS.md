@@ -6,7 +6,14 @@
 
 ## Current version
 
-`0.1.201`
+`0.1.202`
+
+> **Stock Hunter is now a native reusable Synapse skill (2026-08-27):** the existing Stock Hunter
+> research/scoring workflow is packaged under `templates/skills/stock-hunter` with a quick action,
+> source/evidence rules, candidate schema, deterministic price/fundamental screen helpers, and an
+> evidence-gated BUY/WATCH/AVOID scorer. The generic skill catalog test was fixed to support expansion.
+> Focused bundle/skill/quick-action verification: 26 passed; version-helper preservation regression: 1 passed.
+
 
 > **Improvement proposals are now a real durable backlog (2026-08-27):** human decision and
 > implementation lifecycle are separate, so accepting an idea no longer falsely means the work is

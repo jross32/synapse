@@ -1,0 +1,29 @@
+{
+  "id": "stock-hunter",
+  "name": "Stock Hunter",
+  "publisher": "The WhatIf Company",
+  "version": "1.2.0",
+  "description": "Evidence-backed equity screening and deep-dive workflow with automated broad price and fundamentals passes, then primary-source validation of growth, free cash flow, debt, valuation, estimate revisions, insider activity, catalysts, dislocation, and risk.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "stocks",
+    "investing",
+    "research",
+    "screening",
+    "valuation",
+    "catalysts",
+    "web-scraper"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "web-scraper",
+    "web",
+    "browser"
+  ],
+  "optional_capabilities": [
+    "sec",
+    "market-data",
+    "warden"
+  ]
+}

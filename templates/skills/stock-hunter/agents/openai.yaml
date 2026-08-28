@@ -1,0 +1,6 @@
+interface:
+  display_name: "Stock Hunter"
+  short_description: "Evidence-backed stock screening and ranking"
+  default_prompt: "Use $stock-hunter to screen a broad stock universe, verify the best candidates, score them deterministically, and return Buy / Watch / Avoid rankings with evidence and risk gates."
+policy:
+  allow_implicit_invocation: true

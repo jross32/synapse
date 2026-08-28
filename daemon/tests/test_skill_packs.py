@@ -43,12 +43,15 @@ def _pipeline_module():
     return module
 
 
-def test_skill_catalog_validates_package_and_benchmark() -> None:
+def test_skill_catalog_validates_packages_and_benchmark() -> None:
     catalog = skill_packs.load_catalog()
-    assert [item.manifest.id for item in catalog] == ["super-internet-digger"]
-    item = catalog[0]
-    assert item.package_sha256
-    assert any(resource.path == "SKILL.md" for resource in item.resources)
+    by_id = {item.manifest.id: item for item in catalog}
+    assert {"stock-hunter", "super-internet-digger"} <= set(by_id)
+    for item in by_id.values():
+        assert item.package_sha256
+        assert any(resource.path == "SKILL.md" for resource in item.resources)
+
+    item = by_id["super-internet-digger"]
     assert any(resource.path == "references/benchmark-spec.json" for resource in item.resources)
     spec = skill_packs.load_benchmark_spec(
         skill_packs.bundled_skill_packs_dir() / item.manifest.id,
@@ -251,3 +254,51 @@ def test_pipeline_only_allows_four_x_claim_when_quality_and_safety_hold() -> Non
     unsafe = pipeline.compare_metrics(baseline, challenger)
     assert unsafe["claims"]["four_x_faster"] is False
     assert unsafe["eligible_winner"] is False
+
+
+def _stock_hunter_module():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "templates"
+        / "skills"
+        / "stock-hunter"
+        / "scripts"
+        / "stock_hunter.py"
+    )
+    spec = importlib.util.spec_from_file_location("stock_hunter_test_module", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    original = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = original
+    return module
+
+
+def test_stock_hunter_deterministic_score_gates_buy_on_evidence() -> None:
+    module = _stock_hunter_module()
+    evidence = ["https://example.test/evidence"]
+    candidate = {
+        "ticker": "TEST",
+        "primary_fundamentals_validated": True,
+        "components": {
+            key: {"score": 90, "evidence": evidence}
+            for key in module.WEIGHTS
+        },
+        "risk": {key: 0 for key in module.RISK_MAX},
+        "hard_red_flags": [],
+    }
+    scored = module.score_candidate(candidate)["stock_hunter"]
+    assert scored["label"] == "BUY"
+    assert scored["confidence"] == "high"
+    assert scored["coverage"] == 1.0
+    assert scored["final_score"] == 90.0
+
+    candidate["components"]["technical"]["evidence"] = []
+    candidate["components"]["insiders"]["evidence"] = []
+    candidate["primary_fundamentals_validated"] = False
+    gated = module.score_candidate(candidate)["stock_hunter"]
+    assert gated["label"] == "WATCH"
+    assert "primary_fundamentals_not_validated" in gated["gates"]

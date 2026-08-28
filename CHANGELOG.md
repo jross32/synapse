@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.202] - 2026-08-27
+
+### Added
+- **Stock Hunter ships as a native portable Synapse skill + quick action** -- a reusable evidence-backed
+  equity-research funnel for broad price screening, scalable fundamentals/valuation screening, and
+  deep candidate scoring across growth, quality, valuation, revisions, dislocation, catalysts, insiders,
+  technicals, and explicit risk penalties. BUY is gated on evidence coverage plus primary-fundamental
+  validation; breadth/fundamental convenience data is explicitly not treated as a final recommendation.
+- **Deterministic Stock Hunter helpers** (`stock_hunter.py`) provide `prices`, `fundamentals`, and `score`
+  commands with no third-party Python dependency, documented candidate/source/scoring contracts, and
+  Synapse skill-pack discovery through the existing AI Bundles surface.
+
+### Fixed
+- **Portable-skill catalog tests now support more than one bundled skill** instead of hard-coding Super
+  Internet Digger as the only possible package. Stock Hunter has its own deterministic evidence-gating test.
+- **`scripts/version-bump.ps1` now edits only the package version string** instead of reparsing and
+  reserializing `package.json`, eliminating fake Unicode/formatting diffs while retaining the CRLF-safe
+  three-source consistency verification added in v0.1.201.
+
+### Verification
+- Skill-pack / AI-bundle / quick-action gate: **26 passed**.
+- Version-bump raw-preservation regression: **1 passed**.
+
 ## [0.1.201] - 2026-08-27
 
 ### Added
@@ -6092,7 +6115,3 @@ Locked the following 14 design contracts into `AGENTS.md` so they apply to every
 #### Notes
 - Repo pushed to GitHub at this commit.
 - No runtime functionality yet — full daemon and UI come in Milestones B and C.
-
-
-
-
