@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.204] -- 2026-08-27
+
+### Changed
+- **MCP dispatch now has its own bounded executor** -- `POST /mcp/{token}` no longer uses
+  `asyncio.to_thread` and therefore no longer competes for asyncio's process-wide default executor
+  with PTYs, health probes, repo-watch work, or model/code-generation calls. Accepted MCP work runs
+  on 16 dedicated `synapse-mcp` workers; when all 16 are occupied, additional calls fail immediately
+  with retryable HTTP 503 instead of queuing invisibly until the connector times out.
+- **Connector timing is observable without logging secrets** -- successful MCP responses include
+  `X-Synapse-MCP-Queue-Ms`, `X-Synapse-MCP-Execution-Ms`, and `Server-Timing`; delayed dispatches log
+  only the safe method/tool label plus queue/execution duration, never arguments, URLs, tokens, or bodies.
+
+### Fixed
+- **Cross-subsystem executor starvation** -- long MCP calls can no longer consume the same default
+  worker pool used by unrelated daemon background work, closing the real failure mode where the daemon
+  stayed healthy while a trivial connector call silently waited behind long operations from other sessions.
+
+### Verification
+- New executor regressions: **3 passed** (default-executor isolation, bounded fail-fast saturation, timing headers).
+- Full MCP connector suite: **40 passed**.
+
+
 ## [0.1.203] - 2026-08-27
 
 ### Added

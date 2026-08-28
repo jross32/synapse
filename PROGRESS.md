@@ -6,7 +6,13 @@
 
 ## Current version
 
-`0.1.203`
+`0.1.204`
+
+> **MCP dispatch is isolated from daemon-wide thread contention (2026-08-27):** connector JSON-RPC
+> work now runs on a dedicated 16-worker bounded executor instead of asyncio's shared default pool.
+> Saturation returns retryable 503 immediately rather than silently queueing, and response/log timing
+> separates queue delay from execution time without recording tool arguments or secrets. New isolation,
+> saturation, and timing regressions pass; full connector suite 40/40.
 
 > **ChatGPT workers now have durable identity, presence, and timing (2026-08-27):** reusable ChatGPT UI
 > worker conversations are distinct from short-lived coordination sessions; stable AI thread records group

@@ -17,9 +17,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import threading
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -1000,6 +1004,124 @@ _SYNC_RUN_TIMEOUT_MAX = 90
 _BLOCKING_CALL_TIMEOUT_MAX = 90
 
 
+logger = logging.getLogger(__name__)
+
+
+class McpExecutorBusy(RuntimeError):
+    """Raised when the dedicated MCP dispatch lane has no bounded queue capacity."""
+
+
+@dataclass(frozen=True)
+class McpDispatchTiming:
+    queue_ms: float
+    execution_ms: float
+
+
+class McpDispatchExecutor:
+    """Dedicated bounded executor for synchronous MCP request dispatch.
+
+    MCP calls can legitimately block for tens of seconds while downstream HTTP, stdio,
+    or shell work completes. They must therefore never share asyncio's process-wide
+    default executor with health probes, repo polling, PTYs, or model calls. A bounded
+    semaphore caps both running and queued work so saturation becomes an immediate,
+    observable retryable error instead of an invisible queue behind unrelated tasks.
+    """
+
+    def __init__(self, *, max_workers: int, max_queue: int) -> None:
+        if max_workers < 1 or max_queue < 0:
+            raise ValueError("max_workers must be >= 1 and max_queue must be >= 0")
+        self.max_workers = max_workers
+        self.max_queue = max_queue
+        self._executor = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="synapse-mcp"
+        )
+        self._slots = threading.BoundedSemaphore(max_workers + max_queue)
+
+    async def run(
+        self, func: Any, *args: Any, label: str = "mcp"
+    ) -> tuple[Any, McpDispatchTiming]:
+        if not self._slots.acquire(blocking=False):
+            logger.warning(
+                "MCP dispatch saturated label=%s workers=%s queue_capacity=%s",
+                label, self.max_workers, self.max_queue,
+            )
+            raise McpExecutorBusy(
+                "Synapse MCP dispatch is busy; retry shortly instead of queueing indefinitely."
+            )
+
+        queued_at = time.perf_counter()
+        loop = asyncio.get_running_loop()
+
+        def invoke() -> tuple[Any, Exception | None, McpDispatchTiming]:
+            started = time.perf_counter()
+            value: Any = None
+            error: Exception | None = None
+            try:
+                value = func(*args)
+            except Exception as exc:  # noqa: BLE001 -- preserve original tool error semantics
+                error = exc
+            finished = time.perf_counter()
+            return (
+                value,
+                error,
+                McpDispatchTiming(
+                    queue_ms=max(0.0, (started - queued_at) * 1000.0),
+                    execution_ms=max(0.0, (finished - started) * 1000.0),
+                ),
+            )
+
+        try:
+            value, error, timing = await loop.run_in_executor(self._executor, invoke)
+        finally:
+            self._slots.release()
+
+        log = logger.debug
+        if timing.queue_ms >= 1000:
+            log = logger.warning
+        elif timing.queue_ms >= 100:
+            log = logger.info
+        log(
+            "MCP dispatch timing label=%s queue_ms=%.1f execution_ms=%.1f",
+            label, timing.queue_ms, timing.execution_ms,
+        )
+        if error is not None:
+            raise error
+        return value, timing
+
+    def shutdown(self, *, wait: bool = True) -> None:
+        self._executor.shutdown(wait=wait, cancel_futures=True)
+
+
+_MCP_DISPATCH_EXECUTOR = McpDispatchExecutor(max_workers=16, max_queue=0)
+
+
+def _mcp_request_label(msg: Any) -> str:
+    if not isinstance(msg, dict):
+        return "invalid-request"
+    method = str(msg.get("method") or "unknown")
+    if method != "tools/call":
+        return method
+    params = msg.get("params") or {}
+    if not isinstance(params, dict):
+        return method
+    name = str(params.get("name") or "unknown")
+    return f"{method}:{name}"
+
+
+def _mcp_timing_headers(timings: list[McpDispatchTiming]) -> dict[str, str]:
+    if not timings:
+        return {}
+    queue_ms = max(item.queue_ms for item in timings)
+    execution_ms = max(item.execution_ms for item in timings)
+    return {
+        "X-Synapse-MCP-Queue-Ms": f"{queue_ms:.1f}",
+        "X-Synapse-MCP-Execution-Ms": f"{execution_ms:.1f}",
+        "Server-Timing": (
+            f"mcp_queue;dur={queue_ms:.1f}, mcp_execution;dur={execution_ms:.1f}"
+        ),
+    }
+
+
 def _proxy_tool_arguments(args: dict[str, Any]) -> dict[str, Any]:
     """Resolve downstream MCP arguments from an object or JSON-string fallback.
 
@@ -1867,27 +1989,42 @@ def build_mcp_router(
         # stays read-only while the operator's own link can still drive the machine.
         allow_writes = request.query_params.get("mode", "").strip().lower() != "read"
 
-        # Off the event loop thread. `_handle` is synchronous all the way down, and
-        # `synapse_run_command` inside it calls a plain blocking `subprocess.run` with a
-        # timeout of up to 900s -- called straight from this coroutine, that froze every
-        # other request the daemon was serving (including its own health checks) for
-        # however long the command took. This is the confirmed cause of the daemon
-        # "wedge": read-only tool calls stayed fast enough not to notice, but any write
-        # command routed through here (which is exactly what a coding agent's connector
-        # calls) reliably froze the daemon until the command finished.
-        if isinstance(payload, list):
-            handled = await asyncio.gather(
-                *(asyncio.to_thread(_handle, m, allow_writes) for m in payload)
-            )
-            responses = [r for r in handled if r is not None]
-            if not responses:
-                return Response(status_code=202)
-            return JSONResponse(responses)
+        # `_handle` is synchronous and may block on downstream MCP/HTTP/shell work. Keep
+        # it off the event loop *and* off asyncio's process-wide default executor. The
+        # dedicated bounded lane prevents PTYs, health probes, repo-watch polling, or
+        # model calls elsewhere in the daemon from starving connector requests (or vice
+        # versa), and exposes queue-vs-execution timing on every response.
+        try:
+            if isinstance(payload, list):
+                handled = await asyncio.gather(
+                    *(
+                        _MCP_DISPATCH_EXECUTOR.run(
+                            _handle, m, allow_writes, label=_mcp_request_label(m)
+                        )
+                        for m in payload
+                    )
+                )
+                timings = [timing for _, timing in handled]
+                responses = [response for response, _ in handled if response is not None]
+                headers = _mcp_timing_headers(timings)
+                if not responses:
+                    return Response(status_code=202, headers=headers)
+                return JSONResponse(responses, headers=headers)
 
-        response = await asyncio.to_thread(_handle, payload, allow_writes)
+            response, timing = await _MCP_DISPATCH_EXECUTOR.run(
+                _handle, payload, allow_writes, label=_mcp_request_label(payload)
+            )
+        except McpExecutorBusy as exc:
+            return JSONResponse(
+                _error(None, -32002, str(exc)),
+                status_code=503,
+                headers={"Retry-After": "1", "X-Synapse-MCP-Executor": "saturated"},
+            )
+
+        headers = _mcp_timing_headers([timing])
         if response is None:
-            return Response(status_code=202)
-        return JSONResponse(response)
+            return Response(status_code=202, headers=headers)
+        return JSONResponse(response, headers=headers)
 
     @router.get("/mcp/{token}", response_model=None)
     async def mcp_get(token: str) -> Response:

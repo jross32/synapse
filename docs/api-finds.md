@@ -867,6 +867,12 @@ Synapse exposes itself as an MCP server for Claude.ai custom connectors.
 **Endpoint:** `POST /mcp/{token}`  
 **Protocol:** Streamable HTTP JSON-RPC 2.0
 
+**Dispatch reliability:** MCP requests use a dedicated bounded executor, separate from asyncio's
+process-wide default thread pool. Accepted responses include `X-Synapse-MCP-Queue-Ms`,
+`X-Synapse-MCP-Execution-Ms`, and `Server-Timing`. If all 16 MCP workers are busy, Synapse fails
+fast with HTTP 503, JSON-RPC error `-32002`, `Retry-After: 1`, and
+`X-Synapse-MCP-Executor: saturated`; callers should back off and retry instead of rapid polling.
+
 **Available MCP tools:**
 - `synapse_get_context` — orientation digest (read-only)
 - `synapse_list_projects` — list projects

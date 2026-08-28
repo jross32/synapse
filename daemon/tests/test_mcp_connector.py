@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from synapse_daemon.app import build_app
-from synapse_daemon.mcp_connector import _proxy_tool_arguments
+from synapse_daemon.mcp_connector import (
+    McpDispatchExecutor,
+    McpExecutorBusy,
+    _proxy_tool_arguments,
+)
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
@@ -660,3 +668,72 @@ def test_proxy_tool_arguments_rejects_ambiguous_or_non_object_json() -> None:
         _proxy_tool_arguments({"arguments_json": '[1,2,3]'})
     with pytest.raises(ValueError, match="must be valid JSON"):
         _proxy_tool_arguments({"arguments_json": '{bad json}'})
+
+
+def test_mcp_response_exposes_queue_and_execution_timing(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+    response = _rpc(client, token, "ping")
+    assert response.status_code == 200
+    assert float(response.headers["x-synapse-mcp-queue-ms"]) >= 0
+    assert float(response.headers["x-synapse-mcp-execution-ms"]) >= 0
+    assert "mcp_queue;dur=" in response.headers["server-timing"]
+    assert "mcp_execution;dur=" in response.headers["server-timing"]
+
+
+def test_mcp_dispatch_executor_is_independent_from_default_executor() -> None:
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        default_executor = ThreadPoolExecutor(max_workers=1)
+        loop.set_default_executor(default_executor)
+        default_started = threading.Event()
+        default_release = threading.Event()
+
+        def occupy_default() -> None:
+            default_started.set()
+            default_release.wait(timeout=5)
+
+        blocker = loop.run_in_executor(None, occupy_default)
+        assert default_started.wait(timeout=1)
+        dedicated = McpDispatchExecutor(max_workers=1, max_queue=1)
+        try:
+            value, timing = await asyncio.wait_for(
+                dedicated.run(lambda: "dedicated-ok", label="test:independent"),
+                timeout=1,
+            )
+            assert value == "dedicated-ok"
+            assert timing.queue_ms >= 0
+        finally:
+            default_release.set()
+            await blocker
+            dedicated.shutdown()
+            default_executor.shutdown(wait=True, cancel_futures=True)
+
+    asyncio.run(scenario())
+
+
+def test_mcp_dispatch_executor_bounds_queue_and_fails_fast() -> None:
+    async def scenario() -> None:
+        gate = threading.Event()
+        executor = McpDispatchExecutor(max_workers=1, max_queue=1)
+
+        def blocked(value: str) -> str:
+            gate.wait(timeout=5)
+            return value
+
+        first = asyncio.create_task(executor.run(blocked, "first", label="test:first"))
+        await asyncio.sleep(0.05)
+        second = asyncio.create_task(executor.run(blocked, "second", label="test:second"))
+        await asyncio.sleep(0.05)
+        started = time.perf_counter()
+        try:
+            with pytest.raises(McpExecutorBusy, match="retry shortly"):
+                await executor.run(lambda: "third", label="test:third")
+            assert time.perf_counter() - started < 0.25
+        finally:
+            gate.set()
+            first_result, second_result = await asyncio.gather(first, second)
+            assert first_result[0] == "first"
+            assert second_result[0] == "second"
+            executor.shutdown()
+
+    asyncio.run(scenario())

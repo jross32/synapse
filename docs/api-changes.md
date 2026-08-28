@@ -15,6 +15,15 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.204 (dedicated bounded MCP dispatch)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-08-27 | `POST /mcp/{token}` dispatch | corrective | MCP JSON-RPC work runs on a dedicated 16-worker executor rather than asyncio's process-wide default executor. When all workers are occupied, new calls receive retryable HTTP 503 / JSON-RPC `-32002` immediately instead of joining an invisible queue. |
+| 2026-08-27 | MCP response headers | additive | Successful MCP responses expose `X-Synapse-MCP-Queue-Ms`, `X-Synapse-MCP-Execution-Ms`, and `Server-Timing` so queue-vs-execution delay is externally observable. Saturation returns `Retry-After: 1` and `X-Synapse-MCP-Executor: saturated`. |
+
+Migration: none. Existing JSON-RPC request/response bodies are unchanged; clients should treat HTTP 503 as retryable and may use the timing headers for diagnostics.
+
 ### Shipped in v0.1.203 (durable ChatGPT workers + thread presence)
 
 | Date | Endpoint or event | Kind | Notes |
