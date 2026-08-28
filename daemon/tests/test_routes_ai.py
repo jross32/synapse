@@ -5,10 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-
-from synapse_daemon import coder_workspace
-from synapse_daemon import ai_executions
-from synapse_daemon import coordination
+from synapse_daemon import ai_executions, coder_workspace, coordination
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -52,6 +49,10 @@ def test_ai_context_returns_versioned_digest(tmp_path: Path) -> None:
         # for AI sessions.
         assert any(e["path"] == "/api/v1/projects" for e in body["endpoints_for_ai"])
         assert any(e["path"] == "/api/v1/ai/health-report" for e in body["endpoints_for_ai"])
+        advertised = " ".join(e["path"] for e in body["endpoints_for_ai"])
+        assert "/api/v1/thread-presence/overview" in advertised
+        assert "/api/v1/chatgpt-workers" in advertised
+        assert "/api/v1/projects/{id}/records/canonical-chat-url" in advertised
         assert body["runtime_execution"]["schema"] == "synapse.ai.runtimes/v1"
         assert body["runtime_execution"]["endpoints"]["readiness_and_usage"] == (
             "GET /api/v1/ai/runtimes"
@@ -135,7 +136,11 @@ def test_worker_runtime_reads_are_project_and_work_item_scoped(tmp_path: Path) -
         assert denied.json()["code"] == "auth.worker_scope_denied"
 
 
-def test_local_operator_can_acknowledge_reset_without_claiming_ready(tmp_path: Path) -> None:
+def test_local_operator_can_acknowledge_reset_without_claiming_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # This test exercises reset semantics, not whether the CI host has Copilot installed.
+    monkeypatch.setattr(ai_executions.coder_runtimes, "available", lambda _runtime: True)
     client = _harness(tmp_path)
     storage = client.app.state.storage
     with storage.transaction() as conn:

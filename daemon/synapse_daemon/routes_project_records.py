@@ -15,6 +15,7 @@ from .project_records import (
     ProjectAdrUpdate,
     ProjectBacklogItemCreate,
     ProjectBacklogItemUpdate,
+    ProjectCanonicalChatUrlUpdate,
     ProjectVersionCreate,
     ProjectVersionUpdate,
 )
@@ -30,6 +31,29 @@ def build_project_records_router(storage: Storage) -> APIRouter:
     async def get_records(project_id: str) -> dict[str, Any]:
         projects_module.get(storage.conn, project_id)
         return records.get_records(storage.conn, project_id).model_dump(mode="json")
+
+    @router.put("/projects/{project_id}/records/canonical-chat-url", response_model=None)
+    async def set_canonical_chat_url(
+        project_id: str, payload: ProjectCanonicalChatUrlUpdate
+    ) -> dict[str, Any]:
+        projects_module.get(storage.conn, project_id)
+        with storage.transaction() as conn:
+            bundle = records.set_canonical_chat_url(conn, project_id, payload.url)
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="project_record_metadata",
+                    entity_id=project_id,
+                    action="set_canonical_chat_url",
+                    source=payload.source,
+                    result="success",
+                    details={
+                        "project_id": project_id,
+                        "canonical_chat_url": bundle.canonical_chat_url,
+                    },
+                ),
+            )
+        return bundle.model_dump(mode="json")
 
     # ── ADRs ─────────────────────────────────────────────────────────────────
 

@@ -130,7 +130,11 @@ def test_relaunch_creates_a_new_execution_attempt(tmp_path):
         storage.close()
 
 
-def test_timeout_outcome_is_sticky_after_late_exit(tmp_path):
+def test_timeout_outcome_is_sticky_after_late_exit(tmp_path, monkeypatch):
+    # This test is about persisted timeout semantics, not whether the CI host happens to
+    # have a Claude binary installed. Keep runtime availability deterministic so Linux CI
+    # does not reinterpret the untouched capacity row as NOT_INSTALLED.
+    monkeypatch.setattr(ai_executions.coder_runtimes, 'available', lambda _runtime: True)
     storage = _storage(tmp_path)
     try:
         with storage.transaction() as conn:

@@ -95,7 +95,7 @@ class _FakeLocator:
 
 
 class _FakeSendKeyboard:
-    def __init__(self, page: "_FakeSendPage"):
+    def __init__(self, page: _FakeSendPage):
         self._page = page
 
     async def type(self, text):
@@ -236,3 +236,19 @@ def test_type_multiline_splits_on_shift_enter_not_enter():
     # is the premature-send bug this module exists to avoid. Sending is the caller's job,
     # done exactly once, after typing is fully complete.
     assert keys_pressed == ["Shift+Enter", "Shift+Enter"]
+
+
+
+def test_parse_worked_for_seconds_handles_chatgpt_style_duration():
+    assert runtime.parse_worked_for_seconds("Worked for 3m 8s") == 188
+    assert runtime.parse_worked_for_seconds("Worked for 35m") == 2100
+    assert runtime.parse_worked_for_seconds("Worked for 1h 2m 3s") == 3723
+
+
+def test_parse_worked_for_seconds_prefers_latest_match():
+    text = "Worked for 5s\nolder text\nWorked for 2m 1s"
+    assert runtime.parse_worked_for_seconds(text) == 121
+
+
+def test_parse_worked_for_seconds_returns_none_when_ui_has_no_timer():
+    assert runtime.parse_worked_for_seconds("Finished successfully.") is None

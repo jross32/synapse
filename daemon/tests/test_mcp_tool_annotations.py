@@ -44,6 +44,7 @@ EXPECTED_READ_ONLY = {
 EXPECTED_NOT_READ_ONLY = {
     "synapse_add_project_idea",
     "synapse_capture_note",
+    "synapse_set_project_chat_url",
     "synapse_create_squad",
     "synapse_add_work_item",
     "synapse_create_collaboration_room",

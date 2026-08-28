@@ -100,3 +100,16 @@ five stages as successful, closed this temporary window automatically, and left 
 The cockpit still **works** but remains **project-scoped only**: you pick a registered project first, then start a thread inside it. The new Synapse Self project makes that workable for self-improvement, but the project-free "New chat" idea is still a real future polish target rather than something this wave solved.
 
 - `review-backlog-desktop.png` / `review-backlog-mobile.png` ? v0.1.201 durable improvement backlog, expanded proposal controls and lifecycle/decision state.
+
+## Durable thread presence + worker timing ? desktop (1440?1000)
+
+![Thread presence desktop](./thread-presence-desktop.png)
+
+Live View proof for the durable request/thread model: grouped AI threads, active/idle state, cumulative worked time,
+and linked ChatGPT worker/session context without page-level horizontal overflow.
+
+## Durable thread presence + worker timing ? mobile (390?844)
+
+![Thread presence mobile](./thread-presence-mobile.png)
+
+The same operator state at phone width, with responsive cards/controls and no page-level horizontal overflow.

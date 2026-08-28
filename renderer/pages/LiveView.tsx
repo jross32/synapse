@@ -57,6 +57,7 @@ import { cn } from '@shared/utils';
 import { AppPreview, previewUrl } from '../components/AppPreview';
 import { renderInlineBold } from '../components/InlineBold';
 import { PageHeader } from '../components/PageHeader';
+import { ThreadPresencePanel } from '../components/ThreadPresencePanel';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Modal } from '../components/ui/modal';
@@ -67,6 +68,14 @@ const LEVEL_DOT: Record<ActivityLevel, string> = {
   red: 'bg-status-error',
   info: 'bg-primary',
 };
+
+function sessionIndicatorLevel(session: ActivitySession): ActivityLevel {
+  if (session.connection_level === 'red') return 'red';
+  if (session.stale || session.status === 'gone' || session.status === 'idle') return 'info';
+  if (session.connection_level === 'yellow' || session.status === 'blocked' || session.status === 'holding') return 'yellow';
+  if (session.status === 'active') return 'green';
+  return session.connection_level;
+}
 
 const STATUS_STYLE: Record<ActivityJournalStatus, string> = {
   planned: 'border-border bg-muted/40 text-muted-foreground',
@@ -396,7 +405,7 @@ export function LiveViewPage(): JSX.Element {
   );
 
   const displayedSessions = useMemo(
-    () => showAllSessions ? (sessions ?? []) : (sessions ?? []).slice(0, 5),
+    () => showAllSessions ? (sessions ?? []) : (sessions ?? []).slice(0, 3),
     [sessions, showAllSessions]
   );
 
@@ -706,6 +715,8 @@ export function LiveViewPage(): JSX.Element {
         }
       />
 
+      <ThreadPresencePanel />
+
       <div className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row'>
         <Card className='flex max-h-48 min-h-0 shrink-0 flex-col overflow-hidden p-0 lg:max-h-none lg:w-64'>
           <div className='shrink-0 border-b border-border px-3 py-2'>
@@ -740,10 +751,10 @@ export function LiveViewPage(): JSX.Element {
                         <span
                           className={cn(
                             'h-2 w-2 shrink-0 rounded-full',
-                            LEVEL_DOT[session.connection_level] ?? LEVEL_DOT.info,
+                            LEVEL_DOT[sessionIndicatorLevel(session)] ?? LEVEL_DOT.info,
                             session.status === 'active' && !session.stale && 'animate-pulse'
                           )}
-                          title={connectionHelp(session).title}
+                          title={`${workStatusHelp(session, session.id === selectedId ? detail : null).title} · ${connectionHelp(session).title}`}
                           aria-hidden='true'
                         />
                         <span className='font-mono text-xs text-muted-foreground'>
@@ -752,7 +763,7 @@ export function LiveViewPage(): JSX.Element {
                         <span className='truncate text-sm font-medium'>{session.agent_label || session.runtime_id || 'AI'}</span>
                       </div>
                       <p className='mt-0.5 truncate text-[11px] text-muted-foreground'>
-                        {session.status}{session.stale ? ' · stale' : ''} · {relative(session.last_heartbeat_at)}
+                        {session.project_name || session.project_id || 'No project'} · {session.status}{session.stale ? ' · stale' : ''} · {relative(session.last_heartbeat_at)}
                       </p>
                       {(session.last_intent || session.task) && (
                         <p className='mt-1 line-clamp-2 text-[11px] text-foreground/75'>
@@ -769,12 +780,12 @@ export function LiveViewPage(): JSX.Element {
                               <span
                                 className={cn(
                                   'h-1.5 w-1.5 shrink-0 rounded-full',
-                                  LEVEL_DOT[child.connection_level] ?? LEVEL_DOT.info
+                                  LEVEL_DOT[sessionIndicatorLevel(child)] ?? LEVEL_DOT.info
                                 )}
                                 aria-hidden='true'
                               />
                               <span className='truncate text-[10px] text-muted-foreground'>
-                                {child.agent_label || child.runtime_id}
+                                {child.chatgpt_worker?.title || child.agent_label || child.runtime_id}
                               </span>
                             </li>
                           ))}
@@ -791,13 +802,13 @@ export function LiveViewPage(): JSX.Element {
               </ul>
             )}
           </div>
-          {(sessions?.length ?? 0) > 5 && (
+          {(sessions?.length ?? 0) > 3 && (
             <button
               type='button'
               onClick={() => setShowAllSessions((value) => !value)}
               className='shrink-0 border-t border-border px-3 py-2 text-left text-xs text-primary transition hover:bg-accent/40'
             >
-              {showAllSessions ? 'Show recent sessions' : `Show more sessions (${(sessions?.length ?? 0) - 5})`}
+              {showAllSessions ? 'Show 3 recent' : `Show more recent (${(sessions?.length ?? 0) - 3})`}
             </button>
           )}
         </Card>
@@ -839,7 +850,7 @@ export function LiveViewPage(): JSX.Element {
                     >
                       {selected.status}
                     </button>
-                    <span>registered {relative(selected.registered_at)}{selected.project_id ? ` · ${selected.project_id}` : ''}</span>
+                    <span>registered {relative(selected.registered_at)}{selected.project_id ? ` · ${selected.project_name || selected.project_id}` : ''}</span>
                   </div>
                 </div>
                 <div className='flex items-center gap-2 text-[11px] text-muted-foreground'>
@@ -935,6 +946,40 @@ export function LiveViewPage(): JSX.Element {
                         {tool}
                       </span>
                     ))}
+                  </div>
+                )}
+                {(detail?.chatgpt_workers.length ?? 0) > 0 && (
+                  <div className='mt-2 flex flex-wrap items-center gap-1.5'>
+                    <span className='text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
+                      Synapse2GPT workers
+                    </span>
+                    {(detail?.chatgpt_workers ?? []).slice(0, 3).map((worker) => (
+                      worker.conversation_url ? (
+                        <a
+                          key={worker.id}
+                          href={worker.conversation_url}
+                          target='_blank'
+                          rel='noreferrer'
+                          title={`Open ${worker.title} in ChatGPT`}
+                          className='max-w-56 truncate rounded-full border border-border bg-background/60 px-2 py-0.5 text-[10px] text-primary hover:border-primary'
+                        >
+                          {worker.title}
+                        </a>
+                      ) : (
+                        <span
+                          key={worker.id}
+                          title={worker.title}
+                          className='max-w-56 truncate rounded-full border border-border bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground'
+                        >
+                          {worker.title} · {worker.status}
+                        </span>
+                      )
+                    ))}
+                    {(detail?.chatgpt_workers.length ?? 0) > 3 && (
+                      <span className='text-[10px] text-muted-foreground'>
+                        +{(detail?.chatgpt_workers.length ?? 0) - 3} more
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

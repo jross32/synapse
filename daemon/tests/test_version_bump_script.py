@@ -56,3 +56,26 @@ def test_version_bump_updates_crlf_python_versions_and_preserves_unicode(tmp_pat
     assert '__version__ = "1.2.4"' in (
         root / "daemon" / "synapse_daemon" / "__init__.py"
     ).read_text(encoding="utf-8-sig")
+    second = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(root / "scripts" / "version-bump.ps1"), "-Set", "1.2.5"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert second.returncode == 0, second.stderr or second.stdout
+    for path in (
+        root / "package.json",
+        root / "pyproject.toml",
+        root / "daemon" / "synapse_daemon" / "__init__.py",
+        root / "CHANGELOG.md",
+    ):
+        raw = path.read_bytes()
+        assert raw.endswith(b"\n")
+        assert not raw.endswith(b"\n\n")
+    assert json.loads((root / "package.json").read_text(encoding="utf-8-sig"))["version"] == "1.2.5"
+    assert 'version = "1.2.5"' in (root / "pyproject.toml").read_text(encoding="utf-8-sig")
+    assert '__version__ = "1.2.5"' in (
+        root / "daemon" / "synapse_daemon" / "__init__.py"
+    ).read_text(encoding="utf-8-sig")

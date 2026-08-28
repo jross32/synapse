@@ -216,6 +216,10 @@ class AgentWorkItemLaunchRequest(BaseModel):
     execution_mode: AgentExecutionMode | None = None
     authority: AgentExecutionAuthority = AgentExecutionAuthority.WORKSPACE
     timeout_seconds: int = Field(default=1800, ge=30, le=86400)
+    # Same-work-item retries resume their existing ChatGPT UI chat automatically.
+    # A distinct related work item may opt into the same worker by naming the
+    # work item whose conversation should be reused. Never infer this semantically.
+    reuse_chat_from_work_item_id: str | None = None
     source: AuditSource = AuditSource.DESKTOP
 
 
@@ -904,6 +908,29 @@ def set_work_item_session(
             to_iso(now),
             work_item_id,
         ),
+    )
+    touch_squad_activity(conn, current.squad_id, when=now)
+    return get_work_item(conn, work_item_id)
+
+
+def release_work_item_session(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    *,
+    status: AgentWorkItemStatus = AgentWorkItemStatus.QUEUED,
+) -> AgentWorkItem:
+    """Release a pre-reserved PTY link after launch fails before a process exists."""
+
+    current = get_work_item(conn, work_item_id)
+    now = utc_now()
+    conn.execute(
+        """
+        UPDATE agent_work_items
+        SET status = ?, pty_session_id = NULL, opened_in_tab = 0,
+            updated_at = ?, completed_at = NULL
+        WHERE id = ?
+        """,
+        (status.value, to_iso(now), work_item_id),
     )
     touch_squad_activity(conn, current.squad_id, when=now)
     return get_work_item(conn, work_item_id)

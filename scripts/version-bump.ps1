@@ -119,13 +119,13 @@ Write-Utf8NoBom -Path $packageJsonPath -Value $packageContent.TrimEnd("`r", "`n"
 # Update pyproject.toml (only the [project] version line)
 $pyContent = Read-Utf8 $pyprojectPath
 $pyContent = [regex]::Replace($pyContent, '(?m)^version = "[^"\r\n]*"', "version = `"$newVersion`"")
-Write-Utf8NoBom -Path $pyprojectPath -Value $pyContent
+Write-Utf8NoBom -Path $pyprojectPath -Value $pyContent.TrimEnd("`r", "`n")
 
 # Update __version__ in the package __init__.py (Contract #8: single source of truth).
 $initPath = Join-Path $root 'daemon\synapse_daemon\__init__.py'
 $initContent = Read-Utf8 $initPath
 $initContent = [regex]::Replace($initContent, '(?m)^__version__ = "[^"\r\n]*"', "__version__ = `"$newVersion`"")
-Write-Utf8NoBom -Path $initPath -Value $initContent
+Write-Utf8NoBom -Path $initPath -Value $initContent.TrimEnd("`r", "`n")
 
 # Append CHANGELOG stub
 $changelog = Read-Utf8 $changelogPath
@@ -141,7 +141,7 @@ $entry = @"
 
 "@
 $changelog = $changelog -replace '## \[Unreleased\]', "## [Unreleased]`r`n$entry"
-Write-Utf8NoBom -Path $changelogPath -Value $changelog
+Write-Utf8NoBom -Path $changelogPath -Value $changelog.TrimEnd("`r", "`n")
 
 # Refuse to report success if Windows line endings or a future format change caused
 # one version source to miss the rewrite. This caught a real CRLF bug where only

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from .migrations import list_migrations
 from .migrations._runner import apply_pending
@@ -43,11 +43,14 @@ class Storage:
         # background task (the health-probe heartbeat) held a transaction open across a
         # network await, and a concurrent HTTP request's own `transaction()` collided with
         # it: `sqlite3.OperationalError: cannot start a transaction within a transaction`.
-        # Fixing that one call site is not enough - the connection had no protection against
-        # the *next* caller making the same mistake. A `threading.Lock` covers both kinds of
-        # caller this connection actually sees: plain coroutines running on the event-loop
-        # thread, and `asyncio.to_thread` workers running on real OS threads.
-        self._transaction_lock = threading.Lock()
+        #
+        # Re-entrant calls on the same thread are supported for legitimate synchronous
+        # composition and use SQLite SAVEPOINTs below, preserving nested rollback semantics.
+        # This is a safety net, not permission to hold a transaction across external awaits:
+        # async routes are regression-tested to release the DB lock before awaited PTY/process
+        # work. Other OS threads remain serialized by the RLock.
+        self._transaction_lock = threading.RLock()
+        self._transaction_state = threading.local()
 
     # ── lifecycle ────────────────────────────────────────────────────────
 
@@ -98,25 +101,38 @@ class Storage:
     def transaction(self) -> Iterator[sqlite3.Connection]:
         """Run a block in an exclusive transaction.
 
-        Commits on normal exit, rolls back on exception.
+        Commits on normal exit, rolls back on exception. Re-entrant calls on
+        the same thread use SQLite savepoints; calls from other threads remain
+        serialized around the shared connection.
         """
 
         conn = self.conn
-        # Held only around BEGIN..COMMIT/ROLLBACK, never across an await inside the `with`
-        # block - a caller that does that will stall other transactions for as long as it
-        # takes, which is a slow bug rather than a wrong one, and is the reason
-        # `_probe_health` was rewritten to run its network call before opening this.
         self._transaction_lock.acquire()
+        depth = getattr(self._transaction_state, "depth", 0)
+        savepoint = f"synapse_nested_tx_{depth}"
+        nested = depth > 0 or conn.in_transaction
+        self._transaction_state.depth = depth + 1
         try:
-            conn.execute("BEGIN IMMEDIATE")
+            if nested:
+                conn.execute(f"SAVEPOINT {savepoint}")
+            else:
+                conn.execute("BEGIN IMMEDIATE")
             try:
                 yield conn
             except Exception:
-                conn.execute("ROLLBACK")
+                if nested:
+                    conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                    conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    conn.execute("ROLLBACK")
                 raise
             else:
-                conn.execute("COMMIT")
+                if nested:
+                    conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    conn.execute("COMMIT")
         finally:
+            self._transaction_state.depth = depth
             self._transaction_lock.release()
 
     # ── migrations ───────────────────────────────────────────────────────

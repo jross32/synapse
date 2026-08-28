@@ -6,7 +6,17 @@
 
 ## Current version
 
-`0.1.202`
+`0.1.203`
+
+> **ChatGPT workers now have durable identity, presence, and timing (2026-08-27):** reusable ChatGPT UI
+> worker conversations are distinct from short-lived coordination sessions; stable AI thread records group
+> the same conversation/request across reconnects and roll up per-turn work time. A canonical project chat
+> pointer, dedicated one-time setup browser/profile, Live View thread panel, auto-collaboration reuse, and
+> browser presence companion complete the loop. Repeated bootstrap/worker/setup operations are guarded
+> against duplicate rows/processes, and generic MCP forwarding now has an `arguments_json` compatibility
+> path for nested Playwright/Reflex arguments. Production renderer/Electron build is green; final full
+> daemon + refreshed UI proof run before commit.
+
 
 > **Stock Hunter is now a native reusable Synapse skill (2026-08-27):** the existing Stock Hunter
 > research/scoring workflow is packaged under `templates/skills/stock-hunter` with a quick action,

@@ -142,6 +142,33 @@ Deep View is deliberately detailed, but it is not a secret sink or a private cha
 Report explicit alternatives, assumptions, rationale, evidence, findings, and next steps. Never copy
 credentials, auth tokens, secret values, private hidden model reasoning, or raw sensitive tool output.
 
+### 4. Track durable AI thread work without duplicating identity
+
+For project work, coordination presence and durable conversation identity are related but **not the same record**:
+
+- **Coordination session** = one live connection/execution lease. Register it at the start, heartbeat it, and end it
+  when that live run is over. A reused ChatGPT conversation may legitimately have many coordination sessions over time.
+- **ChatGPT worker chat** = the reusable ChatGPT conversation itself. Synapse manages this for ChatGPT-owned squad work;
+  relaunching the same work item resumes the current non-archived worker instead of creating another one. Related work
+  reuses a worker only when explicitly linked; archived workers stay archived until explicitly restored. Once assigned, a non-empty ChatGPT conversation URL may belong to only one durable worker row; conflicts must reuse/unarchive that worker, never clone the URL.
+- **Thread presence record** = the durable conversation/request identity + active/idle/error state + work-time ledger.
+  Reuse the same stable `external_thread_key` (normally the ChatGPT conversation identity) every time that conversation
+  reconnects. Never generate a new external key merely because a new prompt/turn starts.
+
+Protocol for tracked work: `POST /api/v1/thread-presence/bootstrap` once per conversation identity (or use the MCP
+`synapse_thread_bootstrap` mirror), then `/threads/{id}/begin` when a real work turn starts, `/heartbeat` during long
+work, and `/finish` exactly once before the final response. Browser observations use `/browser-observe` and attach to
+the same durable thread when their `external_thread_key` later bootstraps. The database enforces unique external-thread
+identity; finish accounting is idempotent so cumulative work time is not double-counted.
+
+For a project-wide pointer to the **current** human/AI chat, use
+`PUT /api/v1/projects/{id}/records/canonical-chat-url` (or MCP `synapse_set_project_chat_url`). This is deliberately
+last-write-wins metadata, not a history table and not a replacement for worker/thread identity.
+
+If an account-owner ChatGPT profile needs setup, call `GET /api/v1/chatgpt-workers/readiness` and then
+`POST /api/v1/chatgpt-workers/setup-browser`. The setup browser uses only Synapse's dedicated profile and repeated calls
+return `already_running` while that profile is open instead of spawning duplicate setup processes.
+
 ---
 
 ## Repo layout (high level)

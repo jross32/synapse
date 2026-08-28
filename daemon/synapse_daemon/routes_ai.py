@@ -22,27 +22,27 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from . import __version__
-from . import projects as projects_module
 from . import agent_squads as agent_squads_module
 from . import ai_bundles as ai_bundles_module
 from . import ai_cases as ai_cases_module
+from . import ai_executions as ai_executions_module
 from . import ai_factory as ai_factory_module
 from . import benchmarks as benchmarks_module
-from . import coder_workspace as coder_workspace_module
 from . import blueprints as blueprints_module
-from . import local_models as local_models_module
-from . import ai_executions as ai_executions_module
-from . import mcp_servers as mcp_servers_module
-from . import quality_os as quality_os_module
+from . import coder_workspace as coder_workspace_module
 from . import collaboration_rooms as collaboration_rooms_module
+from . import local_models as local_models_module
+from . import mcp_servers as mcp_servers_module
+from . import projects as projects_module
+from . import quality_os as quality_os_module
 from .ai_context_memory import ai_context_metadata
+from .audit import AuditRecord, audit
 from .files_storage import list_for_project
-from .storage import Storage
 from .pty_sessions import PtySessionManager
+from .storage import Storage
 from .synapse_dev import SynapseDevManager
 from .time_utils import utc_now
 from .tools_registry import ToolRegistry
-from .audit import AuditRecord, audit
 
 #: Cap inlined files per project so the AI context payload stays small.
 #: A Claude session can hit /api/v1/projects/{id}/files for the full list.
@@ -776,9 +776,9 @@ def build_ai_router(
                     "path": "/api/v1/agent-squads/{id}/work-items | /api/v1/agent-work-items/{id}/launch | /handoff | /status",
                 },
                 {
-                    "purpose": "launch a Claude, Codex, or GitHub Copilot worker with the role-scoped enabled MCP set translated automatically for that runtime",
+                    "purpose": "launch a role-scoped worker; squads owned by ChatGPT force a real chatgpt.com child chat with no CLI fallback, while other parents retain their configured runtime ladder",
                     "method": "POST",
-                    "path": "/api/v1/agent-work-items/{id}/launch (uses /api/v1/mcp-servers + agent_role_templates.mcp_server_ids)",
+                    "path": "/api/v1/agent-work-items/{id}/launch (ChatGPT parents => chatgpt_web; others use role runtime preferences)",
                 },
                 {
                     "purpose": "create, run, inspect, stop, and export AI Operating System cases",
@@ -801,9 +801,19 @@ def build_ai_router(
                     "path": "/api/v1/ai-bundles | /api/v1/ai-bundles/install/{id} | /api/v1/ai-bundles/skills | /skills/{skill_id} | /skills/{skill_id}/resources/{resource_path}",
                 },
                 {
-                    "purpose": "read a project's ADRs, backlog, and version history",
-                    "method": "GET",
-                    "path": "/api/v1/projects/{id}/records",
+                    "purpose": "read project records plus the one current canonical AI chat/thread URL, or replace/clear that pointer",
+                    "method": "GET | PUT",
+                    "path": "/api/v1/projects/{id}/records | /api/v1/projects/{id}/records/canonical-chat-url",
+                },
+                {
+                    "purpose": "inspect durable ChatGPT UI workers, check one-time setup readiness, open the dedicated account-owner login browser, and archive/unarchive worker conversations without deleting them",
+                    "method": "GET | POST",
+                    "path": "/api/v1/chatgpt-workers | /api/v1/chatgpt-workers/readiness | /api/v1/chatgpt-workers/setup-browser | /api/v1/chatgpt-workers/{id} | /archive | /unarchive",
+                },
+                {
+                    "purpose": "bootstrap durable AI thread identity, observe browser tabs, track active/idle/error state, heartbeat long turns, finish timed work, and inspect work-group totals",
+                    "method": "GET | POST",
+                    "path": "/api/v1/thread-presence/overview | /groups | /bootstrap | /browser-observe | /threads/{id}/begin | /heartbeat | /finish | /state | /turns",
                 },
                 {
                     "purpose": "capture a quick idea/ADR on a project, then promote it to a numbered ADR",
@@ -826,7 +836,7 @@ def build_ai_router(
                     "path": "/api/v1/coordination/sessions | /coordination/sessions/{id} | /coordination/lanes | /coordination/overlap | /coordination/snapshot | /coordination/detect-collisions | /coordination/next-numbers",
                 },
                 {
-                    "purpose": "collaborate with peer AIs in a durable project room (ADR-0037): create/list rooms, join using an existing Synapse session, receive goal/summary/member/message catch-up, post explicit status/questions/decisions/handoffs, leave, and cursor-sync new messages",
+                    "purpose": "collaborate with peer AIs in a durable project room (ADR-0037): a second live root AI on the same project auto-creates/reuses the room, children join an existing room without creating one, and newcomers receive separate per-peer catch-up packets plus normal room sync/messages",
                     "method": "GET | POST | PATCH | DELETE",
                     "path": "/api/v1/collaboration/rooms | /collaboration/rooms/{id} | /join | /messages | /members/{session_id} | /sync?after_message_id={cursor}",
                 },

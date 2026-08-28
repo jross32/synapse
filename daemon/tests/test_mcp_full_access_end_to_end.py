@@ -108,14 +108,23 @@ def test_every_write_tool_response_carries_a_real_result_not_a_stub(tmp_path, cl
     assert {"runtime", "usable_now", "cost_usd_today"} <= set(payload[0])
 
 
-def test_runtime_status_defers_to_durable_evidence_over_a_fresh_restart(tmp_path, clean_env):
+def test_runtime_status_defers_to_durable_evidence_over_a_fresh_restart(
+    tmp_path, clean_env, monkeypatch
+):
     """Reproduces a real discrepancy found live: right after a daemon restart,
     coder_runtimes.preflight()'s in-memory cooldown has no memory of anything, so it reports
     a runtime as usable even though the durable ai_runtime_capacity ledger still holds real
     provider evidence that it's quota-exhausted. The MCP tool must not expose the more
     optimistic, less-informed answer when better evidence already exists."""
-    from synapse_daemon import ai_executions
+    from synapse_daemon import ai_executions, coder_runtimes
     from synapse_daemon.storage import Storage
+
+    # This test isolates restart-vs-durable-evidence precedence. Model the runtime
+    # as installed explicitly so the CI host's tool inventory cannot short-circuit
+    # the scenario with a legitimate "not installed" result.
+    monkeypatch.setattr(
+        coder_runtimes, "resolve_command", lambda command: f"/fake/{command}"
+    )
 
     storage = Storage(tmp_path / "data")
     storage.open()

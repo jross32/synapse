@@ -11,8 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-
-from synapse_daemon import agent_squads, routes_agent_squads
+from synapse_daemon import agent_squads, chatgpt_child_agents, coordination, routes_agent_squads
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -40,6 +39,28 @@ def _harness(tmp_path: Path):
     app = build_app(storage, EventBus())
     client = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
     return app, client
+
+
+
+
+def _mock_runtime_available(
+    monkeypatch: pytest.MonkeyPatch, *runtime_ids: str
+) -> None:
+    """Make a fake-spawn test independent of locally installed AI CLIs.
+
+    Production capacity checks stay real. Tests that replace the PTY spawn with a
+    deterministic fake explicitly declare the runtime binary available instead of
+    accidentally relying on the developer machine having Codex/Copilot installed.
+    """
+
+    original = routes_agent_squads.coder_runtimes.available
+    allowed = set(runtime_ids)
+
+    def available(runtime) -> bool:
+        runtime_id = getattr(runtime, "value", str(runtime))
+        return runtime_id in allowed or original(runtime)
+
+    monkeypatch.setattr(routes_agent_squads.coder_runtimes, "available", available)
 
 
 def _create_squad(client: TestClient) -> dict:
@@ -115,6 +136,7 @@ def test_codex_work_item_launch_injects_enabled_mcp_servers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
     captured: dict[str, object] = {}
 
     async def _fake_spawn(**kwargs):
@@ -227,6 +249,7 @@ def test_launch_releases_storage_transaction_before_awaited_pty_spawn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
 
     async def _fake_spawn(**kwargs):
         # This is the transaction a heartbeat, audit projection, or another
@@ -278,6 +301,7 @@ def test_parallel_launch_requests_are_serialized_without_internal_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
     active_spawns = 0
     max_active_spawns = 0
 
@@ -334,6 +358,7 @@ def test_spawn_failure_releases_preregistered_worker_presence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
 
     async def _fail_spawn(**kwargs):
         raise RuntimeError("simulated PTY startup failure")
@@ -353,6 +378,8 @@ def test_spawn_failure_releases_preregistered_worker_presence(
     assert response.status_code == 422, response.text
     updated = next(entry for entry in detail["work_items"] if entry["id"] == item["id"])
     assert updated["status"] == "queued"
+    assert updated["pty_session_id"] is None
+    assert updated["opened_in_tab"] is False
     worker_sessions = [
         session
         for session in routes_agent_squads.coordination.list_all_sessions(app.state.storage.conn)
@@ -367,6 +394,7 @@ def test_copilot_work_item_launch_injects_session_only_mcp_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "copilot")
     captured: dict[str, object] = {}
 
     async def _fake_spawn(**kwargs):
@@ -581,6 +609,7 @@ def test_automatic_launch_uses_absolute_prompt_and_mcp_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
     captured: dict[str, object] = {}
 
     async def _fake_spawn(**kwargs):
@@ -687,6 +716,7 @@ def test_role_default_execution_mode_is_used_when_launch_does_not_specify_one(
     """ADR-0025's load-bearing gap: PTY workers report zero tokens because nothing opts
     them into automatic mode by default. A role can now do that itself."""
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
     captured: dict[str, object] = {}
 
     async def _fake_spawn(**kwargs):
@@ -740,6 +770,7 @@ def test_explicit_launch_request_overrides_the_role_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = _harness(tmp_path)
+    _mock_runtime_available(monkeypatch, "codex")
     captured: dict[str, object] = {}
 
     async def _fake_spawn(**kwargs):
@@ -895,7 +926,7 @@ async def test_daemon_heartbeats_worker_while_pty_is_alive(tmp_path: Path) -> No
         async def publish(self, name: str, payload: dict) -> None:
             published.append((name, payload))
 
-    with client as c:
+    with client:
         with app.state.storage.transaction() as conn:
             session = routes_agent_squads.coordination.register_session(
                 conn,
@@ -1416,3 +1447,143 @@ def test_gemini_automatic_launch_maps_authority_to_approval_mode(tmp_path: Path)
         # Headless, or a spawned worker waits forever for a human.
         assert "--prompt" in argv
         assert "explicit handoff" in argv[-1]
+
+
+def test_chatgpt_parent_forces_online_chat_child_and_never_spawns_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    with app.state.storage.transaction() as conn:
+        parent = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="demo-project",
+                runtime_id="chatgpt",
+                agent_label="GPT-5.6 Sol parent",
+                task="Own the child-agent squad",
+            ),
+        )
+
+    monkeypatch.setattr(
+        routes_agent_squads.activity_module,
+        "_owner_session_id_for_squad",
+        lambda _conn, _squad_id: parent.id,
+    )
+
+    async def fake_run_child(
+        worker_id: str,
+        prompt: str,
+        *,
+        timeout: float,
+        conversation_url: str | None = None,
+        desired_title: str = "",
+    ):
+        assert worker_id
+        assert conversation_url is None
+        assert "Review" in desired_title
+        assert "ChatGPT UI child-agent rules" in prompt
+        assert "Do not delegate work to Claude, Codex, Copilot, Gemini" in prompt
+        assert timeout == 180
+        return chatgpt_child_agents.ChatGPTChildResult(
+            worker_id=worker_id,
+            ok=True,
+            reply="ChatGPT UI child finished the review.",
+            conversation_url="https://chatgpt.com/c/child-proof",
+            wall_clock_seconds=190.0,
+            ui_duration_seconds=188.0,
+        )
+
+    monkeypatch.setattr(app.state.chatgpt_child_pool, "run_child", fake_run_child)
+
+    async def forbidden_pty_spawn(**_kwargs):
+        raise AssertionError("ChatGPT child must never spawn a CLI/PTy runtime")
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", forbidden_pty_spawn)
+
+    with client as c:
+        squad = _create_squad(c)
+        item = _create_work_item(
+            c,
+            squad["id"],
+            title="Review with a ChatGPT UI child",
+            assigned_role_id="reviewer",
+        )
+
+        rejected = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={
+                "preferred_runtime": "codex",
+                "execution_mode": "automatic",
+                "timeout_seconds": 180,
+                "open_in_tab": False,
+            },
+        )
+        assert rejected.status_code == 409, rejected.text
+        assert rejected.json()["code"] == "agent_runtime.conflict"
+        assert rejected.json()["details"]["required_runtime"] == "chatgpt_web"
+
+        launched = c.post(
+            f"/api/v1/agent-work-items/{item['id']}/launch",
+            json={
+                "execution_mode": "automatic",
+                "timeout_seconds": 180,
+                "open_in_tab": False,
+            },
+        )
+        assert launched.status_code == 200, launched.text
+        payload = launched.json()
+        assert payload["runtime"] == "chatgpt_web"
+        assert payload["browser_runtime"] is True
+        assert payload["worker_chat_id"]
+        assert "Review" in payload["worker_chat_title"]
+        assert payload["worker_chat_reused"] is False
+
+        deadline = time.time() + 2
+        current = None
+        while time.time() < deadline:
+            current = c.get(
+                f"/api/v1/agent-squads/{squad['id']}"
+            ).json()["work_items"][0]
+            if current["status"] != "running":
+                break
+            time.sleep(0.02)
+
+        assert current is not None
+        assert current["status"] == "handoff"
+        assert current["preferred_runtime"] == "chatgpt_web"
+        assert current["summary_md"] == "ChatGPT UI child finished the review."
+        worker = c.get(f"/api/v1/chatgpt-workers/{payload['worker_chat_id']}")
+        assert worker.status_code == 200, worker.text
+        worker_body = worker.json()
+        assert worker_body["status"] == "idle"
+        assert worker_body["conversation_url"] == "https://chatgpt.com/c/child-proof"
+        assert item["id"] in worker_body["work_item_ids"]
+
+        timing = c.get("/api/v1/thread-presence/overview")
+        assert timing.status_code == 200, timing.text
+        timing_body = timing.json()
+        assert timing_body["counts"]["threads"] == 1
+        assert timing_body["total_work_seconds"] == 188
+        request_group = timing_body["groups"][0]
+        assert request_group["name"] == squad["name"]
+        assert request_group["external_group_key"] == f"squad:{squad['id']}"
+        assert request_group["total_work_seconds"] == 188
+        tracked_thread = request_group["threads"][0]
+        assert tracked_thread["title"] == payload["worker_chat_title"]
+        assert tracked_thread["turn_count"] == 1
+        assert tracked_thread["total_work_seconds"] == 188
+        assert tracked_thread["display_status"] == "idle"
+
+        children = c.get(
+            "/api/v1/coordination/sessions",
+            params={"project_id": "demo-project", "include_gone": True},
+        ).json()
+        web_children = [
+            session
+            for session in children
+            if session["parent_session_id"] == parent.id
+            and session["runtime_id"] == "chatgpt_web"
+        ]
+        assert len(web_children) == 1
+        assert web_children[0]["seq"] is None

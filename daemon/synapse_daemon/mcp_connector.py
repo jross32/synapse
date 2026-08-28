@@ -21,31 +21,25 @@ import os
 import threading
 import uuid
 from pathlib import Path
-
-from . import boot_config
-from . import local_agent
-from . import mcp_servers
-from .runtime_paths import repo_root
-from .runtime_resolution import resolve_command
-from .time_utils import from_iso, to_iso, utc_now
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import __version__
+from . import __version__, boot_config, local_agent, mcp_servers, quality_os, skill_packs
 from . import agent_squads as squads
 from . import collaboration_rooms as collaboration_rooms_module
 from . import project_records as records
 from . import projects as projects_module
-from . import quality_os
+from .api_versions import event_name
 from .auth import AuthManager
 from .errors import SynapseError
 from .quick_actions import load_templates
-from . import skill_packs
+from .runtime_paths import repo_root
+from .runtime_resolution import resolve_command
 from .storage import Storage
+from .time_utils import from_iso, to_iso, utc_now
 from .tools_registry import ToolRegistry
-from .api_versions import event_name
 from .ws import EventBus
 
 # A recent MCP protocol revision. We echo the client's requested version when
@@ -249,6 +243,16 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                                            "idempotentHint": False},
     "synapse_leave_collaboration_room": {"readOnlyHint": False, "destructiveHint": False,
                                          "idempotentHint": False},
+    "synapse_thread_bootstrap": {"readOnlyHint": False, "destructiveHint": False,
+                                 "idempotentHint": True},
+    "synapse_thread_begin_turn": {"readOnlyHint": False, "destructiveHint": False,
+                                  "idempotentHint": True},
+    "synapse_thread_heartbeat": {"readOnlyHint": False, "destructiveHint": False,
+                                 "idempotentHint": True},
+    "synapse_thread_finish_turn": {"readOnlyHint": False, "destructiveHint": False,
+                                   "idempotentHint": True},
+    "synapse_set_project_chat_url": {"readOnlyHint": False, "destructiveHint": False,
+                                     "idempotentHint": True},
     "synapse_report_playbook_status": {"readOnlyHint": False, "destructiveHint": False,
                                        "idempotentHint": False},
     # -- writes that can overwrite or replace content that already exists --
@@ -444,6 +448,101 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
     # read a hardcoded path here and silently disagreed with the actual configured data
     # directory whenever the daemon was not running out of the repo checkout.
     if allow_writes:
+
+        specs.extend(
+            [
+                {
+                    "name": "synapse_thread_bootstrap",
+                    "description": (
+                        "Register/resume this AI conversation in Synapse's durable thread tracker. "
+                        "Call this at the start of project work. On a new thread, the first call may "
+                        "return candidate work groups; inspect them and call again with work_group_id "
+                        "for the same request or create_group_name for a genuinely new request."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "external_thread_key": {"type": "string", "description": "Stable conversation identity. Prefer the chatgpt.com conversation URL/id when known; otherwise use a stable per-thread key."},
+                            "runtime_id": {"type": "string", "description": "Default chatgpt."},
+                            "source": {"type": "string", "enum": ["connector", "browser_observer", "managed_browser", "cli", "other"]},
+                            "conversation_url": {"type": "string"},
+                            "title": {"type": "string"},
+                            "description": {"type": "string"},
+                            "current_task": {"type": "string"},
+                            "session_id": {"type": "string"},
+                            "work_group_id": {"type": "string", "description": "Join an existing request/group after inspecting candidates."},
+                            "create_group_name": {"type": "string", "description": "Create a new request/group when this work is not the same as an existing candidate."},
+                            "create_group_description": {"type": "string"},
+                        },
+                        "required": ["project_id", "external_thread_key"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_thread_begin_turn",
+                    "description": (
+                        "Mark a tracked conversation as actively working and open one timed turn. "
+                        "Call immediately when starting substantive work for the user's prompt."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "thread_id": {"type": "string"},
+                            "prompt_label": {"type": "string"},
+                            "current_task": {"type": "string"},
+                        },
+                        "required": ["thread_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_thread_heartbeat",
+                    "description": (
+                        "Refresh a tracked thread's live lease/status while work is still underway. "
+                        "Managed browser workers do this automatically; connector-only sessions should "
+                        "call it during long work so the operator can distinguish active from stale."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "thread_id": {"type": "string"},
+                            "status": {"type": "string", "enum": ["active", "idle", "error", "gone", "archived"]},
+                            "current_task": {"type": "string"},
+                            "conversation_url": {"type": "string"},
+                            "title": {"type": "string"},
+                            "error": {"type": "string"},
+                        },
+                        "required": ["thread_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_thread_finish_turn",
+                    "description": (
+                        "Finalize one timed response/work turn before returning the final answer. "
+                        "Adds the duration exactly once to this thread's cumulative worked time. "
+                        "Use duration_source=ui_display when a local browser observer captured ChatGPT's "
+                        "own 'Worked for …' value; otherwise omit duration_seconds for server wall-clock timing."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "thread_id": {"type": "string"},
+                            "turn_id": {"type": "string"},
+                            "status": {"type": "string", "enum": ["success", "error", "cancelled"]},
+                            "duration_seconds": {"type": "number", "minimum": 0},
+                            "duration_source": {"type": "string", "enum": ["ui_display", "wall_clock", "reported", "recovered"]},
+                            "summary_md": {"type": "string"},
+                            "error": {"type": "string"},
+                        },
+                        "required": ["thread_id", "turn_id"],
+                        "additionalProperties": False,
+                    },
+                },
+            ]
+        )
+
         # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
         # remote MCP client (e.g. the claude.ai connector over the WAN tunnel) SET UP work:
         # capture context, create a squad, and assign work items. LAUNCHING a worker (which
@@ -451,6 +550,26 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
         # reachable over the same tunnel -- see docs/DRIVE-SYNAPSE-FROM-AI.md.
         specs.extend(
             [
+                {
+                    "name": "synapse_set_project_chat_url",
+                    "description": (
+                        "Set the current canonical AI chat/thread URL for a project. This replaces any "
+                        "older pointer so every AI can discover the same live thread with "
+                        "synapse_get_project_records. Omit or pass an empty url to clear it."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "url": {
+                                "type": "string",
+                                "description": "Absolute http(s) chat/thread URL. Omit or empty to clear.",
+                            },
+                        },
+                        "required": ["project_id"],
+                        "additionalProperties": False,
+                    },
+                },
                 {
                     "name": "synapse_add_project_idea",
                     "description": "Capture a quick idea / draft ADR on a project (status=idea). Promote it later in the UI.",
@@ -802,7 +921,15 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "properties": {
                             "server": {"type": "string", "description": "Server id, e.g. reflex"},
                             "tool": {"type": "string", "description": "Tool name on that server."},
-                            "arguments": {"type": "object", "description": "Arguments for that tool."},
+                            "arguments": {
+                                "type": "object",
+                                "description": "Arguments for that tool. Use arguments_json if the calling connector cannot pass arbitrary nested objects.",
+                                "additionalProperties": True,
+                            },
+                            "arguments_json": {
+                                "type": "string",
+                                "description": "JSON object encoded as a string; compatibility fallback for connector hosts that reject free-form nested objects before dispatch.",
+                            },
                             "timeout_seconds": {"type": "integer", "description": "Default 120, capped at 90 regardless -- this blocks a shared worker thread for the full duration, so a large value here can stall other tool calls."},
                         },
                         "required": ["server", "tool"],
@@ -871,6 +998,34 @@ _SYNC_RUN_TIMEOUT_MAX = 90
 # 2026-08-26: exactly this symptom, root-caused after Cloudflare tunnel + daemon health both ruled
 # out). Same ceiling as synapse_run_command for the same reason.
 _BLOCKING_CALL_TIMEOUT_MAX = 90
+
+
+def _proxy_tool_arguments(args: dict[str, Any]) -> dict[str, Any]:
+    """Resolve downstream MCP arguments from an object or JSON-string fallback.
+
+    Some connector hosts validate tool schemas before dispatch and reject arbitrary
+    nested object keys even though the downstream MCP tool accepts them. A scalar
+    JSON transport avoids that host-side schema limitation without weakening the
+    normal object path for clients that support free-form nested arguments.
+    """
+
+    nested = args.get("arguments")
+    raw = args.get("arguments_json")
+    if raw not in (None, ""):
+        if nested not in (None, {}):
+            raise ValueError("Provide either arguments or arguments_json, not both")
+        try:
+            parsed = json.loads(str(raw))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"arguments_json must be valid JSON: {exc.msg}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("arguments_json must encode a JSON object")
+        return parsed
+    if nested is None:
+        return {}
+    if not isinstance(nested, dict):
+        raise ValueError("arguments must be an object")
+    return nested
 
 
 def _prune_old_command_jobs() -> None:
@@ -1071,6 +1226,12 @@ def build_mcp_router(
                 ],
                 "writes_enabled": writes_allowed(),
                 "hint": "Use synapse_get_project_records for project decisions and synapse_get_skill_pack for reusable AI instructions.",
+                "thread_tracking": {
+                    "enabled": True,
+                    "bootstrap_required_for_project_work": True,
+                    "protocol": "bootstrap -> begin turn -> heartbeat while long-running -> finish turn",
+                    "why": "Synapse uses this durable identity to show exact active/idle/error/stale threads and cumulative worked time.",
+                },
             }
         if name == "synapse_create_collaboration_room":
             _require_writes()
@@ -1141,6 +1302,108 @@ def build_mcp_router(
                 "room_left", {"room_id": room_id, "session_id": session_id}
             )
             return dumped
+
+        if name == "synapse_set_project_chat_url":
+            if not writes_allowed():
+                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            project_id = str(args.get("project_id", "")).strip()
+            projects_module.get(storage.conn, project_id)
+            raw_url = args.get("url")
+            from .models import AuditSource
+            from .project_records import ProjectCanonicalChatUrlUpdate
+
+            payload = ProjectCanonicalChatUrlUpdate(url=raw_url, source=AuditSource.AUTO)
+            with storage.transaction() as conn:
+                bundle = records.set_canonical_chat_url(conn, project_id, payload.url)
+            return bundle.model_dump(mode="json")
+
+        if name == "synapse_thread_bootstrap":
+            _require_writes()
+            from . import thread_presence as _thread_presence
+            payload = _thread_presence.ThreadBootstrap(
+                project_id=str(args.get("project_id") or ""),
+                external_thread_key=str(args.get("external_thread_key") or ""),
+                runtime_id=str(args.get("runtime_id") or "chatgpt"),
+                source=_thread_presence.ThreadSource(str(args.get("source") or "connector")),
+                conversation_url=str(args.get("conversation_url") or ""),
+                title=str(args.get("title") or ""),
+                description=str(args.get("description") or ""),
+                current_task=str(args.get("current_task") or ""),
+                session_id=(str(args.get("session_id") or "").strip() or None),
+                work_group_id=(str(args.get("work_group_id") or "").strip() or None),
+                create_group_name=(str(args.get("create_group_name") or "").strip() or None),
+                create_group_description=str(args.get("create_group_description") or ""),
+            )
+            with storage.transaction() as conn:
+                projects_module.get(conn, payload.project_id)
+                item, candidates, needs_decision = _thread_presence.bootstrap_thread(conn, payload)
+            return {
+                "thread": item.model_dump(mode="json") if item else None,
+                "needs_group_decision": needs_decision,
+                "group_candidates": [candidate.model_dump(mode="json") for candidate in candidates],
+                "instruction": (
+                    "Choose whether this is the same request as one candidate. Call synapse_thread_bootstrap "
+                    "again with that work_group_id, or create_group_name for a new request."
+                    if needs_decision else
+                    "Tracking active. Call synapse_thread_begin_turn now, heartbeat during long work, "
+                    "and synapse_thread_finish_turn before returning the final answer."
+                ),
+            }
+        if name == "synapse_thread_begin_turn":
+            _require_writes()
+            from . import thread_presence as _thread_presence
+            thread_id = str(args.get("thread_id") or "").strip()
+            with storage.transaction() as conn:
+                turn = _thread_presence.begin_turn(
+                    conn,
+                    thread_id,
+                    _thread_presence.ThreadBegin(
+                        prompt_label=str(args.get("prompt_label") or ""),
+                        current_task=str(args.get("current_task") or ""),
+                    ),
+                )
+            return turn.model_dump(mode="json")
+        if name == "synapse_thread_heartbeat":
+            _require_writes()
+            from . import thread_presence as _thread_presence
+            thread_id = str(args.get("thread_id") or "").strip()
+            payload_args: dict[str, Any] = {}
+            for key in ("current_task", "conversation_url", "title", "error"):
+                if key in args:
+                    payload_args[key] = args.get(key)
+            if args.get("status"):
+                payload_args["status"] = _thread_presence.ThreadStatus(str(args.get("status")))
+            with storage.transaction() as conn:
+                item = _thread_presence.heartbeat_thread(
+                    conn, thread_id, _thread_presence.ThreadHeartbeat(**payload_args)
+                )
+            return item.model_dump(mode="json")
+        if name == "synapse_thread_finish_turn":
+            _require_writes()
+            from . import thread_presence as _thread_presence
+            thread_id = str(args.get("thread_id") or "").strip()
+            with storage.transaction() as conn:
+                turn, item = _thread_presence.finish_turn(
+                    conn,
+                    thread_id,
+                    _thread_presence.ThreadFinish(
+                        turn_id=str(args.get("turn_id") or ""),
+                        status=_thread_presence.TurnStatus(str(args.get("status") or "success")),
+                        duration_seconds=(
+                            float(args["duration_seconds"]) if args.get("duration_seconds") is not None else None
+                        ),
+                        duration_source=_thread_presence.DurationSource(
+                            str(args.get("duration_source") or "wall_clock")
+                        ),
+                        summary_md=str(args.get("summary_md") or ""),
+                        error=str(args.get("error") or ""),
+                    ),
+                )
+            return {
+                "turn": turn.model_dump(mode="json"),
+                "thread": item.model_dump(mode="json"),
+            }
+
         if name == "synapse_add_project_idea":
             if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
@@ -1507,7 +1770,7 @@ def build_mcp_router(
             if not tool:
                 raise ValueError("tool is required")
             return speak(server, "tools/call",
-                         {"name": tool, "arguments": args.get("arguments") or {}},
+                         {"name": tool, "arguments": _proxy_tool_arguments(args)},
                          timeout)
 
         if name == "synapse_report_playbook_status":

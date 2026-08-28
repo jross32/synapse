@@ -35,6 +35,7 @@ import asyncio
 import base64
 import io
 import logging
+import ntpath
 import os
 import secrets
 import signal
@@ -802,11 +803,12 @@ class PtySessionManager:
             return list(argv)
         # Copilot must stay the FIRST branch so a hypothetical ``copilot.cmd``
         # keeps its (lower-cased) semantics instead of the generic path.
-        if Path(argv[0]).stem.lower() == "copilot":
+        windows_head = ntpath.basename(argv[0])
+        if ntpath.splitext(windows_head)[0].lower() == "copilot":
             wrapped = self._powershell_wrap(argv, lowercase_arg0=True)
             return wrapped if wrapped is not None else list(argv)
         # ``.cmd``/``.bat`` shim WITH arguments -> the squad-launch bug. Wrap it.
-        if Path(argv[0]).suffix.lower() in (".cmd", ".bat") and len(argv) > 1:
+        if ntpath.splitext(windows_head)[1].lower() in (".cmd", ".bat") and len(argv) > 1:
             wrapped = self._powershell_wrap(argv, lowercase_arg0=False)
             if wrapped is None:
                 # Do NOT fall back to the known-broken raw argv (it hangs the

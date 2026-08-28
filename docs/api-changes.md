@@ -15,6 +15,29 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.203 (durable ChatGPT workers + thread presence)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-08-27 | `PUT /api/v1/projects/{id}/records/canonical-chat-url` | additive | Replaces or clears the one current canonical AI chat/thread pointer for a project; project-record reads now include the pointer + updated timestamp. |
+| 2026-08-27 | `GET /api/v1/chatgpt-workers` + `/{id}` | additive | Lists/reads durable ChatGPT UI worker conversations independently of short-lived coordination sessions. |
+| 2026-08-27 | `GET /api/v1/chatgpt-workers/readiness` | additive | Reports dedicated profile/project setup readiness without reading the operator's normal browser profile. |
+| 2026-08-27 | `POST /api/v1/chatgpt-workers/setup-browser` | additive | Opens the one-time account-owner browser on Synapse's dedicated profile; repeated calls return `already_running` while that profile is already open. |
+| 2026-08-27 | `POST /api/v1/chatgpt-workers/{id}/archive|unarchive` | additive | Retires/restores durable worker conversations without deleting their work-item history. |
+| 2026-08-27 | `GET /api/v1/thread-presence/overview|groups|threads/{id}/turns` | additive | Reads durable request groups, threads, browser observations, status, and auditable worked-time totals. |
+| 2026-08-27 | `POST /api/v1/thread-presence/bootstrap|browser-observe|threads/{id}/begin|heartbeat|finish|state` | additive | Stable thread identity + browser attachment + explicit per-turn accounting protocol. Reusing an external thread key updates the same durable record. |
+| 2026-08-27 | `v1.thread_presence.browser_observed|thread_bootstrapped|turn_started|thread_updated|turn_finished` | additive | Streams browser/thread/turn state into the operator surfaces. |
+| 2026-08-27 | `GET /api/v1/activity/sessions` / detail representations | additive | Activity/Live View data can include project names and linked durable ChatGPT worker summaries for the selected session. |
+| 2026-08-27 | ChatGPT-owned `POST /api/v1/agent-work-items/{id}/launch` | corrective/extended | ChatGPT parent ownership selects the real `chatgpt_web` child path; same-work-item launches reuse the current eligible worker conversation instead of duplicating it. |
+| 2026-08-27 | automatic project collaboration | corrective/extended | Same-project root AIs share one auto-managed room; children join that room and peers retain separate catch-up packets. |
+| 2026-08-27 | local MCP tools | additive | Adds `synapse_thread_bootstrap`, `synapse_thread_begin_turn`, `synapse_thread_heartbeat`, `synapse_thread_finish_turn`, and `synapse_set_project_chat_url`. |
+| 2026-08-27 | `synapse_call_mcp_tool` input | additive compatibility | Accepts normal free-form nested `arguments` plus scalar `arguments_json` for connector hosts that cannot validate arbitrary nested keys. |
+
+Migrations 037-040 add project canonical-chat metadata, durable ChatGPT worker/work-item links, work groups,
+AI threads/turns, and browser observations. All changes are additive to `/api/v1`; existing clients can ignore the new
+fields/routes. Identity is intentionally split: coordination sessions are live leases, worker chats are reusable
+conversations, and thread-presence rows are durable request/conversation timing records. Migration 040 additionally enforces one non-empty ChatGPT conversation URL per durable worker row.
+
 ### Shipped in v0.1.201 (durable improvement-proposal lifecycle)
 
 | Date | Endpoint or event | Kind | Notes |

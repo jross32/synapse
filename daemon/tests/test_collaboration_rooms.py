@@ -8,11 +8,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
-
 from synapse_daemon import collaboration_rooms as rooms
 from synapse_daemon import coordination
 from synapse_daemon.errors import SynapseError
-from synapse_daemon.projects import Project, create as create_project
+from synapse_daemon.projects import Project
+from synapse_daemon.projects import create as create_project
 from synapse_daemon.routes_collaboration_rooms import build_collaboration_rooms_router
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
@@ -239,3 +239,141 @@ def test_router_emits_realtime_room_events(tmp_path: Path) -> None:
     assert "v1.collaboration.room_created" in names
     assert "v1.collaboration.room_joined" in names
     assert "v1.collaboration.message_posted" in names
+
+def test_auto_collaboration_starts_only_when_second_root_arrives(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        _project(conn, "p1", tmp_path)
+        first = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="p1",
+                runtime_id="chatgpt",
+                agent_label="First AI",
+                task="Build backend",
+                last_intent="Editing the API",
+            ),
+        )
+        assert rooms.ensure_project_collaboration(conn, first.id) is None
+
+        child = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="p1",
+                runtime_id="chatgpt_web",
+                agent_label="First child",
+                task="Review backend",
+                parent_session_id=first.id,
+            ),
+        )
+        assert rooms.ensure_project_collaboration(conn, child.id) is None
+        assert rooms.list_rooms(conn, project_id="p1") == []
+
+        coordination.claim_lane(
+            conn,
+            "p1",
+            coordination.LaneClaim(
+                session_id=first.id,
+                path_globs=["daemon/api/**"],
+                task_ref="backend",
+            ),
+        )
+        second = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="p1",
+                runtime_id="chatgpt",
+                agent_label="Second AI",
+                task="Build UI",
+                last_intent="Starting the live dashboard",
+            ),
+        )
+        result = rooms.ensure_project_collaboration(conn, second.id)
+
+    assert result is not None
+    assert result.created is True
+    assert {member.session_id for member in result.sync.members} == {
+        first.id,
+        child.id,
+        second.id,
+    }
+    packets = {packet.session_id: packet for packet in result.sync.peer_packets}
+    assert set(packets) == {first.id, child.id}
+    assert packets[first.id].task == "Build backend"
+    assert packets[first.id].last_intent == "Editing the API"
+    assert packets[first.id].path_globs == ["daemon/api/**"]
+
+
+def test_auto_collaboration_reuses_room_and_keeps_peer_packets_separate(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        _project(conn, "p1", tmp_path)
+        first = _session(conn, "p1", "chatgpt", "First")
+        second = _session(conn, "p1", "chatgpt", "Second")
+        initial = rooms.ensure_project_collaboration(conn, second.id)
+        assert initial is not None and initial.created is True
+
+        rooms.post_message(
+            conn,
+            initial.sync.room.id,
+            rooms.CollaborationRoomPost(
+                session_id=first.id,
+                kind=rooms.CollaborationMessageKind.STATUS,
+                body_md="First owns migrations.",
+            ),
+        )
+        rooms.post_message(
+            conn,
+            initial.sync.room.id,
+            rooms.CollaborationRoomPost(
+                session_id=second.id,
+                kind=rooms.CollaborationMessageKind.STATUS,
+                body_md="Second owns renderer.",
+            ),
+        )
+        third = _session(conn, "p1", "chatgpt", "Third")
+        joined = rooms.ensure_project_collaboration(conn, third.id)
+
+    assert joined is not None
+    assert joined.created is False
+    assert len(rooms.list_rooms(storage.conn, project_id="p1")) == 1
+    packets = {packet.session_id: packet for packet in joined.sync.peer_packets}
+    assert set(packets) == {first.id, second.id}
+    assert [m.body_md for m in packets[first.id].recent_messages] == [
+        "First owns migrations."
+    ]
+    assert [m.body_md for m in packets[second.id].recent_messages] == [
+        "Second owns renderer."
+    ]
+
+
+def test_child_auto_joins_existing_room_without_creating_another(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        _project(conn, "p1", tmp_path)
+        first = _session(conn, "p1", "chatgpt", "First")
+        second = _session(conn, "p1", "chatgpt", "Second")
+        initial = rooms.ensure_project_collaboration(conn, second.id)
+        assert initial is not None
+
+        child = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="p1",
+                runtime_id="chatgpt_web",
+                agent_label="Second child",
+                parent_session_id=second.id,
+                task="Run QA",
+            ),
+        )
+        child_join = rooms.ensure_project_collaboration(conn, child.id)
+
+    assert child_join is not None
+    assert child_join.created is False
+    assert child.id in child_join.joined_session_ids
+    assert len(rooms.list_rooms(storage.conn, project_id="p1")) == 1
+    assert {member.session_id for member in child_join.sync.members} == {
+        first.id,
+        second.id,
+        child.id,
+    }

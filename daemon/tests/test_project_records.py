@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -167,6 +166,59 @@ def test_empty_project_records(tmp_path: Path) -> None:
     assert bundle["adrs"] == []
     assert bundle["backlog"] == []
     assert bundle["versions"] == []
+
+
+def test_canonical_chat_url_is_current_clearable_and_persistent(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    endpoint = "/api/v1/projects/demo-project/records/canonical-chat-url"
+
+    initial = client.get("/api/v1/projects/demo-project/records").json()
+    assert initial["canonical_chat_url"] is None
+    assert initial["canonical_chat_url_updated_at"] is None
+
+    first_url = "https://chatgpt.com/c/first-thread"
+    first = client.put(endpoint, json={"url": f"  {first_url}  "})
+    assert first.status_code == 200, first.text
+    first_bundle = first.json()
+    assert first_bundle["canonical_chat_url"] == first_url
+    assert first_bundle["canonical_chat_url_updated_at"] is not None
+
+    second_url = "https://claude.ai/chat/current-thread"
+    second = client.put(endpoint, json={"url": second_url})
+    assert second.status_code == 200, second.text
+    current = client.get("/api/v1/projects/demo-project/records").json()
+    assert current["canonical_chat_url"] == second_url
+    assert first_url not in str(current)
+
+    # Reopen the same SQLite data directory to prove this is durable state, not
+    # an in-process cache attached to the first app instance.
+    client.app.state.storage.close()
+    storage = Storage(tmp_path / "data")
+    storage.open()
+    storage.migrate()
+    app = build_app(storage, EventBus())
+    reopened = TestClient(app, headers={"X-Synapse-Token": app.state.auth.local_token})
+    persisted = reopened.get("/api/v1/projects/demo-project/records").json()
+    assert persisted["canonical_chat_url"] == second_url
+
+    cleared = reopened.put(endpoint, json={"url": None})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["canonical_chat_url"] is None
+    assert reopened.get("/api/v1/projects/demo-project/records").json()["canonical_chat_url"] is None
+
+
+def test_canonical_chat_url_validates_and_unknown_project_is_404(tmp_path: Path) -> None:
+    client = _harness(tmp_path)
+    endpoint = "/api/v1/projects/demo-project/records/canonical-chat-url"
+    assert client.put(endpoint, json={"url": "file:///tmp/thread"}).status_code == 422
+    assert client.put(endpoint, json={"url": "not-a-url"}).status_code == 422
+    assert (
+        client.put(
+            "/api/v1/projects/nope/records/canonical-chat-url",
+            json={"url": "https://chatgpt.com/c/thread"},
+        ).status_code
+        == 404
+    )
 
 
 def test_unknown_project_is_404(tmp_path: Path) -> None:

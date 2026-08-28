@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-08-01",
+  "generated_at": "2026-08-27",
   "items": [
     {
       "id": "canonical-ai-execution-accounting",
@@ -16,7 +16,7 @@
       "status": "in_progress",
       "phase": "Quality",
       "adr": "ADR-0023",
-      "summary": "Before and after meaningful work, the AI consults a small panel of expert reviewers (2-10, by task size) and synthesizes their feedback \u2014 so it doesn't work alone. Ships as a launchable workflow + discipline; a native council engine is a later step."
+      "summary": "Before and after meaningful work, the AI consults a small panel of expert reviewers (2-10, by task size) and synthesizes their feedback — so it doesn't work alone. Ships as a launchable workflow + discipline; a native council engine is a later step."
     },
     {
       "id": "local-llm",
@@ -24,7 +24,7 @@
       "status": "shipped",
       "phase": "Local LLM",
       "adr": "ADR-0014",
-      "summary": "A private, on-device LLM (Ollama) you can chat with about your projects and Synapse itself \u2014 off by default."
+      "summary": "A private, on-device LLM (Ollama) you can chat with about your projects and Synapse itself — off by default."
     },
     {
       "id": "model-marketplace",
@@ -40,7 +40,7 @@
       "status": "shipped",
       "phase": "Voice",
       "adr": "ADR-0015",
-      "summary": "Dictate into the command pad + the assistant \u2014 great on the phone."
+      "summary": "Dictate into the command pad + the assistant — great on the phone."
     },
     {
       "id": "review-inbox",
@@ -120,7 +120,7 @@
       "status": "in_progress",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0019",
-      "summary": "This page \u2014 see what shipped and what's coming, as a path."
+      "summary": "This page — see what shipped and what's coming, as a path."
     },
     {
       "id": "workers-personalities",
@@ -128,7 +128,7 @@
       "status": "in_progress",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0018",
-      "summary": "Download workers as a role + a personality \u2014 two AIs can share a role but differ in personality, so they collaborate and debate."
+      "summary": "Download workers as a role + a personality — two AIs can share a role but differ in personality, so they collaborate and debate."
     },
     {
       "id": "ai-bundles",
@@ -195,6 +195,14 @@
       "summary": "Faster summaries over transcripts, shared memory, review history, and project records so a new AI can re-enter a project without rereading raw logs."
     },
     {
+      "id": "chatgpt-ui-workers-thread-presence",
+      "title": "Durable ChatGPT UI workers + thread presence",
+      "status": "shipped",
+      "phase": "AI-coding power",
+      "adr": null,
+      "summary": "Synapse can keep reusable ChatGPT UI worker conversations separate from short-lived connection sessions, remember the current project chat pointer, group the same conversation/request across reconnects, track active/idle/error state and auditable per-turn worked time, show it in Live View, and observe visible ChatGPT tabs through a dedicated local browser companion. Same-work-item and same-thread identities are reused instead of duplicated."
+    },
+    {
       "id": "chatgpt-companion",
       "title": "ChatGPT companion",
       "status": "in_progress",
@@ -224,7 +232,7 @@
       "status": "in_progress",
       "phase": "AI-coding power",
       "adr": "ADR-0024",
-      "summary": "When two AI coders share one repo, Synapse holds one live picture of who's editing what: a presence registry, advisory file-lane claims with overlap detection, a git collision detector, disk-truth migration/ADR numbering, and a pre-commit gate. Cockpit panel + shared Plan to follow."
+      "summary": "Presence registry, advisory file lanes, overlap detection, git collision checks, disk-truth numbering, and the pre-commit gate are live. Same-project root AIs can also share one auto-managed durable collaboration room, while child workers join the existing room and newcomers get per-peer catch-up packets; broader cockpit/shared-plan polish remains in progress."
     },
     {
       "id": "qa-bug-hunt-team",
@@ -248,7 +256,7 @@
       "status": "coming",
       "phase": "Marketplace & Workforce",
       "adr": "ADR-0018",
-      "summary": "Pick a team for a goal \u2014 a UI/UX crew, an SEO sweep, a scraping pipeline, a security review \u2014 in one tap."
+      "summary": "Pick a team for a goal — a UI/UX crew, an SEO sweep, a scraping pipeline, a security review — in one tap."
     },
     {
       "id": "publishing",
@@ -288,7 +296,7 @@
       "status": "coming",
       "phase": "AI-coding power",
       "adr": "ADR-0020",
-      "summary": "Before a big change, the AI shows a few cheap mockups (e.g. 3 nav-bar options) side by side \u2014 you pick, then it builds the one you chose."
+      "summary": "Before a big change, the AI shows a few cheap mockups (e.g. 3 nav-bar options) side by side — you pick, then it builds the one you chose."
     },
     {
       "id": "live-preview",
@@ -336,7 +344,7 @@
       "status": "shipped",
       "phase": "PLAN 5",
       "adr": "ADR-0028, ADR-0033",
-      "summary": "SHIPPED (v0.1.82-0.1.93): numbered and graded AI sessions, notifications, and a one-window Live View. Deep View now defaults to detailed deliberate reasoning summaries, decisions, searches, evidence, clean Synapse/MCP/tool receipts, accurate event correlation, status explanations, and collapsible clickable squad -> worker profiles; Summary View keeps the major story."
+      "summary": "SHIPPED: numbered/graded AI sessions, detailed operator journal, squads/workers, notifications, and one-window Live View now also include durable AI thread/request groups, active/idle/error/stale state, linked ChatGPT UI workers, and cumulative per-turn worked-time accounting with desktop/mobile proof."
     },
     {
       "id": "one-window-ui-standard",

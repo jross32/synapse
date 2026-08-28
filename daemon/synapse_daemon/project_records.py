@@ -21,13 +21,13 @@ import secrets
 import sqlite3
 from datetime import datetime
 from enum import Enum
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .errors import not_found
 from .models import AuditSource
 from .time_utils import from_iso, to_iso, utc_now
-
 
 # ── Enums ────────────────────────────────────────────────────────────────────
 
@@ -156,10 +156,37 @@ class ProjectVersionUpdate(BaseModel):
     source: AuditSource = AuditSource.DESKTOP
 
 
+class ProjectCanonicalChatUrlUpdate(BaseModel):
+    """Set the one current AI chat/thread URL for a project.
+
+    The field is intentionally provider-agnostic: ChatGPT, Claude, or another
+    web AI can all be canonical as long as the value is an HTTP(S) URL. Empty
+    strings normalize to ``None`` so callers can clear stale ownership.
+    """
+
+    url: str | None = Field(default=None, max_length=4096)
+    source: AuditSource = AuditSource.DESKTOP
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("canonical chat URL must be an absolute http:// or https:// URL")
+        return normalized
+
+
 class ProjectRecords(BaseModel):
     """The full per-project record bundle for the detail view."""
 
     project_id: str
+    canonical_chat_url: str | None = None
+    canonical_chat_url_updated_at: datetime | None = None
     adrs: list[ProjectAdr] = Field(default_factory=list)
     backlog: list[ProjectBacklogItem] = Field(default_factory=list)
     versions: list[ProjectVersion] = Field(default_factory=list)
@@ -500,9 +527,48 @@ def delete_version(conn: sqlite3.Connection, version_id: str) -> None:
 # ── Bundle ───────────────────────────────────────────────────────────────────
 
 
+def _canonical_chat_metadata(
+    conn: sqlite3.Connection, project_id: str
+) -> tuple[str | None, datetime | None]:
+    row = conn.execute(
+        "SELECT canonical_chat_url, updated_at FROM project_record_metadata WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    if row is None:
+        return None, None
+    return (
+        row["canonical_chat_url"],
+        from_iso(row["updated_at"]) if row["updated_at"] else None,
+    )
+
+
+def set_canonical_chat_url(
+    conn: sqlite3.Connection, project_id: str, url: str | None
+) -> ProjectRecords:
+    """Replace the project's canonical chat/thread pointer atomically.
+
+    This is deliberately last-write-wins: callers asking for the *current*
+    thread must never have to choose among historical URLs.
+    """
+
+    normalized = ProjectCanonicalChatUrlUpdate(url=url).url
+    now = to_iso(utc_now())
+    conn.execute(
+        "INSERT INTO project_record_metadata (project_id, canonical_chat_url, updated_at) "
+        "VALUES (?, ?, ?) "
+        "ON CONFLICT(project_id) DO UPDATE SET "
+        "canonical_chat_url = excluded.canonical_chat_url, updated_at = excluded.updated_at",
+        (project_id, normalized, now),
+    )
+    return get_records(conn, project_id)
+
+
 def get_records(conn: sqlite3.Connection, project_id: str) -> ProjectRecords:
+    canonical_chat_url, canonical_chat_url_updated_at = _canonical_chat_metadata(conn, project_id)
     return ProjectRecords(
         project_id=project_id,
+        canonical_chat_url=canonical_chat_url,
+        canonical_chat_url_updated_at=canonical_chat_url_updated_at,
         adrs=list_adrs(conn, project_id),
         backlog=list_backlog(conn, project_id),
         versions=list_versions(conn, project_id),

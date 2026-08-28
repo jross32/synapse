@@ -24,65 +24,67 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__
-from . import boot_config
+from . import __version__, boot_config
 from .api_versions import API_PREFIX, event_name
 from .auth import AuthManager, ensure_local_token, require_token
+from .chatgpt_child_agents import ChatGPTBrowserPool
 from .errors import ErrorEnvelope, SynapseError
+from .mcp_connector import build_mcp_info_router, build_mcp_router
+from .mcp_servers import McpServerManager
+from .model_market import ModelPullManager
 from .models import AuditSource, HealthResponse
 from .orphan_reconciler import ReconcileOutcome, summarise
 from .process_manager import ProcessManager
 from .profile import ProfileManager
 from .pty_sessions import PtySessionManager
-from .runtime_paths import bundled_dist_dir, bundled_mobile_dir, bundled_tools_dir
-from .routes_ai import build_ai_router
-from .routes_ai_bundles import build_ai_bundles_router
-from .routes_ai_factory import build_ai_factory_router
+from .routes_about import build_about_router
+from .routes_activity import build_activity_router
 from .routes_agent_squads import (
     WorkerPresenceRegistry,
     WorkerTimeoutRegistry,
     build_agent_squads_router,
     subscribe_agent_squad_events,
 )
-from .routes_audit import build_audit_router
-from .routes_files import build_files_router
-from .routes_watch import build_watch_router
-from .routes_imports import build_imports_router
-from .routes_marketplace import build_marketplace_router
-from .routes_quick_actions import build_quick_actions_router
-from .routes_system import build_system_router
-from .routes_pty import build_pty_router
-from .routes_workbench import build_workbench_router
-from .routes_auth import build_auth_router
+from .routes_ai import build_ai_router
+from .routes_ai_bundles import build_ai_bundles_router
 from .routes_ai_cases import build_ai_cases_router, subscribe_ai_case_events
-from .routes_benchmarks import build_benchmarks_router
-from .routes_coder_workspace import build_coder_workspace_router, subscribe_coder_workspace_events
-from .routes_discovery import build_discovery_router
-from .routes_projects import build_projects_router
-from .routes_project_records import build_project_records_router
+from .routes_ai_factory import build_ai_factory_router
 from .routes_assistant import build_assistant_router
+from .routes_audit import build_audit_router
+from .routes_auth import build_auth_router
+from .routes_benchmarks import build_benchmarks_router
 from .routes_blueprints import build_blueprints_router
+from .routes_capture import build_capture_router
+from .routes_chatgpt_workers import build_chatgpt_workers_router
+from .routes_coder_workspace import build_coder_workspace_router, subscribe_coder_workspace_events
+from .routes_collaboration_rooms import build_collaboration_rooms_router
+from .routes_coordination import build_coordination_router
+from .routes_discovery import build_discovery_router
+from .routes_files import build_files_router
+from .routes_imports import build_imports_router
+from .routes_installed_pages import build_installed_pages_router
 from .routes_local_ai import build_local_ai_router
+from .routes_marketplace import build_marketplace_router
+from .routes_mcp_servers import build_mcp_servers_router
 from .routes_models import build_models_router
-from .model_market import ModelPullManager
+from .routes_personalities import build_personalities_router
+from .routes_profile import build_profile_router
+from .routes_project_records import build_project_records_router
+from .routes_projects import build_projects_router
+from .routes_pty import build_pty_router
+from .routes_quality_os import build_quality_os_router
+from .routes_quick_actions import build_quick_actions_router
 from .routes_review import build_review_router
 from .routes_search import build_search_router
-from .routes_activity import build_activity_router
-from .routes_capture import build_capture_router
-from .routes_coordination import build_coordination_router
-from .routes_collaboration_rooms import build_collaboration_rooms_router
-from .routes_token_ledger import build_token_ledger_router
-from .routes_installed_pages import build_installed_pages_router
-from .routes_mcp_servers import build_mcp_servers_router
-from .mcp_servers import McpServerManager
-from .routes_about import build_about_router
-from .routes_personalities import build_personalities_router
-from .mcp_connector import build_mcp_info_router, build_mcp_router
-from .routes_profile import build_profile_router
-from .routes_quality_os import build_quality_os_router
 from .routes_snapshot import build_snapshot_router
 from .routes_synapse_dev import build_synapse_dev_router
+from .routes_system import build_system_router
+from .routes_thread_presence import build_thread_presence_router
+from .routes_token_ledger import build_token_ledger_router
 from .routes_tools import build_tools_router
+from .routes_watch import build_watch_router
+from .routes_workbench import build_workbench_router
+from .runtime_paths import bundled_dist_dir, bundled_mobile_dir, bundled_tools_dir
 from .storage import Storage
 from .synapse_dev import SynapseDevManager
 from .time_utils import to_iso, utc_now
@@ -138,8 +140,8 @@ def build_app(
     profile_manager = ProfileManager(storage)
     with storage.transaction() as conn:
         from .agent_squads import seed_default_role_templates
-        from .benchmarks import seed_default_specs
         from .ai_factory import seed_default_catalog
+        from .benchmarks import seed_default_specs
         from .personalities import seed_default_personalities
         from .quality_os import seed_default_quality_os
 
@@ -412,6 +414,8 @@ def build_app(
     app.state.worker_timeout_registry = worker_timeout_registry
     worker_presence_registry = WorkerPresenceRegistry()
     app.state.worker_presence_registry = worker_presence_registry
+    chatgpt_child_pool = ChatGPTBrowserPool(storage.data_dir)
+    app.state.chatgpt_child_pool = chatgpt_child_pool
     app.include_router(
         build_pty_router(pty_manager),
         prefix=API_PREFIX,
@@ -487,6 +491,7 @@ def build_app(
             lambda: f"http://127.0.0.1:{getattr(app.state, 'bound_port', 7878)}/api/v1",
             worker_timeout_registry,
             worker_presence_registry,
+            chatgpt_child_pool,
         ),
         prefix=API_PREFIX,
         dependencies=[token_guard],
@@ -556,9 +561,20 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    app.include_router(
+        build_chatgpt_workers_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
     # Per-work-item token accounting -- squad-worker token roll-up (ADR-0025).
     app.include_router(
         build_token_ledger_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Durable AI thread presence + cumulative turn-time accounting.
+    app.include_router(
+        build_thread_presence_router(storage, bus),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -763,6 +779,7 @@ def build_app(
     async def _cancel_worker_timeouts() -> None:
         worker_timeout_registry.cancel_all()
         worker_presence_registry.cancel_all()
+        await chatgpt_child_pool.close()
 
     app.router.on_shutdown.append(_cancel_worker_timeouts)
 

@@ -439,6 +439,46 @@ one PTY session with a role-specific prompt.
 {"input_tokens": 5000, "output_tokens": 1200, "model": "claude-opus-4-5", "note": "..."}
 ```
 
+### 5E2. ChatGPT UI Workers & Durable Thread Presence
+
+Three identity layers deliberately coexist without duplicating responsibility: a **coordination session** is one live
+connection/run, a **ChatGPT worker chat** is a reusable browser conversation, and an **AI thread** is the durable
+conversation/request identity with status + turn-time accounting. Reconnects reuse stable IDs instead of creating a new
+row per prompt.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/chatgpt-workers/readiness` | Check dedicated ChatGPT profile + `Synapse2GPT Workers` Project readiness |
+| POST | `/chatgpt-workers/setup-browser` | Open the visible one-time login browser on Synapse's dedicated profile; idempotent while already open |
+| GET | `/chatgpt-workers` | List durable worker chats (filter by project; archived hidden by default) |
+| GET | `/chatgpt-workers/{id}` | Read one worker plus linked/current work items |
+| POST | `/chatgpt-workers/{id}/archive` | Retire a worker without deleting history; it will not auto-resume |
+| POST | `/chatgpt-workers/{id}/unarchive` | Make an archived worker eligible for explicit reuse again |
+| PUT | `/projects/{id}/records/canonical-chat-url` | Replace/clear the one current project chat pointer |
+| GET | `/thread-presence/overview` | Counts + current durable thread/browser state for the operator |
+| GET | `/thread-presence/groups` | Request/project work groups with their durable threads and cumulative time |
+| POST | `/thread-presence/bootstrap` | Resolve one stable external conversation key to its existing/new durable AI thread; asks for a deliberate group choice when needed |
+| POST | `/thread-presence/browser-observe` | Upsert visible browser-tab/generation state; later bootstrap attaches the same external key to the durable thread |
+| POST | `/thread-presence/threads/{id}/begin` | Start one auditable work turn |
+| POST | `/thread-presence/threads/{id}/heartbeat` | Refresh long-running state/task/title/url without creating another thread |
+| POST | `/thread-presence/threads/{id}/finish` | Finish one turn exactly once and roll its duration into cumulative work time |
+| POST | `/thread-presence/threads/{id}/state` | Explicit idle/error/gone/archive-style state correction |
+| GET | `/thread-presence/threads/{id}/turns` | Read the bounded auditable turn ledger |
+
+**MCP mirrors:** `synapse_thread_bootstrap`, `synapse_thread_begin_turn`, `synapse_thread_heartbeat`,
+`synapse_thread_finish_turn`, and `synapse_set_project_chat_url`. For generic downstream MCP calls, use normal
+`arguments:{...}` when supported; use `arguments_json:"{...}"` only when the connector host rejects arbitrary nested
+object keys before Synapse can dispatch them.
+
+**Worker identity invariant:** once ChatGPT assigns a non-empty conversation URL, the database permits exactly one durable worker row to own it. A second claim returns `409 chatgpt_worker_chat.conflict` with the existing worker id.
+
+**Browser observer:** the unpacked local extension lives at `browser-extensions/chatgpt-presence-companion/`, not under
+`tools/` (Chrome extension manifests are not Synapse ToolManifests). It reports visible ChatGPT tab/generation state but
+does not replace the durable bootstrap identity.
+
+**WS:** `v1.thread_presence.browser_observed`, `thread_bootstrapped`, `turn_started`, `thread_updated`, and
+`turn_finished` refresh Live View without polling.
+
 ### 5F. Coder Workspace Threads
 
 Chat-first coder sessions with message history, review passes, and runtime switching.

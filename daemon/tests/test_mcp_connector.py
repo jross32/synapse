@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from synapse_daemon.app import build_app
+from synapse_daemon.mcp_connector import _proxy_tool_arguments
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
@@ -88,6 +89,7 @@ def test_read_only_url_never_advertises_a_write_tool(tmp_path: Path, monkeypatch
     assert "synapse_get_context" in names
     assert "synapse_list_projects" in names
     assert "synapse_add_project_idea" not in names
+    assert "synapse_set_project_chat_url" not in names
     assert "synapse_run_command" not in names
     assert "synapse_run_command_async" not in names
 
@@ -110,6 +112,41 @@ def test_tools_call_get_records(tmp_path: Path) -> None:
     result = res.json()["result"]
     assert result["isError"] is False
     assert '"adrs"' in result["content"][0]["text"]
+
+
+def test_tools_call_set_project_chat_url_replaces_stale_pointer(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+
+    def call(name: str, arguments: dict) -> dict:
+        response = _rpc(
+            client, token, "tools/call", {"name": name, "arguments": arguments}
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()["result"]
+        assert result["isError"] is False, result
+        return json.loads(result["content"][0]["text"])
+
+    first_url = "https://chatgpt.com/c/old-thread"
+    first = call(
+        "synapse_set_project_chat_url",
+        {"project_id": "demo-project", "url": first_url},
+    )
+    assert first["canonical_chat_url"] == first_url
+
+    second_url = "https://chatgpt.com/c/current-thread"
+    second = call(
+        "synapse_set_project_chat_url",
+        {"project_id": "demo-project", "url": second_url},
+    )
+    assert second["canonical_chat_url"] == second_url
+
+    current = call("synapse_get_project_records", {"project_id": "demo-project"})
+    assert current["canonical_chat_url"] == second_url
+    assert first_url not in json.dumps(current)
+
+    cleared = call("synapse_set_project_chat_url", {"project_id": "demo-project"})
+    assert cleared["canonical_chat_url"] is None
 
 
 def test_tools_call_unknown_project_is_tool_error(tmp_path: Path) -> None:
@@ -597,3 +634,29 @@ def test_run_command_async_requires_writes(tmp_path: Path, monkeypatch) -> None:
     })
     result = res.json()["result"]
     assert result["isError"] is True
+
+
+def test_call_mcp_tool_schema_has_json_string_fallback(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+    tools = _rpc(client, token, "tools/list").json()["result"]["tools"]
+    spec = next(tool for tool in tools if tool["name"] == "synapse_call_mcp_tool")
+    props = spec["inputSchema"]["properties"]
+    assert props["arguments"]["additionalProperties"] is True
+    assert props["arguments_json"]["type"] == "string"
+
+
+def test_proxy_tool_arguments_accepts_nested_object_and_json_string() -> None:
+    nested = {"url": "https://chatgpt.com/c/demo", "options": {"headless": True}}
+    assert _proxy_tool_arguments({"arguments": nested}) == nested
+    assert _proxy_tool_arguments(
+        {"arguments_json": '{"url":"https://chatgpt.com/c/demo","options":{"headless":true}}'}
+    ) == nested
+
+
+def test_proxy_tool_arguments_rejects_ambiguous_or_non_object_json() -> None:
+    with pytest.raises(ValueError, match="either arguments or arguments_json"):
+        _proxy_tool_arguments({"arguments": {"url": "x"}, "arguments_json": '{"url":"y"}'})
+    with pytest.raises(ValueError, match="must encode a JSON object"):
+        _proxy_tool_arguments({"arguments_json": '[1,2,3]'})
+    with pytest.raises(ValueError, match="must be valid JSON"):
+        _proxy_tool_arguments({"arguments_json": '{bad json}'})

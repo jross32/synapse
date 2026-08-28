@@ -36,7 +36,8 @@ def test_yesterdays_spend_does_not_count_against_today(tmp_path):
     assert {s.runtime: s for s in cr.preflight(path=path)}["claude"].cost_usd_today == 0.0
 
 
-def test_a_cooling_rung_is_not_usable_and_says_when_it_returns(tmp_path):
+def test_a_cooling_rung_is_not_usable_and_says_when_it_returns(tmp_path, monkeypatch):
+    monkeypatch.setattr(cr, "resolve_command", lambda command: f"/fake/{command}")
     cr.clear_exhausted()
     try:
         cr.mark_exhausted(cr.CoderRuntime.COPILOT, seconds=3600)

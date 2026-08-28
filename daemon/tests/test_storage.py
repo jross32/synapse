@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from synapse_daemon.storage import Storage
 
 
@@ -127,6 +126,59 @@ def test_transaction_rolls_back_on_exception(tmp_path: Path) -> None:
                 raise RuntimeError("force rollback")
         cursor = s.conn.execute("SELECT COUNT(*) FROM settings WHERE key='rollback_me'")
         assert cursor.fetchone()[0] == 0
+    finally:
+        s.close()
+
+
+def test_nested_transaction_commits_via_savepoint(tmp_path: Path) -> None:
+    s = _open(tmp_path)
+    try:
+        s.migrate()
+        with s.transaction() as outer:
+            outer.execute(
+                "INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+                ("outer", '"one"', "2026-05-13T00:00:00+00:00"),
+            )
+            with s.transaction() as inner:
+                inner.execute(
+                    "INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+                    ("inner", '"two"', "2026-05-13T00:00:00+00:00"),
+                )
+        rows = s.conn.execute(
+            "SELECT key FROM settings WHERE key IN ('outer', 'inner') ORDER BY key"
+        ).fetchall()
+        assert [row[0] for row in rows] == ["inner", "outer"]
+    finally:
+        s.close()
+
+
+def test_nested_transaction_rollback_is_scoped_to_savepoint(tmp_path: Path) -> None:
+    s = _open(tmp_path)
+    try:
+        s.migrate()
+        with s.transaction() as outer:
+            outer.execute(
+                "INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+                ("outer_before", '"one"', "2026-05-13T00:00:00+00:00"),
+            )
+            with pytest.raises(RuntimeError):
+                with s.transaction() as inner:
+                    inner.execute(
+                        "INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+                        ("inner_rollback", '"two"', "2026-05-13T00:00:00+00:00"),
+                    )
+                    raise RuntimeError("rollback only nested work")
+            outer.execute(
+                "INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+                ("outer_after", '"three"', "2026-05-13T00:00:00+00:00"),
+            )
+        keys = {
+            row[0]
+            for row in s.conn.execute(
+                "SELECT key FROM settings WHERE key IN ('outer_before', 'inner_rollback', 'outer_after')"
+            ).fetchall()
+        }
+        assert keys == {"outer_before", "outer_after"}
     finally:
         s.close()
 

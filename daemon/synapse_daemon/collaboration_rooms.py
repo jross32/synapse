@@ -10,10 +10,11 @@ here".
 
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -23,12 +24,12 @@ from .errors import invalid, not_found
 from .time_utils import from_iso, to_iso, utc_now
 
 
-class CollaborationRoomStatus(str, Enum):
+class CollaborationRoomStatus(StrEnum):
     OPEN = "open"
     ARCHIVED = "archived"
 
 
-class CollaborationMessageKind(str, Enum):
+class CollaborationMessageKind(StrEnum):
     MESSAGE = "message"
     STATUS = "status"
     HANDOFF = "handoff"
@@ -101,12 +102,35 @@ class CollaborationRoomMessage(BaseModel):
     created_at: datetime
 
 
+class CollaborationPeerPacket(BaseModel):
+    """One peer's own concise catch-up state for a newly joining AI."""
+
+    session_id: str
+    agent_label: str = ""
+    runtime_id: str = ""
+    task: str = ""
+    last_intent: str = ""
+    session_status: coordination.AgentSessionStatus
+    stale: bool = False
+    path_globs: list[str] = Field(default_factory=list)
+    recent_messages: list[CollaborationRoomMessage] = Field(default_factory=list)
+
+
 class CollaborationRoomSync(BaseModel):
     room: CollaborationRoom
     members: list[CollaborationRoomMember] = Field(default_factory=list)
     messages: list[CollaborationRoomMessage] = Field(default_factory=list)
+    # Populated on join/auto-join. Keeping each peer separate avoids a lossy
+    # "one AI summarized everybody" catch-up packet.
+    peer_packets: list[CollaborationPeerPacket] = Field(default_factory=list)
     latest_message_id: int = 0
     generated_at: datetime
+
+
+class AutoCollaborationResult(BaseModel):
+    sync: CollaborationRoomSync
+    created: bool = False
+    joined_session_ids: list[str] = Field(default_factory=list)
 
 
 def _new_id() -> str:
@@ -241,7 +265,10 @@ def join_room(
     conn.execute(
         "UPDATE collaboration_rooms SET updated_at = ? WHERE id = ?", (now, room_id)
     )
-    return sync_room(conn, room_id)
+    synced = sync_room(conn, room_id)
+    return synced.model_copy(
+        update={"peer_packets": peer_packets(conn, room_id, exclude_session_id=payload.session_id)}
+    )
 
 
 def leave_room(
@@ -433,3 +460,162 @@ def sync_room(
         latest_message_id=int(latest or 0),
         generated_at=utc_now(),
     )
+
+
+_AUTO_ROOM_META_KEY = "auto_project_room"
+
+
+def _room_metadata(conn: sqlite3.Connection, room_id: str) -> dict[str, object]:
+    row = conn.execute(
+        "SELECT metadata_json FROM collaboration_rooms WHERE id = ?", (room_id,)
+    ).fetchone()
+    if row is None:
+        return {}
+    try:
+        value = json.loads(row["metadata_json"] or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _auto_room(conn: sqlite3.Connection, project_id: str) -> CollaborationRoom | None:
+    rows = conn.execute(
+        "SELECT * FROM collaboration_rooms "
+        "WHERE project_id = ? AND status = 'open' ORDER BY updated_at DESC",
+        (project_id,),
+    ).fetchall()
+    for row in rows:
+        try:
+            metadata = json.loads(row["metadata_json"] or "{}")
+        except (TypeError, ValueError):
+            metadata = {}
+        if isinstance(metadata, dict) and metadata.get(_AUTO_ROOM_META_KEY) is True:
+            return _row_to_room(row)
+    return None
+
+
+def _is_active_member(conn: sqlite3.Connection, room_id: str, session_id: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM collaboration_room_members "
+        "WHERE room_id = ? AND session_id = ? AND left_at IS NULL",
+        (room_id, session_id),
+    ).fetchone()
+    return row is not None
+
+
+def peer_packets(
+    conn: sqlite3.Connection,
+    room_id: str,
+    *,
+    exclude_session_id: str | None = None,
+    messages_per_peer: int = 8,
+) -> list[CollaborationPeerPacket]:
+    """Build independent peer catch-ups from canonical Synapse state."""
+
+    room = get_room(conn, room_id)
+    active_lanes = coordination.list_active_lanes(conn, room.project_id)
+    recent = list_messages(conn, room_id, limit=100)
+    packets: list[CollaborationPeerPacket] = []
+    for member in list_members(conn, room_id):
+        if exclude_session_id and member.session_id == exclude_session_id:
+            continue
+        session = coordination.get_session(conn, member.session_id)
+        peer_messages = [
+            message for message in recent if message.session_id == member.session_id
+        ][-max(1, min(messages_per_peer, 25)) :]
+        globs: list[str] = []
+        for lane in active_lanes:
+            if lane.session_id == member.session_id:
+                for path_glob in lane.path_globs:
+                    if path_glob not in globs:
+                        globs.append(path_glob)
+        packets.append(
+            CollaborationPeerPacket(
+                session_id=session.id,
+                agent_label=session.agent_label,
+                runtime_id=session.runtime_id,
+                task=session.task,
+                last_intent=session.last_intent,
+                session_status=session.status,
+                stale=session.stale,
+                path_globs=globs,
+                recent_messages=peer_messages,
+            )
+        )
+    return packets
+
+
+def ensure_project_collaboration(
+    conn: sqlite3.Connection, session_id: str
+) -> AutoCollaborationResult | None:
+    """Auto-enroll same-project AIs without making rooms a spawn dependency.
+
+    A child session never *causes* a room. The first root AI works normally.
+    When a second present root AI appears, one canonical auto-managed room is
+    created and every present session on that project is enrolled. Once that
+    room exists, later root or child sessions join it automatically.
+    """
+
+    session = coordination.get_session(conn, session_id)
+    project_id = (session.project_id or "").strip()
+    if not project_id or session.status == coordination.AgentSessionStatus.GONE or session.stale:
+        return None
+
+    present = [
+        candidate
+        for candidate in coordination.list_sessions(conn, project_id, include_gone=False)
+        if not candidate.stale
+        and candidate.status != coordination.AgentSessionStatus.GONE
+    ]
+    roots = [candidate for candidate in present if candidate.parent_session_id is None]
+    room = _auto_room(conn, project_id)
+
+    # Children may join an existing collaboration, but they never trigger one.
+    if room is None and (session.parent_session_id is not None or len(roots) < 2):
+        return None
+
+    created = False
+    if room is None:
+        room = create_room(
+            conn,
+            CollaborationRoomCreate(
+                project_id=project_id,
+                name=f"Live collaboration ? {project_id}"[:160],
+                goal_md=(
+                    "Coordinate concurrently active AI sessions on this Synapse project. "
+                    "Share concise status, decisions, questions and handoffs; inspect file "
+                    "lanes before overlapping edits."
+                ),
+                created_by_session_id=session.id,
+            ),
+        )
+        conn.execute(
+            "UPDATE collaboration_rooms SET metadata_json = ? WHERE id = ?",
+            (json.dumps({_AUTO_ROOM_META_KEY: True}, separators=(",", ":")), room.id),
+        )
+        created = True
+
+    joined: list[str] = []
+    # When the room first appears, include every currently present session,
+    # including children that were already running under either root.
+    for candidate in present:
+        if not _is_active_member(conn, room.id, candidate.id):
+            join_room(
+                conn,
+                room.id,
+                CollaborationRoomJoin(
+                    session_id=candidate.id,
+                    role_label=("child" if candidate.parent_session_id else "root"),
+                ),
+            )
+            joined.append(candidate.id)
+
+    synced = sync_room(conn, room.id)
+    synced = synced.model_copy(
+        update={
+            "peer_packets": peer_packets(
+                conn, room.id, exclude_session_id=session.id
+            )
+        }
+    )
+    return AutoCollaborationResult(sync=synced, created=created, joined_session_ids=joined)

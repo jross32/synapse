@@ -10,6 +10,53 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.203] - 2026-08-27
+
+### Added
+- **Durable ChatGPT UI workers** -- ChatGPT-owned squads can launch real `chatgpt_web` child workers,
+  persist each reusable conversation separately from short-lived coordination sessions, link workers to
+  current/related work items, archive them without deletion, and resume the same conversation only when
+  reuse is explicit or the same work item is relaunched. A dedicated `Synapse2GPT Workers` browser
+  profile keeps account-owner sign-in separate from the operator's normal Chrome/Edge profile.
+- **Durable thread presence + work-time accounting** -- migrations 038-039 add request/work groups,
+  stable AI-thread identity, active/idle/error/gone state, heartbeats, auditable per-turn durations,
+  cumulative worked time, and browser observations that attach to the same thread when a ChatGPT tab is
+  identified later. Live View now exposes the resulting thread/project/worker state on desktop and mobile.
+- **Canonical project chat pointer** -- migration 037 and project-record APIs keep one last-write-wins
+  current AI chat/thread URL per project. The writable MCP helper `synapse_set_project_chat_url` mirrors
+  the REST operation for remote AI operators.
+- **ChatGPT presence companion browser extension** now lives under `browser-extensions/` and can report
+  visible ChatGPT tab/generation state without masquerading as a Synapse tool plugin.
+
+### Changed
+- **ChatGPT-owned squad launches prefer the actual ChatGPT web worker path** instead of silently falling
+  back to a CLI runtime; durable worker records stay distinct from the coordination-session lease used by
+  one live execution.
+- **Same-project AI collaboration is deduplicated** around one auto-managed room: a second live root AI
+  reuses/creates the canonical project room, child workers join the existing room, and newcomers receive
+  separate per-peer catch-up packets instead of flattened ambiguous history.
+- **AI discoverability now advertises worker, setup, canonical-chat, and thread-presence REST routes** via
+  `/api/v1/ai/context`, including the bootstrap -> begin -> heartbeat -> finish protocol.
+
+### Fixed
+- **Generic MCP forwarding accepts nested downstream arguments reliably** -- `synapse_call_mcp_tool` now
+  explicitly permits free-form nested `arguments` and offers scalar `arguments_json` for connector hosts
+  that reject arbitrary nested keys before dispatch. This unblocks Playwright/Reflex proxy calls without
+  weakening normal clients.
+- **Setup-browser launch is idempotent** -- repeated setup clicks detect a process already using the
+  dedicated Synapse ChatGPT profile and return `already_running` instead of spawning another browser.
+- **Browser companion placement no longer pollutes the tool registry** -- its Chrome `manifest.json` is no
+  longer scanned as a Synapse ToolManifest.
+- Corrected migration 039's header so its file and documentation agree on the migration number.
+- **Worker conversation URLs are DB-unique once assigned** -- migration 040 adds a partial unique index and the update path returns a clean conflict pointing to the existing durable worker instead of allowing two rows to claim one ChatGPT conversation.
+
+### Verification
+- Full mounted-route audit: **328 routes, zero duplicate method/path pairs**; migration-number audit: zero duplicates.
+- Live SQLite identity audit: zero duplicate thread keys, current worker/work-item links, worker URLs,
+  external work-group keys, browser observations, or canonical project metadata rows.
+- Production renderer + Electron build: **PASS**. Full daemon suite and refreshed UI proof are recorded
+  before the release commit.
+
 ## [0.1.202] - 2026-08-27
 
 ### Added

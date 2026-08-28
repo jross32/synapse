@@ -183,6 +183,10 @@ def build_ai_cases_router(
         prepared_children: list[ai_cases.AiCase] = []
         opened_gates: list[quality_os.QualityGate] = []
 
+        # Prepare all durable DB state before PTY startup, then release Synapse's
+        # shared transaction lock. PTY startup publishes activity events whose
+        # subscribers legitimately open their own transactions; awaiting spawn
+        # while holding this lock deadlocks those subscribers on POSIX.
         with storage.transaction() as conn:
             case, bundle, prepared_children = _prepare_mode_specific_case_plan(
                 storage,
@@ -193,7 +197,9 @@ def build_ai_cases_router(
                 bundle,
             )
             role = squads.get_role_template(conn, "boss")
-            squad = _ensure_case_squad(storage, conn, case, primary, neighbors, str(ensured_worktree), branch_name)
+            squad = _ensure_case_squad(
+                storage, conn, case, primary, neighbors, str(ensured_worktree), branch_name
+            )
             work_items = squads.list_work_items(conn, squad.id)
             lead_item = next((item for item in work_items if item.title == "Judge / Boss"), None)
             if lead_item is None:
@@ -244,6 +250,8 @@ def build_ai_cases_router(
                 "SYNAPSE_AI_CASE_DRAFT_PR": str(ai_cases.draft_pr_path(storage.data_dir, case.id)),
                 "SYNAPSE_ROLE_PROMPT_FILE": str(role_prompt_path),
             }
+
+        try:
             session = await manager.spawn(
                 argv=argv,
                 cwd=str(ensured_worktree),
@@ -252,6 +260,39 @@ def build_ai_cases_router(
                 cols=80,
                 project_id=primary.id,
             )
+        except Exception as exc:
+            with storage.transaction() as conn:
+                case = ai_cases.update_case(
+                    conn,
+                    case.id,
+                    status=ai_cases.AiCaseStatus.ERROR,
+                    phase=ai_cases.AiCasePhase.ERROR,
+                    squad_id=squad.id,
+                    lead_work_item_id=lead_item.id,
+                    branch_name=branch_name,
+                    worktree_path=str(ensured_worktree),
+                    stopped_at=utc_now(),
+                    last_error_code="ai_case.spawn_failed",
+                    last_error_message=str(exc),
+                )
+                audit(
+                    conn,
+                    AuditRecord(
+                        entity_type="ai_case",
+                        entity_id=case.id,
+                        action="run",
+                        source=AuditSource.DESKTOP,
+                        result="error",
+                        error_code="ai_case.spawn_failed",
+                        details={"runtime": chosen_runtime, "message": str(exc)},
+                    ),
+                )
+            await bus.publish(
+                "v1.ai_case.updated", {"case_id": case.id, "status": case.status.value}
+            )
+            raise invalid("ai_case", f"Could not start the case lead session: {exc}") from exc
+
+        with storage.transaction() as conn:
             lead_item = squads.set_work_item_session(
                 conn,
                 lead_item.id,
@@ -352,32 +393,35 @@ def build_ai_cases_router(
         case = ai_cases.get_case(storage.conn, case_id)
         stopped_sessions = 0
         closed_work_item_ids: list[str] = []
+        work_items = (
+            squads.list_work_items(storage.conn, case.squad_id) if case.squad_id else []
+        )
+        for item in work_items:
+            if not item.pty_session_id:
+                continue
+            # PTY close can publish activity events. Never await it under the
+            # shared SQLite transaction lock.
+            if not await manager.close(item.pty_session_id):
+                continue
+            stopped_sessions += 1
+            closed_work_item_ids.append(item.id)
+            with storage.transaction() as conn:
+                squads.complete_work_item_from_session_exit(
+                    conn, session_id=item.pty_session_id, exit_code=-1
+                )
+                job = ai_cases.update_job_for_session_finalization(
+                    conn, session_id=item.pty_session_id, exit_code=-1
+                )
+                if job is not None:
+                    ai_cases.update_job(
+                        conn,
+                        job.id,
+                        status=ai_cases.AiJobStatus.STOPPED,
+                        completed_at=utc_now(),
+                        exit_code=-1,
+                    )
+
         with storage.transaction() as conn:
-            if case.squad_id:
-                for item in squads.list_work_items(conn, case.squad_id):
-                    if not item.pty_session_id:
-                        continue
-                    if await manager.close(item.pty_session_id):
-                        stopped_sessions += 1
-                        closed_work_item_ids.append(item.id)
-                        squads.complete_work_item_from_session_exit(
-                            conn,
-                            session_id=item.pty_session_id,
-                            exit_code=-1,
-                        )
-                        job = ai_cases.update_job_for_session_finalization(
-                            conn,
-                            session_id=item.pty_session_id,
-                            exit_code=-1,
-                        )
-                        if job is not None:
-                            ai_cases.update_job(
-                                conn,
-                                job.id,
-                                status=ai_cases.AiJobStatus.STOPPED,
-                                completed_at=utc_now(),
-                                exit_code=-1,
-                            )
             case = ai_cases.update_case(
                 conn,
                 case.id,
