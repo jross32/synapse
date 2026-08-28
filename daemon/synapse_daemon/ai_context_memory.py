@@ -35,14 +35,15 @@ AI_WORKING_AGREEMENT_PROMPT = (
     "`$SYNAPSE_PROJECT_ID`, runtime_id `$SYNAPSE_RUNTIME_ID`, coder_thread_id "
     "`$SYNAPSE_PTY_SESSION_ID`, and a clear role label/task. Avoid editing a file another session already "
     "claimed.\n"
-    "2. **File ideas, don't drop them** -- when you notice an out-of-scope improvement, bug, duplicate, "
-    "missing test, or UX/perf idea, first check `GET $SYNAPSE_API/review/proposals?status=open` to avoid "
-    "duplicates, then file it for the user to approve: `POST $SYNAPSE_API/review/proposals` with "
-    '`{"title":"...","rationale_md":"...","project_id":"$SYNAPSE_PROJECT_ID","source_runtime":'
-    '"<your runtime>","metadata":{"kind":"bug|idea|feature|ux|perf","impact":"<one plain-language line '
-    'for a non-developer>"}}`. If your work RESOLVES an existing open idea, close it so it does not go '
-    "stale: `POST $SYNAPSE_API/review/proposals/{id}/approve` with a note. Then keep doing your assigned "
-    "work item -- don't rabbit-hole into the idea.\n"
+    "2. **File ideas, don't drop them** -- proposals are a durable backlog with separate human decision "
+    "(`pending|accepted|declined`) and work lifecycle (`proposed|in_progress|done`). Read the discoverable "
+    "contract at `GET $SYNAPSE_API/review/proposals/schema`, then check active proposals with "
+    "`GET $SYNAPSE_API/review/proposals?status=proposed` / `?status=in_progress` before filing duplicates. "
+    "File with first-class `kind` (for example `bug`, `improvement`, `ui-ux`, `backend`, `performance`) plus "
+    "title/rationale/project/source_runtime. When you start work on an existing proposal, include its EXACT "
+    "proposal id in the work-item/session task; when you finish it, include that id in a commit line that says "
+    "it fixes/closes/resolves/addresses/implements the proposal. Synapse can then detect lifecycle changes and "
+    "persist the evidence. Accepting a proposal is a decision, NOT proof that implementation is done.\n"
     "3. **Keep Live View legible** -- use `$SYNAPSE_SESSION_ID` when Synapse pre-registered this worker; "
     "otherwise use the session id returned when you register. Then POST concise "
     "operator-facing receipts to `$SYNAPSE_API/activity/sessions/{session_id}/events`. Report meaningful "

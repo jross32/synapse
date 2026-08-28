@@ -1,12 +1,14 @@
-"""REST for the Needs-Review / approval inbox (ADR-0016, Phase R).
+"""REST for human review plus the durable improvement-proposal backlog.
 
-GET the cross-squad queue of work the AI handed back; approve / revise / reject
-each item. Actions audit + emit ``v1.review.resolved`` so any open inbox (desktop
-or phone) clears live.
+Work-item review keeps the approve/revise/reject workflow from ADR-0016. Proposals use two
+independent axes: human decision (pending/accepted/declined) and implementation lifecycle
+(proposed/in_progress/done), with queryable categorization and inspectable auto-detection evidence.
 """
 
 from __future__ import annotations
 
+import asyncio
+import subprocess
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -19,7 +21,15 @@ from .audit import AuditRecord, audit
 from .errors import invalid
 from .models import AuditSource
 from .project_records import ProjectBacklogItemCreate
-from .proposals import ProposalCreate, ProposalResolveRequest, ProposalStatus
+from .proposals import (
+    ProposalCreate,
+    ProposalDecision,
+    ProposalLifecycleRequest,
+    ProposalResolveRequest,
+    ProposalSort,
+    ProposalStatus,
+    SortDirection,
+)
 from .review import ReviewActionRequest, ReviewInbox
 from .storage import Storage
 from .ws import EventBus
@@ -69,9 +79,9 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
     async def reject(work_item_id: str, payload: ReviewActionRequest) -> dict[str, Any]:
         return await _act(work_item_id, "reject", payload.note)
 
-    # Improvement proposals -- AIs file ideas here for you to approve/reject (ADR-0025).
     @router.post("/proposals", response_model=proposals_module.Proposal)
     async def file_proposal(payload: ProposalCreate) -> proposals_module.Proposal:
+        """File durable backlog work. ``kind`` is first-class; metadata.kind remains accepted."""
         with storage.transaction() as conn:
             proposal = proposals_module.create_proposal(conn, payload)
             audit(
@@ -82,63 +92,128 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                     action="proposal.filed",
                     source=AuditSource.AUTO,
                     result="success",
-                    details={"title": proposal.title, "project_id": proposal.project_id},
+                    details={
+                        "title": proposal.title,
+                        "project_id": proposal.project_id,
+                        "kind": proposal.kind,
+                    },
                 ),
             )
         await bus.publish(event_name("review", "proposal_filed"), {"id": proposal.id})
         return proposal
 
-    async def _resolve_proposal(proposal_id: str, status: ProposalStatus, note: str) -> dict[str, Any]:
+    async def _decide_proposal(
+        proposal_id: str, decision: ProposalDecision, note: str
+    ) -> dict[str, Any]:
         with storage.transaction() as conn:
-            proposal = proposals_module.resolve_proposal(conn, proposal_id, status, note)
+            proposal = proposals_module.resolve_proposal(conn, proposal_id, decision, note)
             audit(
                 conn,
                 AuditRecord(
                     entity_type="proposal",
                     entity_id=proposal_id,
-                    action=f"proposal.{status.value}",
+                    action=f"proposal.decision.{decision.value}",
                     source=AuditSource.DESKTOP,
                     result="success",
+                    details={"status": proposal.status.value},
                 ),
             )
-        await bus.publish(event_name("review", "resolved"), {"id": proposal_id, "action": status.value})
+        await bus.publish(
+            event_name("review", "proposal_updated"),
+            {"id": proposal_id, "decision": decision.value, "status": proposal.status.value},
+        )
         return proposal.model_dump(mode="json")
 
+    # Compatibility URLs retained: approve/reject now change DECISION only. They no longer pretend
+    # an accepted idea has been implemented.
     @router.post("/proposals/{proposal_id}/approve", response_model=None)
     async def approve_proposal(
         proposal_id: str, payload: ProposalResolveRequest | None = None
     ) -> dict[str, Any]:
-        return await _resolve_proposal(proposal_id, ProposalStatus.APPROVED, payload.note if payload else "")
+        return await _decide_proposal(
+            proposal_id, ProposalDecision.ACCEPTED, payload.note if payload else ""
+        )
 
     @router.post("/proposals/{proposal_id}/reject", response_model=None)
     async def reject_proposal(
         proposal_id: str, payload: ProposalResolveRequest | None = None
     ) -> dict[str, Any]:
-        return await _resolve_proposal(proposal_id, ProposalStatus.REJECTED, payload.note if payload else "")
+        return await _decide_proposal(
+            proposal_id, ProposalDecision.DECLINED, payload.note if payload else ""
+        )
+
+    @router.patch("/proposals/{proposal_id}/lifecycle", response_model=proposals_module.Proposal)
+    async def update_proposal_lifecycle(
+        proposal_id: str, payload: ProposalLifecycleRequest
+    ) -> proposals_module.Proposal:
+        """Explicit lifecycle override/reopen. Automatic reconciliation uses the same transition log."""
+        with storage.transaction() as conn:
+            proposal = proposals_module.transition_proposal(
+                conn,
+                proposal_id,
+                payload.status,
+                source="manual",
+                detail=payload.note or f"Lifecycle set manually to {payload.status.value}",
+            )
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="proposal",
+                    entity_id=proposal_id,
+                    action=f"proposal.lifecycle.{payload.status.value}",
+                    source=AuditSource.DESKTOP,
+                    result="success",
+                    details={"note": payload.note.strip()},
+                ),
+            )
+        await bus.publish(
+            event_name("review", "proposal_updated"),
+            {"id": proposal_id, "status": proposal.status.value},
+        )
+        return proposal
 
     @router.post("/proposals/{proposal_id}/promote", response_model=None)
     async def promote_proposal(proposal_id: str) -> dict[str, Any]:
-        # "Yes, do this" -> turn an approved idea into an actionable project backlog item, closing
-        # the brainstorm -> approve -> action loop. Only a project-scoped proposal can be promoted;
-        # a Synapse-wide one (project_id is null) has no backlog to land in.
+        """Accept + create a project backlog item + mark implementation in progress."""
         with storage.transaction() as conn:
             proposal = proposals_module.get_proposal(conn, proposal_id)
             if not proposal.project_id:
                 raise invalid(
                     "proposal", "Only a project-scoped proposal can be promoted to a backlog item."
                 )
+            if proposal.resolution_note.startswith("Promoted to backlog item ") or any(
+                e.source == "backlog" for e in proposal.lifecycle_evidence
+            ):
+                raise invalid("proposal", "This proposal has already been promoted to the backlog.")
             item = project_records.create_backlog_item(
                 conn,
                 proposal.project_id,
                 ProjectBacklogItemCreate(
                     title=proposal.title,
-                    body_md=(proposal.rationale_md.strip() + f"\n\n_Promoted from proposal {proposal.id}._").strip(),
+                    body_md=(
+                        proposal.rationale_md.strip()
+                        + f"\n\n_Promoted from proposal {proposal.id}; keep this id in linked work so lifecycle detection can follow it._"
+                    ).strip(),
                     source=AuditSource.DESKTOP,
                 ),
             )
-            resolved = proposals_module.resolve_proposal(
-                conn, proposal_id, ProposalStatus.APPROVED, f"Promoted to backlog item {item.id}"
+            decided = proposals_module.set_proposal_decision(
+                conn,
+                proposal_id,
+                ProposalDecision.ACCEPTED,
+                f"Promoted to backlog item {item.id}",
             )
+            promoted = decided
+            if decided.status != ProposalStatus.DONE:
+                promoted = proposals_module.transition_proposal(
+                    conn,
+                    proposal_id,
+                    ProposalStatus.IN_PROGRESS,
+                    source="backlog",
+                    detail=f"Promoted to project backlog item {item.id}",
+                    ref_id=item.id,
+                    evidence_status="open",
+                )
             audit(
                 conn,
                 AuditRecord(
@@ -151,18 +226,75 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                 ),
             )
         await bus.publish(
-            event_name("review", "resolved"),
-            {"id": proposal_id, "action": "promoted", "backlog_item_id": item.id},
+            event_name("review", "proposal_updated"),
+            {
+                "id": proposal_id,
+                "action": "promoted",
+                "backlog_item_id": item.id,
+                "status": promoted.status.value,
+            },
         )
-        return {"proposal": resolved.model_dump(mode="json"), "backlog_item": item.model_dump(mode="json")}
+        return {
+            "proposal": promoted.model_dump(mode="json"),
+            "backlog_item": item.model_dump(mode="json"),
+        }
+
+    @router.get("/proposals/schema", response_model=None)
+    async def proposal_schema() -> dict[str, Any]:
+        """Compact machine-readable contract so a new AI can use the backlog without a playbook."""
+        return {
+            "purpose": (
+                "Durable improvement backlog. decision records whether the idea is wanted; status records "
+                "whether implementation work has happened. Do not use decision=accepted to mean done."
+            ),
+            "lifecycle": {
+                "field": "status",
+                "values": [item.value for item in ProposalStatus],
+                "normal_flow": ["proposed", "in_progress", "done"],
+                "auto_detection": (
+                    "Reconcile can infer in_progress only from an active work item/session explicitly "
+                    "referencing the proposal id, and done only from a commit line explicitly claiming "
+                    "to fix/close/resolve/address/implement that id. Evidence is persisted."
+                ),
+            },
+            "decision": {
+                "field": "decision",
+                "values": [item.value for item in ProposalDecision],
+                "meaning": "pending=user has not decided; accepted=worth doing; declined=do not pursue",
+            },
+            "kinds": list(proposals_module.KNOWN_KINDS),
+            "linking_convention": (
+                "When beginning work on an existing proposal, include its exact proposal id in the work "
+                "item/session task and in the completion commit message."
+            ),
+            "queries": {
+                "list": "GET /api/v1/review/proposals?status=&decision=&kind=&project_id=&sort_by=&sort_dir=",
+                "one": "GET /api/v1/review/proposals/{id}",
+                "set_lifecycle": "PATCH /api/v1/review/proposals/{id}/lifecycle",
+                "accept": "POST /api/v1/review/proposals/{id}/approve",
+                "decline": "POST /api/v1/review/proposals/{id}/reject",
+                "reconcile": "POST /api/v1/review/proposals/reconcile",
+            },
+        }
 
     @router.get("/proposals", response_model=list[proposals_module.Proposal])
     async def list_review_proposals(
         status: ProposalStatus | None = Query(default=None),
+        decision: ProposalDecision | None = Query(default=None),
+        kind: str | None = Query(default=None),
+        project_id: str | None = Query(default=None),
+        sort_by: ProposalSort = Query(default=ProposalSort.UPDATED_AT),
+        sort_dir: SortDirection = Query(default=SortDirection.DESC),
     ) -> list[proposals_module.Proposal]:
-        # Optional status filter (open|approved|rejected) -- lets a brainstormer skip
-        # ideas you already rejected, and the UI show the full proposal history.
-        return proposals_module.list_proposals(storage.conn, status)
+        return proposals_module.list_proposals(
+            storage.conn,
+            status,
+            decision=decision,
+            kind=kind,
+            project_id=project_id,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
 
     @router.get("/proposals/{proposal_id}", response_model=proposals_module.Proposal)
     async def get_review_proposal(proposal_id: str) -> proposals_module.Proposal:
@@ -170,31 +302,20 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
 
     @router.post("/proposals/reconcile", response_model=None)
     async def reconcile_proposals_route() -> dict[str, Any]:
-        # Scan recent commit messages for open-proposal ids and FLAG matches as possibly
-        # addressed (metadata.addressed_by) -- never auto-resolves. Catches ideas whose fix
-        # landed without the AI closing the proposal.
-        import asyncio
-        import subprocess
-
+        """Refresh lifecycle from recent commits plus explicitly-linked active Synapse work."""
         from .runtime_paths import repo_root
 
         def read_recent_commits() -> list[str]:
-            """Read commit messages in a worker thread.
-
-            `git log` over 300 commits takes long enough on a real repository to matter, and
-            running it inline in an async route stalls every other request behind it for up
-            to the full 15s timeout - the daemon appears hung, not slow.
-            """
             try:
                 result = subprocess.run(
-                    ["git", "log", "-n", "300", "--format=%h %s%n%b%x1e"],
+                    ["git", "log", "-n", "500", "--format=%h %s%n%b%x1e"],
                     cwd=str(repo_root()),
                     capture_output=True,
                     text=True,
                     timeout=15,
                     check=False,
                 )
-            except Exception:  # noqa: BLE001 - git may be unavailable; reconcile is best-effort
+            except Exception:  # noqa: BLE001 - reconciliation is best-effort
                 return []
             if not result.stdout:
                 return []
@@ -202,9 +323,26 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
 
         commit_texts = await asyncio.to_thread(read_recent_commits)
         with storage.transaction() as conn:
-            flagged = proposals_module.reconcile_addressed_proposals(conn, commit_texts)
-        for proposal in flagged:
-            await bus.publish(event_name("review", "proposal_filed"), {"id": proposal.id})
-        return {"flagged": [p.model_dump(mode="json") for p in flagged], "count": len(flagged)}
+            changed = proposals_module.reconcile_proposals(conn, commit_texts)
+            for proposal in changed:
+                audit(
+                    conn,
+                    AuditRecord(
+                        entity_type="proposal",
+                        entity_id=proposal.id,
+                        action=f"proposal.reconciled.{proposal.status.value}",
+                        source=AuditSource.AUTO,
+                        result="success",
+                        details={"lifecycle_source": proposal.lifecycle_source},
+                    ),
+                )
+        for proposal in changed:
+            await bus.publish(
+                event_name("review", "proposal_updated"),
+                {"id": proposal.id, "status": proposal.status.value},
+            )
+        payload = [p.model_dump(mode="json") for p in changed]
+        # ``flagged`` remains as a response alias for clients written against the old route.
+        return {"changed": payload, "flagged": payload, "count": len(changed)}
 
     return router

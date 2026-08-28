@@ -98,3 +98,5 @@ five stages as successful, closed this temporary window automatically, and left 
 ### Verified finding (2026-07-05) — feeds the cockpit work
 
 The cockpit still **works** but remains **project-scoped only**: you pick a registered project first, then start a thread inside it. The new Synapse Self project makes that workable for self-improvement, but the project-free "New chat" idea is still a real future polish target rather than something this wave solved.
+
+- `review-backlog-desktop.png` / `review-backlog-mobile.png` ? v0.1.201 durable improvement backlog, expanded proposal controls and lifecycle/decision state.

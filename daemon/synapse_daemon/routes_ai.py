@@ -851,9 +851,9 @@ def build_ai_router(
                     "path": "/api/v1/capture",
                 },
                 {
-                    "purpose": "read the human review inbox (work-item handoffs + AI-filed improvement proposals awaiting approval) -- check before starting new work; approve/revise/reject items; and FILE an improvement idea for the user to approve instead of acting unilaterally (agents brainstorm, you approve), then approve/reject proposals",
-                    "method": "GET | POST",
-                    "path": "/api/v1/review/inbox | /api/v1/review/items/{id}/approve | /revise | /reject | /api/v1/review/proposals | /api/v1/review/proposals/{id}/approve | /reject | /promote (approve + create a project backlog item) | /api/v1/review/proposals/reconcile (flag open ideas addressed by recent commits)",
+                    "purpose": "human review plus the durable proposal backlog: proposals have first-class kind, separate pending/accepted/declined decision and proposed/in_progress/done lifecycle, query filters/sorting, and inspectable auto-detection evidence; read /review/proposals/schema before using it for the first time",
+                    "method": "GET | POST | PATCH",
+                    "path": "/api/v1/review/inbox | /api/v1/review/proposals/schema | /api/v1/review/proposals?status=&decision=&kind=&project_id=&sort_by=&sort_dir= | /api/v1/review/proposals/{id}/approve | /reject | /lifecycle | /promote | /api/v1/review/proposals/reconcile",
                 },
                 {
                     "purpose": "upload, list, download, and delete project or shared files, and list a project's AI session transcripts",

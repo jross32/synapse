@@ -108,34 +108,25 @@ At the **start** of any Synapse work session, and periodically as you work:
 If the daemon isn't reachable, proceed best-effort — but still stage only your own files, rebase before
 pushing, and never `git add -A` when another AI may be mid-edit (`docs/MULTI-AI-WORKFLOW.md`).
 
-### 2. File improvement ideas as you work (proposals — ADR-0025)
+### 2. File improvement ideas as you work (proposals -> durable backlog)
 
-While building you **will** notice things worth doing that are out of scope for the current change — a
-bug, a duplicate, dead code, a missing test, a UX/UI improvement, a new tool/MCP/workflow idea, a "this
-would be easier if X." **Don't silently drop them, and don't rabbit-hole into them.** File each as a
-proposal for Justin to approve at a glance, then keep coding:
+While building you **will** notice out-of-scope improvements. Do not drop them and do not
+rabbit-hole into them. First read the discoverable contract at
+`GET /api/v1/review/proposals/schema`, then check `?status=proposed` and `?status=in_progress`
+for duplicates. File the idea with a first-class `kind` plus title/rationale/project/source.
 
-```
-POST /api/v1/review/proposals
-{"title":"<one line>","rationale_md":"<why + how, markdown>","project_id":"synapse-self",
- "source_runtime":"<which AI you are>","est_effort":"S|M|L","est_token_cost":<int>,
- "metadata":{"kind":"bug|idea|feature|ux|perf|dedup|doc-drift",
-             "impact":"<one plain-language line a non-developer understands>"}}
-```
+Proposal state has **two independent axes**:
+- decision: `pending | accepted | declined` -- what the human wants
+- lifecycle: `proposed | in_progress | done` -- whether implementation actually happened
 
-- **Include `metadata.impact`** — one plain-English sentence a non-developer gets ("Panels won't get
-  stuck loading forever"). The inbox renders it as *"What this means for you."*
-- **Dedup before filing** — `GET /api/v1/review/proposals?status=open` first; don't file a
-  near-duplicate of an idea that's already there.
-- **Close what you address** — if your work resolves an existing open idea, **resolve it** so it doesn't
-  go stale: `POST /api/v1/review/proposals/{id}/approve` (or `/reject` if obsolete) with a note, and
-  reference the idea's id in your commit message. Never edit away the richer parts of an idea because
-  you did one piece of it — leave the rest for Justin's manual review.
+Accepting a proposal is **not** proof that implementation is done. When starting linked work, put
+the proposal's **exact id** in the work-item/session task. When finishing, include that same id in a
+commit line that explicitly says it fixes/closes/resolves/addresses/implements the proposal. Synapse
+can then reconcile lifecycle from strong evidence and preserve the evidence trail. Use
+`PATCH /api/v1/review/proposals/{id}/lifecycle` for an explicit Start/Done/Reopen override.
 
-They land in the **Review inbox** next to work handoffs, grouped by category and clickable for detail;
-Justin approves / rejects / **promotes** each (a `synapse-self`-scoped idea promotes straight to a
-backlog item). These habits are advertised to in-app AIs via `GET /api/v1/ai/context` and injected into
-every squad worker's prompt, so they hold no matter how the AI was launched.
+Promoting a project-scoped proposal still creates a project backlog item, but promotion/acceptance
+and implementation completion remain separate facts.
 
 ### 3. Keep the operator's Live View current (activity journal — ADR-0033)
 

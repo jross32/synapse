@@ -48,7 +48,7 @@
       "status": "shipped",
       "phase": "Remote cockpit",
       "adr": "ADR-0016",
-      "summary": "Approve, revise, or reject what your AI workforce hands back \u2014 from your desk or your phone."
+      "summary": "Approve, revise, or reject work handoffs, and manage AI-filed improvement ideas as a durable backlog with separate human decision and implementation lifecycle, evidence-backed progress detection, and explicit Start/Done/Reopen controls."
     },
     {
       "id": "capture",

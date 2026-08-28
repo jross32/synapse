@@ -15,6 +15,23 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.1.201 (durable improvement-proposal lifecycle)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-08-27 | `GET /api/v1/review/proposals/schema` | additive | Discoverable proposal contract: lifecycle, decision values, kinds, filters, sort fields, linking convention, and operation URLs. |
+| 2026-08-27 | `GET /api/v1/review/proposals` | breaking semantics within v1 compatibility surface | Query now uses lifecycle `status=proposed|in_progress|done`, optional `decision=pending|accepted|declined`, `kind`, `project_id`, `sort_by`, and `sort_dir`. |
+| 2026-08-27 | `PATCH /api/v1/review/proposals/{id}/lifecycle` | additive | Explicitly Start, Done, or Reopen a proposal; transition evidence is retained. |
+| 2026-08-27 | `POST /api/v1/review/proposals/{id}/approve|reject` | corrective semantics | Compatibility URLs now update the independent human decision only; acceptance no longer claims implementation is complete. |
+| 2026-08-27 | `POST /api/v1/review/proposals/reconcile` | corrective/extended | Reconciles lifecycle from strong evidence: exact proposal id in active work/session -> in progress; explicit completion claim plus id in commit text -> done; evidence is persisted. |
+| 2026-08-27 | proposal representation | additive/breaking semantics | Adds first-class `kind`, `decision`, `lifecycle_source`, `lifecycle_evidence`, `decision_at`, `started_at`, and `done_at`; `status` now means implementation lifecycle. |
+
+Migration: migration `035_proposal_lifecycle.sql` converts legacy `open|approved|rejected` records
+to lifecycle `proposed` plus the equivalent decision (`pending|accepted|declined`) and deliberately
+does **not** infer that an approved proposal was implemented. Clients that used `status=open` should
+move to `status=proposed`/`in_progress`; clients should read `/review/proposals/schema` instead of
+hard-coding the vocabulary. Existing approve/reject URLs remain callable.
+
 ### Shipped in v0.1.95 (parallel squad launch reliability)
 
 | Date | Endpoint or event | Kind | Notes |

@@ -893,19 +893,29 @@ Built-in assistant powered by Ollama. Wraps Synapse context into a system prompt
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/review/inbox` | Get work-item handoffs + AI-filed improvement proposals awaiting human review |
-| POST | `/review/items/{id}/approve` | Approve item |
-| POST | `/review/items/{id}/revise` | Request revision |
-| POST | `/review/items/{id}/reject` | Reject item |
-| POST | `/review/proposals` | **File an improvement proposal** — an idea for the user to approve (ADR-0025) |
-| GET | `/review/proposals` | List proposals (optional `?status=open\|approved\|rejected`) |
-| GET | `/review/proposals/{id}` | Get one proposal |
-| POST | `/review/proposals/{id}/approve` | Approve a proposal |
-| POST | `/review/proposals/{id}/reject` | Reject a proposal |
-| POST | `/review/proposals/{id}/promote` | Approve + turn a project-scoped proposal into a project **backlog item** (the actionable "yes, do this"). 400 if the proposal is Synapse-wide (no project) |
+| GET | `/review/inbox` | Get work-item handoffs plus pending/proposed improvement backlog items |
+| POST | `/review/items/{id}/approve` | Approve work-item review |
+| POST | `/review/items/{id}/revise` | Request work-item revision |
+| POST | `/review/items/{id}/reject` | Reject work-item review |
+| POST | `/review/proposals` | File a durable improvement proposal; `kind` is first-class |
+| GET | `/review/proposals/schema` | **Read this first**: lifecycle, decisions, kinds, filters, sorting, linking convention, operation URLs |
+| GET | `/review/proposals` | List/filter/sort proposals by lifecycle `status`, `decision`, `kind`, `project_id`, `sort_by`, `sort_dir` |
+| GET | `/review/proposals/{id}` | Get one proposal including lifecycle evidence |
+| POST | `/review/proposals/{id}/approve` | Set human decision to `accepted`; does **not** claim implementation is done |
+| POST | `/review/proposals/{id}/reject` | Set human decision to `declined` |
+| PATCH | `/review/proposals/{id}/lifecycle` | Explicit Start / Done / Reopen lifecycle transition with note/evidence |
+| POST | `/review/proposals/{id}/promote` | Accept + create a project backlog item while preserving independent lifecycle |
+| POST | `/review/proposals/reconcile` | Refresh lifecycle from exact-id live-work evidence and high-confidence completion commits |
 
-**Proposal body:** `{"title": "...", "rationale_md": "...", "project_id": "...", "source_runtime": "claude", "est_effort": "S", "est_token_cost": 20000}`.
-The safe **"agents brainstorm, you approve"** path — an AI files an idea here instead of acting on it unilaterally. Open proposals appear in `GET /review/inbox` under `proposals`.
+**Proposal body:** supply `title`, `rationale_md`, optional `project_id`, `source_runtime`,
+first-class `kind`, `est_effort`, `est_token_cost`, and optional metadata. Read `/schema` rather
+than hard-coding kinds.
+
+**Do not confuse decision with completion.** Decision is `pending|accepted|declined`; lifecycle is
+`proposed|in_progress|done`. To make automatic lifecycle reconciliation trustworthy, include the
+proposal's **exact id** in the work-item/session task when work starts and in an explicit
+fix/close/resolve/address/implement commit line when it finishes. Automatic transitions retain
+inspectable evidence.
 
 ### 5Y. Token Ledger
 

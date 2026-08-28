@@ -10,6 +10,43 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.201] - 2026-08-27
+
+### Added
+- **Durable improvement-proposal backlog** (`daemon/synapse_daemon/proposals.py`,
+  `routes_review.py`, migration `035_proposal_lifecycle.sql`, and the Review UI) -- proposals now
+  track two independent truths: human decision (`pending|accepted|declined`) and implementation
+  lifecycle (`proposed|in_progress|done`). The API adds first-class `kind`, filtering/sorting, a
+  discoverable `/review/proposals/schema`, manual lifecycle updates, and evidence-backed reconcile.
+- **Implementation evidence instead of guesswork** -- reconciliation can mark work `in_progress`
+  only when a live work item/session explicitly references the exact proposal id, and can mark it
+  `done` only from a high-confidence completion claim in commit text. Every automatic transition
+  records its source/evidence and auto-started work can return to `proposed` if the live signal
+  disappears.
+- **Improvement backlog UI** -- Review now exposes active/done/declined/all views with category,
+  decision, lifecycle, latest evidence, Accept, Accept + backlog, Start, Done, Reopen, and Decline.
+
+### Changed
+- **Accepting an idea no longer pretends it was implemented.** The compatibility `/approve` and
+  `/reject` URLs now update decision only; lifecycle remains independent. Existing legacy
+  open/approved/rejected proposals migrate without inventing completion state.
+- **AI working agreement and API docs** now teach exact-id lifecycle linking and the new schema so
+  future workers can discover and drive the backlog without stale `status=open` instructions.
+
+### Fixed
+- **`scripts/version-bump.ps1` now updates Python versions on CRLF working trees** -- the old
+  end-anchored regex silently missed `pyproject.toml` and `daemon/synapse_daemon/__init__.py` on
+  Windows while still changing `package.json` and printing success. The matcher is now CRLF-safe
+  and the script verifies all three version sources before reporting success. A regression test also
+  proves Unicode survives the rewrite.
+
+### Verification
+- Focused proposal/review/version-helper suite: **34 passed**.
+- Isolated real UI proof: desktop **1280x900** + mobile **390x844**, no overflow, zero console/page
+  errors, expanded controls visible, and a real Start -> Accept flow persisted and refreshed.
+- Renderer + Electron TypeScript gate: **PASS**.
+
+
 ## [0.1.200] - 2026-08-26
 
 ### Fixed

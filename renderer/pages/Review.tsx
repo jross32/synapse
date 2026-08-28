@@ -31,6 +31,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Modal } from '../components/ui/modal';
 import { PageHeader } from '../components/PageHeader';
+import { ProposalBacklog } from '../components/ProposalBacklog';
 
 // Friendly category names for the raw metadata.kind an AI files a proposal under.
 const CATEGORY_LABELS: Record<string, string> = {
@@ -99,8 +100,8 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
   );
 
   const count = inbox?.count ?? 0;
-  const proposals = inbox?.proposals ?? [];
-  const isEmpty = count === 0 && proposals.length === 0;
+  const proposals: Proposal[] = []; // Full lifecycle backlog renders separately below.
+  const isEmpty = count === 0;
 
   // Group ideas by friendly category so a growing inbox stays organized.
   const proposalGroups = new Map<string, Proposal[]>();
@@ -147,7 +148,7 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
       ) : isEmpty ? (
         <Card className='mx-auto flex max-w-md flex-col items-center gap-2 p-10 text-center'>
           <Inbox className='h-8 w-8 text-primary' />
-          <h2 className='text-lg font-semibold'>All caught up</h2>
+          <h2 className='text-lg font-semibold'>No handoffs need review</h2>
           <p className='text-sm text-muted-foreground'>
             When an AI squad finishes a chunk of work, gets stuck, or files an improvement idea, it
             shows up here to <span className='text-foreground'>approve</span>,
@@ -187,6 +188,8 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
           )}
         </div>
       )}
+
+      <ProposalBacklog />
 
       {openProposal && (
         <ProposalDetailModal

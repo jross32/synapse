@@ -6,7 +6,15 @@
 
 ## Current version
 
-`0.1.200`
+`0.1.201`
+
+> **Improvement proposals are now a real durable backlog (2026-08-27):** human decision and
+> implementation lifecycle are separate, so accepting an idea no longer falsely means the work is
+> done. Proposal kind/filter/sort/schema APIs, explicit lifecycle controls, exact-id active-work
+> detection, conservative commit-based completion detection, durable evidence, and the Review UI
+> backlog all landed together. Migration 035 preserves old decisions without inventing completion.
+> Focused backend gate: 34 passed; renderer + Electron typecheck green.
+
 
 > **The staged coordination gate authenticates by default again (2026-08-26):**
 > `scripts/coordination-preflight.ps1 -Staged` now falls back to the trusted-local

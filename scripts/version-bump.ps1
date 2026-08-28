@@ -109,13 +109,13 @@ Write-Utf8NoBom -Path $packageJsonPath -Value ($pkg | ConvertTo-Json -Depth 50)
 
 # Update pyproject.toml (only the [project] version line)
 $pyContent = Read-Utf8 $pyprojectPath
-$pyContent = [regex]::Replace($pyContent, '(?m)^version = ".*"$', "version = `"$newVersion`"")
+$pyContent = [regex]::Replace($pyContent, '(?m)^version = "[^"\r\n]*"', "version = `"$newVersion`"")
 Write-Utf8NoBom -Path $pyprojectPath -Value $pyContent
 
 # Update __version__ in the package __init__.py (Contract #8: single source of truth).
 $initPath = Join-Path $root 'daemon\synapse_daemon\__init__.py'
 $initContent = Read-Utf8 $initPath
-$initContent = [regex]::Replace($initContent, '(?m)^__version__ = ".*"$', "__version__ = `"$newVersion`"")
+$initContent = [regex]::Replace($initContent, '(?m)^__version__ = "[^"\r\n]*"', "__version__ = `"$newVersion`"")
 Write-Utf8NoBom -Path $initPath -Value $initContent
 
 # Append CHANGELOG stub
@@ -133,6 +133,16 @@ $entry = @"
 "@
 $changelog = $changelog -replace '## \[Unreleased\]', "## [Unreleased]`r`n$entry"
 Write-Utf8NoBom -Path $changelogPath -Value $changelog
+
+# Refuse to report success if Windows line endings or a future format change caused
+# one version source to miss the rewrite. This caught a real CRLF bug where only
+# package.json changed while the daemon still reported the previous version.
+$verifyPkg = [string](Read-Utf8 $packageJsonPath | ConvertFrom-Json).version
+$verifyPy = [regex]::Match((Read-Utf8 $pyprojectPath), '(?m)^version = "([^"\r\n]+)"').Groups[1].Value
+$verifyInit = [regex]::Match((Read-Utf8 $initPath), '(?m)^__version__ = "([^"\r\n]+)"').Groups[1].Value
+if ($verifyPkg -ne $newVersion -or $verifyPy -ne $newVersion -or $verifyInit -ne $newVersion) {
+  throw "Version bump verification failed: package=$verifyPkg pyproject=$verifyPy daemon=$verifyInit expected=$newVersion"
+}
 
 Write-Host "Synapse bumped: $currentVersion  ->  $newVersion  (kind: $Kind)"
 Write-Host "Updated:"

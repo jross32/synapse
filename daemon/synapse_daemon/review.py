@@ -100,7 +100,11 @@ def build_inbox(conn: sqlite3.Connection) -> ReviewInbox:
             status=quality_os.QualityGateStatus.OPEN,
             blocking=True,
         ),
-        proposals=proposals_module.list_proposals(conn, proposals_module.ProposalStatus.OPEN),
+        proposals=proposals_module.list_proposals(
+            conn,
+            proposals_module.ProposalStatus.PROPOSED,
+            decision=proposals_module.ProposalDecision.PENDING,
+        ),
     )
 
 
