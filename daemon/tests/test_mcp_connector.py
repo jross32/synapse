@@ -15,6 +15,7 @@ from synapse_daemon.app import build_app
 from synapse_daemon.mcp_connector import (
     McpDispatchExecutor,
     McpExecutorBusy,
+    _mcp_dispatch_executor,
     _proxy_tool_arguments,
 )
 from synapse_daemon.projects import Project, create
@@ -678,6 +679,7 @@ def test_mcp_response_exposes_queue_and_execution_timing(tmp_path: Path) -> None
     assert float(response.headers["x-synapse-mcp-execution-ms"]) >= 0
     assert "mcp_queue;dur=" in response.headers["server-timing"]
     assert "mcp_execution;dur=" in response.headers["server-timing"]
+    assert response.headers["x-synapse-mcp-lane"] == "control"
 
 
 def test_mcp_dispatch_executor_is_independent_from_default_executor() -> None:
@@ -735,5 +737,64 @@ def test_mcp_dispatch_executor_bounds_queue_and_fails_fast() -> None:
             assert first_result[0] == "first"
             assert second_result[0] == "second"
             executor.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_mcp_dispatch_reserves_control_lane_for_local_reads() -> None:
+    control_lane, control_executor = _mcp_dispatch_executor(
+        {
+            "method": "tools/call",
+            "params": {"name": "synapse_get_context", "arguments": {}},
+        }
+    )
+    blocking_lane, blocking_executor = _mcp_dispatch_executor(
+        {
+            "method": "tools/call",
+            "params": {
+                "name": "synapse_run_command",
+                "arguments": {"command": "echo ok"},
+            },
+        }
+    )
+    assert control_lane == "control"
+    assert blocking_lane == "blocking"
+    assert control_executor is not blocking_executor
+
+
+def test_reserved_control_lane_survives_saturated_blocking_lane() -> None:
+    async def scenario() -> None:
+        gate = threading.Event()
+        blocking = McpDispatchExecutor(
+            name="blocking-test", max_workers=1, max_queue=0
+        )
+        control = McpDispatchExecutor(
+            name="control-test", max_workers=1, max_queue=0
+        )
+
+        def blocked() -> str:
+            gate.wait(timeout=5)
+            return "released"
+
+        first = asyncio.create_task(
+            blocking.run(blocked, label="test:blocking-saturation")
+        )
+        await asyncio.sleep(0.05)
+        try:
+            with pytest.raises(McpExecutorBusy) as exc_info:
+                await blocking.run(lambda: "should-not-run", label="test:overflow")
+            assert exc_info.value.lane == "blocking-test"
+
+            value, timing = await asyncio.wait_for(
+                control.run(lambda: "control-ok", label="test:control"),
+                timeout=0.5,
+            )
+            assert value == "control-ok"
+            assert timing.queue_ms >= 0
+        finally:
+            gate.set()
+            assert (await first)[0] == "released"
+            blocking.shutdown()
+            control.shutdown()
 
     asyncio.run(scenario())

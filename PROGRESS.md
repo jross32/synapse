@@ -6,7 +6,18 @@
 
 ## Current version
 
-`0.1.204`
+`0.1.205`
+
+> **MCP control traffic stays reachable under connector saturation (2026-08-28):** v0.1.205
+> keeps the total MCP dispatch budget at 16 threads but reserves 4 for cheap local control/read
+> work and 12 for blocking shell/network/downstream-MCP work. Heavy saturation now fails fast
+> inside the blocking lane while context/session/thread-accounting/recovery calls retain their
+> own capacity. Responses expose `X-Synapse-MCP-Lane` in addition to queue/execution timings.
+> Focused lane-routing/saturation/timing regressions: 5 passed. Clean Windows daemon suite:
+> 1195 passed / 14 skipped; clean Node install/typecheck/renderer/Electron build all pass.
+> Live isolated-daemon saturation proof kept `synapse_get_context` responsive at 0.08s while
+> all 12 blocking workers were occupied, and rejected the 13th blocking call in 0.046s with
+> retryable 503 / Retry-After: 1.
 
 > **MCP dispatch is isolated from daemon-wide thread contention (2026-08-27):** connector JSON-RPC
 > work now runs on a dedicated 16-worker bounded executor instead of asyncio's shared default pool.

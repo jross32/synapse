@@ -10,6 +10,22 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.205] -- 2026-08-28
+
+### Changed
+- **MCP now reserves a control/read lane under load** -- the v0.1.204 dedicated 16-thread executor is split into 4 reserved control workers and 12 blocking-work workers. Long shell, downstream MCP, repo-watch, HTTP, web-search, runtime-probe, and delegation calls can saturate their lane without consuming the capacity used by local context/session/thread-accounting/recovery calls.
+- **Dispatch lane is observable** -- MCP responses now include `X-Synapse-MCP-Lane: control|blocking|mixed`; saturation responses identify the saturated lane alongside the existing retryable 503 and `Retry-After: 1` signal.
+
+### Fixed
+- **Recovery calls no longer disappear behind connector-heavy work** -- a burst of long commands/browser/downstream calls cannot occupy every connector dispatch worker and make `synapse_get_context`, session inspection, heartbeats, or result polling wait on the same pool.
+
+### Verification
+- Focused lane-routing/saturation/timing regressions: **5 passed**.
+- Clean Windows daemon suite: **1195 passed, 14 skipped** in 24m19s (2 existing asyncio subprocess cleanup warnings).
+- Clean Node gate: `npm ci`, TypeScript typecheck, renderer build, and Electron build all **PASS**.
+- Live isolated-daemon saturation proof: with all 12 blocking workers occupied, `synapse_get_context` returned HTTP 200 on the reserved control lane in **0.08s**; a 13th blocking call failed fast with HTTP 503 in **0.046s** and `Retry-After: 1`; all 12 accepted blocking calls completed HTTP 200.
+
+
 ## [0.1.204] -- 2026-08-27
 
 ### Changed
