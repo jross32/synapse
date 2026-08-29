@@ -40,6 +40,16 @@ Run:
 
 The detector recognizes web/HTML5, Phaser, Unity, Godot, Unreal, and Blender-oriented workspaces without launching them. Browser games are a first-class automation lane for fast build/playtest feedback; engine-specific adapters can layer on top. For Unity, read `ProjectSettings/ProjectVersion.txt` and project/package files when available.
 
+## Browser-game verification ladder
+
+For web/HTML5/Phaser games, verify in layers instead of treating one browser tool as a single point of failure:
+
+1. Run the project's own deterministic/unit checks.
+2. Start the local game server and run `python scripts/game_dev_studio.py web-smoke --url <loopback-url>` to prove the page is reachable and inspect basic HTML signals.
+3. Prefer Playwright for semantic browser interaction, console inspection, state assertions, and repeatable playtest flows.
+4. If Playwright is unavailable or times out, fall back to Reflex + the user's real browser for launch, keyboard/mouse interaction, and screenshot proof. Record that this was a fallback; do not claim semantic assertions that Reflex did not perform.
+5. A failed adapter is a Studio capability finding, not automatically a game defect. Record the distinction in the event stream.
+
 ## Unity policy boundary
 
 The AI may help the user build their own Unity project by writing/inspecting their project materials and using user-authorized workflows. Do not point unofficial bots/scrapers at Unity services or the Asset Store. Current Unity terms require AI agents/MCP/automated callers interacting with Unity Offerings to use Unity-authorized pathways. If direct agentic editor/service integration is desired, verify the current authorized mechanism before enabling it.
