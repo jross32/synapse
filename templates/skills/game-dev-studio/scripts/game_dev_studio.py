@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""WhatIf Game Dev Studio helper.
+
+Dependency-light utilities for game-project discovery, local tool detection,
+Blender provisioning, durable truthful activity events, and asset provenance.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.request
+import uuid
+
+SOURCE = "whatif-game-dev-studio"
+EVENT_SCHEMA_VERSION = 1
+PROVENANCE_SCHEMA_VERSION = 1
+
+
+def _now() -> str:
+    return dt.datetime.now().astimezone().isoformat()
+
+
+def _print_json(value: object) -> None:
+    print(json.dumps(value, indent=2, ensure_ascii=False))
+
+
+def _run(args: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+
+
+def _existing(paths: list[Path]) -> list[str]:
+    return [str(path) for path in paths if path.exists()]
+
+
+def _find_unity_editors() -> list[dict[str, str]]:
+    editors_root = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Unity" / "Hub" / "Editor"
+    found: list[dict[str, str]] = []
+    if editors_root.exists():
+        for version_dir in sorted(editors_root.iterdir(), reverse=True):
+            exe = version_dir / "Editor" / "Unity.exe"
+            if exe.exists():
+                found.append({"version": version_dir.name, "path": str(exe)})
+    path_exe = shutil.which("Unity") or shutil.which("Unity.exe")
+    if path_exe and not any(item["path"].lower() == path_exe.lower() for item in found):
+        found.append({"version": "unknown", "path": path_exe})
+    return found
+
+
+def _find_unreal_editors() -> list[dict[str, str]]:
+    roots = [
+        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Epic Games",
+        Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Epic Games",
+    ]
+    found: list[dict[str, str]] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for version_dir in sorted(root.glob("UE_*"), reverse=True):
+            exe = version_dir / "Engine" / "Binaries" / "Win64" / "UnrealEditor.exe"
+            if exe.exists():
+                found.append({"version": version_dir.name.removeprefix("UE_"), "path": str(exe)})
+    return found
+
+
+def _find_godot() -> list[dict[str, str]]:
+    candidates: list[str] = []
+    for name in ("godot", "godot4", "Godot.exe"):
+        path = shutil.which(name)
+        if path and path not in candidates:
+            candidates.append(path)
+    common = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Godot"
+    if common.exists():
+        for exe in common.rglob("*.exe"):
+            if "godot" in exe.name.lower() and str(exe) not in candidates:
+                candidates.append(str(exe))
+    found = []
+    for path in candidates:
+        proc = _run([path, "--version"], timeout=15)
+        version = (proc.stdout or proc.stderr).strip().splitlines()[0] if (proc.stdout or proc.stderr).strip() else "unknown"
+        found.append({"version": version, "path": path})
+    return found
+
+
+def _find_blender() -> dict[str, object]:
+    candidates: list[str] = []
+    path_exe = shutil.which("blender") or shutil.which("blender.exe")
+    if path_exe:
+        candidates.append(path_exe)
+    base = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Blender Foundation"
+    if base.exists():
+        for exe in sorted(base.glob("Blender */blender.exe"), reverse=True):
+            if str(exe) not in candidates:
+                candidates.append(str(exe))
+    if not candidates:
+        return {"installed": False, "path": None, "version": None}
+    exe = candidates[0]
+    proc = _run([exe, "--version"], timeout=20)
+    first = (proc.stdout or proc.stderr).splitlines()
+    version = first[0].replace("Blender ", "").strip() if first else "unknown"
+    return {"installed": True, "path": exe, "version": version}
+
+
+def doctor() -> dict[str, object]:
+    hub = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Unity Hub" / "Unity Hub.exe"
+    return {
+        "schema_version": 1,
+        "observed_at": _now(),
+        "platform": sys.platform,
+        "python": {"version": sys.version.split()[0], "path": sys.executable},
+        "blender": _find_blender(),
+        "unity": {"hub": str(hub) if hub.exists() else None, "editors": _find_unity_editors()},
+        "unreal": {"editors": _find_unreal_editors()},
+        "godot": {"editors": _find_godot()},
+        "winget": shutil.which("winget") or shutil.which("winget.exe"),
+    }
+
+
+def _winget_blender_metadata(winget: str) -> dict[str, str]:
+    proc = _run([winget, "show", "--id", "BlenderFoundation.Blender", "--exact", "--accept-source-agreements"], timeout=60)
+    if proc.returncode != 0:
+        raise RuntimeError(f"winget show failed: {(proc.stderr or proc.stdout).strip()[-1000:]}")
+    metadata: dict[str, str] = {}
+    for raw in proc.stdout.splitlines():
+        line = raw.strip()
+        if line.startswith("Version:"):
+            metadata["version"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Installer Url:"):
+            metadata["url"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Installer SHA256:"):
+            metadata["sha256"] = line.split(":", 1)[1].strip().lower()
+    if not all(metadata.get(key) for key in ("version", "url", "sha256")):
+        raise RuntimeError("winget did not provide Blender version, installer URL, and SHA256")
+    if not metadata["url"].lower().startswith("https://download.blender.org/"):
+        raise RuntimeError("Refusing Blender installer URL outside download.blender.org")
+    return metadata
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def ensure_blender(install: bool) -> dict[str, object]:
+    before = _find_blender()
+    if before["installed"]:
+        return {"ok": True, "changed": False, "message": "Blender already installed", "blender": before}
+    if not install:
+        return {
+            "ok": False,
+            "changed": False,
+            "message": "Blender is missing. Re-run with --install to provision it automatically.",
+            "blender": before,
+        }
+    winget = shutil.which("winget") or shutil.which("winget.exe")
+    if not winget:
+        return {"ok": False, "changed": False, "message": "winget is unavailable; automatic Blender install could not resolve a trusted package."}
+    try:
+        metadata = _winget_blender_metadata(winget)
+        with tempfile.TemporaryDirectory(prefix="whatif-blender-") as temp_dir:
+            installer = Path(temp_dir) / f"blender-{metadata['version']}.msi"
+            request = urllib.request.Request(metadata["url"], headers={"User-Agent": "Mozilla/5.0 WhatIfGameDevStudio/0.1"})
+            with urllib.request.urlopen(request, timeout=120) as response, installer.open("wb") as out:
+                shutil.copyfileobj(response, out)
+            actual_sha = _sha256(installer)
+            if actual_sha.lower() != metadata["sha256"].lower():
+                raise RuntimeError(f"Blender installer SHA256 mismatch: expected {metadata['sha256']}, got {actual_sha}")
+            proc = _run(["msiexec.exe", "/i", str(installer), "/qn", "/norestart"], timeout=900)
+        after = _find_blender()
+        return {
+            "ok": bool(after["installed"]),
+            "changed": bool(after["installed"]),
+            "message": "Blender installed" if after["installed"] else "Blender installer completed but Blender was not detected",
+            "resolved_version": metadata["version"],
+            "installer_source": metadata["url"],
+            "installer_sha256": metadata["sha256"],
+            "command_exit_code": proc.returncode,
+            "stdout_tail": proc.stdout[-2000:],
+            "stderr_tail": proc.stderr[-2000:],
+            "blender": after,
+        }
+    except Exception as exc:
+        return {"ok": False, "changed": False, "message": str(exc), "blender": _find_blender()}
+
+
+def _unity_project_version(root: Path) -> str | None:
+    file = root / "ProjectSettings" / "ProjectVersion.txt"
+    if not file.exists():
+        return None
+    for line in file.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("m_EditorVersion:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def detect_project(project: str) -> dict[str, object]:
+    root = Path(project).expanduser().resolve()
+    if not root.exists():
+        raise FileNotFoundError(root)
+    signals: list[str] = []
+    engine = "unknown"
+    version: str | None = None
+    if (root / "ProjectSettings" / "ProjectVersion.txt").exists() and (root / "Assets").exists():
+        engine = "unity"
+        version = _unity_project_version(root)
+        signals.extend(["ProjectSettings/ProjectVersion.txt", "Assets/"])
+    elif (root / "project.godot").exists():
+        engine = "godot"
+        signals.append("project.godot")
+        for line in (root / "project.godot").read_text(encoding="utf-8", errors="replace").splitlines():
+            if "config/features" in line:
+                signals.append(line.strip()[:300])
+                break
+    else:
+        uprojs = list(root.glob("*.uproject"))
+        if uprojs:
+            engine = "unreal"
+            signals.append(uprojs[0].name)
+            try:
+                payload = json.loads(uprojs[0].read_text(encoding="utf-8"))
+                version = str(payload.get("EngineAssociation") or "") or None
+            except (OSError, json.JSONDecodeError):
+                pass
+        elif list(root.glob("*.blend")):
+            engine = "blender"
+            signals.append("*.blend")
+        elif (root / "index.html").exists():
+            engine = "web"
+            signals.append("index.html")
+            package_json = root / "package.json"
+            if package_json.exists():
+                signals.append("package.json")
+                try:
+                    payload = json.loads(package_json.read_text(encoding="utf-8"))
+                    version = str(payload.get("version") or "") or None
+                    deps = {**payload.get("dependencies", {}), **payload.get("devDependencies", {})}
+                    if "phaser" in deps:
+                        engine = "phaser"
+                        signals.append("phaser:" + str(deps["phaser"]))
+                except (OSError, json.JSONDecodeError, TypeError):
+                    pass
+    git_dirty = None
+    if (root / ".git").exists():
+        proc = _run(["git", "status", "--porcelain"], timeout=15)
+        git_dirty = bool(proc.stdout.strip()) if proc.returncode == 0 else None
+    return {
+        "schema_version": 1,
+        "observed_at": _now(),
+        "project": str(root),
+        "engine": engine,
+        "engine_version": version,
+        "signals": signals,
+        "git_dirty": git_dirty,
+        "event_log": str(root / ".synapse" / "game-dev-events.jsonl"),
+        "provenance_log": str(root / ".synapse" / "asset-provenance.jsonl"),
+    }
+
+
+def append_event(project: str, phase: str, kind: str, message: str, progress: float | None, detail_raw: str | None) -> dict[str, object]:
+    allowed_kinds = {"started", "activity", "artifact", "milestone", "warning", "error", "completed", "heartbeat"}
+    if kind not in allowed_kinds:
+        raise ValueError(f"Unsupported event kind: {kind}")
+    if progress is not None and not 0 <= progress <= 100:
+        raise ValueError("progress must be between 0 and 100")
+    detail: object = {}
+    if detail_raw:
+        detail = json.loads(detail_raw)
+        if not isinstance(detail, dict):
+            raise ValueError("detail must be a JSON object")
+    root = Path(project).expanduser().resolve()
+    if not root.exists():
+        raise FileNotFoundError(root)
+    log = root / ".synapse" / "game-dev-events.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    event = {
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": str(uuid.uuid4()),
+        "timestamp": _now(),
+        "project": str(root),
+        "phase": phase,
+        "kind": kind,
+        "message": message,
+        "progress": progress,
+        "detail": detail,
+        "source": SOURCE,
+    }
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+    return event
+
+
+def provenance_add(project: str, asset: str, origin: str, license_name: str, commercial_use: str, attribution: str, modifications: str, usage: str) -> dict[str, object]:
+    root = Path(project).expanduser().resolve()
+    if not root.exists():
+        raise FileNotFoundError(root)
+    log = root / ".synapse" / "asset-provenance.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "schema_version": PROVENANCE_SCHEMA_VERSION,
+        "record_id": str(uuid.uuid4()),
+        "timestamp": _now(),
+        "asset": asset,
+        "origin": origin,
+        "license": license_name,
+        "commercial_use": commercial_use,
+        "attribution": attribution,
+        "modifications": modifications,
+        "usage": usage,
+        "source": SOURCE,
+    }
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return record
+
+
+def provenance_list(project: str) -> list[object]:
+    log = Path(project).expanduser().resolve() / ".synapse" / "asset-provenance.jsonl"
+    if not log.exists():
+        return []
+    rows: list[object] = []
+    for line in log.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            rows.append(json.loads(line))
+    return rows
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="WhatIf Game Dev Studio helper")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("doctor")
+    blender = sub.add_parser("ensure-blender")
+    blender.add_argument("--install", action="store_true")
+    detect = sub.add_parser("detect-project")
+    detect.add_argument("--project", required=True)
+    event = sub.add_parser("event")
+    event.add_argument("--project", required=True)
+    event.add_argument("--phase", required=True)
+    event.add_argument("--kind", required=True)
+    event.add_argument("--message", required=True)
+    event.add_argument("--progress", type=float)
+    event.add_argument("--detail")
+    prov = sub.add_parser("provenance-add")
+    prov.add_argument("--project", required=True)
+    prov.add_argument("--asset", required=True)
+    prov.add_argument("--origin", required=True)
+    prov.add_argument("--license", required=True, dest="license_name")
+    prov.add_argument("--commercial-use", required=True)
+    prov.add_argument("--attribution", default="none")
+    prov.add_argument("--modifications", default="none")
+    prov.add_argument("--usage", default="unspecified")
+    prov_list = sub.add_parser("provenance-list")
+    prov_list.add_argument("--project", required=True)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        if args.command == "doctor":
+            result = doctor()
+        elif args.command == "ensure-blender":
+            result = ensure_blender(args.install)
+        elif args.command == "detect-project":
+            result = detect_project(args.project)
+        elif args.command == "event":
+            result = append_event(args.project, args.phase, args.kind, args.message, args.progress, args.detail)
+        elif args.command == "provenance-add":
+            result = provenance_add(args.project, args.asset, args.origin, args.license_name, args.commercial_use, args.attribution, args.modifications, args.usage)
+        elif args.command == "provenance-list":
+            result = provenance_list(args.project)
+        else:
+            raise AssertionError(args.command)
+        _print_json(result)
+        if isinstance(result, dict) and result.get("ok") is False:
+            return 2
+        return 0
+    except Exception as exc:
+        _print_json({"ok": False, "error": type(exc).__name__, "message": str(exc)})
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
