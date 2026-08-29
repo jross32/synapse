@@ -2,7 +2,7 @@
   "id": "game-dev-studio",
   "name": "WhatIf Game Dev Studio",
   "publisher": "The WhatIf Company",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Agentic game-development workflow for inspecting, building, testing, and visually reporting web, Unity, Godot, Unreal, and Blender game projects with provenance and truthful real-time activity events.",
   "entrypoint": "SKILL.md",
   "tags": [

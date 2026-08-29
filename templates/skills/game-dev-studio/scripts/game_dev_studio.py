@@ -17,6 +17,8 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+import urllib.parse
+import re
 import uuid
 
 SOURCE = "whatif-game-dev-studio"
@@ -266,6 +268,28 @@ def detect_project(project: str) -> dict[str, object]:
     }
 
 
+def web_smoke(url: str) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+        raise ValueError("web-smoke only permits loopback game URLs")
+    request = urllib.request.Request(url, headers={"User-Agent": "WhatIfGameDevStudio/0.1"})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        body = response.read(2_000_000).decode("utf-8", errors="replace")
+        status = int(response.status)
+        content_type = response.headers.get("Content-Type", "")
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
+    title = re.sub(r"\s+", " ", title_match.group(1)).strip() if title_match else None
+    return {
+        "ok": 200 <= status < 400,
+        "url": url,
+        "status": status,
+        "content_type": content_type,
+        "title": title,
+        "has_canvas": bool(re.search(r"<canvas\b", body, re.I)),
+        "bytes_sampled": len(body.encode("utf-8")),
+    }
+
+
 def append_event(project: str, phase: str, kind: str, message: str, progress: float | None, detail_raw: str | None) -> dict[str, object]:
     allowed_kinds = {"started", "activity", "artifact", "milestone", "warning", "error", "completed", "heartbeat"}
     if kind not in allowed_kinds:
@@ -342,6 +366,8 @@ def build_parser() -> argparse.ArgumentParser:
     blender.add_argument("--install", action="store_true")
     detect = sub.add_parser("detect-project")
     detect.add_argument("--project", required=True)
+    smoke = sub.add_parser("web-smoke")
+    smoke.add_argument("--url", required=True)
     event = sub.add_parser("event")
     event.add_argument("--project", required=True)
     event.add_argument("--phase", required=True)
@@ -372,6 +398,8 @@ def main(argv: list[str] | None = None) -> int:
             result = ensure_blender(args.install)
         elif args.command == "detect-project":
             result = detect_project(args.project)
+        elif args.command == "web-smoke":
+            result = web_smoke(args.url)
         elif args.command == "event":
             result = append_event(args.project, args.phase, args.kind, args.message, args.progress, args.detail)
         elif args.command == "provenance-add":
