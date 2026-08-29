@@ -19,6 +19,7 @@ Treat game development as an end-to-end engineering + creative production workfl
 8. Every material asset must have provenance: source URL/path, license, commercial-use status, attribution requirement, modifications, and project usage. Never scrape or bypass an asset store's access controls.
 9. Do not invent progress. Emit real events using the live-event schema in `references/live-studio-events.md`.
 10. A task is not finished merely because code was written. Build it, launch/playtest it when practical, inspect console/errors, collect visual proof, and record what was actually verified.
+11. Verification and release gates are fail-closed. If lint, tests, build, diff checks, secret scans, or other required gates return nonzero, stop that release sequence and fix or explicitly record the blocker before commit/push. Do not chain later release actions behind a failing command without checking its exit status.
 
 ## Live Studio event stream
 
