@@ -1008,7 +1008,13 @@ logger = logging.getLogger(__name__)
 
 
 class McpExecutorBusy(RuntimeError):
-    """Raised when the dedicated MCP dispatch lane has no bounded queue capacity."""
+    """Raised when a dedicated MCP dispatch lane has no bounded queue capacity."""
+
+    def __init__(self, lane: str) -> None:
+        self.lane = lane
+        super().__init__(
+            f"Synapse MCP {lane} lane is busy; retry shortly instead of queueing indefinitely."
+        )
 
 
 @dataclass(frozen=True)
@@ -1027,13 +1033,16 @@ class McpDispatchExecutor:
     observable retryable error instead of an invisible queue behind unrelated tasks.
     """
 
-    def __init__(self, *, max_workers: int, max_queue: int) -> None:
+    def __init__(
+        self, *, max_workers: int, max_queue: int, name: str = "dispatch"
+    ) -> None:
         if max_workers < 1 or max_queue < 0:
             raise ValueError("max_workers must be >= 1 and max_queue must be >= 0")
+        self.name = name
         self.max_workers = max_workers
         self.max_queue = max_queue
         self._executor = ThreadPoolExecutor(
-            max_workers=max_workers, thread_name_prefix="synapse-mcp"
+            max_workers=max_workers, thread_name_prefix=f"synapse-mcp-{name}"
         )
         self._slots = threading.BoundedSemaphore(max_workers + max_queue)
 
@@ -1042,12 +1051,10 @@ class McpDispatchExecutor:
     ) -> tuple[Any, McpDispatchTiming]:
         if not self._slots.acquire(blocking=False):
             logger.warning(
-                "MCP dispatch saturated label=%s workers=%s queue_capacity=%s",
-                label, self.max_workers, self.max_queue,
+                "MCP dispatch saturated lane=%s label=%s workers=%s queue_capacity=%s",
+                self.name, label, self.max_workers, self.max_queue,
             )
-            raise McpExecutorBusy(
-                "Synapse MCP dispatch is busy; retry shortly instead of queueing indefinitely."
-            )
+            raise McpExecutorBusy(self.name)
 
         queued_at = time.perf_counter()
         loop = asyncio.get_running_loop()
@@ -1081,8 +1088,8 @@ class McpDispatchExecutor:
         elif timing.queue_ms >= 100:
             log = logger.info
         log(
-            "MCP dispatch timing label=%s queue_ms=%.1f execution_ms=%.1f",
-            label, timing.queue_ms, timing.execution_ms,
+            "MCP dispatch timing lane=%s label=%s queue_ms=%.1f execution_ms=%.1f",
+            self.name, label, timing.queue_ms, timing.execution_ms,
         )
         if error is not None:
             raise error
@@ -1092,7 +1099,39 @@ class McpDispatchExecutor:
         self._executor.shutdown(wait=wait, cancel_futures=True)
 
 
-_MCP_DISPATCH_EXECUTOR = McpDispatchExecutor(max_workers=16, max_queue=0)
+# Keep the total executor budget at 16 threads, but reserve four of them for cheap
+# local control/read operations. Twelve long-running shell/network/downstream-MCP
+# calls can saturate without consuming the capacity needed for get_context,
+# session inspection, thread heartbeats, command-result polling, or recovery controls.
+_MCP_CONTROL_EXECUTOR = McpDispatchExecutor(name="control", max_workers=4, max_queue=0)
+_MCP_BLOCKING_EXECUTOR = McpDispatchExecutor(name="blocking", max_workers=12, max_queue=0)
+
+_BLOCKING_MCP_TOOLS = frozenset(
+    {
+        "synapse_delegate_module",
+        "synapse_runtime_status",
+        "synapse_run_command",
+        "synapse_run_command_async",
+        "synapse_watch_repo",
+        "synapse_http",
+        "synapse_web_search",
+        "synapse_list_mcp_tools",
+        "synapse_call_mcp_tool",
+    }
+)
+
+
+def _mcp_dispatch_executor(msg: Any) -> tuple[str, McpDispatchExecutor]:
+    """Choose the reserved control lane or the bounded blocking-work lane."""
+    if not isinstance(msg, dict) or msg.get("method") != "tools/call":
+        return ("control", _MCP_CONTROL_EXECUTOR)
+    params = msg.get("params") or {}
+    if not isinstance(params, dict):
+        return ("control", _MCP_CONTROL_EXECUTOR)
+    tool_name = str(params.get("name") or "")
+    if tool_name in _BLOCKING_MCP_TOOLS:
+        return ("blocking", _MCP_BLOCKING_EXECUTOR)
+    return ("control", _MCP_CONTROL_EXECUTOR)
 
 
 def _mcp_request_label(msg: Any) -> str:
@@ -1989,39 +2028,48 @@ def build_mcp_router(
         # stays read-only while the operator's own link can still drive the machine.
         allow_writes = request.query_params.get("mode", "").strip().lower() != "read"
 
-        # `_handle` is synchronous and may block on downstream MCP/HTTP/shell work. Keep
-        # it off the event loop *and* off asyncio's process-wide default executor. The
-        # dedicated bounded lane prevents PTYs, health probes, repo-watch polling, or
-        # model calls elsewhere in the daemon from starving connector requests (or vice
-        # versa), and exposes queue-vs-execution timing on every response.
+        # _handle is synchronous and may block on downstream MCP/HTTP/shell work. Keep
+        # it off the event loop *and* off asyncio's process-wide default executor. Long
+        # operations use their own bounded lane; a separate reserved control lane keeps
+        # cheap local reads/recovery calls responsive even while shell/browser/network
+        # work is saturated. Both expose queue-vs-execution timing on every response.
+        async def dispatch(message: Any) -> tuple[Any, McpDispatchTiming, str]:
+            lane, executor = _mcp_dispatch_executor(message)
+            response, timing = await executor.run(
+                _handle, message, allow_writes, label=_mcp_request_label(message)
+            )
+            return response, timing, lane
+
         try:
             if isinstance(payload, list):
-                handled = await asyncio.gather(
-                    *(
-                        _MCP_DISPATCH_EXECUTOR.run(
-                            _handle, m, allow_writes, label=_mcp_request_label(m)
-                        )
-                        for m in payload
-                    )
-                )
-                timings = [timing for _, timing in handled]
-                responses = [response for response, _ in handled if response is not None]
+                handled = await asyncio.gather(*(dispatch(m) for m in payload))
+                timings = [timing for _, timing, _ in handled]
+                lanes = [lane for _, _, lane in handled]
+                responses = [
+                    response for response, _, _ in handled if response is not None
+                ]
                 headers = _mcp_timing_headers(timings)
+                headers["X-Synapse-MCP-Lane"] = (
+                    lanes[0] if lanes and len(set(lanes)) == 1 else "mixed"
+                )
                 if not responses:
                     return Response(status_code=202, headers=headers)
                 return JSONResponse(responses, headers=headers)
 
-            response, timing = await _MCP_DISPATCH_EXECUTOR.run(
-                _handle, payload, allow_writes, label=_mcp_request_label(payload)
-            )
+            response, timing, lane = await dispatch(payload)
         except McpExecutorBusy as exc:
             return JSONResponse(
                 _error(None, -32002, str(exc)),
                 status_code=503,
-                headers={"Retry-After": "1", "X-Synapse-MCP-Executor": "saturated"},
+                headers={
+                    "Retry-After": "1",
+                    "X-Synapse-MCP-Executor": "saturated",
+                    "X-Synapse-MCP-Lane": exc.lane,
+                },
             )
 
         headers = _mcp_timing_headers([timing])
+        headers["X-Synapse-MCP-Lane"] = lane
         if response is None:
             return Response(status_code=202, headers=headers)
         return JSONResponse(response, headers=headers)

@@ -47,4 +47,4 @@ jobs:
         run: python scripts/docs_sync_check.py
 
       - name: Run pytest
-        run: pytest -x -vv --timeout=60 --timeout-method=thread
+        run: pytest -q

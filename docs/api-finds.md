@@ -14,6 +14,8 @@
 
 ---
 
+> **v0.1.205 MCP reliability note:** connector-local context/session/thread-accounting and recovery calls use a reserved control lane; long shell, web-search, HTTP, repo-watch, runtime-probe, delegation, and downstream MCP operations use a separate blocking lane. Inspect `X-Synapse-MCP-Lane`, `X-Synapse-MCP-Queue-Ms`, and `X-Synapse-MCP-Execution-Ms` when diagnosing connector latency. A lane-saturation 503 is retryable and includes `Retry-After: 1`.
+
 ## Table of Contents
 
 1. [AI-First Orientation Endpoints](#1-ai-first-orientation-endpoints)
