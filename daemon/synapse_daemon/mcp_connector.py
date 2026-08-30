@@ -116,7 +116,7 @@ def _http_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) ->
                     headers["Mcp-Session-Id"] = session
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:300]
-            raise ValueError(f"{server.id} returned {exc.code}: {detail}")
+            raise ValueError(f"{server.id} returned {exc.code}: {detail}") from exc
         for line in body.splitlines():
             line = line.strip()
             if line.startswith("data:"):
@@ -172,7 +172,7 @@ def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -
         out, err = proc.communicate("\n".join(lines) + "\n", timeout=timeout)
     except subprocess.TimeoutExpired:
         proc.kill()
-        raise ValueError(f"{server.id} did not answer within {timeout}s")
+        raise ValueError(f"{server.id} did not answer within {timeout}s") from None
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -219,6 +219,8 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_list_collaboration_rooms": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_sync_collaboration_room": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_recent_activity": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_trace_recent": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_trace_analyze": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_quality_summary": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_watch_repo": {"readOnlyHint": True, "idempotentHint": False},
     "synapse_runtime_status": {"readOnlyHint": True, "idempotentHint": True},
@@ -235,6 +237,8 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                                  "idempotentHint": False},
     "synapse_capture_note": {"readOnlyHint": False, "destructiveHint": False,
                              "idempotentHint": False},
+    "synapse_trace_record": {"readOnlyHint": False, "destructiveHint": False,
+                          "idempotentHint": False},
     "synapse_create_squad": {"readOnlyHint": False, "destructiveHint": False,
                              "idempotentHint": False},
     "synapse_add_work_item": {"readOnlyHint": False, "destructiveHint": False,
@@ -414,6 +418,39 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
         {
+            "name": "synapse_trace_recent",
+            "description": (
+                "Synapse Trace / Flight Recorder timeline: privacy-filtered receipts for AI/tool actions, "
+                "runtime observations, watchdog events, errors, recoveries, and timings. Runtime logs are "
+                "ingested idempotently before the timeline is returned."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 500, "description": "Default 100."},
+                    "category": {"type": "string"},
+                    "project_id": {"type": "string"},
+                    "source": {"type": "string"},
+                    "status": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_trace_analyze",
+            "description": (
+                "Analyze the Synapse Trace timeline for repeated failures, recovery churn, slow operations, "
+                "recent incidents, and concrete recommendations. Does not expose hidden chain-of-thought."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "window_hours": {"type": "integer", "minimum": 1, "maximum": 720, "description": "Default 24."}
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "synapse_quality_summary",
             "description": (
                 "Quality OS digest: open UI-quality gates (which are blocking), the most recently "
@@ -527,7 +564,7 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "Finalize one timed response/work turn before returning the final answer. "
                         "Adds the duration exactly once to this thread's cumulative worked time. "
                         "Use duration_source=ui_display when a local browser observer captured ChatGPT's "
-                        "own 'Worked for …' value; otherwise omit duration_seconds for server wall-clock timing."
+                        "own 'Worked for Ã¢â‚¬Â¦' value; otherwise omit duration_seconds for server wall-clock timing."
                     ),
                     "inputSchema": {
                         "type": "object",
@@ -599,6 +636,27 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "title": {"type": "string", "description": "Backlog title (defaults to the first line)."},
                         },
                         "required": ["project_id", "content"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_trace_record",
+                    "description": (
+                        "Append an explicit, privacy-filtered action/decision receipt to Synapse Trace. "
+                        "Use this for a short rationale or outcome summary; never send private hidden chain-of-thought."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "summary": {"type": "string", "description": "Short observable action/outcome summary."},
+                            "category": {"type": "string", "description": "Default note."},
+                            "action": {"type": "string", "description": "Default annotation."},
+                            "status": {"type": "string", "description": "Default info."},
+                            "project_id": {"type": "string"},
+                            "session_id": {"type": "string"},
+                            "details": {"type": "object", "description": "Optional safe structured metadata; secrets are redacted."},
+                        },
+                        "required": ["summary"],
                         "additionalProperties": False,
                     },
                 },
@@ -974,7 +1032,7 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
     return specs
 
 
-# ── async command jobs ───────────────────────────────────────────────────────
+# Ã¢â€â‚¬Ã¢â€â‚¬ async command jobs Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 #
 # synapse_run_command blocks the HTTP request for as long as the underlying shell
 # command takes (up to 900s). Every hop the request passes through on its way back to a
@@ -1348,6 +1406,32 @@ def build_mcp_router(
                 }
                 for n in _activity.list_notifications(storage.conn, limit=20)
             ]
+        if name == "synapse_trace_recent":
+            from . import trace_recorder as _trace
+
+            imported = _trace.ingest_runtime_sources(storage)
+            return {
+                "items": _trace.list_events(
+                    storage,
+                    limit=max(1, min(int(args.get("limit") or 100), 500)),
+                    category=str(args.get("category") or "").strip() or None,
+                    project_id=str(args.get("project_id") or "").strip() or None,
+                    source=str(args.get("source") or "").strip() or None,
+                    status=str(args.get("status") or "").strip() or None,
+                ),
+                "runtime_imported": imported,
+            }
+        if name == "synapse_trace_analyze":
+            from . import trace_recorder as _trace
+
+            imported = _trace.ingest_runtime_sources(storage)
+            return {
+                **_trace.analyze_events(
+                    storage,
+                    window_hours=max(1, min(int(args.get("window_hours") or 24), 720)),
+                ),
+                "runtime_imported": imported,
+            }
         if name == "synapse_quality_summary":
             return quality_os.quality_summary(storage.conn)
         if name == "synapse_list_playbooks":
@@ -1401,6 +1485,25 @@ def build_mcp_router(
                     "why": "Synapse uses this durable identity to show exact active/idle/error/stale threads and cumulative worked time.",
                 },
             }
+        if name == "synapse_trace_record":
+            _require_writes()
+            from . import trace_recorder as _trace
+
+            summary = str(args.get("summary") or "").strip()
+            if not summary:
+                raise ValueError("summary is required")
+            event_id = _trace.record_event(
+                storage,
+                source="agent",
+                category=str(args.get("category") or "note"),
+                action=str(args.get("action") or "annotation"),
+                status=str(args.get("status") or "info"),
+                summary=summary,
+                project_id=str(args.get("project_id") or "").strip() or None,
+                session_id=str(args.get("session_id") or "").strip() or None,
+                details=args.get("details") if isinstance(args.get("details"), dict) else {},
+            )
+            return {"id": event_id, "recorded": True}
         if name == "synapse_create_collaboration_room":
             _require_writes()
             payload = collaboration_rooms_module.CollaborationRoomCreate(
@@ -2000,12 +2103,55 @@ def build_mcp_router(
         if method == "tools/call":
             name = (params or {}).get("name", "")
             args = (params or {}).get("arguments") or {}
+            started_at = time.perf_counter()
+
+            def _trace_tool_outcome(
+                *,
+                status: str,
+                summary: str,
+                error_code: str | None = None,
+            ) -> None:
+                # Trace is observability, never a dependency of tool execution. A recorder
+                # failure must not turn an otherwise valid MCP call into a user-visible error.
+                try:
+                    from . import trace_recorder as _trace
+
+                    _trace.record_event(
+                        storage,
+                        source="mcp",
+                        category="tool",
+                        action=str(name or "unknown"),
+                        status=status,
+                        severity="error" if status == "error" else "info",
+                        summary=summary,
+                        project_id=str(args.get("project_id") or "").strip() or None,
+                        session_id=str(args.get("session_id") or "").strip() or None,
+                        correlation_id=str(msg_id) if msg_id is not None else None,
+                        duration_ms=(time.perf_counter() - started_at) * 1000.0,
+                        error_code=error_code,
+                        details={"arguments": _trace.safe_tool_arguments(str(name), args)},
+                    )
+                except Exception as trace_exc:  # noqa: BLE001 -- observability must fail open
+                    logger.debug("Trace recorder skipped MCP tool receipt: %s", trace_exc)
+
             try:
                 data = _call_tool(name, args, allow_writes=allow_writes)
             except SynapseError as exc:  # not_found / invalid -> tool error, not transport error
+                _trace_tool_outcome(
+                    status="error",
+                    summary=f"{name} failed: {exc.envelope.message}",
+                    error_code=exc.envelope.code,
+                )
                 return _tool_error(msg_id, exc.envelope.message)
             except Exception as exc:  # noqa: BLE001 -- surface as an MCP tool error
+                _trace_tool_outcome(
+                    status="error",
+                    summary=f"{name} failed: {exc}",
+                    error_code=type(exc).__name__,
+                )
                 return _tool_error(msg_id, str(exc))
+
+            _trace_tool_outcome(status="success", summary=f"{name} completed")
             return _ok(
                 msg_id,
                 {

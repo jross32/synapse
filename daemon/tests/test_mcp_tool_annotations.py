@@ -28,6 +28,8 @@ EXPECTED_READ_ONLY = {
     "synapse_list_collaboration_rooms",
     "synapse_sync_collaboration_room",
     "synapse_recent_activity",
+    "synapse_trace_recent",
+    "synapse_trace_analyze",
     "synapse_quality_summary",
     "synapse_runtime_status",
     "synapse_list_blueprints",
@@ -44,6 +46,7 @@ EXPECTED_READ_ONLY = {
 EXPECTED_NOT_READ_ONLY = {
     "synapse_add_project_idea",
     "synapse_capture_note",
+    "synapse_trace_record",
     "synapse_set_project_chat_url",
     "synapse_create_squad",
     "synapse_add_work_item",

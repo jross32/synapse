@@ -134,14 +134,25 @@ function Start-LoggedCmdProcess {
     Remove-Item -Path $LogPath -Force -ErrorAction SilentlyContinue
   }
 
+  # Use CREATE_NO_WINDOW instead of Start-Process -WindowStyle Hidden. On Windows
+  # 11 with Windows Terminal configured as the console host, "hidden" console
+  # launches can still create/consolidate Terminal hosts and were correlated
+  # with repeated WindowsTerminal.exe crashes. CreateNoWindow keeps the same
+  # log redirection/Process object semantics without creating a console host.
   $wrapped = "$Command >> `"$LogPath`" 2>&1"
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = "$env:ComSpec"
+  $startInfo.Arguments = "/d /c `"$wrapped`""
+  $startInfo.WorkingDirectory = $root
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+
   Write-Host "-> Starting $Label"
-  $proc = Start-Process `
-    -FilePath 'cmd.exe' `
-    -ArgumentList @('/d', '/c', $wrapped) `
-    -WorkingDirectory $root `
-    -WindowStyle Hidden `
-    -PassThru
+  $proc = [System.Diagnostics.Process]::Start($startInfo)
+  if (-not $proc) {
+    throw "Failed to start $Label."
+  }
   Write-Host "   PID $($proc.Id) | log: $LogPath"
   return $proc
 }
@@ -201,6 +212,33 @@ function Wait-HttpReady {
   throw "$Label did not become ready within ${TimeoutSeconds}s.`n$tail"
 }
 
+function Start-NoConsoleProcess {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$FilePath,
+    [string[]]$Arguments = @(),
+    [string]$WorkingDirectory = $root
+  )
+
+  $command = Get-Command $FilePath -ErrorAction SilentlyContinue
+  $resolved = if ($command -and $command.Source) { $command.Source } else { $FilePath }
+
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $resolved
+  $startInfo.Arguments = ($Arguments -join ' ')
+  $startInfo.WorkingDirectory = $WorkingDirectory
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+
+  $proc = [System.Diagnostics.Process]::Start($startInfo)
+  if (-not $proc) {
+    throw "Failed to start background process: $FilePath"
+  }
+  return $proc
+}
+
+
 function Get-RunningWatchdogPid {
   # Neither watchdog self-registers a lock file or checks for a sibling before
   # launching, and both are detached (Start-Process -WindowStyle Hidden) so
@@ -251,8 +289,8 @@ function Start-DaemonWatchdog {
   if ($BindLan) {
     $watchdogArgs += '-BindLan'
   }
-  Start-Process -FilePath 'powershell' -ArgumentList $watchdogArgs -WindowStyle Hidden | Out-Null
-  Write-Host "-> Daemon watchdog armed (polls /api/v1/health, auto-restarts after 3 consecutive failures)"
+  $watchdogProc = Start-NoConsoleProcess -FilePath 'powershell.exe' -Arguments $watchdogArgs
+  Write-Host "-> Daemon watchdog armed as PID $($watchdogProc.Id) (polls /api/v1/health, auto-restarts after 3 consecutive failures)"
 }
 
 function Start-PersistentTunnel {
@@ -280,8 +318,8 @@ function Start-PersistentTunnel {
     Write-Host "-> cloudflared not found on PATH; skipping persistent tunnel"
     return
   }
-  Start-Process -FilePath 'cloudflared' -ArgumentList @('tunnel', 'run', 'synapse') -WindowStyle Hidden | Out-Null
-  Write-Host "-> Persistent Cloudflare tunnel started (synapse.whatapc.com)"
+  $cloudflaredProc = Start-NoConsoleProcess -FilePath 'cloudflared.exe' -Arguments @('tunnel', 'run', 'synapse')
+  Write-Host "-> Persistent Cloudflare tunnel started as PID $($cloudflaredProc.Id) (synapse.whatapc.com)"
 }
 
 function Start-TunnelWatchdog {
@@ -301,8 +339,8 @@ function Start-TunnelWatchdog {
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchdogScript,
     '-Port', '7878'
   )
-  Start-Process -FilePath 'powershell' -ArgumentList $watchdogArgs -WindowStyle Hidden | Out-Null
-  Write-Host "-> Tunnel watchdog armed (checks synapse.whatapc.com, auto-restarts cloudflared after 3 consecutive failures)"
+  $watchdogProc = Start-NoConsoleProcess -FilePath 'powershell.exe' -Arguments $watchdogArgs
+  Write-Host "-> Tunnel watchdog armed as PID $($watchdogProc.Id) (checks synapse.whatapc.com, auto-restarts cloudflared after 3 consecutive failures)"
 }
 
 function Start-DaemonOnly {

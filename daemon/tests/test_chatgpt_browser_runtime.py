@@ -252,3 +252,76 @@ def test_parse_worked_for_seconds_prefers_latest_match():
 
 def test_parse_worked_for_seconds_returns_none_when_ui_has_no_timer():
     assert runtime.parse_worked_for_seconds("Finished successfully.") is None
+
+
+class _ReplyMessages:
+    def __init__(self, texts: list[str]):
+        self.texts = texts
+
+    async def count(self):
+        return len(self.texts)
+
+    def nth(self, index: int):
+        return _FakeLocator(text=self.texts[index])
+
+
+class _ReplyPage:
+    def __init__(self, texts: list[str], *, generating: bool = False):
+        self.messages = _ReplyMessages(texts)
+        self.generating = generating
+
+    def locator(self, selector: str):
+        if selector == runtime._ASSISTANT_MESSAGE_SELECTOR:
+            return self.messages
+        if selector == runtime._STOP_BUTTON_SELECTOR:
+            return _FakeLocator(count=1 if self.generating else 0)
+        if selector == "body":
+            return _FakeLocator(text="ordinary conversation")
+        raise AssertionError(f"unexpected selector: {selector}")
+
+
+def test_wait_for_reply_recovery_never_reuses_previous_assistant_answer(monkeypatch):
+    import asyncio
+
+    page = _ReplyPage(["previous turn answer"])
+    monkeypatch.setattr(runtime, "POLL_INTERVAL_SECONDS", 0.001)
+    monkeypatch.setattr(runtime, "STALL_TIMEOUT_SECONDS", 0.005)
+
+    reply = asyncio.run(
+        runtime._wait_for_reply(page, timeout=0.02, minimum_message_count=2)
+    )
+
+    assert reply is None
+
+
+def test_wait_for_reply_recovery_accepts_new_assistant_answer(monkeypatch):
+    import asyncio
+
+    page = _ReplyPage(["previous turn answer", "recovered current turn answer"])
+    monkeypatch.setattr(runtime, "POLL_INTERVAL_SECONDS", 0.001)
+
+    reply = asyncio.run(
+        runtime._wait_for_reply(page, timeout=0.02, minimum_message_count=2)
+    )
+
+    assert reply == "recovered current turn answer"
+    assert asyncio.run(runtime.assistant_message_count(page)) == 2
+
+
+def test_wait_for_reply_detects_frozen_generation_even_when_stop_button_stays_visible(monkeypatch):
+    """A frozen tab can leave ChatGPT's Stop button visible indefinitely."""
+    import asyncio
+    import time
+
+    page = _ReplyPage([], generating=True)
+    monkeypatch.setattr(runtime, "POLL_INTERVAL_SECONDS", 0.001)
+    monkeypatch.setattr(runtime, "STALL_TIMEOUT_SECONDS", 0.005)
+
+    started = time.monotonic()
+    reply = asyncio.run(
+        runtime._wait_for_reply(page, timeout=2.0, minimum_message_count=1)
+    )
+    elapsed = time.monotonic() - started
+
+    assert reply is None
+    assert elapsed < 0.5

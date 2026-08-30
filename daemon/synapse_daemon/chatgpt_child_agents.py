@@ -51,6 +51,9 @@ class ChatGPTChildResult:
     chatgpt_project_name: str = WORKER_PROJECT_NAME
     wall_clock_seconds: float = 0.0
     ui_duration_seconds: float | None = None
+    recovery_attempted: bool = False
+    recovery_succeeded: bool = False
+    recovery_error: str = ""
 
 
 def profile_dir(data_dir: Path) -> Path:
@@ -527,6 +530,8 @@ class ChatGPTBrowserPool:
                 "Use the connected Synapse app/connector for project and tool actions "
                 "required by this task.\n\n" + prompt
             )
+            assistant_count_before_send = await browser_runtime.assistant_message_count(page)
+            minimum_reply_count = assistant_count_before_send + 1
             send_error: str | None = None
             for _attempt in range(1, browser_runtime.MAX_SEND_ATTEMPTS + 1):
                 send_error = await browser_runtime._send_and_confirm_started(page, app_prompt)
@@ -542,13 +547,44 @@ class ChatGPTBrowserPool:
             result.conversation_url = str(getattr(page, "url", "") or "")
             if desired_title:
                 result.title_renamed = await rename_current_chat(page, desired_title)
-            reply = await browser_runtime._wait_for_reply(page, timeout=timeout)
+            reply = await browser_runtime._wait_for_reply(
+                page, timeout=timeout, minimum_message_count=minimum_reply_count
+            )
             if reply is None:
                 if await browser_runtime.conversation_length_limit_reached(page):
                     result.error = "ChatGPT child conversation hit its maximum length."
-                else:
-                    result.error = f"ChatGPT child returned no reply within {timeout:g}s."
-                return result
+                    return result
+
+                # Safe recovery for a frozen/interrupted observer: the prompt was already
+                # positively confirmed as sent, so NEVER resend it here. Re-open the exact
+                # durable conversation URL and observe that same turn once more. The message
+                # count floor prevents a previous assistant answer from being mistaken for
+                # this turn after navigation.
+                recovery_url = result.conversation_url or str(getattr(page, "url", "") or "")
+                if recovery_url:
+                    result.recovery_attempted = True
+                    try:
+                        await page.goto(recovery_url, wait_until="domcontentloaded")
+                        reply = await browser_runtime._wait_for_reply(
+                            page,
+                            timeout=min(120.0, max(10.0, float(timeout))),
+                            minimum_message_count=minimum_reply_count,
+                        )
+                        result.recovery_succeeded = reply is not None
+                    except Exception as exc:  # noqa: BLE001 -- preserve the original actionable failure
+                        result.recovery_error = f"{type(exc).__name__}: {exc}"
+                        reply = None
+
+                if reply is None:
+                    if await browser_runtime.conversation_length_limit_reached(page):
+                        result.error = "ChatGPT child conversation hit its maximum length."
+                    else:
+                        result.error = (
+                            f"ChatGPT child returned no reply within {timeout:g}s; one safe "
+                            "same-conversation recovery observation was attempted without "
+                            "resending the prompt."
+                        )
+                    return result
 
             result.ok = True
             result.reply = reply

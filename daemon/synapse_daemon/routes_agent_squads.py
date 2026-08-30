@@ -500,6 +500,13 @@ def build_agent_squads_router(
                         error=(result.error or "")[:8000],
                     ),
                 )
+            if result.recovery_attempted:
+                chatgpt_worker_chats.record_recovery(
+                    conn,
+                    worker_chat_id,
+                    outcome="succeeded" if result.recovery_succeeded else "failed",
+                    error=result.recovery_error or ("" if result.recovery_succeeded else result.error),
+                )
             if result.ok:
                 chatgpt_worker_chats.mark_idle(
                     conn,

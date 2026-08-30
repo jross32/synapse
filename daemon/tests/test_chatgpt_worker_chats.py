@@ -327,3 +327,85 @@ def test_two_worker_rows_cannot_claim_the_same_chatgpt_conversation_url(tmp_path
                 "UPDATE chatgpt_worker_chats SET conversation_url = ? WHERE id = ?",
                 ("https://chatgpt.com/c/one-real-chat", second.id),
             )
+
+
+
+def test_recovery_accounting_is_durable_and_bounded(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, _squad_id, work_id = _seed(storage, tmp_path)
+    with storage.transaction() as conn:
+        chat = workers.create_chat(
+            conn, project_id="p1", owner_session_id=owner_id, role_id=None, title="Worker", work_item_id=work_id
+        )
+        workers.record_recovery(conn, chat.id, outcome="failed", error="tab frozen")
+        workers.record_recovery(conn, chat.id, outcome="succeeded")
+        current = workers.get_chat(conn, chat.id)
+
+    recovery = current.metadata["recovery"]
+    assert recovery["attempts"] == 2
+    assert recovery["successes"] == 1
+    assert recovery["last_outcome"] == "succeeded"
+    assert recovery["last_error"] == ""
+    assert [entry["outcome"] for entry in recovery["history"]] == ["failed", "succeeded"]
+
+
+def test_recovery_accounting_keeps_only_last_ten_events(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, _squad_id, work_id = _seed(storage, tmp_path)
+    with storage.transaction() as conn:
+        chat = workers.create_chat(
+            conn, project_id="p1", owner_session_id=owner_id, role_id=None, title="Worker", work_item_id=work_id
+        )
+        for i in range(12):
+            workers.record_recovery(conn, chat.id, outcome="failed", error=f"e{i}")
+        current = workers.get_chat(conn, chat.id)
+
+    history = current.metadata["recovery"]["history"]
+    assert len(history) == 10
+    assert history[0]["error"] == "e2"
+    assert history[-1]["error"] == "e11"
+
+
+def test_restart_reconciliation_makes_interrupted_worker_resumable(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, _squad_id, work_id = _seed(storage, tmp_path)
+    with storage.transaction() as conn:
+        chat = workers.create_chat(
+            conn, project_id="p1", owner_session_id=owner_id, role_id=None,
+            title="Worker", work_item_id=work_id
+        )
+        workers.mark_active(
+            conn, chat.id, session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/resumable-worker"
+        )
+        changed = workers.reconcile_interrupted_workers(conn)
+        current = workers.get_chat(conn, chat.id)
+
+    assert changed == [chat.id]
+    assert current.status == workers.ChatGPTWorkerStatus.IDLE
+    assert current.conversation_url == "https://chatgpt.com/c/resumable-worker"
+    assert current.metadata["restart_recovery"]["pending"] is True
+    assert current.metadata["restart_recovery"]["previous_status"] == "active"
+
+
+def test_mark_active_clears_restart_recovery_pending(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, _squad_id, work_id = _seed(storage, tmp_path)
+    with storage.transaction() as conn:
+        chat = workers.create_chat(
+            conn, project_id="p1", owner_session_id=owner_id, role_id=None,
+            title="Worker", work_item_id=work_id
+        )
+        workers.mark_active(
+            conn, chat.id, session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/resume-me"
+        )
+        workers.reconcile_interrupted_workers(conn)
+        resumed = workers.mark_active(
+            conn, chat.id, session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/resume-me"
+        )
+
+    restart = resumed.metadata["restart_recovery"]
+    assert restart["pending"] is False
+    assert restart["resumed_at"]

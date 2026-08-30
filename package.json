@@ -1,8 +1,8 @@
 {
   "name": "synapse",
   "productName": "Synapse",
-  "version": "0.1.205",
-  "description": "Synapse \u2014 a modular developer command center. By The WhatIf Company.",
+  "version": "0.1.206",
+  "description": "Synapse — a modular developer command center. By The WhatIf Company.",
   "author": {
     "name": "The WhatIf Company",
     "email": "justinwross32@gmail.com"
@@ -11,13 +11,13 @@
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "echo \"Use scripts/dev.ps1 \u2014 orchestrates daemon + electron together\"",
+    "dev": "echo \"Use scripts/dev.ps1 — orchestrates daemon + electron together\"",
     "build:renderer": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
     "build:daemon": "powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-daemon.ps1",
     "build": "npm run build:renderer && npm run build:electron",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p electron/tsconfig.json",
-    "lint": "echo \"Lint placeholder \u2014 wire ESLint in Milestone C\"",
+    "lint": "echo \"Lint placeholder — wire ESLint in Milestone C\"",
     "start": "electron .",
     "pack": "npm run build && npm run build:daemon && electron-builder --dir",
     "dist": "npm run build && npm run build:daemon && electron-builder"

@@ -68,6 +68,12 @@ const AiFactoryPage = lazy(() =>
 const WhatsnewPage = lazy(() =>
   import('./pages/Whatsnew').then((module) => ({ default: module.WhatsnewPage }))
 );
+const TracePage = lazy(() =>
+  import('./pages/Trace').then((module) => ({ default: module.TracePage }))
+);
+const WatchdogsPage = lazy(() =>
+  import('./pages/Watchdogs').then((module) => ({ default: module.WatchdogsPage }))
+);
 const SettingsPage = lazy(() =>
   import('./pages/Settings').then((module) => ({ default: module.SettingsPage }))
 );
@@ -319,6 +325,14 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       setRoute({ kind: 'core', page: 'ai-factory' });
       return;
     }
+    if (intent.page === 'trace') {
+      setRoute({ kind: 'core', page: 'trace' });
+      return;
+    }
+    if (intent.page === 'watchdogs') {
+      setRoute({ kind: 'core', page: 'watchdogs' });
+      return;
+    }
     if (intent.page === 'settings') {
       setRoute({ kind: 'core', page: 'settings' });
       return;
@@ -527,6 +541,8 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
             {route.kind === 'core' && route.page === 'live' && <LiveViewPage />}
             {route.kind === 'core' && route.page === 'ai-factory' && <AiFactoryPage />}
             {route.kind === 'core' && route.page === 'whatsnew' && <WhatsnewPage />}
+            {route.kind === 'core' && route.page === 'trace' && <TracePage />}
+            {route.kind === 'core' && route.page === 'watchdogs' && <WatchdogsPage />}
             {route.kind === 'core' && route.page === 'settings' && (
               <SettingsPage
                 mobileRoute={mobileRoute}

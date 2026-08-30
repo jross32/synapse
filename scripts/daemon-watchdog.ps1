@@ -113,8 +113,15 @@ function Start-Daemon {
   $argsJoined = $daemonArgs -join ' '
   $wrapped = "python $argsJoined >> `"$logPath`" 2>&1"
   try {
-    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d', '/c', $wrapped) `
-      -WorkingDirectory $root -WindowStyle Hidden -PassThru
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $env:ComSpec
+    $startInfo.Arguments = "/d /c `"$wrapped`""
+    $startInfo.WorkingDirectory = $root
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $proc = [System.Diagnostics.Process]::Start($startInfo)
+    if (-not $proc) { throw 'daemon process did not start' }
     Write-WatchdogLog "relaunched daemon as PID $($proc.Id)"
     return $proc.Id
   } catch {

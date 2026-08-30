@@ -27,7 +27,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 
-from . import __version__, boot_config
+from . import __version__, boot_config, chatgpt_worker_chats
 from .app import boot_publish_daemon_started, boot_publish_reconciliation, build_app
 from .auth import AuthManager, ensure_local_token
 from .orphan_reconciler import reconcile, reconcile_project_statuses
@@ -124,6 +124,15 @@ def _build_lifespan(
         # running state with no live process (Contract #6).
         outcomes = await asyncio.to_thread(reconcile, storage.conn)
         await asyncio.to_thread(reconcile_project_statuses, storage.conn)
+        interrupted_chatgpt_workers = await asyncio.to_thread(
+            chatgpt_worker_chats.reconcile_interrupted_workers, storage.conn
+        )
+        if interrupted_chatgpt_workers:
+            log.info(
+                "Marked %d interrupted ChatGPT worker chat(s) resumable after daemon restart: %s",
+                len(interrupted_chatgpt_workers),
+                interrupted_chatgpt_workers,
+            )
         await boot_publish_reconciliation(bus, outcomes)
         await boot_publish_daemon_started(bus, schema)
 

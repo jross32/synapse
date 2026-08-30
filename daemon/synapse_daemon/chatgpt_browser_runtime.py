@@ -262,13 +262,33 @@ async def _send_and_confirm_started(page: Any, prompt: str) -> str | None:
     )
 
 
-async def _wait_for_reply(page: Any, *, timeout: float) -> str | None:
-    """Poll until the send button flips back from "stop" to "send", or give up.
+async def assistant_message_count(page: Any) -> int:
+    """Return the number of assistant messages currently rendered in the conversation.
+
+    Capturing this immediately before a send gives recovery code a durable lower bound: after
+    reloading the same conversation we must observe a *new* assistant message before declaring
+    that the just-sent turn succeeded. Without this guard, a recovered tab could accidentally
+    return the previous turn's already-complete answer as if it belonged to the current task.
+    """
+    try:
+        return int(await page.locator(_ASSISTANT_MESSAGE_SELECTOR).count())
+    except Exception:  # noqa: BLE001 -- observation metadata must not crash the worker
+        return 0
+
+
+async def _wait_for_reply(
+    page: Any,
+    *,
+    timeout: float,
+    minimum_message_count: int | None = None,
+) -> str | None:
+    """Poll until the current ChatGPT turn has a completed assistant reply, or give up.
 
     Two clocks, not one: an overall timeout (a very long real turn is normal here) and a
     stall timeout (the reply text must keep growing, or something is stuck -- the "frozen
     tab" failure mode the playbooks already document, where the process is alive but nothing
-    is happening). Either one expiring is reported as "no reply", never guessed at as success.
+    is happening). ``minimum_message_count`` is used by safe recovery after a reload so an
+    older assistant answer can never be mistaken for the reply to the prompt we just sent.
     """
     deadline = time.time() + timeout
     last_length = -1
@@ -281,15 +301,24 @@ async def _wait_for_reply(page: Any, *, timeout: float) -> str | None:
         stop_visible = await page.locator(_STOP_BUTTON_SELECTOR).count()
         messages = page.locator(_ASSISTANT_MESSAGE_SELECTOR)
         count = await messages.count()
-        current_text = await messages.nth(count - 1).inner_text() if count else ""
+        has_current_reply = minimum_message_count is None or count >= minimum_message_count
+        current_text = (
+            await messages.nth(count - 1).inner_text()
+            if count and has_current_reply
+            else ""
+        )
 
         if len(current_text) != last_length:
             last_length = len(current_text)
             last_growth = time.time()
-        elif stop_visible == 0 and time.time() - last_growth > STALL_TIMEOUT_SECONDS:
-            break  # not growing and not generating -- treat as stuck, stop waiting
+        elif time.time() - last_growth > STALL_TIMEOUT_SECONDS:
+            # A frozen ChatGPT tab can leave the Stop button visible forever. Treat
+            # sustained lack of observable reply growth as the stall signal rather
+            # than trusting that button alone. The caller may safely reload/re-observe
+            # the same conversation without resending the already-confirmed prompt.
+            break
 
-        if stop_visible == 0 and current_text:
+        if stop_visible == 0 and has_current_reply and current_text:
             return current_text
 
         await asyncio.sleep(POLL_INTERVAL_SECONDS)

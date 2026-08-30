@@ -4,6 +4,7 @@
 // same route model, but only renders the six fixed hubs in the bottom nav.
 
 import {
+  Activity,
   BrainCircuit,
   FolderKanban,
   Globe,
@@ -11,6 +12,7 @@ import {
   Radio,
   Rocket,
   Settings,
+  ShieldCheck,
   Sparkles,
   Wrench,
   type LucideIcon,
@@ -23,6 +25,8 @@ export type CorePageId =
   | 'live'
   | 'ai-coding'
   | 'ai-factory'
+  | 'trace'
+  | 'watchdogs'
   | 'settings';
 
 export type RoutePageId = CorePageId | 'whatsnew';
@@ -45,7 +49,7 @@ export type AiCodingSection =
   | 'chatgpt';
 
 export type NavigationIntent =
-  | { page: 'home' | 'live' | 'ai-factory' | 'settings' | 'whatsnew' }
+  | { page: 'home' | 'live' | 'ai-factory' | 'trace' | 'watchdogs' | 'settings' | 'whatsnew' }
   | { page: 'apps'; section?: AppsSection }
   | {
       page: 'tools';
@@ -130,6 +134,22 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     icon: BrainCircuit,
     description: 'Reusable AI systems, workers, and cases',
     section: 'ai',
+  },
+  {
+    id: 'trace',
+    label: 'Trace',
+    icon: Activity,
+    description: 'Flight recorder for AI actions, incidents, recoveries, and timings',
+    section: 'system',
+    locked: true,
+  },
+  {
+    id: 'watchdogs',
+    label: 'Watchdogs',
+    icon: ShieldCheck,
+    description: 'Protection chains, background services, schedules, and live logs',
+    section: 'system',
+    locked: true,
   },
   {
     id: 'settings',
@@ -396,6 +416,20 @@ export function buildDesktopSidebarSections(
   }
 
   const systemItems: SidebarSectionItem[] = [
+    {
+      route: { kind: 'core', page: 'trace' },
+      label: coreNavItem('trace').label,
+      description: coreNavItem('trace').description,
+      icon: coreNavItem('trace').icon,
+      locked: true,
+    },
+    {
+      route: { kind: 'core', page: 'watchdogs' },
+      label: coreNavItem('watchdogs').label,
+      description: coreNavItem('watchdogs').description,
+      icon: coreNavItem('watchdogs').icon,
+      locked: true,
+    },
     {
       route: { kind: 'core', page: 'settings' },
       label: coreNavItem('settings').label,

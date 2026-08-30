@@ -10,6 +10,33 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.206] -- 2026-08-29
+
+### Added
+- **Synapse Trace / Flight Recorder** -- a first-class, privacy-filtered timeline for observable AI/tool actions, watchdog and runtime events, errors, recoveries, durations, project/session correlation, and explicit action/outcome summaries.
+- **Trace analysis** -- highlights repeated failures, restart/recovery churn, slow operations, recent incidents, and actionable recommendations from the recorded evidence.
+- **Trace MCP surface** -- `synapse_trace_recent`, `synapse_trace_analyze`, and additive `synapse_trace_record` tools let connected AI workers inspect the same timeline and append concise explicit receipts without exposing hidden reasoning.
+- **Automatic MCP tool receipts** -- every `tools/call` records success/failure, duration, correlation id, project/session hints, and privacy-filtered arguments. Trace failures are fail-open and can never break the actual tool call.
+- **Watchdogs dashboard** -- a scalable System page that discovers the Synapse, Stock Hunter, and Web Scraper protection chain; shows health, PIDs, uptime, scheduled-task state, console-risk state, and expandable live logs.
+
+### Changed
+- **Background supervisors are headless by default** -- known Synapse and Stock Hunter scheduled watchdog/supervisor tasks use hidden `pythonw.exe` launchers so they keep protecting services without leaving terminal windows on the desktop.
+- **Runtime evidence is unified** -- Trace idempotently ingests the existing Live Monitor, AI Supervisor, Repair Watchdog, Stock Hunter supervisor/campaign, daemon-watchdog, and tunnel-watchdog logs into one normalized timeline.
+
+### Fixed
+- **Desktop console clutter** -- watchdog/supervisor scheduled tasks no longer need interactive CMD/PowerShell windows to remain alive.
+- **MCP exception chaining** -- two pre-existing connector error paths now preserve their originating exception context instead of triggering Ruff B904 findings.
+- **Trace historical-log timestamps** -- plain watchdog logs now use their logged clock time instead of ingestion time, and transient 1/3 health misses are warnings rather than hard errors. This prevents old watchdog history from flooding the current 24-hour incident count.
+
+### Privacy
+- Trace never records private hidden chain-of-thought, keylogging, or continuous screenshots. Secret-like fields are automatically redacted, large nested payloads are bounded, and file-write bodies are omitted from tool receipts.
+
+### Verification
+- Trace + Watchdogs focused tests: **21 passed**; relevant MCP connector regressions: **6 passed** (27 focused checks total).
+- Python compile and Ruff checks for the changed Trace/MCP paths: **PASS**.
+- TypeScript typecheck, renderer production build, and Electron build: **PASS**.
+
+
 ## [0.1.205] -- 2026-08-28
 
 ### Changed

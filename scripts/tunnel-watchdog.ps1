@@ -117,8 +117,15 @@ function Restart-Tunnel {
   }
 
   try {
-    $proc = Start-Process -FilePath 'cloudflared' -ArgumentList @('tunnel', 'run', $TunnelName) `
-      -WindowStyle Hidden -PassThru
+    $cloudflared = Get-Command cloudflared -ErrorAction Stop
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $cloudflared.Source
+    $startInfo.Arguments = "tunnel run $TunnelName"
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $proc = [System.Diagnostics.Process]::Start($startInfo)
+    if (-not $proc) { throw 'cloudflared process did not start' }
     Write-TunnelWatchdogLog "relaunched cloudflared as PID $($proc.Id)"
   } catch {
     Write-TunnelWatchdogLog "relaunch failed: $($_.Exception.Message) -- will retry from the next check"

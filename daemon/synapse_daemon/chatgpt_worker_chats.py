@@ -12,6 +12,7 @@ in ChatGPT when the lifecycle policy decides it is appropriate.
 
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 from datetime import datetime
@@ -47,6 +48,7 @@ class ChatGPTWorkerChat(BaseModel):
     created_at: datetime
     last_used_at: datetime
     archived_at: datetime | None = None
+    metadata: dict[str, object] = {}
     work_item_ids: list[str] = []
 
 
@@ -78,9 +80,63 @@ def _row_to_chat(conn: sqlite3.Connection, row: sqlite3.Row) -> ChatGPTWorkerCha
         created_at=from_iso(row["created_at"]),
         last_used_at=from_iso(row["last_used_at"]),
         archived_at=from_iso(row["archived_at"]) if row["archived_at"] else None,
+        metadata=_metadata_from_row(row),
         work_item_ids=_work_item_ids(conn, row["id"]),
     )
 
+
+
+def _metadata_from_row(row: sqlite3.Row) -> dict[str, object]:
+    try:
+        value = json.loads(row["metadata_json"] or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def record_recovery(
+    conn: sqlite3.Connection,
+    worker_chat_id: str,
+    *,
+    outcome: str,
+    error: str = "",
+) -> ChatGPTWorkerChat:
+    """Persist one bounded same-conversation recovery observation.
+
+    Recovery bookkeeping lives in metadata_json so the worker registry can expose
+    it immediately without a schema migration colliding with unrelated in-flight
+    migrations. The history is intentionally compact and append-bounded.
+    """
+    row = conn.execute(
+        "SELECT metadata_json FROM chatgpt_worker_chats WHERE id = ?",
+        (worker_chat_id,),
+    ).fetchone()
+    if row is None:
+        raise not_found("chatgpt_worker_chat", worker_chat_id)
+    metadata = _metadata_from_row(row)
+    recovery = metadata.get("recovery")
+    if not isinstance(recovery, dict):
+        recovery = {}
+    attempts = int(recovery.get("attempts") or 0) + 1
+    successes = int(recovery.get("successes") or 0) + (1 if outcome == "succeeded" else 0)
+    now = to_iso(utc_now())
+    history = recovery.get("history")
+    if not isinstance(history, list):
+        history = []
+    history = [*history[-9:], {"at": now, "outcome": outcome, "error": error[:1000]}]
+    metadata["recovery"] = {
+        "attempts": attempts,
+        "successes": successes,
+        "last_at": now,
+        "last_outcome": outcome,
+        "last_error": error[:1000],
+        "history": history,
+    }
+    conn.execute(
+        "UPDATE chatgpt_worker_chats SET metadata_json = ?, last_used_at = ? WHERE id = ?",
+        (json.dumps(metadata, separators=(",", ":"), sort_keys=True), now, worker_chat_id),
+    )
+    return get_chat(conn, worker_chat_id)
 
 def get_chat(conn: sqlite3.Connection, worker_chat_id: str) -> ChatGPTWorkerChat:
     row = conn.execute(
@@ -90,6 +146,42 @@ def get_chat(conn: sqlite3.Connection, worker_chat_id: str) -> ChatGPTWorkerChat
         raise not_found("chatgpt_worker_chat", worker_chat_id)
     return _row_to_chat(conn, row)
 
+
+
+def reconcile_interrupted_workers(conn: sqlite3.Connection) -> list[str]:
+    """Convert daemon-interrupted managed ChatGPT workers into resumable idle chats.
+
+    The browser controller lives inside the daemon process, so an ``active`` or
+    ``starting`` row cannot truthfully remain active across a daemon restart. The
+    durable conversation URL is still valuable, though: relaunching the work item
+    can safely resume that exact conversation. Record the interruption in metadata
+    and move only those transient states to ``idle``; failed/archived/ordinary idle
+    workers are untouched.
+    """
+    rows = conn.execute(
+        "SELECT id, status, metadata_json FROM chatgpt_worker_chats "
+        "WHERE status IN ('starting', 'active')"
+    ).fetchall()
+    changed: list[str] = []
+    now = to_iso(utc_now())
+    for row in rows:
+        metadata = _metadata_from_row(row)
+        restart = metadata.get("restart_recovery")
+        if not isinstance(restart, dict):
+            restart = {}
+        restart.update({
+            "pending": True,
+            "at": now,
+            "previous_status": str(row["status"]),
+            "reason": "daemon-restart",
+        })
+        metadata["restart_recovery"] = restart
+        conn.execute(
+            "UPDATE chatgpt_worker_chats SET status = 'idle', metadata_json = ?, last_used_at = ? WHERE id = ?",
+            (json.dumps(metadata, separators=(",", ":"), sort_keys=True), now, row["id"]),
+        )
+        changed.append(str(row["id"]))
+    return changed
 
 def list_chats(
     conn: sqlite3.Connection,
@@ -301,17 +393,26 @@ def mark_active(
     title: str | None = None,
 ) -> ChatGPTWorkerChat:
     existing = get_chat(conn, worker_chat_id)
+    now = to_iso(utc_now())
+    metadata = dict(existing.metadata)
+    restart = metadata.get("restart_recovery")
+    if isinstance(restart, dict) and restart.get("pending"):
+        restart = dict(restart)
+        restart["pending"] = False
+        restart["resumed_at"] = now
+        metadata["restart_recovery"] = restart
     conn.execute(
         "UPDATE chatgpt_worker_chats SET last_session_id = ?, conversation_url = ?, "
         "title = ?, status = 'active', archived_reason = '', archived_at = NULL, "
-        "last_used_at = ? WHERE id = ?",
+        "metadata_json = ?, last_used_at = ? WHERE id = ?",
         (
             session_id,
             _conversation_url_for_update(
                 conn, worker_chat_id, conversation_url, existing.conversation_url
             ),
             (title.strip() if title else existing.title),
-            to_iso(utc_now()),
+            json.dumps(metadata, separators=(",", ":"), sort_keys=True),
+            now,
             worker_chat_id,
         ),
     )
