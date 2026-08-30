@@ -1287,7 +1287,20 @@ def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeou
     import subprocess
 
     try:
-        done = subprocess.run(shell_argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+        # encoding/errors explicit: without them, `text=True` decodes with the OS default
+        # (cp1252 on Windows), which raises UnicodeDecodeError -- and unlike a normal exception,
+        # that error surfaces inside subprocess.communicate()'s own internal reader thread, whose
+        # traceback prints via threading.excepthook and is NOT caught by this function's own
+        # try/except. Confirmed live 2026-08-30: this crashed the whole daemon process twice in
+        # ~10 minutes under real concurrent command load (multiple ChatGPT-delegated build
+        # threads running git/gh/npm/Unity commands at once, any of which can emit a byte cp1252
+        # can't decode, e.g. a smart quote or box-drawing character in build/CLI output).
+        # errors="replace" means a stray undecodable byte degrades the captured text rather than
+        # taking down the process.
+        done = subprocess.run(
+            shell_argv, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout, cwd=cwd,
+        )
         result = {
             "ok": done.returncode == 0,
             "exit_code": done.returncode,
@@ -1899,7 +1912,12 @@ def build_mcp_router(
             shell_argv = (["powershell", "-NoProfile", "-Command", command]
                           if _sys.platform == "win32" else ["bash", "-lc", command])
             try:
+                # See _run_command_job_thread's comment: encoding/errors must be explicit here
+                # too, or a byte the OS default codepage (cp1252 on Windows) can't decode raises
+                # inside subprocess's own internal reader thread and crashes the whole daemon --
+                # confirmed live 2026-08-30 under real concurrent command load from this exact tool.
                 done = subprocess.run(shell_argv, capture_output=True, text=True,
+                                      encoding="utf-8", errors="replace",
                                       timeout=timeout, cwd=cwd)
             except subprocess.TimeoutExpired:
                 return {"ok": False, "timed_out": True,
