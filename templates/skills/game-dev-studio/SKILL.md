@@ -138,3 +138,5 @@ For reference projects, preserve a small deterministic benchmark fixture. A Unit
 ## Unity benchmark validity
 
 For Unity runtime evidence, follow `references/unity-benchmark-contract.md`. Validate machine-readable runtime output with `python scripts/game_dev_studio.py benchmark-validate --input <benchmark.json> --expect rendered` (or `headless`). A headless `Null Device` result is not rendering evidence. Use warm-up-aware steady-state samples, mark unsupported counters unavailable, and never claim cold-cache versus warm-cache build speedups as directly comparable.
+
+For rendered release evidence, verify engine-native screenshot bytes and hash when available, record benchmark presentation settings, and preserve rejected benchmark runs as compact provenance. Diagnose isolated max-frame failures before changing a threshold.

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
@@ -92,3 +92,45 @@ def test_benchmark_validate_accepts_rendered_with_optional_counter_unavailable(t
     assert result["ok"] is True
     assert result["comparable_for_rendering"] is True
     assert "counter_unavailable:draw_calls" in result["warnings"]
+
+def test_benchmark_validate_verifies_screenshot_hash(tmp_path):
+    mod = _module()
+    import json, hashlib
+    shot = tmp_path / "proof.png"
+    shot.write_bytes(b"png-proof")
+    payload = {
+        "warmup_seconds": 2.0, "duration_seconds": 10.0,
+        "average_frame_ms": 8.3, "p95_frame_ms": 8.4,
+        "max_frame_ms": 16.7, "average_fps": 120.0,
+        "graphics_device": "Example GPU",
+        "benchmark_vsync_count": 0, "benchmark_target_frame_rate": 120,
+        "screenshot_path": str(shot), "screenshot_bytes": shot.stat().st_size,
+        "screenshot_sha256": hashlib.sha256(shot.read_bytes()).hexdigest(),
+    }
+    path = tmp_path / "rendered.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    result = mod.benchmark_validate(str(path), "rendered", True, True)
+    assert result["ok"] is True
+    assert result["screenshot_verified"] is True
+    assert result["presentation_controlled"] is True
+    payload["screenshot_sha256"] = "0" * 64
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    bad = mod.benchmark_validate(str(path), "rendered", True, True)
+    assert bad["ok"] is False
+    assert "screenshot_sha256_mismatch" in bad["issues"]
+
+
+def test_benchmark_validate_can_require_controlled_presentation(tmp_path):
+    mod = _module()
+    import json
+    payload = {
+        "warmup_seconds": 2.0, "duration_seconds": 10.0,
+        "average_frame_ms": 8.3, "p95_frame_ms": 8.4,
+        "max_frame_ms": 16.7, "average_fps": 120.0,
+        "graphics_device": "Example GPU",
+    }
+    path = tmp_path / "rendered.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    result = mod.benchmark_validate(str(path), "rendered", False, True)
+    assert result["ok"] is False
+    assert "controlled_presentation_required" in result["issues"]

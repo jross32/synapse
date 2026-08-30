@@ -2,8 +2,8 @@
   "id": "game-dev-studio",
   "name": "WhatIf Game Dev Studio",
   "publisher": "The WhatIf Company",
-  "version": "0.1.8",
-  "description": "Agentic game-development workflow with isolated Unity preflights, transactional project creation, benchmark-validity gates, provenance, builds, playtests, and truthful release evidence.",
+  "version": "0.1.9",
+  "description": "Agentic game-development workflow with Unity preflights, transactional project creation, cryptographic visual benchmark validation, controlled-presentation evidence gates, provenance, builds, playtests, and truthful release evidence.",
   "entrypoint": "SKILL.md",
   "tags": [
     "games",
