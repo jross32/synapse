@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.208] -- 2026-08-30
+
+### Changed
+- **Operator Router uses Project Doctor first** -- diagnostic and developer plans now prefer the one-call Project Doctor snapshot before lower-level shell inspection, reducing repeated path/Git/stack/port discovery calls.
+- **Project Doctor is a native operator capability** -- automatic capability discovery advertises it even when the caller does not explicitly provide a capability list.
+
+### Verification
+- Operator Router + Project Doctor focused tests: **12 passed**.
+
 ## [0.1.207] -- 2026-08-30
 
 ### Added

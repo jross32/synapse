@@ -50,6 +50,7 @@ _CAPABILITY_ALIASES = {
     "trace": {"trace", "flight-recorder", "flight_recorder"},
     "watchdogs": {"watchdogs", "watchdog"},
     "shell": {"shell", "system", "synapse"},
+    "project_doctor": {"project-doctor", "project_doctor", "doctor", "synapse_project_doctor"},
 }
 
 
@@ -103,6 +104,7 @@ def build_operator_plan(intent: str, capabilities: Iterable[str]) -> OperatorPla
     if mode == "diagnose":
         add("trace", "analyze recent correlated failures", "Start with the failure timeline instead of guessing.")
         add("watchdogs", "inspect protection-chain health", "Separate service death, stale heartbeat, and recovery failure.")
+        add("project_doctor", "run one-call project diagnostics", "Compress path, stack, Git, and registered-port checks before deeper shell work.")
         add("shell", "inspect logs, ports, processes, tests, and repo state", "Structured machine evidence narrows root cause.", verification="re-run the failing health/test check")
         add("desktop", "inspect visible application state only if machine evidence is insufficient", "UI state is a fallback signal.", verification="capture post-fix visible proof")
     elif mode == "research":
@@ -117,6 +119,7 @@ def build_operator_plan(intent: str, capabilities: Iterable[str]) -> OperatorPla
         add("desktop", "inspect windows and use semantic/system controls before mouse coordinates", "Desktop control should be observable and recoverable.", verification="confirm resulting window/process state", risk="medium")
         add("trace", "record operator receipts", "Preserve what happened for later diagnosis.")
     elif mode == "developer":
+        add("project_doctor", "inspect project health and workspace state", "Start with one compact project snapshot before issuing lower-level commands.")
         add("shell", "inspect project, git state, tests, logs, and ports", "Machine-local structured evidence should drive code changes.", verification="run focused tests then project gates")
         add("github", "inspect or update remote repo state when needed", "Keep local and remote state aligned.")
         add("browser", "verify user-facing behavior in a real browser", "Functional UI proof catches integration regressions.", fallback="desktop", verification="capture passing browser proof")

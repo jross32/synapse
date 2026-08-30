@@ -17,10 +17,10 @@ def test_classify_diagnose_precedes_generic_fix_words():
 def test_diagnose_plan_prefers_trace_watchdog_shell_before_desktop():
     plan = build_operator_plan(
         "Synapse is stuck and timing out; fix it",
-        ["trace", "watchdog", "synapse", "reflex"],
+        ["trace", "watchdog", "project_doctor", "synapse", "reflex"],
     )
     assert plan.mode == "diagnose"
-    assert [step.capability for step in plan.steps] == ["trace", "watchdogs", "shell", "desktop"]
+    assert [step.capability for step in plan.steps] == ["trace", "watchdogs", "project_doctor", "shell", "desktop"]
     assert plan.missing_capabilities == ()
 
 
@@ -38,7 +38,8 @@ def test_browser_plan_reports_missing_browser_but_keeps_desktop_fallback():
 
 
 def test_developer_plan_has_verification_contract():
-    plan = build_operator_plan("Implement and test this project", ["synapse", "github", "playwright", "trace"])
+    plan = build_operator_plan("Implement and test this project", ["project_doctor", "synapse", "github", "playwright", "trace"])
     assert plan.mode == "developer"
+    assert plan.steps[0].capability == "project_doctor"
     shell_step = next(step for step in plan.steps if step.capability == "shell")
     assert "tests" in (shell_step.verification or "")

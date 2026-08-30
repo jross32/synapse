@@ -10,7 +10,7 @@ from .storage import Storage
 
 
 def _installed_capabilities(storage: Storage) -> list[str]:
-    capabilities = ["synapse", "trace", "watchdogs"]
+    capabilities = ["synapse", "trace", "watchdogs", "project_doctor"]
     try:
         capabilities.extend(server.id for server in list_servers(storage.conn) if server.enabled)
     except Exception:  # Capability discovery must never take down the operator planner.
