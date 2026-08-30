@@ -48,3 +48,29 @@ def test_expected_port_health(tmp_path: Path) -> None:
     assert closed["port_open"] is False
     assert closed["healthy"] is False
     assert "expected_port_closed" in closed["issues"]
+
+
+def test_git_branch_tracking_metadata_is_structured(monkeypatch, tmp_path: Path) -> None:
+    from synapse_daemon import project_doctor
+
+    (tmp_path / ".git").mkdir()
+
+    def fake_run(args, cwd, timeout=5.0):
+        if args[1:3] == ["rev-parse", "--is-inside-work-tree"]:
+            return {"ok": True, "exit_code": 0, "stdout": "true", "stderr": ""}
+        if args[1:3] == ["status", "--porcelain=v1"]:
+            return {
+                "ok": True,
+                "exit_code": 0,
+                "stdout": "## main...origin/main [ahead 2, behind 1]\n M demo.py",
+                "stderr": "",
+            }
+        raise AssertionError(args)
+
+    monkeypatch.setattr(project_doctor, "_run", fake_run)
+    report = project_doctor.diagnose_project(tmp_path)
+    assert report["git"]["branch"] == "main"
+    assert report["git"]["tracking"] == "origin/main"
+    assert report["git"]["ahead"] == 2
+    assert report["git"]["behind"] == 1
+    assert report["git"]["dirty"] is True

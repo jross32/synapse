@@ -8,6 +8,7 @@ signals) into one deterministic report that can be exposed through Synapse.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import subprocess
 from pathlib import Path
@@ -86,9 +87,16 @@ def diagnose_project(path: str | Path, expected_port: int | None = None) -> dict
     if is_repo:
         status = _run(["git", "status", "--porcelain=v1", "--branch"], root)
         lines = status["stdout"].splitlines() if status["stdout"] else []
+        branch_line = lines[0][3:] if lines and lines[0].startswith("## ") else ""
+        branch = branch_line.split("...", 1)[0].split(" ", 1)[0] or None
+        ahead_match = re.search(r"ahead (\d+)", branch_line)
+        behind_match = re.search(r"behind (\d+)", branch_line)
         git.update(
             {
-                "branch": lines[0][3:] if lines and lines[0].startswith("## ") else None,
+                "branch": branch,
+                "tracking": branch_line.split("...", 1)[1].split(" ", 1)[0] if "..." in branch_line else None,
+                "ahead": int(ahead_match.group(1)) if ahead_match else 0,
+                "behind": int(behind_match.group(1)) if behind_match else 0,
                 "dirty": any(not line.startswith("## ") for line in lines),
                 "change_count": sum(1 for line in lines if not line.startswith("## ")),
             }

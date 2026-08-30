@@ -10,6 +10,14 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.209] -- 2026-08-30
+
+### Fixed
+- **Project Doctor Git metadata** -- branch names are now separated from upstream tracking/ahead/behind status, so AI operators receive structured `branch`, `tracking`, `ahead`, and `behind` fields instead of a combined porcelain-status string.
+
+### Verification
+- Project Doctor regression suite: **5 passed**.
+
 ## [0.1.208] -- 2026-08-30
 
 ### Changed
