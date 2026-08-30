@@ -36,6 +36,8 @@ CONNECTOR_LAUNCH_URL_FILENAME = "chatgpt-connector-launch-url.txt"
 WORKER_PROJECT_URL_FILENAME = "chatgpt-worker-project-url.txt"
 WORKER_PROJECT_NAME = "Synapse2GPT Workers"
 SETUP_URL = "https://chatgpt.com/"
+DEFAULT_BROWSER_CHANNEL = "chrome"
+BACKGROUND_BROWSER_ARGS = ("--window-position=-32000,-32000", "--window-size=1100,820")
 
 
 @dataclass
@@ -419,11 +421,25 @@ async def rename_current_chat(page: Any, title: str) -> bool:
 
 
 class ChatGPTBrowserPool:
-    """One signed-in ChatGPT browser context with one page per child worker."""
+    """One signed-in ChatGPT browser context with one page per child worker.
 
-    def __init__(self, data_dir: Path, *, headless: bool = True) -> None:
+    The default is a real Chrome window positioned far off-screen rather than
+    Chromium's true headless mode. ChatGPT/Cloudflare currently challenges the
+    latter on this machine, while the off-screen browser preserves the normal
+    signed-in web runtime without putting a window in the operator's way.
+    Callers can still request ``headless=True`` explicitly for diagnostics.
+    """
+
+    def __init__(
+        self,
+        data_dir: Path,
+        *,
+        headless: bool = False,
+        browser_channel: str | None = DEFAULT_BROWSER_CHANNEL,
+    ) -> None:
         self.data_dir = Path(data_dir)
         self.headless = headless
+        self.browser_channel = browser_channel
         self._playwright: Any = None
         self._context: Any = None
         self._start_lock = asyncio.Lock()
@@ -453,9 +469,16 @@ class ChatGPTBrowserPool:
 
             try:
                 self._playwright = await async_playwright().start()
+                launch_kwargs: dict[str, Any] = {
+                    "user_data_dir": str(profile_dir(self.data_dir)),
+                    "headless": self.headless,
+                }
+                if not self.headless:
+                    if self.browser_channel:
+                        launch_kwargs["channel"] = self.browser_channel
+                    launch_kwargs["args"] = list(BACKGROUND_BROWSER_ARGS)
                 self._context = await self._playwright.chromium.launch_persistent_context(
-                    user_data_dir=str(profile_dir(self.data_dir)),
-                    headless=self.headless,
+                    **launch_kwargs
                 )
             except Exception as exc:
                 if self._playwright is not None:

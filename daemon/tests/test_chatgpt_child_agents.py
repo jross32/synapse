@@ -268,3 +268,15 @@ def test_setup_browser_launch_is_idempotent_when_profile_is_already_open(
     assert result["already_running"] is True
     assert result["pid"] == 4242
     assert result["profile_dir"] == str(chatgpt_child_agents.profile_dir(tmp_path))
+
+
+def test_worker_pool_defaults_to_offscreen_real_chrome(tmp_path: Path) -> None:
+    pool = chatgpt_child_agents.ChatGPTBrowserPool(tmp_path)
+    assert pool.headless is False
+    assert pool.browser_channel == "chrome"
+    assert "--window-position=-32000,-32000" in chatgpt_child_agents.BACKGROUND_BROWSER_ARGS
+
+
+def test_worker_pool_can_still_request_true_headless(tmp_path: Path) -> None:
+    pool = chatgpt_child_agents.ChatGPTBrowserPool(tmp_path, headless=True)
+    assert pool.headless is True
