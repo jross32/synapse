@@ -1099,12 +1099,19 @@ class McpDispatchExecutor:
         self._executor.shutdown(wait=wait, cancel_futures=True)
 
 
-# Keep the total executor budget at 16 threads, but reserve four of them for cheap
-# local control/read operations. Twelve long-running shell/network/downstream-MCP
-# calls can saturate without consuming the capacity needed for get_context,
-# session inspection, thread heartbeats, command-result polling, or recovery controls.
-_MCP_CONTROL_EXECUTOR = McpDispatchExecutor(name="control", max_workers=4, max_queue=0)
-_MCP_BLOCKING_EXECUTOR = McpDispatchExecutor(name="blocking", max_workers=12, max_queue=0)
+# Reserve a small dedicated pool for cheap local control/read operations so
+# get_context, session inspection, thread heartbeats, command-result polling, and
+# recovery controls are never starved by long-running blocking work. The blocking
+# lane serves shell/network/downstream-MCP calls; these are I/O-bound waits (subprocess
+# and HTTP calls sitting idle on a syscall, not CPU-bound work), so sizing it well past
+# the CPU count is safe -- an oversubscribed thread here costs a stack, not a core.
+# Live production load (2026-08-30) showed the previous 12-worker/zero-queue blocking
+# lane saturating repeatedly under real concurrent usage (many standing sessions each
+# running synapse_run_command/synapse_watch_repo at once), rejecting calls outright
+# with no buffer -- raised to 32 workers, and both lanes now carry a small queue so a
+# brief burst waits a beat instead of failing immediately.
+_MCP_CONTROL_EXECUTOR = McpDispatchExecutor(name="control", max_workers=6, max_queue=6)
+_MCP_BLOCKING_EXECUTOR = McpDispatchExecutor(name="blocking", max_workers=32, max_queue=16)
 
 _BLOCKING_MCP_TOOLS = frozenset(
     {
