@@ -280,3 +280,74 @@ def test_worker_pool_defaults_to_offscreen_real_chrome(tmp_path: Path) -> None:
 def test_worker_pool_can_still_request_true_headless(tmp_path: Path) -> None:
     pool = chatgpt_child_agents.ChatGPTBrowserPool(tmp_path, headless=True)
     assert pool.headless is True
+
+
+class _FakeConnectorMenuPage:
+    def __init__(self, *, has_menu: bool = True) -> None:
+        self.plus = _FakeLocator(count=1 if has_menu else 0)
+        self.search = _FakeLocator()
+        self.synapse = _FakeLocator()
+        self.none = _FakeLocator(count=0)
+
+    def locator(self, selector: str):
+        if "composer" in selector.lower() and "add" in selector.lower():
+            return self.plus
+        if selector.startswith('input[placeholder*="Search"'):
+            return self.search
+        if selector.startswith('input[aria-label*="Search"'):
+            return self.none
+        if "Synapse" in selector:
+            return self.none
+        return self.none
+
+    def get_by_role(self, role: str, name: str):
+        if role == "menuitem" and name == "Synapse":
+            return self.synapse
+        return self.none
+
+    def get_by_text(self, _text: str, *, exact: bool):
+        assert exact is True
+        return self.none
+
+
+def test_attach_synapse_connector_uses_composer_menu_search() -> None:
+    page = _FakeConnectorMenuPage()
+
+    error = asyncio.run(chatgpt_child_agents.attach_synapse_connector(page))
+
+    assert error is None
+    assert page.plus.clicked == 1
+    assert page.search.filled == "Synapse"
+    assert page.synapse.clicked == 1
+
+
+def test_attach_synapse_connector_fails_closed_without_composer_menu() -> None:
+    page = _FakeConnectorMenuPage(has_menu=False)
+
+    error = asyncio.run(chatgpt_child_agents.attach_synapse_connector(page))
+
+    assert error is not None
+    assert "could not be attached" in error
+    assert page.synapse.clicked == 0
+
+
+class _FakeAttachedConnectorPage(_FakeConnectorMenuPage):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attached = _FakeLocator()
+
+    def locator(self, selector: str):
+        if "Synapse" in selector:
+            return self.attached
+        return super().locator(selector)
+
+
+def test_attach_synapse_connector_is_idempotent_when_chip_is_visible() -> None:
+    page = _FakeAttachedConnectorPage()
+
+    error = asyncio.run(chatgpt_child_agents.attach_synapse_connector(page))
+
+    assert error is None
+    assert page.plus.clicked == 0
+    assert page.search.filled == ""
+    assert page.synapse.clicked == 0

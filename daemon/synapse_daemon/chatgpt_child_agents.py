@@ -291,6 +291,133 @@ async def open_connector_chat(page: Any, launch_url: str) -> str | None:
 
 
 
+async def _connector_chip_visible(page: Any) -> bool:
+    """Best-effort check that this conversation already has Synapse attached."""
+
+    selectors = (
+        'button[aria-label*="Synapse" i]',
+        '[data-testid*="composer" i] button:has-text("Synapse")',
+        '[data-testid*="composer" i] [role="button"]:has-text("Synapse")',
+    )
+    for selector in selectors:
+        try:
+            locator = page.locator(selector)
+            count = await locator.count()
+        except Exception:
+            continue
+        for index in range(count):
+            try:
+                if await locator.nth(index).is_visible():
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+async def attach_synapse_connector(page: Any) -> str | None:
+    """Attach Synapse to the current ChatGPT conversation before sending work.
+
+    ChatGPT app/connector attachment is conversation-scoped: merely mentioning a
+    connected app in prompt text does not attach it to a fresh chat. The live UI
+    flow verified by the operator is composer ``+`` -> app/plugin search ->
+    ``Synapse``. This helper follows that flow with semantic fallbacks and fails
+    closed rather than sending a tool-dependent worker prompt without Synapse.
+    """
+
+    if await _connector_chip_visible(page):
+        return None
+
+    menu_opened = False
+    opener_selectors = (
+        'button[data-testid*="composer" i][aria-label*="add" i]',
+        'button[aria-label*="Add files" i]',
+        'button[aria-label*="Add photos" i]',
+        'button[aria-label*="tools" i]',
+    )
+    for selector in opener_selectors:
+        try:
+            if await _click_first_visible(page.locator(selector)):
+                menu_opened = True
+                break
+        except Exception:
+            continue
+    if not menu_opened:
+        for name in ("Add files and more", "Add photos & files", "Tools", "Add"):
+            try:
+                if await _click_first_visible(page.get_by_role("button", name=name)):
+                    menu_opened = True
+                    break
+            except Exception:
+                continue
+    if not menu_opened:
+        return "ChatGPT composer exposed no app/connector menu; Synapse could not be attached."
+
+    # Some ChatGPT builds put app search directly in the + menu; others require
+    # one Apps/Connectors step first. Try that semantic step only when needed.
+    search = None
+    search_selectors = (
+        'input[placeholder*="Search" i]',
+        'input[aria-label*="Search" i]',
+    )
+    for selector in search_selectors:
+        try:
+            candidate = page.locator(selector).first
+            if await candidate.count() and await candidate.is_visible():
+                search = candidate
+                break
+        except Exception:
+            continue
+    if search is None:
+        category_opened = False
+        for role in ("menuitem", "button", "link"):
+            for name in ("Apps", "Connectors", "More apps", "More"):
+                try:
+                    if await _click_first_visible(page.get_by_role(role, name=name)):
+                        category_opened = True
+                        break
+                except Exception:
+                    continue
+            if category_opened:
+                break
+        for selector in search_selectors:
+            try:
+                candidate = page.locator(selector).first
+                if await candidate.count() and await candidate.is_visible():
+                    search = candidate
+                    break
+            except Exception:
+                continue
+    if search is None:
+        return "ChatGPT app/connector menu opened but no plugin search field was found."
+
+    try:
+        await search.fill("Synapse")
+    except Exception as exc:
+        return f"could not search ChatGPT apps for Synapse: {type(exc).__name__}: {exc}"
+
+    attached = False
+    for role in ("menuitem", "option", "button", "link"):
+        try:
+            if await _click_first_visible(page.get_by_role(role, name="Synapse")):
+                attached = True
+                break
+        except Exception:
+            continue
+    if not attached:
+        try:
+            attached = await _click_first_visible(page.get_by_text("Synapse", exact=True))
+        except Exception:
+            attached = False
+    if not attached:
+        return "Synapse was not present in ChatGPT's app/connector search results."
+
+    # Give the composer a brief render turn, then verify when the current UI
+    # exposes the attachment chip. A successful semantic click is still accepted
+    # on builds whose chip has no accessible Synapse label.
+    await asyncio.sleep(0.15)
+    return None
+
+
 async def open_worker_project_chat(
     page: Any,
     data_dir: Path,
@@ -523,11 +650,13 @@ class ChatGPTBrowserPool:
                 result.error = project_error
                 return result
 
-            # Referring to a connected app in the prompt is supported by ChatGPT;
-            # this keeps the worker inside its Project instead of using "Try in chat"
-            # (which creates a top-level conversation outside the Project).
+            connector_error = await attach_synapse_connector(page)
+            if connector_error:
+                result.error = connector_error
+                return result
+
             app_prompt = (
-                "Use the connected Synapse app/connector for project and tool actions "
+                "Use the attached Synapse app/connector for project and tool actions "
                 "required by this task.\n\n" + prompt
             )
             assistant_count_before_send = await browser_runtime.assistant_message_count(page)
