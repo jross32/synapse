@@ -209,6 +209,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_get_context": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_projects": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_records": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_project_doctor": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_ai_context": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_tools": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_quick_actions": {"readOnlyHint": True, "idempotentHint": True},
@@ -315,6 +316,22 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": {
                 "type": "object",
                 "properties": {"project_id": {"type": "string", "description": "The project id (kebab-case)."}},
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_project_doctor",
+            "description": (
+                "Run one compact, read-only diagnostic pass over a registered project: path, "
+                "stack markers, Git state, and whether its registered localhost port is reachable. "
+                "Use this before making changes or when a project appears unhealthy."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Registered Synapse project id."},
+                },
                 "required": ["project_id"],
                 "additionalProperties": False,
             },
@@ -1449,6 +1466,24 @@ def build_mcp_router(
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown
             return records.get_records(storage.conn, project_id).model_dump(mode="json")
+        if name == "synapse_project_doctor":
+            from .project_doctor import diagnose_project
+
+            project_id = str(args.get("project_id") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            project = projects_module.get(storage.conn, project_id)
+            return {
+                "project": {
+                    "id": project.id,
+                    "name": project.name,
+                    "kind": project.kind.value,
+                    "status": project.status.value,
+                    "path": project.path,
+                    "expected_port": project.expected_port,
+                },
+                "doctor": diagnose_project(project.path, expected_port=project.expected_port),
+            }
         if name == "synapse_get_project_ai_context":
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown

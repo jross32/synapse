@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -211,3 +210,18 @@ def test_reporting_playbook_status_when_writes_are_on_actually_persists(tmp_path
     reread = pb.get_playbook(storage.conn, "demo")
     assert reread.status == pb.PlaybookStatus.NEEDS_ATTENTION
     assert reread.status_note == "button moved"
+
+
+def test_project_doctor_runs_through_read_only_mcp(tmp_path, clean_env):
+    client, token = _harness(tmp_path, writes_enabled=True)
+    result = _call(
+        client,
+        token,
+        "synapse_project_doctor",
+        {"project_id": "demo-project"},
+        url_suffix="?mode=read",
+    )
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["project"]["id"] == "demo-project"
+    assert payload["doctor"]["exists"] is True
+    assert payload["doctor"]["git"]["is_repo"] in {True, False}
