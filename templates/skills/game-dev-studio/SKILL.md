@@ -134,3 +134,7 @@ Before release, require evidence appropriate to the change:
 Hard correctness failures are release blockers. Benchmark movement is compared against an explicit tolerance and investigated when material; do not invent thresholds after seeing a result. Never convert an infrastructure timeout into a product failure or success.
 
 For reference projects, preserve a small deterministic benchmark fixture. A Unity reference fixture should be able to prove: isolated preflight, transactional creation, package resolution, compile, Edit Mode tests, Play Mode tests, build, launch, screenshot/visual inspection, and performance capture. Record machine-readable evidence under `.synapse/benchmarks/` so later versions can compare against prior accepted baselines.
+
+## Unity benchmark validity
+
+For Unity runtime evidence, follow `references/unity-benchmark-contract.md`. Validate machine-readable runtime output with `python scripts/game_dev_studio.py benchmark-validate --input <benchmark.json> --expect rendered` (or `headless`). A headless `Null Device` result is not rendering evidence. Use warm-up-aware steady-state samples, mark unsupported counters unavailable, and never claim cold-cache versus warm-cache build speedups as directly comparable.

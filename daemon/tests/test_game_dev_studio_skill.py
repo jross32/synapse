@@ -56,3 +56,39 @@ def test_detect_project_recognizes_unity_version(tmp_path):
     result = mod.detect_project(str(tmp_path))
     assert result["engine"] == "unity"
     assert result["engine_version"] == "6000.4.0f1"
+
+
+def test_benchmark_validate_rejects_headless_when_rendered_expected(tmp_path):
+    mod = _module()
+    payload = {
+        "warmup_seconds": 2.0, "duration_seconds": 10.0,
+        "average_frame_ms": 0.2, "p95_frame_ms": 0.3,
+        "max_frame_ms": 2.0, "average_fps": 5000.0,
+        "graphics_device": "Null Device", "draw_calls_valid": False,
+    }
+    path = tmp_path / "headless.json"
+    import json
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    result = mod.benchmark_validate(str(path), "rendered")
+    assert result["ok"] is False
+    assert result["mode"] == "headless"
+    assert any(item.startswith("mode_mismatch") for item in result["issues"])
+
+
+def test_benchmark_validate_accepts_rendered_with_optional_counter_unavailable(tmp_path):
+    mod = _module()
+    payload = {
+        "warmup_seconds": 2.0, "duration_seconds": 10.0,
+        "average_frame_ms": 8.4, "p95_frame_ms": 8.5,
+        "max_frame_ms": 16.7, "average_fps": 119.0,
+        "graphics_device": "Example GPU",
+        "system_used_memory_valid": True, "system_used_memory_bytes": 500_000_000,
+        "draw_calls_valid": False,
+    }
+    path = tmp_path / "rendered.json"
+    import json
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    result = mod.benchmark_validate(str(path), "rendered")
+    assert result["ok"] is True
+    assert result["comparable_for_rendering"] is True
+    assert "counter_unavailable:draw_calls" in result["warnings"]
