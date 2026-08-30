@@ -507,7 +507,7 @@ def web_smoke(url: str) -> dict[str, object]:
 
 
 
-def benchmark_validate(path: str, expect: str) -> dict[str, object]:
+def benchmark_validate(path: str, expect: str, require_screenshot: bool = False, require_controlled_presentation: bool = False) -> dict[str, object]:
     payload_path = Path(path).expanduser().resolve()
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -549,6 +549,39 @@ def benchmark_validate(path: str, expect: str) -> dict[str, object]:
             value = payload.get(value_key)
             if not isinstance(value, (int, float)) or value < 0:
                 issues.append(f"invalid_counter:{name}")
+    screenshot_verified = False
+    screenshot_path_raw = str(payload.get("screenshot_path") or "").strip()
+    screenshot_hash = str(payload.get("screenshot_sha256") or "").strip().lower()
+    screenshot_bytes = payload.get("screenshot_bytes")
+    if screenshot_path_raw:
+        screenshot_path = Path(screenshot_path_raw).expanduser()
+        if not screenshot_path.is_absolute():
+            screenshot_path = (payload_path.parent / screenshot_path).resolve()
+        if not screenshot_path.exists():
+            issues.append("screenshot_missing")
+        elif len(screenshot_hash) != 64:
+            issues.append("screenshot_sha256_invalid")
+        else:
+            actual_hash = hashlib.sha256(screenshot_path.read_bytes()).hexdigest()
+            if actual_hash != screenshot_hash:
+                issues.append("screenshot_sha256_mismatch")
+            elif isinstance(screenshot_bytes, int) and screenshot_bytes != screenshot_path.stat().st_size:
+                issues.append("screenshot_size_mismatch")
+            else:
+                screenshot_verified = True
+    elif require_screenshot:
+        issues.append("screenshot_required")
+
+    presentation_controlled = False
+    if mode == "rendered":
+        vsync = payload.get("benchmark_vsync_count")
+        target_fps = payload.get("benchmark_target_frame_rate")
+        presentation_controlled = isinstance(vsync, int) and isinstance(target_fps, int) and vsync == 0 and target_fps > 0
+        if require_controlled_presentation and not presentation_controlled:
+            issues.append("controlled_presentation_required")
+        elif not presentation_controlled:
+            warnings.append("presentation_not_explicitly_controlled")
+
     comparable_for_rendering = mode == "rendered" and warmup >= 1.0 and duration >= 5.0 and not issues
     return {
         "ok": not issues,
@@ -558,6 +591,8 @@ def benchmark_validate(path: str, expect: str) -> dict[str, object]:
         "comparable_for_rendering": comparable_for_rendering,
         "issues": issues,
         "warnings": warnings,
+        "screenshot_verified": screenshot_verified,
+        "presentation_controlled": presentation_controlled,
         "summary": {
             "warmup_seconds": warmup,
             "duration_seconds": duration,
@@ -657,6 +692,8 @@ def build_parser() -> argparse.ArgumentParser:
     bench = sub.add_parser("benchmark-validate")
     bench.add_argument("--input", required=True)
     bench.add_argument("--expect", choices=("any", "headless", "rendered"), default="any")
+    bench.add_argument("--require-screenshot", action="store_true")
+    bench.add_argument("--require-controlled-presentation", action="store_true")
     event = sub.add_parser("event")
     event.add_argument("--project", required=True)
     event.add_argument("--phase", required=True)
@@ -694,7 +731,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "web-smoke":
             result = web_smoke(args.url)
         elif args.command == "benchmark-validate":
-            result = benchmark_validate(args.input, args.expect)
+            result = benchmark_validate(args.input, args.expect, args.require_screenshot, args.require_controlled_presentation)
         elif args.command == "event":
             result = append_event(args.project, args.phase, args.kind, args.message, args.progress, args.detail)
         elif args.command == "provenance-add":

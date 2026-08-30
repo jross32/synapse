@@ -32,3 +32,11 @@ Run whitespace/diff checks on authored source, manifests, benchmark records, and
 ## Coverage
 
 Coverage is execution evidence, not a quality score. Preserve aggregate and per-class coverage, then use low-covered behavior to choose the next meaningful tests.
+
+## Visual evidence and presentation control
+
+For release-grade rendered benchmarks, prefer engine-native screenshots captured after rendering completes. Store the PNG path, byte count, and SHA-256 in the benchmark JSON and verify the bytes before accepting the run. A screenshot path or hash that cannot be verified is a hard evidence failure when screenshot proof is required.
+
+Rendered benchmark comparisons should explicitly control presentation when max-frame thresholds matter. Record the benchmark VSync count and target frame rate. Do not silently compare a VSync-paced run with an uncapped or differently capped run. If a benchmark is rejected, preserve a compact rejection record containing the frozen threshold, observed value, diagnosis, and corrective action; do not delete the fact that the run failed.
+
+When an isolated max-frame outlier appears while p95 remains healthy, diagnose before changing thresholds. Check startup stabilization, display pacing, target discovery/allocation hotspots, spawning, garbage collection, and OS scheduling. Keep the predeclared acceptance limit unchanged unless a later version explicitly defines a new benchmark class before measuring it.
