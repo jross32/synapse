@@ -506,6 +506,69 @@ def web_smoke(url: str) -> dict[str, object]:
     }
 
 
+
+def benchmark_validate(path: str, expect: str) -> dict[str, object]:
+    payload_path = Path(path).expanduser().resolve()
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("benchmark payload must be a JSON object")
+    required_numeric = (
+        "warmup_seconds", "duration_seconds", "average_frame_ms",
+        "p95_frame_ms", "max_frame_ms", "average_fps",
+    )
+    issues: list[str] = []
+    warnings: list[str] = []
+    for key in required_numeric:
+        value = payload.get(key)
+        if not isinstance(value, (int, float)):
+            issues.append(f"missing_or_non_numeric:{key}")
+    warmup = float(payload.get("warmup_seconds", 0) or 0)
+    duration = float(payload.get("duration_seconds", 0) or 0)
+    average_frame = float(payload.get("average_frame_ms", 0) or 0)
+    p95_frame = float(payload.get("p95_frame_ms", 0) or 0)
+    max_frame = float(payload.get("max_frame_ms", 0) or 0)
+    average_fps = float(payload.get("average_fps", 0) or 0)
+    if warmup < 1.0:
+        warnings.append("warmup_shorter_than_1s")
+    if duration < 5.0:
+        warnings.append("sample_window_shorter_than_5s")
+    if average_frame <= 0 or p95_frame <= 0 or max_frame <= 0 or average_fps <= 0:
+        issues.append("non_positive_frame_metric")
+    graphics_device = str(payload.get("graphics_device") or "").strip()
+    mode = "headless" if graphics_device.lower() in {"null device", "null", "none"} else "rendered"
+    if expect not in {"any", "headless", "rendered"}:
+        raise ValueError("expect must be any, headless, or rendered")
+    if expect != "any" and mode != expect:
+        issues.append(f"mode_mismatch:expected_{expect}:observed_{mode}")
+    for name in ("process_working_set", "system_used_memory", "gc_reserved_memory", "draw_calls"):
+        valid_key = f"{name}_valid"
+        value_key = f"{name}_bytes" if name != "draw_calls" else "draw_calls"
+        if valid_key in payload and payload.get(valid_key) is False:
+            warnings.append(f"counter_unavailable:{name}")
+        elif payload.get(valid_key) is True:
+            value = payload.get(value_key)
+            if not isinstance(value, (int, float)) or value < 0:
+                issues.append(f"invalid_counter:{name}")
+    comparable_for_rendering = mode == "rendered" and warmup >= 1.0 and duration >= 5.0 and not issues
+    return {
+        "ok": not issues,
+        "input": str(payload_path),
+        "mode": mode,
+        "expected_mode": expect,
+        "comparable_for_rendering": comparable_for_rendering,
+        "issues": issues,
+        "warnings": warnings,
+        "summary": {
+            "warmup_seconds": warmup,
+            "duration_seconds": duration,
+            "average_frame_ms": average_frame,
+            "p95_frame_ms": p95_frame,
+            "max_frame_ms": max_frame,
+            "average_fps": average_fps,
+            "graphics_device": graphics_device,
+        },
+    }
+
 def append_event(project: str, phase: str, kind: str, message: str, progress: float | None, detail_raw: str | None) -> dict[str, object]:
     allowed_kinds = {"started", "activity", "artifact", "milestone", "warning", "error", "completed", "heartbeat"}
     if kind not in allowed_kinds:
@@ -591,6 +654,9 @@ def build_parser() -> argparse.ArgumentParser:
     detect.add_argument("--project", required=True)
     smoke = sub.add_parser("web-smoke")
     smoke.add_argument("--url", required=True)
+    bench = sub.add_parser("benchmark-validate")
+    bench.add_argument("--input", required=True)
+    bench.add_argument("--expect", choices=("any", "headless", "rendered"), default="any")
     event = sub.add_parser("event")
     event.add_argument("--project", required=True)
     event.add_argument("--phase", required=True)
@@ -627,6 +693,8 @@ def main(argv: list[str] | None = None) -> int:
             result = detect_project(args.project)
         elif args.command == "web-smoke":
             result = web_smoke(args.url)
+        elif args.command == "benchmark-validate":
+            result = benchmark_validate(args.input, args.expect)
         elif args.command == "event":
             result = append_event(args.project, args.phase, args.kind, args.message, args.progress, args.detail)
         elif args.command == "provenance-add":
