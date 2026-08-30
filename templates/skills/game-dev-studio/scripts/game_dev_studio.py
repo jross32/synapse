@@ -189,6 +189,73 @@ def unity_preflight(editor: str | None, min_free_gb: float) -> dict[str, object]
         "log_tail": log[-3000:],
     }
 
+def unity_create(project: str, editor: str | None, min_free_gb: float) -> dict[str, object]:
+    target = Path(project).expanduser().resolve()
+    if target.exists():
+        return {
+            "ok": False,
+            "blocked_reason": "target_exists",
+            "cleanup_performed": False,
+            "message": "Refusing to create a Unity project into an existing path.",
+            "project": str(target),
+        }
+    preflight = unity_preflight(editor, min_free_gb)
+    if not preflight.get("ok"):
+        return {
+            "ok": False,
+            "blocked_reason": preflight.get("blocked_reason"),
+            "cleanup_performed": False,
+            "message": "Unity project creation blocked by preflight.",
+            "project": str(target),
+            "preflight": preflight,
+        }
+    selected = preflight["editor"]
+    cleanup_performed = False
+    try:
+        proc = _run([
+            selected["path"], "-batchmode", "-nographics", "-quit",
+            "-createProject", str(target), "-logFile", "-"
+        ], timeout=300)
+        log = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        complete = (
+            (target / "Assets").exists()
+            and (target / "Packages" / "manifest.json").exists()
+            and (target / "ProjectSettings" / "ProjectVersion.txt").exists()
+        )
+        if proc.returncode != 0 or not complete:
+            if target.exists():
+                shutil.rmtree(target, ignore_errors=True)
+                cleanup_performed = not target.exists()
+            return {
+                "ok": False,
+                "blocked_reason": "unity_create_failed",
+                "cleanup_performed": cleanup_performed,
+                "message": "Unity project creation failed; newly created partial output was rolled back.",
+                "project": str(target),
+                "command_exit_code": proc.returncode,
+                "log_tail": log[-3000:],
+            }
+        return {
+            "ok": True,
+            "blocked_reason": None,
+            "cleanup_performed": False,
+            "message": "Unity project created successfully.",
+            "project": str(target),
+            "editor": selected,
+            "command_exit_code": proc.returncode,
+        }
+    except Exception as exc:
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+            cleanup_performed = not target.exists()
+        return {
+            "ok": False,
+            "blocked_reason": "unity_create_exception",
+            "cleanup_performed": cleanup_performed,
+            "message": str(exc),
+            "project": str(target),
+        }
+
 def _winget_blender_metadata(winget: str) -> dict[str, str]:
     proc = _run([winget, "show", "--id", "BlenderFoundation.Blender", "--exact", "--accept-source-agreements"], timeout=60)
     if proc.returncode != 0:
@@ -429,6 +496,10 @@ def build_parser() -> argparse.ArgumentParser:
     unity = sub.add_parser("unity-preflight")
     unity.add_argument("--editor")
     unity.add_argument("--min-free-gb", type=float, default=15.0)
+    unity_create_parser = sub.add_parser("unity-create")
+    unity_create_parser.add_argument("--project", required=True)
+    unity_create_parser.add_argument("--editor")
+    unity_create_parser.add_argument("--min-free-gb", type=float, default=15.0)
     blender = sub.add_parser("ensure-blender")
     blender.add_argument("--install", action="store_true")
     detect = sub.add_parser("detect-project")
@@ -463,6 +534,8 @@ def main(argv: list[str] | None = None) -> int:
             result = doctor()
         elif args.command == "unity-preflight":
             result = unity_preflight(args.editor, args.min_free_gb)
+        elif args.command == "unity-create":
+            result = unity_create(args.project, args.editor, args.min_free_gb)
         elif args.command == "ensure-blender":
             result = ensure_blender(args.install)
         elif args.command == "detect-project":
