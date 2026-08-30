@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """WhatIf Game Dev Studio helper.
 
 Dependency-light utilities for game-project discovery, local tool detection,
@@ -164,96 +164,181 @@ def unity_preflight(editor: str | None, min_free_gb: float) -> dict[str, object]
             "editor": selected,
             "disk": disk,
         }
-    proc = _run([selected["path"], "-batchmode", "-nographics", "-quit", "-logFile", "-"], timeout=120)
-    log = (proc.stdout or "") + "\n" + (proc.stderr or "")
-    license_missing = proc.returncode == 198 or "No valid Unity Editor license found" in log
-    if license_missing:
+
+    probe_root = Path(tempfile.mkdtemp(prefix="whatif-unity-preflight-"))
+    probe_project = probe_root / "ProbeProject"
+    cleanup_performed = False
+    try:
+        proc = _run([
+            selected["path"],
+            "-batchmode", "-nographics", "-quit",
+            "-createProject", str(probe_project),
+            "-logFile", "-",
+        ], timeout=180)
+        log = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        license_missing = proc.returncode == 198 or "No valid Unity Editor license found" in log
+        project_locked = "another Unity instance is running with this project open" in log
+        if license_missing:
+            return {
+                "ok": False,
+                "blocked_reason": "unity_license_required",
+                "needs_interactive_action": True,
+                "message": "Unity is installed but no valid Editor license is active. Sign in to Unity Hub and activate a license before headless automation.",
+                "editor": selected,
+                "disk": disk,
+                "command_exit_code": proc.returncode,
+                "probe_project": str(probe_project),
+                "log_tail": log[-3000:],
+            }
+        if project_locked:
+            return {
+                "ok": False,
+                "blocked_reason": "unity_project_locked",
+                "needs_interactive_action": False,
+                "message": "Unity reported the isolated preflight project as locked; inspect running Editor processes before retrying.",
+                "editor": selected,
+                "disk": disk,
+                "command_exit_code": proc.returncode,
+                "probe_project": str(probe_project),
+                "log_tail": log[-3000:],
+            }
+        valid_probe = (
+            (probe_project / "Assets").exists()
+            and (probe_project / "Packages" / "manifest.json").exists()
+            and (probe_project / "ProjectSettings" / "ProjectVersion.txt").exists()
+        )
         return {
-            "ok": False,
-            "blocked_reason": "unity_license_required",
-            "needs_interactive_action": True,
-            "message": "Unity is installed but no valid Editor license is active. Sign in to Unity Hub and activate a license before headless automation.",
+            "ok": proc.returncode == 0 and valid_probe,
+            "blocked_reason": None if proc.returncode == 0 and valid_probe else "unity_preflight_failed",
+            "needs_interactive_action": False,
+            "message": "Unity isolated headless preflight passed." if proc.returncode == 0 and valid_probe else "Unity isolated headless preflight failed; inspect log_tail.",
             "editor": selected,
             "disk": disk,
             "command_exit_code": proc.returncode,
+            "probe_valid": valid_probe,
+            "probe_project": str(probe_project),
             "log_tail": log[-3000:],
         }
-    return {
-        "ok": proc.returncode == 0,
-        "blocked_reason": None if proc.returncode == 0 else "unity_preflight_failed",
-        "needs_interactive_action": False,
-        "message": "Unity headless preflight passed." if proc.returncode == 0 else "Unity headless preflight failed; inspect log_tail.",
-        "editor": selected,
-        "disk": disk,
-        "command_exit_code": proc.returncode,
-        "log_tail": log[-3000:],
-    }
+    finally:
+        for _ in range(5):
+            try:
+                if probe_root.exists():
+                    shutil.rmtree(probe_root)
+                cleanup_performed = not probe_root.exists()
+                if cleanup_performed:
+                    break
+            except OSError:
+                import time
+                time.sleep(0.25)
+
 
 def unity_create(project: str, editor: str | None, min_free_gb: float) -> dict[str, object]:
-    target = Path(project).expanduser().resolve()
-    if target.exists():
+    import time
+
+    root = Path(project).expanduser().resolve()
+    if root.exists():
         return {
             "ok": False,
-            "blocked_reason": "target_exists",
+            "blocked_reason": "project_path_exists",
             "cleanup_performed": False,
-            "message": "Refusing to create a Unity project into an existing path.",
-            "project": str(target),
+            "message": "Refusing to create a Unity project in an existing path.",
+            "project": str(root),
         }
+
     preflight = unity_preflight(editor, min_free_gb)
     if not preflight.get("ok"):
         return {
             "ok": False,
-            "blocked_reason": preflight.get("blocked_reason"),
+            "blocked_reason": preflight.get("blocked_reason") or "unity_preflight_failed",
             "cleanup_performed": False,
             "message": "Unity project creation blocked by preflight.",
-            "project": str(target),
+            "project": str(root),
             "preflight": preflight,
         }
-    selected = preflight["editor"]
+
+    selected = preflight.get("editor") or {}
+    editor_path = str(selected.get("path") or "")
+    if not editor_path:
+        return {
+            "ok": False,
+            "blocked_reason": "unity_editor_missing",
+            "cleanup_performed": False,
+            "message": "Unity preflight passed without an editor path; refusing creation.",
+            "project": str(root),
+            "preflight": preflight,
+        }
+
+    started = time.perf_counter()
     cleanup_performed = False
     try:
         proc = _run([
-            selected["path"], "-batchmode", "-nographics", "-quit",
-            "-createProject", str(target), "-logFile", "-"
+            editor_path,
+            "-batchmode", "-nographics", "-quit",
+            "-createProject", str(root),
+            "-logFile", "-",
         ], timeout=300)
+        elapsed = round(time.perf_counter() - started, 3)
         log = (proc.stdout or "") + "\n" + (proc.stderr or "")
-        complete = (
-            (target / "Assets").exists()
-            and (target / "Packages" / "manifest.json").exists()
-            and (target / "ProjectSettings" / "ProjectVersion.txt").exists()
+        valid_project = (
+            (root / "Assets").exists()
+            and (root / "Packages" / "manifest.json").exists()
+            and (root / "ProjectSettings" / "ProjectVersion.txt").exists()
         )
-        if proc.returncode != 0 or not complete:
-            if target.exists():
-                shutil.rmtree(target, ignore_errors=True)
-                cleanup_performed = not target.exists()
+        version = _unity_project_version(root) if valid_project else None
+        if proc.returncode == 0 and valid_project and version and version != "UnknownUnityVersion":
             return {
-                "ok": False,
-                "blocked_reason": "unity_create_failed",
-                "cleanup_performed": cleanup_performed,
-                "message": "Unity project creation failed; newly created partial output was rolled back.",
-                "project": str(target),
+                "ok": True,
+                "blocked_reason": None,
+                "cleanup_performed": False,
+                "message": "Unity project created and structurally verified.",
+                "project": str(root),
+                "engine_version": version,
+                "duration_seconds": elapsed,
                 "command_exit_code": proc.returncode,
                 "log_tail": log[-3000:],
+                "preflight": preflight,
             }
+
+        if root.exists():
+            for _ in range(5):
+                try:
+                    shutil.rmtree(root)
+                    cleanup_performed = not root.exists()
+                    if cleanup_performed:
+                        break
+                except OSError:
+                    time.sleep(0.25)
         return {
-            "ok": True,
-            "blocked_reason": None,
-            "cleanup_performed": False,
-            "message": "Unity project created successfully.",
-            "project": str(target),
-            "editor": selected,
+            "ok": False,
+            "blocked_reason": "unity_create_failed",
+            "cleanup_performed": cleanup_performed,
+            "message": "Unity project creation failed verification; partial output was rolled back when possible.",
+            "project": str(root),
+            "duration_seconds": elapsed,
             "command_exit_code": proc.returncode,
+            "valid_project_shape": valid_project,
+            "engine_version": version,
+            "log_tail": log[-3000:],
+            "preflight": preflight,
         }
     except Exception as exc:
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
-            cleanup_performed = not target.exists()
+        if root.exists():
+            for _ in range(5):
+                try:
+                    shutil.rmtree(root)
+                    cleanup_performed = not root.exists()
+                    if cleanup_performed:
+                        break
+                except OSError:
+                    time.sleep(0.25)
         return {
             "ok": False,
             "blocked_reason": "unity_create_exception",
             "cleanup_performed": cleanup_performed,
             "message": str(exc),
-            "project": str(target),
+            "project": str(root),
+            "duration_seconds": round(time.perf_counter() - started, 3),
+            "preflight": preflight,
         }
 
 def _winget_blender_metadata(winget: str) -> dict[str, str]:

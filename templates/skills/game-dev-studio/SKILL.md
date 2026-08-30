@@ -112,3 +112,25 @@ A progress percentage must be based on known milestone/task completion, not elap
 ## Completion standard
 
 A game feature/build is complete only when the evidence appropriate to it exists: source change, successful build/compile, relevant automated checks, real launch/playtest where possible, no unresolved blocking console error, visual proof for UI/scene changes, and a concise record of limitations.
+
+## Benchmark-driven release contract
+
+Treat every Game Dev Studio version as an engineering experiment, not a version-number exercise.
+
+Before implementation, record the problem, the reason it matters, the current baseline, the intended improvement, and acceptance criteria. Research current engine/tool documentation when behavior, APIs, package versions, licensing, or best practice could have changed.
+
+Before release, require evidence appropriate to the change:
+
+- direct helper/regression tests for Studio automation behavior;
+- engine-native compile/import success;
+- Edit Mode and Play Mode tests for Unity changes when applicable;
+- coverage as execution evidence, never as a substitute for behavioral assertions;
+- build result, duration, output bytes, warnings, and errors from the engine build report;
+- storage delta for large generated caches/builds or dependency changes;
+- launch proof and visual proof for player-facing changes;
+- performance measurements against a named accepted baseline when runtime behavior could regress;
+- exact limitations, skipped checks, infrastructure failures, and non-comparable measurements.
+
+Hard correctness failures are release blockers. Benchmark movement is compared against an explicit tolerance and investigated when material; do not invent thresholds after seeing a result. Never convert an infrastructure timeout into a product failure or success.
+
+For reference projects, preserve a small deterministic benchmark fixture. A Unity reference fixture should be able to prove: isolated preflight, transactional creation, package resolution, compile, Edit Mode tests, Play Mode tests, build, launch, screenshot/visual inspection, and performance capture. Record machine-readable evidence under `.synapse/benchmarks/` so later versions can compare against prior accepted baselines.
