@@ -110,6 +110,17 @@ def _find_blender() -> dict[str, object]:
     return {"installed": True, "path": exe, "version": version}
 
 
+def _disk_headroom(path: Path | None = None) -> dict[str, object]:
+    target = (path or Path.home()).resolve()
+    usage = shutil.disk_usage(target)
+    return {
+        "path": str(target),
+        "free_gb": round(usage.free / (1024 ** 3), 2),
+        "used_gb": round(usage.used / (1024 ** 3), 2),
+        "total_gb": round(usage.total / (1024 ** 3), 2),
+    }
+
+
 def doctor() -> dict[str, object]:
     hub = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Unity Hub" / "Unity Hub.exe"
     return {
@@ -117,6 +128,7 @@ def doctor() -> dict[str, object]:
         "observed_at": _now(),
         "platform": sys.platform,
         "python": {"version": sys.version.split()[0], "path": sys.executable},
+        "disk": _disk_headroom(),
         "blender": _find_blender(),
         "unity": {"hub": str(hub) if hub.exists() else None, "editors": _find_unity_editors()},
         "unreal": {"editors": _find_unreal_editors()},
@@ -124,6 +136,58 @@ def doctor() -> dict[str, object]:
         "winget": shutil.which("winget") or shutil.which("winget.exe"),
     }
 
+
+def unity_preflight(editor: str | None, min_free_gb: float) -> dict[str, object]:
+    editors = _find_unity_editors()
+    selected = None
+    if editor:
+        candidate = Path(editor).expanduser().resolve()
+        if candidate.exists():
+            selected = {"version": "explicit", "path": str(candidate)}
+    elif editors:
+        selected = editors[0]
+    disk = _disk_headroom()
+    if selected is None:
+        return {
+            "ok": False,
+            "blocked_reason": "unity_editor_missing",
+            "needs_interactive_action": True,
+            "message": "No Unity Editor installation was detected.",
+            "disk": disk,
+        }
+    if float(disk["free_gb"]) < min_free_gb:
+        return {
+            "ok": False,
+            "blocked_reason": "low_disk_space",
+            "needs_interactive_action": False,
+            "message": f"Only {disk['free_gb']} GB is free; Unity work requires at least {min_free_gb:.1f} GB for this job.",
+            "editor": selected,
+            "disk": disk,
+        }
+    proc = _run([selected["path"], "-batchmode", "-nographics", "-quit", "-logFile", "-"], timeout=120)
+    log = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    license_missing = proc.returncode == 198 or "No valid Unity Editor license found" in log
+    if license_missing:
+        return {
+            "ok": False,
+            "blocked_reason": "unity_license_required",
+            "needs_interactive_action": True,
+            "message": "Unity is installed but no valid Editor license is active. Sign in to Unity Hub and activate a license before headless automation.",
+            "editor": selected,
+            "disk": disk,
+            "command_exit_code": proc.returncode,
+            "log_tail": log[-3000:],
+        }
+    return {
+        "ok": proc.returncode == 0,
+        "blocked_reason": None if proc.returncode == 0 else "unity_preflight_failed",
+        "needs_interactive_action": False,
+        "message": "Unity headless preflight passed." if proc.returncode == 0 else "Unity headless preflight failed; inspect log_tail.",
+        "editor": selected,
+        "disk": disk,
+        "command_exit_code": proc.returncode,
+        "log_tail": log[-3000:],
+    }
 
 def _winget_blender_metadata(winget: str) -> dict[str, str]:
     proc = _run([winget, "show", "--id", "BlenderFoundation.Blender", "--exact", "--accept-source-agreements"], timeout=60)
@@ -362,6 +426,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="WhatIf Game Dev Studio helper")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor")
+    unity = sub.add_parser("unity-preflight")
+    unity.add_argument("--editor")
+    unity.add_argument("--min-free-gb", type=float, default=15.0)
     blender = sub.add_parser("ensure-blender")
     blender.add_argument("--install", action="store_true")
     detect = sub.add_parser("detect-project")
@@ -394,6 +461,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "doctor":
             result = doctor()
+        elif args.command == "unity-preflight":
+            result = unity_preflight(args.editor, args.min_free_gb)
         elif args.command == "ensure-blender":
             result = ensure_blender(args.install)
         elif args.command == "detect-project":
