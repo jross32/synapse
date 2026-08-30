@@ -55,6 +55,8 @@ For web/HTML5/Phaser games, verify in layers instead of treating one browser too
 
 ## Unity automation preflight
 
+Use `python scripts/game_dev_studio.py unity-create --project <path>` for new Unity projects instead of invoking `-createProject` directly. The wrapper refuses existing targets, runs preflight first, verifies required Unity project markers, and rolls back only newly created partial output when creation fails. Never delete or overwrite a pre-existing target as cleanup.
+
 Before Unity automation, verify three separate facts: the requested Editor version exists, sufficient disk headroom exists for the job, and the Editor can acquire a valid license in batch mode. Installation alone is not proof that Unity is usable. A signed-out Unity Hub may leave the Editor installed but unable to run headlessly. Treat authentication/license activation as an explicit interactive boundary and preserve all other work while waiting for it.
 
 For storage-constrained machines, keep Unity reference projects intentionally small: built-in primitives, generated materials, compact scenes, no duplicate engine versions, no large sample/asset packs, and no committed `Library`, `Temp`, `Logs`, or build output. Measure free space again before large imports or release builds.
