@@ -12,14 +12,16 @@ Treat game development as an end-to-end engineering + creative production workfl
 1. Inspect before editing. Detect the project engine, version, source layout, scenes/maps, assets, packages/plugins, build targets, and existing dirty Git state.
 2. Never reset or overwrite unrelated concurrent work. Work in an isolated lane and stage only files owned by the current task.
 3. Detect installed engines and tools with `python scripts/game_dev_studio.py doctor`.
-4. Blender is a supporting dependency. If Blender is missing, run `python scripts/game_dev_studio.py ensure-blender --install`. Tell the user what is being installed and why while installation occurs.
-5. Major game engines require user approval before installation. If the requested/new project needs Unity, Unreal, Godot, or another major engine and it is absent, explain which engine is needed and ask before installing it.
-6. If an existing project already declares an engine, prefer that engine instead of suggesting a migration.
-7. Use semantic operations first: edit project/source files, invoke documented build/test commands, run Blender Python/background jobs, inspect logs, and capture screenshots. Use Reflex desktop control only when a GUI-only step is genuinely required.
-8. Every material asset must have provenance: source URL/path, license, commercial-use status, attribution requirement, modifications, and project usage. Never scrape or bypass an asset store's access controls.
-9. Do not invent progress. Emit real events using the live-event schema in `references/live-studio-events.md`.
-10. A task is not finished merely because code was written. Build it, launch/playtest it when practical, inspect console/errors, collect visual proof, and record what was actually verified.
-11. Verification and release gates are fail-closed. If lint, tests, build, diff checks, secret scans, or other required gates return nonzero, stop that release sequence and fix or explicitly record the blocker before commit/push. Do not chain later release actions behind a failing command without checking its exit status.
+4. Before any Unity create/import/test/build job, run `python scripts/game_dev_studio.py unity-preflight`. This checks disk headroom and whether headless Unity has an active Editor license. If it reports `unity_license_required`, stop automated Unity execution, emit a warning/blocked event, and ask the user only for the interactive Hub sign-in/license step. Do not repeatedly launch Unity while auth is unresolved.
+5. Treat disk space as a production constraint. When free space is tight, prefer primitive/procedural assets, minimal packages, one engine version, disposable `Library/`, `Temp/`, `Logs/`, and `Builds/` outputs, and avoid duplicate engine installs or large asset packs. Use a job-specific minimum-free-space threshold when a build is expected to be large.
+6. Blender is a supporting dependency. If Blender is missing, run `python scripts/game_dev_studio.py ensure-blender --install`. Tell the user what is being installed and why while installation occurs.
+7. Major game engines require user approval before installation. If the requested/new project needs Unity, Unreal, Godot, or another major engine and it is absent, explain which engine is needed and ask before installing it.
+8. If an existing project already declares an engine, prefer that engine instead of suggesting a migration.
+9. Use semantic operations first: edit project/source files, invoke documented build/test commands, run Blender Python/background jobs, inspect logs, and capture screenshots. Use Reflex desktop control only when a GUI-only step is genuinely required.
+10. Every material asset must have provenance: source URL/path, license, commercial-use status, attribution requirement, modifications, and project usage. Never scrape or bypass an asset store's access controls.
+11. Do not invent progress. Emit real events using the live-event schema in `references/live-studio-events.md`.
+12. A task is not finished merely because code was written. Build it, launch/playtest it when practical, inspect console/errors, collect visual proof, and record what was actually verified.
+13. Verification and release gates are fail-closed. If lint, tests, build, diff checks, secret scans, or other required gates return nonzero, stop that release sequence and fix or explicitly record the blocker before commit/push. Do not chain later release actions behind a failing command without checking its exit status.
 
 ## Live Studio event stream
 
@@ -50,6 +52,12 @@ For web/HTML5/Phaser games, verify in layers instead of treating one browser too
 3. Prefer Playwright for semantic browser interaction, console inspection, state assertions, and repeatable playtest flows.
 4. If Playwright is unavailable or times out, fall back to Reflex + the user's real browser for launch, keyboard/mouse interaction, and screenshot proof. Record that this was a fallback; do not claim semantic assertions that Reflex did not perform.
 5. A failed adapter is a Studio capability finding, not automatically a game defect. Record the distinction in the event stream.
+
+## Unity automation preflight
+
+Before Unity automation, verify three separate facts: the requested Editor version exists, sufficient disk headroom exists for the job, and the Editor can acquire a valid license in batch mode. Installation alone is not proof that Unity is usable. A signed-out Unity Hub may leave the Editor installed but unable to run headlessly. Treat authentication/license activation as an explicit interactive boundary and preserve all other work while waiting for it.
+
+For storage-constrained machines, keep Unity reference projects intentionally small: built-in primitives, generated materials, compact scenes, no duplicate engine versions, no large sample/asset packs, and no committed `Library`, `Temp`, `Logs`, or build output. Measure free space again before large imports or release builds.
 
 ## Unity policy boundary
 
