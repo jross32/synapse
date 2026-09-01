@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """WhatIf Game Dev Studio helper.
 
 Dependency-light utilities for game-project discovery, local tool detection,
@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 import urllib.parse
 import re
@@ -507,6 +508,251 @@ def web_smoke(url: str) -> dict[str, object]:
 
 
 
+def _cpu_load_percent() -> float:
+    """Return a best-effort whole-host CPU percentage for benchmark gating."""
+    if sys.platform == "win32":
+        proc = _run([
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+            "(Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1).CounterSamples.CookedValue",
+        ], timeout=10)
+        if proc.returncode == 0:
+            text = (proc.stdout or "").strip().splitlines()
+            if text:
+                try:
+                    return max(0.0, min(100.0, float(text[-1].strip())))
+                except ValueError:
+                    pass
+        proc = _run([
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+            "(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average",
+        ], timeout=10)
+        if proc.returncode == 0:
+            text = (proc.stdout or "").strip().splitlines()
+            if text:
+                try:
+                    return max(0.0, min(100.0, float(text[-1].strip())))
+                except ValueError:
+                    pass
+        raise RuntimeError("unable to measure Windows CPU load")
+
+    if hasattr(os, "getloadavg"):
+        load_1m = float(os.getloadavg()[0])
+        cpus = max(1, int(os.cpu_count() or 1))
+        return max(0.0, min(100.0, (load_1m / cpus) * 100.0))
+    raise RuntimeError(f"CPU load measurement is unsupported on {sys.platform}")
+
+
+def _normalize_process_name(name: str) -> str:
+    value = Path(str(name).strip()).name.lower()
+    return value[:-4] if value.endswith(".exe") else value
+
+
+def _blocked_processes(names: list[str]) -> list[str]:
+    wanted = {_normalize_process_name(name) for name in names if str(name).strip()}
+    if not wanted:
+        return []
+    observed: set[str] = set()
+    if sys.platform == "win32":
+        proc = _run([
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+            "Get-Process | Select-Object -ExpandProperty ProcessName",
+        ], timeout=10)
+        if proc.returncode != 0:
+            raise RuntimeError("unable to enumerate Windows processes")
+        observed = {_normalize_process_name(line) for line in (proc.stdout or "").splitlines() if line.strip()}
+    else:
+        proc = _run(["ps", "-A", "-o", "comm="], timeout=10)
+        if proc.returncode != 0:
+            raise RuntimeError("unable to enumerate processes")
+        observed = {_normalize_process_name(line) for line in (proc.stdout or "").splitlines() if line.strip()}
+    return sorted(wanted & observed)
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_benchmark_fingerprints(manifest_path: str | None, workdir: Path, executable: Path) -> dict[str, object]:
+    if not manifest_path:
+        return {"ok": True, "manifest": None, "source_files_checked": 0, "executable_checked": False, "mismatches": []}
+    path = Path(manifest_path).expanduser().resolve()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("fingerprint manifest must be a JSON object")
+    mismatches: list[dict[str, object]] = []
+    source_map = payload.get("source_file_sha256") or {}
+    if not isinstance(source_map, dict):
+        raise ValueError("source_file_sha256 must be a JSON object")
+    checked = 0
+    for raw_path, expected_raw in source_map.items():
+        raw = str(raw_path).replace("\\\\", "\\")
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = workdir / candidate
+        candidate = candidate.resolve()
+        expected = str(expected_raw).strip().lower()
+        checked += 1
+        if not candidate.exists():
+            mismatches.append({"path": str(candidate), "reason": "missing", "expected_sha256": expected})
+            continue
+        actual = _file_sha256(candidate)
+        if actual != expected:
+            mismatches.append({"path": str(candidate), "reason": "sha256_mismatch", "expected_sha256": expected, "actual_sha256": actual})
+
+    build = payload.get("build") if isinstance(payload.get("build"), dict) else {}
+    expected_exe_raw = payload.get("executable_sha256") or build.get("exe_sha256")
+    executable_checked = bool(expected_exe_raw)
+    if expected_exe_raw:
+        expected_exe = str(expected_exe_raw).strip().lower()
+        if not executable.exists():
+            mismatches.append({"path": str(executable), "reason": "missing", "expected_sha256": expected_exe})
+        else:
+            actual_exe = _file_sha256(executable)
+            if actual_exe != expected_exe:
+                mismatches.append({"path": str(executable), "reason": "sha256_mismatch", "expected_sha256": expected_exe, "actual_sha256": actual_exe})
+    return {
+        "ok": not mismatches,
+        "manifest": str(path),
+        "source_files_checked": checked,
+        "executable_checked": executable_checked,
+        "mismatches": mismatches,
+    }
+
+
+def _run_benchmark_process(command: list[str], cwd: Path, timeout_seconds: float) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, timeout=timeout_seconds, check=False)
+
+
+def benchmark_wait(
+    executable: str,
+    output: str,
+    command_args: list[str] | None = None,
+    *,
+    cwd: str | None = None,
+    max_cpu_percent: float = 65.0,
+    stable_samples: int = 4,
+    sample_interval_seconds: float = 4.0,
+    wait_timeout_seconds: float = 21600.0,
+    process_timeout_seconds: float = 300.0,
+    block_processes: list[str] | None = None,
+    fingerprint_manifest: str | None = None,
+    output_flag: str | None = None,
+    overwrite_output: bool = False,
+) -> dict[str, object]:
+    """Wait for a quiet host, fail closed on drift, then run one benchmark process."""
+    exe = Path(executable).expanduser().resolve()
+    if not exe.exists():
+        return {"ok": False, "blocked_reason": "benchmark_executable_missing", "executable": str(exe)}
+    workdir = Path(cwd).expanduser().resolve() if cwd else exe.parent
+    if not workdir.exists():
+        return {"ok": False, "blocked_reason": "benchmark_cwd_missing", "cwd": str(workdir)}
+    out = Path(output).expanduser()
+    if not out.is_absolute():
+        out = workdir / out
+    out = out.resolve()
+    if out.exists() and not overwrite_output:
+        return {"ok": False, "blocked_reason": "benchmark_output_exists", "output": str(out)}
+    if max_cpu_percent <= 0 or max_cpu_percent > 100:
+        raise ValueError("max_cpu_percent must be > 0 and <= 100")
+    if stable_samples < 1:
+        raise ValueError("stable_samples must be >= 1")
+    if sample_interval_seconds < 0:
+        raise ValueError("sample_interval_seconds must be >= 0")
+    if wait_timeout_seconds < 0 or process_timeout_seconds <= 0:
+        raise ValueError("timeouts must be non-negative, with process timeout > 0")
+
+    fingerprint = _verify_benchmark_fingerprints(fingerprint_manifest, workdir, exe)
+    if not fingerprint["ok"]:
+        return {"ok": False, "blocked_reason": "benchmark_fingerprint_mismatch", "fingerprint": fingerprint}
+
+    blockers = list(block_processes or [])
+    samples: list[dict[str, object]] = []
+    stable = 0
+    started = time.monotonic()
+    launch_cpu: float | None = None
+    while True:
+        cpu = round(float(_cpu_load_percent()), 2)
+        blocked = _blocked_processes(blockers)
+        quiet = cpu <= max_cpu_percent and not blocked
+        stable = stable + 1 if quiet else 0
+        sample = {"observed_at": _now(), "cpu_percent": cpu, "blocked_processes": blocked, "stable_count": stable}
+        samples.append(sample)
+        if len(samples) > 100:
+            samples = samples[-100:]
+        if stable >= stable_samples:
+            launch_cpu = cpu
+            break
+        elapsed = time.monotonic() - started
+        if elapsed >= wait_timeout_seconds:
+            return {
+                "ok": False,
+                "blocked_reason": "host_idle_timeout",
+                "threshold_cpu_percent": max_cpu_percent,
+                "stable_samples_required": stable_samples,
+                "elapsed_seconds": round(elapsed, 3),
+                "samples": samples,
+                "fingerprint": fingerprint,
+            }
+        if sample_interval_seconds:
+            time.sleep(sample_interval_seconds)
+
+    fingerprint = _verify_benchmark_fingerprints(fingerprint_manifest, workdir, exe)
+    if not fingerprint["ok"]:
+        return {"ok": False, "blocked_reason": "benchmark_fingerprint_changed_before_launch", "fingerprint": fingerprint, "samples": samples}
+    blocked_now = _blocked_processes(blockers)
+    if blocked_now:
+        return {"ok": False, "blocked_reason": "blocked_process_started_before_launch", "blocked_processes": blocked_now, "samples": samples}
+
+    if out.exists() and overwrite_output:
+        out.unlink()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    extra = list(command_args or [])
+    if extra and extra[0] == "--":
+        extra = extra[1:]
+    command = [str(exe), *extra]
+    if output_flag:
+        command.extend([output_flag, str(out)])
+    launched_at = _now()
+    try:
+        proc = _run_benchmark_process(command, workdir, process_timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "ok": False,
+            "blocked_reason": "benchmark_process_timeout",
+            "command": command,
+            "launched_at": launched_at,
+            "launch_cpu_percent": launch_cpu,
+            "timeout_seconds": process_timeout_seconds,
+            "samples": samples,
+            "fingerprint": fingerprint,
+            "stdout_tail": (exc.stdout or "")[-2000:] if isinstance(exc.stdout, str) else "",
+            "stderr_tail": (exc.stderr or "")[-2000:] if isinstance(exc.stderr, str) else "",
+        }
+    artifact_exists = out.exists()
+    return {
+        "ok": proc.returncode == 0 and artifact_exists,
+        "blocked_reason": None if proc.returncode == 0 and artifact_exists else ("benchmark_output_missing" if not artifact_exists else "benchmark_process_failed"),
+        "command": command,
+        "cwd": str(workdir),
+        "output": str(out),
+        "artifact_exists": artifact_exists,
+        "artifact_bytes": out.stat().st_size if artifact_exists else 0,
+        "process_returncode": proc.returncode,
+        "launched_at": launched_at,
+        "launch_cpu_percent": launch_cpu,
+        "threshold_cpu_percent": max_cpu_percent,
+        "stable_samples_required": stable_samples,
+        "samples": samples,
+        "fingerprint": fingerprint,
+        "stdout_tail": (proc.stdout or "")[-2000:],
+        "stderr_tail": (proc.stderr or "")[-2000:],
+    }
+
+
 def benchmark_validate(path: str, expect: str, require_screenshot: bool = False, require_controlled_presentation: bool = False) -> dict[str, object]:
     payload_path = Path(path).expanduser().resolve()
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
@@ -694,6 +940,20 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--expect", choices=("any", "headless", "rendered"), default="any")
     bench.add_argument("--require-screenshot", action="store_true")
     bench.add_argument("--require-controlled-presentation", action="store_true")
+    bench_wait = sub.add_parser("benchmark-wait")
+    bench_wait.add_argument("--executable", required=True)
+    bench_wait.add_argument("--output", required=True)
+    bench_wait.add_argument("--cwd")
+    bench_wait.add_argument("--max-cpu-percent", type=float, default=65.0)
+    bench_wait.add_argument("--stable-samples", type=int, default=4)
+    bench_wait.add_argument("--sample-interval-seconds", type=float, default=4.0)
+    bench_wait.add_argument("--wait-timeout-seconds", type=float, default=21600.0)
+    bench_wait.add_argument("--process-timeout-seconds", type=float, default=300.0)
+    bench_wait.add_argument("--block-process", action="append", default=[])
+    bench_wait.add_argument("--fingerprint-manifest")
+    bench_wait.add_argument("--output-flag")
+    bench_wait.add_argument("--overwrite-output", action="store_true")
+    bench_wait.add_argument("command_args", nargs=argparse.REMAINDER)
     event = sub.add_parser("event")
     event.add_argument("--project", required=True)
     event.add_argument("--phase", required=True)
@@ -732,6 +992,15 @@ def main(argv: list[str] | None = None) -> int:
             result = web_smoke(args.url)
         elif args.command == "benchmark-validate":
             result = benchmark_validate(args.input, args.expect, args.require_screenshot, args.require_controlled_presentation)
+        elif args.command == "benchmark-wait":
+            result = benchmark_wait(
+                args.executable, args.output, args.command_args, cwd=args.cwd,
+                max_cpu_percent=args.max_cpu_percent, stable_samples=args.stable_samples,
+                sample_interval_seconds=args.sample_interval_seconds, wait_timeout_seconds=args.wait_timeout_seconds,
+                process_timeout_seconds=args.process_timeout_seconds, block_processes=args.block_process,
+                fingerprint_manifest=args.fingerprint_manifest, output_flag=args.output_flag,
+                overwrite_output=args.overwrite_output,
+            )
         elif args.command == "event":
             result = append_event(args.project, args.phase, args.kind, args.message, args.progress, args.detail)
         elif args.command == "provenance-add":

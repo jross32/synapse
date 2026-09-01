@@ -134,3 +134,98 @@ def test_benchmark_validate_can_require_controlled_presentation(tmp_path):
     result = mod.benchmark_validate(str(path), "rendered", False, True)
     assert result["ok"] is False
     assert "controlled_presentation_required" in result["issues"]
+
+
+def test_benchmark_wait_requires_stable_host_and_verifies_fingerprint(tmp_path, monkeypatch):
+    mod = _module()
+    import hashlib, json, subprocess
+
+    source = tmp_path / "source.cs"
+    source.write_text("stable-source", encoding="utf-8")
+    exe = tmp_path / "game.exe"
+    exe.write_bytes(b"stable-binary")
+    output = tmp_path / "result.json"
+    manifest = tmp_path / "preflight.json"
+    manifest.write_text(json.dumps({
+        "source_file_sha256": {
+            "source.cs": hashlib.sha256(source.read_bytes()).hexdigest(),
+        },
+        "build": {
+            "exe_sha256": hashlib.sha256(exe.read_bytes()).hexdigest(),
+        },
+    }), encoding="utf-8")
+
+    cpu_samples = iter([92.0, 50.0, 55.0])
+    monkeypatch.setattr(mod, "_cpu_load_percent", lambda: next(cpu_samples))
+    monkeypatch.setattr(mod, "_blocked_processes", lambda names: [])
+    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
+
+    launched = {}
+    def fake_run(command, cwd, timeout_seconds):
+        launched["command"] = command
+        launched["cwd"] = cwd
+        launched["timeout"] = timeout_seconds
+        output.write_text("{}", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+    monkeypatch.setattr(mod, "_run_benchmark_process", fake_run)
+
+    result = mod.benchmark_wait(
+        str(exe), str(output), ["--", "--demo"], cwd=str(tmp_path),
+        max_cpu_percent=65.0, stable_samples=2, sample_interval_seconds=0,
+        wait_timeout_seconds=30, process_timeout_seconds=10,
+        block_processes=["Unity.exe"], fingerprint_manifest=str(manifest),
+        output_flag="--output",
+    )
+
+    assert result["ok"] is True
+    assert result["launch_cpu_percent"] == 55.0
+    assert [item["cpu_percent"] for item in result["samples"]] == [92.0, 50.0, 55.0]
+    assert result["fingerprint"]["ok"] is True
+    assert result["fingerprint"]["source_files_checked"] == 1
+    assert result["fingerprint"]["executable_checked"] is True
+    assert launched["command"] == [str(exe.resolve()), "--demo", "--output", str(output.resolve())]
+
+
+def test_benchmark_wait_fails_closed_on_fingerprint_mismatch(tmp_path, monkeypatch):
+    mod = _module()
+    import json
+
+    source = tmp_path / "source.cs"
+    source.write_text("changed", encoding="utf-8")
+    exe = tmp_path / "game.exe"
+    exe.write_bytes(b"binary")
+    output = tmp_path / "result.json"
+    manifest = tmp_path / "preflight.json"
+    manifest.write_text(json.dumps({
+        "source_file_sha256": {"source.cs": "0" * 64},
+    }), encoding="utf-8")
+    monkeypatch.setattr(mod, "_run_benchmark_process", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not launch")))
+
+    result = mod.benchmark_wait(
+        str(exe), str(output), cwd=str(tmp_path), fingerprint_manifest=str(manifest),
+        sample_interval_seconds=0, wait_timeout_seconds=0,
+    )
+
+    assert result["ok"] is False
+    assert result["blocked_reason"] == "benchmark_fingerprint_mismatch"
+    assert result["fingerprint"]["mismatches"][0]["reason"] == "sha256_mismatch"
+
+
+def test_benchmark_wait_times_out_when_host_stays_busy(tmp_path, monkeypatch):
+    mod = _module()
+
+    exe = tmp_path / "game.exe"
+    exe.write_bytes(b"binary")
+    output = tmp_path / "result.json"
+    monkeypatch.setattr(mod, "_cpu_load_percent", lambda: 99.0)
+    monkeypatch.setattr(mod, "_blocked_processes", lambda names: [])
+    monkeypatch.setattr(mod, "_run_benchmark_process", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not launch")))
+
+    result = mod.benchmark_wait(
+        str(exe), str(output), cwd=str(tmp_path), max_cpu_percent=65.0,
+        stable_samples=2, sample_interval_seconds=0, wait_timeout_seconds=0,
+    )
+
+    assert result["ok"] is False
+    assert result["blocked_reason"] == "host_idle_timeout"
+    assert result["samples"][-1]["cpu_percent"] == 99.0
