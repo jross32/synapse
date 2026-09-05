@@ -66,7 +66,11 @@ DEFAULT_TIMEOUT_SECONDS = 1200.0
 32 minutes for a single reply. A short timeout here would mistake "still working" for stuck."""
 
 STALL_TIMEOUT_SECONDS = 180.0
-"""No growth in the reply for this long, with no stop button visible, means stuck -- not slow."""
+"""How long to wait for a *current* assistant response to become observable at all.
+
+Once a current assistant message exists, tool-heavy ChatGPT turns may legitimately leave its
+visible prose unchanged for many minutes; the caller's overall timeout governs those turns.
+"""
 
 POLL_INTERVAL_SECONDS = 2.0
 
@@ -285,10 +289,11 @@ async def _wait_for_reply(
     """Poll until the current ChatGPT turn has a completed assistant reply, or give up.
 
     Two clocks, not one: an overall timeout (a very long real turn is normal here) and a
-    stall timeout (the reply text must keep growing, or something is stuck -- the "frozen
-    tab" failure mode the playbooks already document, where the process is alive but nothing
-    is happening). ``minimum_message_count`` is used by safe recovery after a reload so an
-    older assistant answer can never be mistaken for the reply to the prompt we just sent.
+    short pre-reply stall timeout for the "frozen tab" case where generation starts but no
+    current assistant response ever becomes observable. Once a current assistant message exists,
+    unchanged prose is not itself a stall: connector/tool calls can legitimately run for minutes
+    without adding visible text. ``minimum_message_count`` is used by safe recovery after a reload
+    so an older assistant answer can never be mistaken for the reply to the prompt we just sent.
     """
     deadline = time.time() + timeout
     last_length = -1
@@ -301,21 +306,27 @@ async def _wait_for_reply(
         stop_visible = await page.locator(_STOP_BUTTON_SELECTOR).count()
         messages = page.locator(_ASSISTANT_MESSAGE_SELECTOR)
         count = await messages.count()
-        has_current_reply = minimum_message_count is None or count >= minimum_message_count
+        has_current_reply = count > 0 and (
+            minimum_message_count is None or count >= minimum_message_count
+        )
         current_text = (
             await messages.nth(count - 1).inner_text()
-            if count and has_current_reply
+            if has_current_reply
             else ""
         )
 
         if len(current_text) != last_length:
             last_length = len(current_text)
             last_growth = time.time()
-        elif time.time() - last_growth > STALL_TIMEOUT_SECONDS:
-            # A frozen ChatGPT tab can leave the Stop button visible forever. Treat
-            # sustained lack of observable reply growth as the stall signal rather
-            # than trusting that button alone. The caller may safely reload/re-observe
-            # the same conversation without resending the already-confirmed prompt.
+        elif time.time() - last_growth > STALL_TIMEOUT_SECONDS and not has_current_reply:
+            # Fail fast only when generation never produced a current assistant response at all.
+            # Once a current assistant message exists, ChatGPT may legitimately spend many
+            # minutes inside connector/tool calls without growing the visible prose. FocusForge
+            # dogfooding proved that treating static prose as a frozen tab creates false failures:
+            # the worker wrote and verified the app while this observer marked it blocked. Keep
+            # observing such tool-heavy turns until generation actually completes or the caller's
+            # overall timeout expires. A truly frozen pre-reply tab still exits on the short stall
+            # timer and can use the same-conversation recovery path without resending the prompt.
             break
 
         if stop_visible == 0 and has_current_reply and current_text:

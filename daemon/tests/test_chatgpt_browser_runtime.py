@@ -325,3 +325,33 @@ def test_wait_for_reply_detects_frozen_generation_even_when_stop_button_stays_vi
 
     assert reply is None
     assert elapsed < 0.5
+
+
+def test_wait_for_reply_keeps_tool_heavy_turn_alive_after_assistant_message_exists(monkeypatch):
+    """Static assistant prose is not a stall while a real tool-heavy turn is still running.
+
+    The FocusForge squad exposed this exact failure: ChatGPT emitted an assistant message, spent
+    longer than the short stall window using Synapse tools, successfully wrote the app, and was
+    nevertheless marked blocked because the visible prose length did not change.
+    """
+    import asyncio
+
+    page = _ReplyPage(["I am building and verifying the app now."], generating=True)
+    monkeypatch.setattr(runtime, "POLL_INTERVAL_SECONDS", 0.001)
+    monkeypatch.setattr(runtime, "STALL_TIMEOUT_SECONDS", 0.005)
+
+    async def scenario():
+        async def finish_after_tool_work():
+            # Deliberately exceed STALL_TIMEOUT_SECONDS with unchanged assistant prose.
+            await asyncio.sleep(0.02)
+            page.messages.texts[-1] = "Build complete and verified."
+            page.generating = False
+
+        finisher = asyncio.create_task(finish_after_tool_work())
+        reply = await runtime._wait_for_reply(
+            page, timeout=0.2, minimum_message_count=1
+        )
+        await finisher
+        return reply
+
+    assert asyncio.run(scenario()) == "Build complete and verified."
