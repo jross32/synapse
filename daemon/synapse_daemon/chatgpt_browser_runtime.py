@@ -254,7 +254,7 @@ async def _send_and_confirm_started(page: Any, prompt: str) -> str | None:
 
     deadline = time.time() + SEND_VERIFY_TIMEOUT_SECONDS
     while time.time() < deadline:
-        stop_visible = await page.locator(_STOP_BUTTON_SELECTOR).count()
+        stop_visible = await _stop_button_visible(page)
         remaining = await _composer_text(page)
         if stop_visible or not remaining.strip():
             return None
@@ -280,6 +280,23 @@ async def assistant_message_count(page: Any) -> int:
         return 0
 
 
+async def _stop_button_visible(page: Any) -> bool:
+    """Return whether ChatGPT's generation-stop control is actually visible.
+
+    ChatGPT keeps some controls mounted but hidden across state transitions. Locator.count()
+    therefore answers "does this node exist?", not "is generation still running?". The
+    FocusForge dogfood/recovery proof exposed the difference: a completed turn could retain a
+    hidden stop node and be observed forever.
+    """
+    try:
+        locator = page.locator(_STOP_BUTTON_SELECTOR)
+        if await locator.count() <= 0:
+            return False
+        return bool(await locator.first.is_visible())
+    except Exception:  # noqa: BLE001 -- UI observation should degrade to not-visible
+        return False
+
+
 async def _wait_for_reply(
     page: Any,
     *,
@@ -303,7 +320,7 @@ async def _wait_for_reply(
         if await conversation_length_limit_reached(page):
             break  # permanent condition -- no point waiting out the rest of the timeout
 
-        stop_visible = await page.locator(_STOP_BUTTON_SELECTOR).count()
+        stop_visible = await _stop_button_visible(page)
         messages = page.locator(_ASSISTANT_MESSAGE_SELECTOR)
         count = await messages.count()
         has_current_reply = count > 0 and (

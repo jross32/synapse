@@ -351,3 +351,38 @@ def test_attach_synapse_connector_is_idempotent_when_chip_is_visible() -> None:
     assert page.plus.clicked == 0
     assert page.search.filled == ""
     assert page.synapse.clicked == 0
+
+
+def test_durable_conversation_url_rejects_chatgpt_optimistic_web_id():
+    assert chatgpt_child_agents.is_durable_conversation_url(
+        "https://chatgpt.com/c/WEB:2f64d1a2-4249-429e-a640-f6ff389ad0f3"
+    ) is False
+    assert chatgpt_child_agents.is_durable_conversation_url(
+        "https://chatgpt.com/c/6a9bbfb5-db18-83ea-a36c-fac31f6be1a6"
+    ) is True
+    assert chatgpt_child_agents.is_durable_conversation_url("https://chatgpt.com/") is False
+
+
+def test_wait_for_durable_conversation_url_waits_for_server_canonicalization(monkeypatch):
+    class Page:
+        def __init__(self):
+            self.urls = [
+                "https://chatgpt.com/c/WEB:optimistic",
+                "https://chatgpt.com/c/WEB:optimistic",
+                "https://chatgpt.com/c/6a9bbfb5-db18-83ea-a36c-fac31f6be1a6",
+            ]
+            self.index = 0
+
+        @property
+        def url(self):
+            value = self.urls[min(self.index, len(self.urls) - 1)]
+            self.index += 1
+            return value
+
+    monkeypatch.setattr(
+        chatgpt_child_agents, "CANONICAL_CONVERSATION_URL_POLL_SECONDS", 0.001
+    )
+    result = asyncio.run(
+        chatgpt_child_agents.wait_for_durable_conversation_url(Page(), timeout=0.05)
+    )
+    assert result == "https://chatgpt.com/c/6a9bbfb5-db18-83ea-a36c-fac31f6be1a6"

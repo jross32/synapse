@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import psutil
 
@@ -38,6 +39,8 @@ WORKER_PROJECT_NAME = "Synapse2GPT Workers"
 SETUP_URL = "https://chatgpt.com/"
 DEFAULT_BROWSER_CHANNEL = "chrome"
 BACKGROUND_BROWSER_ARGS = ("--window-position=-32000,-32000", "--window-size=1100,820")
+CANONICAL_CONVERSATION_URL_TIMEOUT_SECONDS = 30.0
+CANONICAL_CONVERSATION_URL_POLL_SECONDS = 0.25
 
 
 @dataclass
@@ -89,6 +92,46 @@ def _store_worker_project_url(data_dir: Path, url: str) -> None:
     path = worker_project_url_path(data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(clean + "\n", encoding="utf-8")
+
+
+def is_durable_conversation_url(url: str) -> bool:
+    """Return True only for a reopenable ChatGPT ``/c/<server-id>`` URL.
+
+    New chats briefly use optimistic client ids such as ``/c/WEB:<uuid>``. Those URLs appear in
+    Chrome history but collapse to ChatGPT home when reopened. ChatGPT later replaces them with
+    the canonical server conversation id. Never put an optimistic URL in the durable worker
+    registry, recovery path, reuse path, or archive path.
+    """
+    clean = (url or "").strip()
+    if not clean:
+        return False
+    try:
+        parsed = urlparse(clean)
+    except ValueError:
+        return False
+    if parsed.scheme != "https" or parsed.netloc.lower() != "chatgpt.com":
+        return False
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) != 2 or parts[0] != "c":
+        return False
+    conversation_id = parts[1].strip()
+    return bool(conversation_id) and not conversation_id.upper().startswith("WEB:")
+
+
+async def wait_for_durable_conversation_url(
+    page: Any,
+    *,
+    timeout: float = CANONICAL_CONVERSATION_URL_TIMEOUT_SECONDS,
+) -> str:
+    """Wait briefly for ChatGPT to replace its optimistic URL with the canonical one."""
+    deadline = time.monotonic() + max(0.0, float(timeout))
+    while True:
+        current = str(getattr(page, "url", "") or "").strip()
+        if is_durable_conversation_url(current):
+            return current
+        if time.monotonic() >= deadline:
+            return ""
+        await asyncio.sleep(CANONICAL_CONVERSATION_URL_POLL_SECONDS)
 
 
 def readiness(data_dir: Path) -> dict[str, Any]:
@@ -673,7 +716,7 @@ class ChatGPTBrowserPool:
                 )
                 return result
 
-            result.conversation_url = str(getattr(page, "url", "") or "")
+            result.conversation_url = await wait_for_durable_conversation_url(page)
             if desired_title:
                 result.title_renamed = await rename_current_chat(page, desired_title)
             reply = await browser_runtime._wait_for_reply(
@@ -689,7 +732,14 @@ class ChatGPTBrowserPool:
                 # durable conversation URL and observe that same turn once more. The message
                 # count floor prevents a previous assistant answer from being mistaken for
                 # this turn after navigation.
-                recovery_url = result.conversation_url or str(getattr(page, "url", "") or "")
+                latest_durable_url = await wait_for_durable_conversation_url(page, timeout=5.0)
+                if latest_durable_url:
+                    result.conversation_url = latest_durable_url
+                recovery_url = (
+                    result.conversation_url
+                    if is_durable_conversation_url(result.conversation_url)
+                    else ""
+                )
                 if recovery_url:
                     result.recovery_attempted = True
                     try:
@@ -708,13 +758,23 @@ class ChatGPTBrowserPool:
                     if await browser_runtime.conversation_length_limit_reached(page):
                         result.error = "ChatGPT child conversation hit its maximum length."
                     else:
-                        result.error = (
-                            f"ChatGPT child returned no reply within {timeout:g}s; one safe "
-                            "same-conversation recovery observation was attempted without "
-                            "resending the prompt."
-                        )
+                        if recovery_url:
+                            result.error = (
+                                "ChatGPT child did not yield a completed observable reply before the "
+                                "browser observer/recovery deadline; one safe same-conversation "
+                                "recovery observation was attempted without resending the prompt."
+                            )
+                        else:
+                            result.error = (
+                                "ChatGPT child did not yield a completed observable reply and ChatGPT "
+                                "never exposed a durable canonical conversation URL for safe recovery. "
+                                "The prompt was not resent."
+                            )
                     return result
 
+            latest_durable_url = await wait_for_durable_conversation_url(page, timeout=5.0)
+            if latest_durable_url:
+                result.conversation_url = latest_durable_url
             result.ok = True
             result.reply = reply
             result.ui_duration_seconds = await browser_runtime.extract_worked_for_seconds(page)

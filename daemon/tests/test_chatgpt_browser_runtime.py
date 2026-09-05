@@ -76,15 +76,19 @@ def test_typed_text_landed_true_for_empty_prompt():
 
 
 class _FakeLocator:
-    def __init__(self, *, count: int = 0, text: str = ""):
+    def __init__(self, *, count: int = 0, text: str = "", visible: bool | None = None):
         self._count = count
         self._text = text
+        self._visible = bool(count) if visible is None else visible
 
     async def count(self):
         return self._count
 
     async def inner_text(self):
         return self._text
+
+    async def is_visible(self):
+        return self._visible
 
     async def click(self):
         pass
@@ -355,3 +359,34 @@ def test_wait_for_reply_keeps_tool_heavy_turn_alive_after_assistant_message_exis
         return reply
 
     assert asyncio.run(scenario()) == "Build complete and verified."
+
+
+def test_wait_for_reply_treats_hidden_mounted_stop_control_as_finished(monkeypatch):
+    """A hidden stop node may remain mounted after ChatGPT finishes generation."""
+    import asyncio
+
+    class HiddenStopPage(_ReplyPage):
+        def locator(self, selector: str):
+            if selector == runtime._STOP_BUTTON_SELECTOR:
+                return _FakeLocator(count=1, visible=False)
+            return super().locator(selector)
+
+    page = HiddenStopPage(["Finished reply."], generating=False)
+    monkeypatch.setattr(runtime, "POLL_INTERVAL_SECONDS", 0.001)
+
+    reply = asyncio.run(
+        runtime._wait_for_reply(page, timeout=0.05, minimum_message_count=1)
+    )
+
+    assert reply == "Finished reply."
+
+
+def test_stop_button_visible_distinguishes_hidden_dom_node():
+    import asyncio
+
+    class Page:
+        def locator(self, selector: str):
+            assert selector == runtime._STOP_BUTTON_SELECTOR
+            return _FakeLocator(count=1, visible=False)
+
+    assert asyncio.run(runtime._stop_button_visible(Page())) is False
