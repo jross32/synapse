@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
+from . import ai_executions
 from . import coder_workspace
 from . import project_records
 from . import projects as projects_module
@@ -54,8 +55,10 @@ def _review_pass_summary(plan: review_engine.ReviewPlan, pass_plan: review_engin
         f"Project: {plan.project_name} ({plan.project_id})\n"
         f"Risk: {plan.risk.value}\n"
         f"Review mode: {plan.mode.value}\n"
-        f"Review token budget: {plan.policy.token_budget}\n"
-        f"Estimated context tokens: {plan.estimated_context_tokens}\n"
+        f"Aggregate Smart Review planning budget: {plan.policy.token_budget}\n"
+        f"Aggregate reserved tokens: {plan.estimated_aggregate_tokens}\n"
+        f"This pass input/context estimate: {pass_plan.estimated_input_tokens}\n"
+        f"This pass output reserve: {pass_plan.output_token_reserve}\n"
         f"Why this pass exists: {pass_plan.reason}\n\n"
         "Changed files:\n"
         f"{changed}\n\n"
@@ -68,7 +71,8 @@ def _review_pass_summary(plan: review_engine.ReviewPlan, pass_plan: review_engin
         "- Prefer concrete bugs, regressions, missing proof, or violated contracts over generic advice.\n"
         "- Do not edit files or broaden scope during this pass.\n"
         "- If no material issue exists, say so instead of inventing work.\n"
-        "- Recommend another AI pass only when its likely value justifies more tokens.\n\n"
+        "- Recommend another AI pass only when its likely value justifies more tokens.\n"
+        f"- Keep the review concise enough to fit the ~{pass_plan.output_token_reserve}-token output reserve.\n\n"
         "Bounded diff/context:\n"
         "```diff\n"
         f"{diff}\n"
@@ -109,7 +113,13 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
         _enforce_review_project_scope(http_request, project_id)
         project = projects_module.get(storage.conn, project_id)
         review_request = payload or review_engine.ReviewEngineRequest()
-        return await asyncio.to_thread(review_engine.plan_project_review, project, review_request)
+        runtime_capacity = ai_executions.list_capacity(storage.conn)
+        return await asyncio.to_thread(
+            review_engine.plan_project_review,
+            project,
+            review_request,
+            runtime_capacity=runtime_capacity,
+        )
 
     @router.post("/engine/queue/{project_id}", response_model=None, status_code=201)
     async def queue_project_review(
@@ -128,19 +138,33 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
         _enforce_review_project_scope(http_request, project_id)
         project = projects_module.get(storage.conn, project_id)
         review_request = payload or review_engine.ReviewEngineRequest()
-        plan = await asyncio.to_thread(review_engine.plan_project_review, project, review_request)
+        runtime_capacity = ai_executions.list_capacity(storage.conn)
+        plan = await asyncio.to_thread(
+            review_engine.plan_project_review,
+            project,
+            review_request,
+            runtime_capacity=runtime_capacity,
+        )
         queued: list[dict[str, Any]] = []
         thread = None
 
         if plan.ai_review_required and plan.review_passes:
             with storage.transaction() as conn:
                 existing_threads = coder_workspace.list_threads(conn, project_id)
-                thread = existing_threads[0] if existing_threads else coder_workspace.create_thread(
+                engine_thread = next(
+                    (
+                        item.thread
+                        for item in existing_threads
+                        if item.thread.metadata.get("created_by") == "review-engine"
+                    ),
+                    None,
+                )
+                thread = engine_thread or coder_workspace.create_thread(
                     conn,
                     project_id,
                     coder_workspace.CoderThreadCreate(
                         title=f"Smart review · {project.name}",
-                        active_runtime_id=review_request.primary_runtime or "codex",
+                        active_runtime_id=review_request.primary_runtime or plan.review_passes[0].requested_runtime_id,
                         thread_kind="review",
                         metadata={"created_by": "review-engine", "review_engine_version": "v1"},
                     ),
@@ -161,7 +185,12 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                                 "risk": plan.risk.value,
                                 "review_mode": plan.mode.value,
                                 "token_budget": plan.policy.token_budget,
-                                "estimated_context_tokens": plan.estimated_context_tokens,
+                                "estimated_input_tokens": pass_plan.estimated_input_tokens,
+                                "output_token_reserve": pass_plan.output_token_reserve,
+                                "estimated_total_tokens": pass_plan.estimated_total_tokens,
+                                "estimated_aggregate_tokens": plan.estimated_aggregate_tokens,
+                                "budget_remaining_after_plan": plan.budget_remaining_after_plan,
+                                "budget_kind": "aggregate_planning_reserve",
                                 "source": review_request.source,
                             },
                         ),

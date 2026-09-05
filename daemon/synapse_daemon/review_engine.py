@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from . import projects as projects_module
+from . import ai_executions, coder_runtimes, projects as projects_module
 
 
 class ReviewMode(str, Enum):
@@ -54,6 +54,9 @@ class ReviewPassPlan(BaseModel):
     requested_runtime_id: str
     reason: str
     focus_points: list[str] = Field(default_factory=list)
+    estimated_input_tokens: int = 0
+    output_token_reserve: int = 0
+    estimated_total_tokens: int = 0
 
 
 class ReviewPolicy(BaseModel):
@@ -97,6 +100,9 @@ class ReviewPlan(BaseModel):
     change: ChangeSnapshot
     estimated_context_tokens: int
     budget_remaining_after_context: int
+    estimated_tokens_per_pass: int
+    estimated_aggregate_tokens: int
+    budget_remaining_after_plan: int
     ai_review_required: bool
     deterministic_findings: list[ReviewFinding] = Field(default_factory=list)
     review_passes: list[ReviewPassPlan] = Field(default_factory=list)
@@ -145,7 +151,12 @@ _DOC_SUFFIXES = (".md", ".rst", ".txt")
 _TEST_MARKERS = ("test_", "_test.", "/tests/", "\\tests\\", ".spec.", ".test.")
 _SOURCE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".cs")
 _RELEASE_FILES = {"changelog.md", "readme.md", "pyproject.toml", "package.json"}
-_SECRET_FILENAMES = {".env", ".env.local", ".env.production", "credentials.json", "secrets.json"}
+_SECRET_FILENAMES = {
+    ".env", ".env.local", ".env.production", ".npmrc", ".pypirc",
+    "credentials.json", "secrets.json", "service-account.json",
+    "id_rsa", "id_ed25519",
+}
+_SECRET_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
 _SECRET_ASSIGNMENT_RE = re.compile(
     r"(?im)^[+ ]?\s*[A-Z0-9_.-]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL)[A-Z0-9_.-]*\s*[:=]\s*[\"']?([^\s\"']{8,})"
 )
@@ -165,6 +176,20 @@ def _diff_has_secret_like_value(diff_text: str) -> bool:
 
 def _normalise_path(path: str) -> str:
     return path.strip().replace("\\", "/").lower()
+
+
+def _is_secret_bearing_path(path: str) -> bool:
+    normalized = _normalise_path(path)
+    base = normalized.rsplit("/", 1)[-1]
+    return (
+        base in _SECRET_FILENAMES
+        or base.startswith(".env.")
+        or base.startswith("id_rsa_")
+        or base.startswith("id_ed25519_")
+        or base.endswith(_SECRET_SUFFIXES)
+        or ("credential" in base and base.endswith((".json", ".yaml", ".yml", ".toml")))
+        or ("secret" in base and base.endswith((".json", ".yaml", ".yml", ".toml")))
+    )
 
 
 def _is_test(path: str) -> bool:
@@ -371,7 +396,7 @@ def deterministic_findings(
     files = [_normalise_path(path) for path in change.changed_files]
     findings: list[ReviewFinding] = []
 
-    secret_files = [path for path in files if path.rsplit("/", 1)[-1] in _SECRET_FILENAMES]
+    secret_files = [path for path in files if _is_secret_bearing_path(path)]
     if secret_files:
         findings.append(
             ReviewFinding(
@@ -456,13 +481,32 @@ def deterministic_findings(
     return findings
 
 
-def _independent_runtime(primary_runtime: str | None, ordinal: int) -> str:
+def _eligible_review_runtimes(
+    primary_runtime: str | None,
+    runtime_capacity: list[ai_executions.RuntimeCapacity] | None,
+) -> list[str]:
+    """Return independent runtimes that Synapse can honestly attempt now.
+
+    Daemon routes pass the durable capacity ledger.  Pure callers without a storage
+    handle fall back to the canonical runtime registry + binary probe, never to a
+    hard-coded provider ladder detached from installation truth.
+    """
+
     primary = (primary_runtime or "").strip().lower()
-    ladder = ["codex", "claude", "copilot"]
-    if primary in ladder:
-        ladder.remove(primary)
-        ladder.append(primary)
-    return ladder[ordinal % len(ladder)]
+    if runtime_capacity is None:
+        return [
+            runtime.value
+            for runtime in coder_runtimes.DEFAULT_LADDER
+            if runtime.value != primary and coder_runtimes.available(runtime)
+        ]
+
+    eligible = [
+        item
+        for item in runtime_capacity
+        if item.runtime_id != primary and item.eligible_for_attempt
+    ]
+    eligible.sort(key=lambda item: (not item.usable_now, item.runtime_id))
+    return _bounded_unique([item.runtime_id for item in eligible], limit=20)
 
 
 def _specialist_passes(
@@ -471,6 +515,10 @@ def _specialist_passes(
     risk: ReviewRisk,
     policy: ReviewPolicy,
     primary_runtime: str | None,
+    runtime_capacity: list[ai_executions.RuntimeCapacity] | None,
+    *,
+    estimated_input_tokens: int,
+    output_token_reserve: int,
 ) -> list[ReviewPassPlan]:
     files_text = "\n".join(_normalise_path(path) for path in change.changed_files)
     candidates: list[tuple[str, str, str, list[str]]] = []
@@ -527,53 +575,77 @@ def _specialist_passes(
             ),
         )
 
-    # Repo-local review contracts are appended to every selected pass. This is how Stock Hunter,
-    # WhatIf Pulse, games, or future projects can carry their own invariants without hard-coding
-    # project names into Synapse.
+    runtime_ids = _eligible_review_runtimes(primary_runtime, runtime_capacity)
+    if not runtime_ids:
+        return []
+
+    per_pass_total = estimated_input_tokens + output_token_reserve
     selected: list[ReviewPassPlan] = []
-    for index, (kind, title, reason, focus) in enumerate(candidates[: policy.max_ai_passes]):
+    planned_total = 0
+    for kind, title, reason, focus in candidates[: policy.max_ai_passes]:
+        if planned_total + per_pass_total > policy.token_budget:
+            break
+        runtime_id = runtime_ids[len(selected) % len(runtime_ids)]
         selected.append(
             ReviewPassPlan(
                 review_kind=kind,
                 title=title,
-                requested_runtime_id=_independent_runtime(primary_runtime, index),
+                requested_runtime_id=runtime_id,
                 reason=reason,
                 focus_points=_bounded_unique([*focus, *policy.focus_points], limit=24),
+                estimated_input_tokens=estimated_input_tokens,
+                output_token_reserve=output_token_reserve,
+                estimated_total_tokens=per_pass_total,
             )
         )
+        planned_total += per_pass_total
     return selected
 
 
 def plan_project_review(
     project: projects_module.Project,
     request: ReviewEngineRequest,
+    *,
+    runtime_capacity: list[ai_executions.RuntimeCapacity] | None = None,
 ) -> ReviewPlan:
     change = collect_change_snapshot(project, request)
     risk = classify_risk(change.changed_files, change.diff_text)
     policy = effective_policy(project, request, change, risk)
     findings = deterministic_findings(change, policy.mode)
 
-    # Rough but intentionally conservative. We only need a budget guard before the real
-    # runtime reports exact usage to the existing Synapse ledgers.
+    # Planning budget is aggregate across every queued pass.  Each pass receives
+    # its own copy of bounded context, so repeated context is counted repeatedly.
     diff_chars_in_context = min(change.diff_chars, policy.max_diff_chars)
-    estimated_context_tokens = math.ceil(diff_chars_in_context / 4) + 1_500
-    remaining = max(policy.token_budget - estimated_context_tokens, 0)
+    per_pass_context_tokens = math.ceil(diff_chars_in_context / 4) + 1_500
+    output_token_reserve = 1_500
+    per_pass_total = per_pass_context_tokens + output_token_reserve
+
     has_material_change = bool(change.changed_files or change.diff_text.strip())
     has_blocker = any(item.severity == "blocking" for item in findings)
     evidence_complete = change.diff_complete
-    ai_required = (
+    base_ai_eligible = (
         has_material_change
         and not has_blocker
         and evidence_complete
         and policy.max_ai_passes > 0
         and (request.force_ai or not change.docs_only)
-        and remaining >= 1_000
+        and per_pass_total <= policy.token_budget
     )
+    eligible_runtimes = _eligible_review_runtimes(request.primary_runtime, runtime_capacity)
     passes = (
-        _specialist_passes(project, change, risk, policy, request.primary_runtime)
-        if ai_required
+        _specialist_passes(
+            project, change, risk, policy, request.primary_runtime, runtime_capacity,
+            estimated_input_tokens=per_pass_context_tokens,
+            output_token_reserve=output_token_reserve,
+        )
+        if base_ai_eligible and eligible_runtimes
         else []
     )
+    aggregate_context = sum(item.estimated_input_tokens for item in passes)
+    aggregate_total = sum(item.estimated_total_tokens for item in passes)
+    remaining_after_context = max(policy.token_budget - aggregate_context, 0)
+    remaining_after_plan = max(policy.token_budget - aggregate_total, 0)
+    ai_required = bool(passes)
 
     if has_blocker:
         reason = "Deterministic blocking finding must be resolved before any diff is sent to an AI reviewer."
@@ -583,10 +655,17 @@ def plan_project_review(
         reason = "Exact diff evidence is incomplete, so Synapse will not spend review tokens or claim the change was reviewed yet."
     elif change.docs_only and not request.force_ai:
         reason = "Docs-only change passed through the token-free deterministic lane; AI review was skipped."
-    elif remaining < 1_000:
-        reason = "Estimated context would consume the configured review budget; AI review was not queued."
+    elif not eligible_runtimes:
+        reason = "No independent reviewer runtime is currently eligible according to Synapse runtime capacity; no doomed pass was queued."
+    elif per_pass_total > policy.token_budget:
+        reason = "One bounded review pass would exceed the configured aggregate planning budget; AI review was not queued."
+    elif not passes:
+        reason = "The configured aggregate planning budget did not justify another AI pass."
     else:
-        reason = f"{policy.mode.value} review selected for {risk.value}-risk change with {len(passes)} targeted AI pass(es)."
+        reason = (
+            f"{policy.mode.value} review selected for {risk.value}-risk change with {len(passes)} "
+            f"targeted AI pass(es), reserving about {aggregate_total} of {policy.token_budget} tokens."
+        )
 
     return ReviewPlan(
         project_id=project.id,
@@ -595,8 +674,11 @@ def plan_project_review(
         mode=policy.mode,
         policy=policy,
         change=change,
-        estimated_context_tokens=estimated_context_tokens,
-        budget_remaining_after_context=remaining,
+        estimated_context_tokens=aggregate_context,
+        budget_remaining_after_context=remaining_after_context,
+        estimated_tokens_per_pass=per_pass_total,
+        estimated_aggregate_tokens=aggregate_total,
+        budget_remaining_after_plan=remaining_after_plan,
         ai_review_required=ai_required,
         deterministic_findings=findings,
         review_passes=passes,

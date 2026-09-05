@@ -3,11 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 
+from synapse_daemon import coder_runtimes
 from synapse_daemon.app import build_app
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
 from synapse_daemon.ws import EventBus
+
+
+@pytest.fixture(autouse=True)
+def _pretend_review_runtimes_are_installed(monkeypatch) -> None:
+    monkeypatch.setattr(coder_runtimes, "available", lambda runtime: True)
 
 
 def _client(tmp_path: Path) -> TestClient:
@@ -64,3 +71,20 @@ def test_smart_review_plan_and_queue_reuse_coder_review_passes(tmp_path: Path) -
     launch_url = queued["queued"][0]["launch_url"]
     assert launch_url.startswith("/api/v1/coder-threads/")
     assert launch_url.endswith("/launch")
+
+
+def test_queue_uses_dedicated_engine_thread_when_project_already_has_threads(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    existing = client.post(
+        "/api/v1/projects/smart-review-demo/coder-threads",
+        json={"title": "Existing normal chat", "active_runtime_id": "codex"},
+    )
+    assert existing.status_code == 201, existing.text
+    normal_thread_id = existing.json()["thread"]["id"] if "thread" in existing.json() else existing.json()["id"]
+
+    queued_response = client.post("/api/v1/review/engine/queue/smart-review-demo", json=_payload())
+    assert queued_response.status_code == 201, queued_response.text
+    queued = queued_response.json()
+    assert queued["thread"]["id"] != normal_thread_id
+    assert queued["thread"]["metadata"]["created_by"] == "review-engine"
+    assert queued["queued"][0]["review_pass"]["metadata"]["budget_kind"] == "aggregate_planning_reserve"

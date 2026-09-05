@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
-from synapse_daemon import review_engine
+import pytest
+
+from synapse_daemon import ai_executions, coder_runtimes, review_engine
 from synapse_daemon.projects import Project, ProjectKind
+
+
+@pytest.fixture(autouse=True)
+def _pretend_default_runtimes_are_installed(monkeypatch) -> None:
+    # Pure planner tests do not have the daemon's SQLite capacity ledger.
+    monkeypatch.setattr(coder_runtimes, "available", lambda runtime: True)
 
 
 def _project(tmp_path, *, project_id: str = "demo", kind: ProjectKind = ProjectKind.APP) -> Project:
@@ -219,3 +228,94 @@ def test_secret_like_assignment_blocks_ai_even_in_normal_source_file(tmp_path) -
     assert plan.ai_review_required is False
     assert any(item.id == "secret-like-value-in-diff" for item in plan.deterministic_findings)
     assert "sk_live_1234567890abcdef" not in review_engine.bounded_diff_for_prompt(plan)
+
+
+def test_aggregate_budget_counts_repeated_context_across_passes(tmp_path) -> None:
+    project = _project(tmp_path)
+    diff = "+x = 1\n" * 18_000
+    plan = review_engine.plan_project_review(
+        project,
+        review_engine.ReviewEngineRequest(
+            mode=review_engine.ReviewMode.RELEASE,
+            changed_files=["src/app.py", "tests/test_app.py"],
+            diff_text=diff,
+            change_title="release v9.9.9",
+        ),
+    )
+    assert plan.review_passes
+    assert plan.estimated_aggregate_tokens == sum(
+        item.estimated_total_tokens for item in plan.review_passes
+    )
+    assert plan.estimated_context_tokens == sum(
+        item.estimated_input_tokens for item in plan.review_passes
+    )
+    assert plan.estimated_aggregate_tokens <= plan.policy.token_budget
+    assert plan.budget_remaining_after_plan == plan.policy.token_budget - plan.estimated_aggregate_tokens
+
+
+def test_runtime_capacity_skips_unavailable_or_primary_reviewers(tmp_path) -> None:
+    now = datetime.now(UTC)
+    capacity = [
+        ai_executions.RuntimeCapacity(
+            runtime_id="codex", state=ai_executions.RuntimeCapacityState.AVAILABLE,
+            usable_now=True, eligible_for_attempt=True, updated_at=now,
+        ),
+        ai_executions.RuntimeCapacity(
+            runtime_id="claude", state=ai_executions.RuntimeCapacityState.QUOTA_EXHAUSTED,
+            usable_now=False, eligible_for_attempt=False, updated_at=now,
+        ),
+        ai_executions.RuntimeCapacity(
+            runtime_id="copilot", state=ai_executions.RuntimeCapacityState.AVAILABLE,
+            usable_now=True, eligible_for_attempt=True, updated_at=now,
+        ),
+    ]
+    plan = review_engine.plan_project_review(
+        _project(tmp_path),
+        review_engine.ReviewEngineRequest(
+            changed_files=["src/app.py", "tests/test_app.py"],
+            diff_text="+x = 1\n",
+            primary_runtime="codex",
+        ),
+        runtime_capacity=capacity,
+    )
+    assert plan.ai_review_required is True
+    assert {item.requested_runtime_id for item in plan.review_passes} == {"copilot"}
+
+
+def test_no_independent_runtime_means_no_doomed_review_pass(tmp_path) -> None:
+    now = datetime.now(UTC)
+    capacity = [
+        ai_executions.RuntimeCapacity(
+            runtime_id="codex", state=ai_executions.RuntimeCapacityState.AVAILABLE,
+            usable_now=True, eligible_for_attempt=True, updated_at=now,
+        ),
+        ai_executions.RuntimeCapacity(
+            runtime_id="claude", state=ai_executions.RuntimeCapacityState.NOT_INSTALLED,
+            usable_now=False, eligible_for_attempt=False, updated_at=now,
+        ),
+    ]
+    plan = review_engine.plan_project_review(
+        _project(tmp_path),
+        review_engine.ReviewEngineRequest(
+            changed_files=["src/app.py"], diff_text="+x = 1\n", primary_runtime="codex"
+        ),
+        runtime_capacity=capacity,
+    )
+    assert plan.ai_review_required is False
+    assert plan.review_passes == []
+    assert "No independent reviewer runtime" in plan.reason
+
+
+def test_common_secret_file_patterns_block_ai_context(tmp_path) -> None:
+    for secret_path in (".env.development", ".npmrc", "certs/private.pem", "config/credentials.yaml"):
+        plan = review_engine.plan_project_review(
+            _project(tmp_path),
+            review_engine.ReviewEngineRequest(
+                changed_files=[secret_path],
+                diff_text="+SAFE_EXAMPLE=placeholder-value\n",
+                force_ai=True,
+            ),
+        )
+        assert plan.ai_review_required is False
+        assert any(item.id == "secret-file-changed" for item in plan.deterministic_findings)
+        assert "withheld" in review_engine.bounded_diff_for_prompt(plan)
