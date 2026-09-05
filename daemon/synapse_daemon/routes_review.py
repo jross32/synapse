@@ -13,9 +13,12 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
+from . import coder_workspace
 from . import project_records
+from . import projects as projects_module
 from . import proposals as proposals_module
 from . import review
+from . import review_engine
 from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .errors import invalid
@@ -35,12 +38,163 @@ from .storage import Storage
 from .ws import EventBus
 
 
+def _review_pass_summary(plan: review_engine.ReviewPlan, pass_plan: review_engine.ReviewPassPlan) -> str:
+    changed = "\n".join(f"- {path}" for path in plan.change.changed_files[:100]) or "- No named files supplied."
+    findings = (
+        "\n".join(
+            f"- [{item.severity}] {item.title}: {item.detail}"
+            for item in plan.deterministic_findings
+        )
+        or "- No deterministic findings."
+    )
+    focus = "\n".join(f"- {item}" for item in pass_plan.focus_points) or "- Review material correctness."
+    diff = review_engine.bounded_diff_for_prompt(plan).strip() or "[no textual diff available]"
+    return (
+        "Synapse Smart Review Engine generated this targeted, read-only review pass.\n\n"
+        f"Project: {plan.project_name} ({plan.project_id})\n"
+        f"Risk: {plan.risk.value}\n"
+        f"Review mode: {plan.mode.value}\n"
+        f"Review token budget: {plan.policy.token_budget}\n"
+        f"Estimated context tokens: {plan.estimated_context_tokens}\n"
+        f"Why this pass exists: {pass_plan.reason}\n\n"
+        "Changed files:\n"
+        f"{changed}\n\n"
+        "Deterministic pre-checks:\n"
+        f"{findings}\n\n"
+        "Focus points:\n"
+        f"{focus}\n\n"
+        "Rules:\n"
+        "- Review the supplied change, not the whole repository.\n"
+        "- Prefer concrete bugs, regressions, missing proof, or violated contracts over generic advice.\n"
+        "- Do not edit files or broaden scope during this pass.\n"
+        "- If no material issue exists, say so instead of inventing work.\n"
+        "- Recommend another AI pass only when its likely value justifies more tokens.\n\n"
+        "Bounded diff/context:\n"
+        "```diff\n"
+        f"{diff}\n"
+        "```"
+    )
+
+
 def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
     router = APIRouter(prefix="/review", tags=["review"])
 
     @router.get("/inbox", response_model=ReviewInbox)
     async def inbox() -> ReviewInbox:
         return review.build_inbox(storage.conn)
+
+    @router.post("/engine/plan/{project_id}", response_model=review_engine.ReviewPlan)
+    async def plan_project_review(
+        project_id: str,
+        payload: review_engine.ReviewEngineRequest | None = None,
+    ) -> review_engine.ReviewPlan:
+        """Plan the cheapest useful review for a project change without spending AI tokens."""
+
+        project = projects_module.get(storage.conn, project_id)
+        request = payload or review_engine.ReviewEngineRequest()
+        return await asyncio.to_thread(review_engine.plan_project_review, project, request)
+
+    @router.post("/engine/queue/{project_id}", response_model=None, status_code=201)
+    async def queue_project_review(
+        project_id: str,
+        payload: review_engine.ReviewEngineRequest | None = None,
+    ) -> dict[str, Any]:
+        """Create targeted coder review passes after deterministic/token-budget planning.
+
+        This intentionally reuses the existing coder review-pass runtime instead of launching
+        a second model-execution path. AI coders can call this route, then launch the returned
+        pass URLs through the normal coder endpoint, which preserves runtime accounting,
+        sandboxing, review verdicts, and quality gates.
+        """
+
+        project = projects_module.get(storage.conn, project_id)
+        request = payload or review_engine.ReviewEngineRequest()
+        plan = await asyncio.to_thread(review_engine.plan_project_review, project, request)
+        queued: list[dict[str, Any]] = []
+        thread = None
+
+        if plan.ai_review_required and plan.review_passes:
+            with storage.transaction() as conn:
+                existing_threads = coder_workspace.list_threads(conn, project_id)
+                thread = existing_threads[0] if existing_threads else coder_workspace.create_thread(
+                    conn,
+                    project_id,
+                    coder_workspace.CoderThreadCreate(
+                        title=f"Smart review · {project.name}",
+                        active_runtime_id=request.primary_runtime or "codex",
+                        thread_kind="review",
+                        metadata={"created_by": "review-engine", "review_engine_version": "v1"},
+                    ),
+                )
+                for pass_plan in plan.review_passes:
+                    review_pass = coder_workspace.create_review_pass(
+                        conn,
+                        thread.id,
+                        coder_workspace.CoderReviewPassCreate(
+                            requested_runtime_id=pass_plan.requested_runtime_id,
+                            title=pass_plan.title,
+                            summary_md=_review_pass_summary(plan, pass_plan),
+                            metadata={
+                                "review_kind": pass_plan.review_kind,
+                                "reason": pass_plan.reason,
+                                "focus_points": pass_plan.focus_points,
+                                "review_engine": "smart-v1",
+                                "risk": plan.risk.value,
+                                "review_mode": plan.mode.value,
+                                "token_budget": plan.policy.token_budget,
+                                "estimated_context_tokens": plan.estimated_context_tokens,
+                                "source": request.source,
+                            },
+                        ),
+                    )
+                    queued.append(
+                        {
+                            "review_pass": review_pass.model_dump(mode="json"),
+                            "launch_url": (
+                                f"/api/v1/coder-threads/{thread.id}/review-passes/"
+                                f"{review_pass.id}/launch"
+                            ),
+                        }
+                    )
+                    audit(
+                        conn,
+                        AuditRecord(
+                            entity_type="coder_review_pass",
+                            entity_id=review_pass.id,
+                            action="review_engine.queued",
+                            source=AuditSource.AUTO,
+                            result="success",
+                            details={
+                                "project_id": project_id,
+                                "risk": plan.risk.value,
+                                "mode": plan.mode.value,
+                                "review_kind": pass_plan.review_kind,
+                                "requested_runtime_id": pass_plan.requested_runtime_id,
+                            },
+                        ),
+                    )
+
+        await bus.publish(
+            event_name("review", "engine_planned"),
+            {
+                "project_id": project_id,
+                "risk": plan.risk.value,
+                "mode": plan.mode.value,
+                "ai_review_required": plan.ai_review_required,
+                "queued": len(queued),
+            },
+        )
+        return {
+            "plan": plan.model_dump(mode="json"),
+            "thread": thread.model_dump(mode="json") if thread else None,
+            "queued": queued,
+            "next_action": (
+                "Launch each returned launch_url through Synapse. The existing coder review runtime "
+                "will execute it read-only and retain normal usage/accounting semantics."
+                if queued
+                else "No AI review pass was worth queueing for this change."
+            ),
+        }
 
     async def _act(work_item_id: str, action: str, note: str | None) -> dict[str, Any]:
         with storage.transaction() as conn:
@@ -274,6 +428,8 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                 "accept": "POST /api/v1/review/proposals/{id}/approve",
                 "decline": "POST /api/v1/review/proposals/{id}/reject",
                 "reconcile": "POST /api/v1/review/proposals/reconcile",
+                "review_plan": "POST /api/v1/review/engine/plan/{project_id}",
+                "queue_smart_review": "POST /api/v1/review/engine/queue/{project_id}",
             },
         }
 
