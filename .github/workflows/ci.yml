@@ -43,6 +43,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # Fast contract check for the remote AI control plane. Keep this ahead of
+      # the full suite so MCP discovery/dispatch regressions surface quickly.
+      - name: MCP connector smoke
+        run: pytest -q daemon/tests/test_mcp_chatgpt_compat.py daemon/tests/test_mcp_connector.py
+
       # Tests must run even when release metadata is stale. A docs-sync failure
       # should still fail the job, but it must not hide code regressions by
       # skipping pytest entirely.
