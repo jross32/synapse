@@ -1,0 +1,116 @@
+name: Finalize Smart Review v0.1.210
+
+on:
+  push:
+    branches:
+      - feature/token-aware-review-engine
+    paths:
+      - .github/workflows/finalize-smart-review-v0210.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/token-aware-review-engine
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Finalize v0.1.210 metadata
+        shell: python
+        run: |
+          from pathlib import Path
+
+          OLD = '0.1.209'
+          NEW = '0.1.210'
+
+          def read(path: str) -> str:
+              return Path(path).read_text(encoding='utf-8-sig')
+
+          def write(path: str, text: str) -> None:
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              text = read(path)
+              if new in text and old not in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f'missing marker in {path}: {old[:100]!r}')
+              write(path, text.replace(old, new, 1))
+
+          replace_once(
+              'daemon/synapse_daemon/__init__.py',
+              '__version__ = "0.1.209"',
+              '__version__ = "0.1.210"',
+          )
+          replace_once(
+              'pyproject.toml',
+              'version = "0.1.209"',
+              'version = "0.1.210"',
+          )
+          replace_once(
+              'package.json',
+              '"version": "0.1.209"',
+              '"version": "0.1.210"',
+          )
+
+          lock = read('package-lock.json')
+          if '"version": "0.1.210"' not in lock:
+              lock = lock.replace('"version": "0.1.209"', '"version": "0.1.210"', 2)
+              write('package-lock.json', lock)
+
+          readme = read('README.md')
+          old_status = '> **Status:** early development (`v0.1.209`).'
+          new_status = '> **Status:** early development (`v0.1.210`).'
+          if new_status not in readme:
+              if old_status not in readme:
+                  raise SystemExit('README status marker missing')
+              readme = readme.replace(old_status, new_status, 1)
+          anchor = "It already launches projects, runs AI coding sessions, spins up AI teams (\"squads\"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release reserves"
+          smart = "It already launches projects, runs AI coding sessions, spins up AI teams (\"squads\"), connects from your phone, and gives operators a live, trustworthy picture of what their AIs are doing. The newest release adds a token-aware Smart Review Engine that runs deterministic evidence/privacy checks first, chooses the smallest justified independent reviewer set from live runtime capacity, counts repeated context across the aggregate planning reserve, and reuses the normal coder review-pass execution path. The preceding release reserves"
+          if smart not in readme:
+              if anchor not in readme:
+                  raise SystemExit('README newest-release marker missing')
+              readme = readme.replace(anchor, smart, 1)
+          write('README.md', readme)
+
+          changelog = read('CHANGELOG.md')
+          old_block = '''## [Unreleased]\n\n### Added\n- **Token-aware Smart Review Engine** -- deterministic/privacy checks run before model spend, risk selects bounded review depth, project contracts can add focused invariants, and targeted passes reuse the existing coder-review runtime across registered projects.\n\n### Fixed\n- **Smart Review review findings** -- project-scoped authorization is enforced, existing coder-thread summaries no longer break queueing because Smart Review uses its own engine-owned thread, reviewer choice follows canonical runtime capacity, common secret-bearing paths are withheld, untracked evidence fails closed, and aggregate planning budgets count repeated context across every queued pass.\n'''
+          new_block = '''## [Unreleased]\n\n## [0.1.210] -- 2026-09-04\n\n### Added\n- **Token-aware Smart Review Engine** -- deterministic/privacy checks run before model spend, risk selects bounded review depth, project contracts can add focused invariants, and targeted passes reuse the existing coder-review runtime across registered projects.\n\n### Fixed\n- **Smart Review review findings** -- project-scoped authorization is enforced, existing coder-thread summaries no longer break queueing because Smart Review uses its own engine-owned thread, reviewer choice follows canonical runtime capacity, common secret-bearing paths are withheld, untracked evidence fails closed, and aggregate planning reserves count repeated context plus an output reserve across every queued pass.\n\n### Verification\n- Smart Review focused regression suite: **18 passed**.\n- Docs-sync and Python compileall: **PASS**.\n- Node TypeScript typecheck: **PASS**.\n'''
+          if '## [0.1.210]' not in changelog:
+              if old_block not in changelog:
+                  raise SystemExit('CHANGELOG Smart Review block marker missing')
+              changelog = changelog.replace(old_block, new_block, 1)
+          write('CHANGELOG.md', changelog)
+
+          progress = read('PROGRESS.md')
+          if '`0.1.210`' not in progress.split('\n', 20):
+              progress = progress.replace('`0.1.205`', '`0.1.210`', 1)
+          note = '''\n> **Smart Review is the default token-aware review decision layer (2026-09-04):** v0.1.210\n> adds deterministic risk/evidence/privacy checks before AI spend, aggregate planning reserves\n> that count repeated per-pass context plus output reserve, canonical runtime-capacity reviewer\n> selection, project-scoped authorization, broad secret withholding, fail-closed untracked\n> evidence, dedicated engine-owned review threads, and AI-discoverable plan/queue endpoints.\n> Focused Smart Review verification: 18 passed; docs-sync, compileall, and Node typecheck pass.\n\n'''
+          marker = '`0.1.210`\n\n'
+          if note.strip() not in progress:
+              if marker not in progress:
+                  raise SystemExit('PROGRESS current-version marker missing')
+              progress = progress.replace(marker, marker + note, 1)
+          write('PROGRESS.md', progress)
+
+      - name: Verify release metadata
+        run: |
+          python scripts/docs_sync_check.py
+          python -m compileall -q daemon/synapse_daemon daemon/tests
+
+      - name: Commit v0.1.210 and remove helper workflow
+        run: |
+          git config user.name "synapse-release-finalizer[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/finalize-smart-review-v0210.yml
+          git add daemon/synapse_daemon/__init__.py pyproject.toml package.json package-lock.json README.md CHANGELOG.md PROGRESS.md
+          git commit -m "Release Smart Review Engine as v0.1.210"
+          git push origin HEAD:feature/token-aware-review-engine
