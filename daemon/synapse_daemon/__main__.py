@@ -30,6 +30,7 @@ from fastapi import FastAPI
 from . import __version__, boot_config, chatgpt_worker_chats
 from .app import boot_publish_daemon_started, boot_publish_reconciliation, build_app
 from .auth import AuthManager, ensure_local_token
+from .mcp_chatgpt_compat import ChatGPTMcpCompatMiddleware
 from .orphan_reconciler import reconcile, reconcile_project_statuses
 from .process_manager import ProcessManager
 from .runtime_paths import bundled_tools_dir
@@ -233,6 +234,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         allow_web_scraper_download_bootstrap=True,
         allow_reflex_bootstrap=True,
         allow_wan_autostart=True,
+    )
+    # ChatGPT's MCP runtime may probe standard resources before dispatching a
+    # tool.  The core Synapse MCP server is tool-first, so advertise one small
+    # readable resource in the real daemon without changing tool dispatch.
+    app.add_middleware(
+        ChatGPTMcpCompatMiddleware,
+        token=auth.local_token or "",
+        version=__version__,
     )
     app.state.bound_port = args.port
     app.state.bound_host = host
