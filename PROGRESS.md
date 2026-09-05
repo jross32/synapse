@@ -6,7 +6,9 @@
 
 ## Current version
 
-`0.1.205`
+`0.1.210`
+
+> **Game Dev Studio now has a provenance-first Reference Lab (2026-09-04):** v0.1.210 / skill v0.1.11 adds deterministic `reference-scan` support for Unity source projects/builds, Blender workspaces, generic source trees, and common ROM binaries. It inventories architecture without executing reference content, disables automatic code/asset copying, records rights/license evidence, and keeps unknown/user-owned binary references analysis-only unless separate reuse rights exist. Real dogfood scans now pair an older Pok?mon-style Unity project for genre/data patterns with Unity Technologies' current U6 multiplayer sample for modern engine patterns. Focused Game Dev Studio tests: 22/22; skill/catalog tests: 14/14; TypeScript typechecks pass; full daemon regression remains the final release gate.
 
 > **MCP control traffic stays reachable under connector saturation (2026-08-28):** v0.1.205
 > keeps the total MCP dispatch budget at 16 threads but reserves 4 for cheap local control/read

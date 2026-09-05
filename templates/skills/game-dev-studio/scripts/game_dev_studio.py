@@ -25,6 +25,7 @@ import uuid
 SOURCE = "whatif-game-dev-studio"
 EVENT_SCHEMA_VERSION = 1
 PROVENANCE_SCHEMA_VERSION = 1
+REFERENCE_SCHEMA_VERSION = 1
 
 
 def _now() -> str:
@@ -111,6 +112,35 @@ def _find_blender() -> dict[str, object]:
     return {"installed": True, "path": exe, "version": version}
 
 
+def _unity_window_titles() -> list[str]:
+    if sys.platform != "win32":
+        return []
+    script = (
+        "Get-Process Unity -ErrorAction SilentlyContinue | "
+        "ForEach-Object { $_.MainWindowTitle } | "
+        "Where-Object { $_ -and $_.Trim().Length -gt 0 }"
+    )
+    try:
+        proc = _run(["powershell.exe", "-NoProfile", "-Command", script], timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
+
+
+def _unity_interactive_blocker() -> dict[str, object] | None:
+    titles = _unity_window_titles()
+    for title in titles:
+        lowered = title.lower()
+        if "unity editor software terms" in lowered or ("unity" in lowered and "software terms" in lowered):
+            return {
+                "blocked_reason": "unity_terms_required",
+                "needs_interactive_action": True,
+                "message": "Unity Editor is waiting for the user to review and accept its software terms.",
+                "window_title": title,
+            }
+    return None
+
+
 def _disk_headroom(path: Path | None = None) -> dict[str, object]:
     target = (path or Path.home()).resolve()
     usage = shutil.disk_usage(target)
@@ -165,17 +195,49 @@ def unity_preflight(editor: str | None, min_free_gb: float) -> dict[str, object]
             "editor": selected,
             "disk": disk,
         }
+    interactive_blocker = _unity_interactive_blocker()
+    if interactive_blocker is not None:
+        return {
+            "ok": False,
+            **interactive_blocker,
+            "editor": selected,
+            "disk": disk,
+        }
 
     probe_root = Path(tempfile.mkdtemp(prefix="whatif-unity-preflight-"))
     probe_project = probe_root / "ProbeProject"
     cleanup_performed = False
     try:
-        proc = _run([
-            selected["path"],
-            "-batchmode", "-nographics", "-quit",
-            "-createProject", str(probe_project),
-            "-logFile", "-",
-        ], timeout=180)
+        try:
+            proc = _run([
+                selected["path"],
+                "-batchmode", "-nographics", "-quit",
+                "-createProject", str(probe_project),
+                "-logFile", "-",
+            ], timeout=180)
+        except subprocess.TimeoutExpired as exc:
+            blocker = _unity_interactive_blocker()
+            if blocker is not None:
+                return {
+                    "ok": False,
+                    **blocker,
+                    "editor": selected,
+                    "disk": disk,
+                    "probe_project": str(probe_project),
+                }
+            partial_stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            partial_stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            log = partial_stdout + "\n" + partial_stderr
+            return {
+                "ok": False,
+                "blocked_reason": "unity_preflight_timeout",
+                "needs_interactive_action": False,
+                "message": "Unity isolated headless preflight did not finish within 180 seconds.",
+                "editor": selected,
+                "disk": disk,
+                "probe_project": str(probe_project),
+                "log_tail": log[-3000:],
+            }
         log = (proc.stdout or "") + "\n" + (proc.stderr or "")
         license_missing = proc.returncode == 198 or "No valid Unity Editor license found" in log
         project_locked = "another Unity instance is running with this project open" in log
@@ -485,6 +547,359 @@ def detect_project(project: str) -> dict[str, object]:
     }
 
 
+
+_REFERENCE_SKIP_DIRS = {".git", ".idea", ".vs", "library", "logs", "temp", "obj", "bin", "node_modules", "builds"}
+_ROM_EXTENSIONS = {".gb", ".gbc", ".gba", ".nds", ".3ds", ".nes", ".sfc", ".smc", ".n64", ".z64", ".v64"}
+_REFERENCE_RIGHTS = {"open-source", "licensed", "user-owned", "unknown"}
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _reference_files(root: Path):
+    if root.is_file():
+        yield root
+        return
+    for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        dirnames[:] = sorted(
+            name for name in dirnames
+            if name.lower() not in _REFERENCE_SKIP_DIRS
+        )
+        base = Path(current)
+        for filename in sorted(filenames):
+            yield base / filename
+
+
+def _license_inventory(source: Path) -> list[dict[str, object]]:
+    root = source if source.is_dir() else source.parent
+    seen: set[Path] = set()
+    rows: list[dict[str, object]] = []
+    for pattern in ("LICENSE*", "LICENCE*", "COPYING*", "NOTICE*"):
+        for path in sorted(root.glob(pattern)):
+            if not path.is_file() or path in seen:
+                continue
+            seen.add(path)
+            try:
+                excerpt = path.read_text(encoding="utf-8", errors="replace")[:500]
+            except OSError:
+                excerpt = ""
+            excerpt = re.sub(r"\s+", " ", excerpt).strip()[:300]
+            rows.append({
+                "path": str(path.relative_to(root)),
+                "sha256": _sha256_file(path),
+                "excerpt": excerpt,
+            })
+    return rows
+
+
+def _reference_kind(source: Path) -> str:
+    if source.is_file():
+        suffix = source.suffix.lower()
+        if suffix == ".blend":
+            return "blender_source"
+        if suffix in _ROM_EXTENSIONS:
+            return "rom_binary"
+        return "generic_file"
+    if (source / "ProjectSettings" / "ProjectVersion.txt").exists() and (source / "Assets").exists():
+        return "unity_source"
+    build_dir = source / "Build"
+    if (source / "index.html").exists() and build_dir.exists() and any(
+        path.suffix.lower() == ".wasm" or ".wasm." in path.name.lower() for path in build_dir.iterdir() if path.is_file()
+    ):
+        return "unity_webgl_build"
+    if source.name.endswith("_Data") and ((source / "Managed").exists() or (source / "globalgamemanagers").exists()):
+        return "unity_build"
+    for child in source.iterdir():
+        if child.is_dir() and child.name.endswith("_Data") and ((child / "Managed").exists() or (child / "globalgamemanagers").exists()):
+            return "unity_build"
+    if any(path.suffix.lower() == ".blend" for path in source.iterdir() if path.is_file()):
+        return "blender_source"
+    return "generic_source"
+
+
+
+def _nested_unity_project_root(root: Path) -> Path | None:
+    if not root.is_dir():
+        return None
+    candidates: list[Path] = []
+    for child in sorted(path for path in root.iterdir() if path.is_dir() and path.name.lower() not in _REFERENCE_SKIP_DIRS):
+        if (child / "ProjectSettings" / "ProjectVersion.txt").exists() and (child / "Assets").exists():
+            candidates.append(child)
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        for child in sorted(path for path in root.iterdir() if path.is_dir() and path.name.lower() not in _REFERENCE_SKIP_DIRS):
+            for grandchild in sorted(path for path in child.iterdir() if path.is_dir() and path.name.lower() not in _REFERENCE_SKIP_DIRS):
+                if (grandchild / "ProjectSettings" / "ProjectVersion.txt").exists() and (grandchild / "Assets").exists():
+                    candidates.append(grandchild)
+    return candidates[0] if len(candidates) == 1 else None
+
+def _unity_source_inventory(root: Path) -> dict[str, object]:
+    assets = root / "Assets"
+    files = list(_reference_files(assets)) if assets.exists() else []
+    suffix_counts: dict[str, int] = {}
+    for path in files:
+        suffix = path.suffix.lower()
+        suffix_counts[suffix] = suffix_counts.get(suffix, 0) + 1
+    test_files = [path for path in files if path.suffix.lower() == ".cs" and any("test" in part.lower() for part in path.parts)]
+
+    packages: dict[str, str] = {}
+    manifest = root / "Packages" / "manifest.json"
+    if manifest.exists():
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            dependencies = payload.get("dependencies", {})
+            if isinstance(dependencies, dict):
+                packages = {str(key): str(value) for key, value in dependencies.items()}
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    signal_patterns = {
+        "scriptable_objects": ("ScriptableObject",),
+        "addressables": ("UnityEngine.AddressableAssets",),
+        "input_system": ("UnityEngine.InputSystem",),
+        "cinemachine": ("Cinemachine",),
+        "ui_toolkit": ("UnityEngine.UIElements",),
+        "dots_ecs": ("Unity.Entities",),
+        "jobs_burst": ("Unity.Jobs", "Unity.Burst"),
+        "netcode": ("Unity.Netcode",),
+        "navmesh": ("UnityEngine.AI",),
+    }
+    package_signals = {
+        "addressables": ("com.unity.addressables",),
+        "input_system": ("com.unity.inputsystem",),
+        "cinemachine": ("com.unity.cinemachine",),
+        "dots_ecs": ("com.unity.entities",),
+        "jobs_burst": ("com.unity.burst",),
+        "netcode": ("com.unity.netcode", "com.unity.netcode.gameobjects"),
+        "urp": ("com.unity.render-pipelines.universal",),
+        "hdrp": ("com.unity.render-pipelines.high-definition",),
+        "multiplayer_services": ("com.unity.services.multiplayer", "com.unity.multiplayer.tools"),
+        "vivox": ("com.unity.services.vivox",),
+        "localization": ("com.unity.localization",),
+        "timeline": ("com.unity.timeline",),
+    }
+    evidence: dict[str, list[str]] = {name: [] for name in sorted(set(signal_patterns) | set(package_signals))}
+    bytes_scanned = 0
+    for path in files:
+        if path.suffix.lower() != ".cs" or bytes_scanned >= 16 * 1024 * 1024:
+            continue
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                body = handle.read(512 * 1024)
+        except OSError:
+            continue
+        bytes_scanned += len(body.encode("utf-8", errors="ignore"))
+        relative = str(path.relative_to(root)).replace("\\", "/")
+        for name, patterns in signal_patterns.items():
+            if any(pattern in body for pattern in patterns):
+                evidence[name].append(relative)
+    for name, package_names in package_signals.items():
+        for package_name in package_names:
+            if package_name in packages:
+                evidence[name].append(f"package:{package_name}@{packages[package_name]}")
+
+    architecture_signals = [
+        {"id": name, "evidence_count": len(items), "evidence": items[:8]}
+        for name, items in evidence.items() if items
+    ]
+    study_target_labels = {
+        "scriptable_objects": "data-driven gameplay and content modeling",
+        "addressables": "runtime content loading and memory strategy",
+        "input_system": "input abstraction and device support",
+        "cinemachine": "camera architecture and feel",
+        "ui_toolkit": "runtime/editor UI composition",
+        "dots_ecs": "high-entity-count simulation architecture",
+        "jobs_burst": "CPU parallelism and deterministic performance work",
+        "netcode": "multiplayer authority and replication",
+        "navmesh": "navigation and AI locomotion",
+        "urp": "modern URP rendering, lighting, and platform scalability",
+        "hdrp": "high-fidelity HDRP rendering and lighting",
+        "multiplayer_services": "sessions, matchmaking, relay/lobby, and multiplayer service orchestration",
+        "vivox": "integrated multiplayer voice/text communication",
+        "localization": "content localization and locale-aware presentation",
+        "timeline": "sequenced cinematics and authored gameplay events",
+    }
+    return {
+        "engine_version": _unity_project_version(root),
+        "file_counts": {
+            "csharp": suffix_counts.get(".cs", 0),
+            "scenes": suffix_counts.get(".unity", 0),
+            "prefabs": suffix_counts.get(".prefab", 0),
+            "scriptable_assets": suffix_counts.get(".asset", 0),
+            "asmdefs": suffix_counts.get(".asmdef", 0),
+            "shaders": suffix_counts.get(".shader", 0) + suffix_counts.get(".shadergraph", 0),
+            "animations": suffix_counts.get(".anim", 0) + suffix_counts.get(".controller", 0),
+            "models": suffix_counts.get(".fbx", 0) + suffix_counts.get(".obj", 0),
+            "blender_files": suffix_counts.get(".blend", 0),
+            "tests": len(test_files),
+        },
+        "packages": packages,
+        "architecture_signals": architecture_signals,
+        "study_targets": [study_target_labels[item["id"]] for item in architecture_signals],
+        "source_bytes_scanned": bytes_scanned,
+    }
+
+
+def _unity_build_inventory(root: Path) -> dict[str, object]:
+    data_dirs: list[Path] = []
+    if root.name.endswith("_Data") and root.is_dir():
+        data_dirs.append(root)
+        build_root = root.parent
+    else:
+        build_root = root
+        data_dirs.extend(sorted(path for path in root.iterdir() if path.is_dir() and path.name.endswith("_Data")))
+    managed: list[str] = []
+    global_metadata = False
+    global_managers = False
+    for data_dir in data_dirs:
+        managed_dir = data_dir / "Managed"
+        if managed_dir.exists():
+            managed.extend(sorted(path.name for path in managed_dir.glob("*.dll")))
+        global_metadata = global_metadata or (data_dir / "il2cpp_data" / "Metadata" / "global-metadata.dat").exists()
+        global_managers = global_managers or (data_dir / "globalgamemanagers").exists()
+    il2cpp_binary = (build_root / "GameAssembly.dll").exists()
+    backend = "il2cpp" if il2cpp_binary or global_metadata else ("mono" if managed else "unknown")
+    executables = sorted(path.name for path in build_root.glob("*.exe"))
+    return {
+        "data_directories": [str(path) for path in data_dirs],
+        "managed_assemblies": managed,
+        "managed_assembly_count": len(managed),
+        "scripting_backend": backend,
+        "globalgamemanagers_present": global_managers,
+        "global_metadata_present": global_metadata,
+        "gameassembly_present": il2cpp_binary,
+        "executables": executables,
+        "extraction_performed": False,
+    }
+
+
+def _unity_webgl_inventory(root: Path) -> dict[str, object]:
+    build = root / "Build"
+    files = [path for path in build.iterdir() if path.is_file()] if build.exists() else []
+    return {
+        "build_files": [{"name": path.name, "bytes": path.stat().st_size} for path in sorted(files)],
+        "wasm_files": [path.name for path in files if path.suffix.lower() == ".wasm" or ".wasm." in path.name.lower()],
+        "total_build_bytes": sum(path.stat().st_size for path in files),
+        "extraction_performed": False,
+    }
+
+
+def _blender_inventory(root: Path) -> dict[str, object]:
+    blend_files = [path for path in _reference_files(root) if path.suffix.lower() == ".blend"]
+    export_files = [path for path in _reference_files(root) if path.suffix.lower() in {".fbx", ".gltf", ".glb"}]
+    texture_files = [path for path in _reference_files(root) if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".tga", ".exr", ".hdr"}]
+    base = root if root.is_dir() else root.parent
+    return {
+        "blend_files": [
+            {"path": str(path.relative_to(base)), "bytes": path.stat().st_size, "sha256": _sha256_file(path)}
+            for path in blend_files[:20]
+        ],
+        "blend_file_count": len(blend_files),
+        "export_file_count": len(export_files),
+        "texture_file_count": len(texture_files),
+        "extraction_performed": False,
+    }
+
+
+def _reference_reuse_policy(kind: str, rights_basis: str, declared_license: str | None) -> dict[str, object]:
+    if rights_basis in {"open-source", "licensed"}:
+        mode = "reuse_subject_to_license"
+        code_reuse = "verify_declared_license_terms_first"
+    elif rights_basis == "user-owned":
+        mode = "analysis_only_unless_separate_reuse_rights"
+        code_reuse = "do_not_copy_from_binary_without_separate_reuse_rights"
+    else:
+        mode = "analysis_only_pending_rights_review"
+        code_reuse = "do_not_copy_until_rights_are_verified"
+    if kind in {"rom_binary", "unity_build", "unity_webgl_build"}:
+        code_reuse = "binary_observation_only_by_default"
+    return {
+        "mode": mode,
+        "declared_license": declared_license,
+        "automatic_code_copy": False,
+        "automatic_asset_copy": False,
+        "code_reuse": code_reuse,
+        "note": "Workflow guardrail only; verify the actual license/rights before reusing code, art, audio, data, or other protected content.",
+    }
+
+
+def reference_scan(
+    source: str,
+    source_url: str | None = None,
+    rights_basis: str = "unknown",
+    license_name: str | None = None,
+    output: str | None = None,
+) -> dict[str, object]:
+    path = Path(source).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if rights_basis not in _REFERENCE_RIGHTS:
+        raise ValueError(f"rights_basis must be one of: {', '.join(sorted(_REFERENCE_RIGHTS))}")
+
+    kind = _reference_kind(path)
+    analysis_path = path
+    if kind == "generic_source":
+        nested_unity = _nested_unity_project_root(path)
+        if nested_unity is not None:
+            kind = "unity_source"
+            analysis_path = nested_unity
+    licenses = _license_inventory(path)
+    warnings: list[str] = []
+    if rights_basis == "unknown":
+        warnings.append("rights_basis_unknown:analysis_only")
+    if rights_basis in {"open-source", "licensed"} and not license_name and not licenses:
+        warnings.append("license_evidence_missing:verify_before_reuse")
+
+    inventory: dict[str, object]
+    if kind == "unity_source":
+        inventory = _unity_source_inventory(analysis_path)
+    elif kind == "unity_build":
+        inventory = _unity_build_inventory(path)
+    elif kind == "unity_webgl_build":
+        inventory = _unity_webgl_inventory(path)
+    elif kind == "blender_source":
+        inventory = _blender_inventory(path)
+    elif kind == "rom_binary":
+        inventory = {
+            "extension": path.suffix.lower(),
+            "bytes": path.stat().st_size,
+            "sha256": _sha256_file(path),
+            "extraction_performed": False,
+        }
+    elif path.is_file():
+        inventory = {"extension": path.suffix.lower(), "bytes": path.stat().st_size, "sha256": _sha256_file(path)}
+    else:
+        files = list(_reference_files(path))
+        inventory = {"file_count": len(files), "total_bytes": sum(item.stat().st_size for item in files)}
+
+    result: dict[str, object] = {
+        "schema_version": REFERENCE_SCHEMA_VERSION,
+        "observed_at": _now(),
+        "source": {
+            "path": str(path),
+            "url": source_url or None,
+            "kind": kind,
+            "rights_basis": rights_basis,
+            "analysis_root": str(analysis_path) if analysis_path != path else None,
+        },
+        "license_evidence": licenses,
+        "reuse_policy": _reference_reuse_policy(kind, rights_basis, license_name),
+        "inventory": inventory,
+        "warnings": warnings,
+    }
+    if output:
+        artifact = Path(output).expanduser().resolve()
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        result["artifact_path"] = str(artifact)
+        artifact.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return result
+
 def web_smoke(url: str) -> dict[str, object]:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
@@ -566,6 +981,21 @@ def _blocked_processes(names: list[str]) -> list[str]:
             raise RuntimeError("unable to enumerate processes")
         observed = {_normalize_process_name(line) for line in (proc.stdout or "").splitlines() if line.strip()}
     return sorted(wanted & observed)
+
+
+def _probe_host_state(names: list[str]) -> tuple[float, list[str], list[str]]:
+    errors: list[str] = []
+    try:
+        cpu = round(float(_cpu_load_percent()), 2)
+    except Exception as exc:
+        cpu = 100.0
+        errors.append(f"cpu_probe:{type(exc).__name__}:{exc}")
+    try:
+        blocked = _blocked_processes(names)
+    except Exception as exc:
+        blocked = ["process_probe_unavailable"]
+        errors.append(f"process_probe:{type(exc).__name__}:{exc}")
+    return cpu, blocked, errors
 
 
 def _file_sha256(path: Path) -> str:
@@ -675,11 +1105,16 @@ def benchmark_wait(
     started = time.monotonic()
     launch_cpu: float | None = None
     while True:
-        cpu = round(float(_cpu_load_percent()), 2)
-        blocked = _blocked_processes(blockers)
-        quiet = cpu <= max_cpu_percent and not blocked
+        cpu, blocked, probe_errors = _probe_host_state(blockers)
+        quiet = cpu <= max_cpu_percent and not blocked and not probe_errors
         stable = stable + 1 if quiet else 0
-        sample = {"observed_at": _now(), "cpu_percent": cpu, "blocked_processes": blocked, "stable_count": stable}
+        sample = {
+            "observed_at": _now(),
+            "cpu_percent": cpu,
+            "blocked_processes": blocked,
+            "stable_count": stable,
+            "probe_errors": probe_errors,
+        }
         samples.append(sample)
         if len(samples) > 100:
             samples = samples[-100:]
@@ -703,9 +1138,24 @@ def benchmark_wait(
     fingerprint = _verify_benchmark_fingerprints(fingerprint_manifest, workdir, exe)
     if not fingerprint["ok"]:
         return {"ok": False, "blocked_reason": "benchmark_fingerprint_changed_before_launch", "fingerprint": fingerprint, "samples": samples}
-    blocked_now = _blocked_processes(blockers)
-    if blocked_now:
-        return {"ok": False, "blocked_reason": "blocked_process_started_before_launch", "blocked_processes": blocked_now, "samples": samples}
+    prelaunch_cpu, blocked_now, prelaunch_probe_errors = _probe_host_state(blockers)
+    if prelaunch_probe_errors:
+        return {
+            "ok": False,
+            "blocked_reason": "host_probe_failed_before_launch",
+            "cpu_percent": prelaunch_cpu,
+            "blocked_processes": blocked_now,
+            "probe_errors": prelaunch_probe_errors,
+            "samples": samples,
+        }
+    if blocked_now or prelaunch_cpu > max_cpu_percent:
+        return {
+            "ok": False,
+            "blocked_reason": "host_changed_before_launch",
+            "cpu_percent": prelaunch_cpu,
+            "blocked_processes": blocked_now,
+            "samples": samples,
+        }
 
     if out.exists() and overwrite_output:
         out.unlink()
@@ -933,6 +1383,12 @@ def build_parser() -> argparse.ArgumentParser:
     blender.add_argument("--install", action="store_true")
     detect = sub.add_parser("detect-project")
     detect.add_argument("--project", required=True)
+    reference = sub.add_parser("reference-scan")
+    reference.add_argument("--source", required=True)
+    reference.add_argument("--source-url")
+    reference.add_argument("--rights-basis", choices=tuple(sorted(_REFERENCE_RIGHTS)), default="unknown")
+    reference.add_argument("--license", dest="license_name")
+    reference.add_argument("--output")
     smoke = sub.add_parser("web-smoke")
     smoke.add_argument("--url", required=True)
     bench = sub.add_parser("benchmark-validate")
@@ -988,6 +1444,8 @@ def main(argv: list[str] | None = None) -> int:
             result = ensure_blender(args.install)
         elif args.command == "detect-project":
             result = detect_project(args.project)
+        elif args.command == "reference-scan":
+            result = reference_scan(args.source, args.source_url, args.rights_basis, args.license_name, args.output)
         elif args.command == "web-smoke":
             result = web_smoke(args.url)
         elif args.command == "benchmark-validate":

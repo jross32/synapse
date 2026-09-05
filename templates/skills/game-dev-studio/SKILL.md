@@ -12,16 +12,17 @@ Treat game development as an end-to-end engineering + creative production workfl
 1. Inspect before editing. Detect the project engine, version, source layout, scenes/maps, assets, packages/plugins, build targets, and existing dirty Git state.
 2. Never reset or overwrite unrelated concurrent work. Work in an isolated lane and stage only files owned by the current task.
 3. Detect installed engines and tools with `python scripts/game_dev_studio.py doctor`.
-4. Before any Unity create/import/test/build job, run `python scripts/game_dev_studio.py unity-preflight`. This checks disk headroom and whether headless Unity has an active Editor license. If it reports `unity_license_required`, stop automated Unity execution, emit a warning/blocked event, and ask the user only for the interactive Hub sign-in/license step. Do not repeatedly launch Unity while auth is unresolved.
+4. Before any Unity create/import/test/build job, run `python scripts/game_dev_studio.py unity-preflight`. This checks disk headroom, whether Unity is blocked on an interactive software-terms window, and whether headless Unity can reach a usable Editor state. If it reports `unity_license_required` or `unity_terms_required`, stop automated Unity execution, emit a warning/blocked event, and ask the user only for the required interactive step. Never accept legal/software terms on the user's behalf. Do not repeatedly launch Unity while the blocker is unresolved.
 5. Treat disk space as a production constraint. When free space is tight, prefer primitive/procedural assets, minimal packages, one engine version, disposable `Library/`, `Temp/`, `Logs/`, and `Builds/` outputs, and avoid duplicate engine installs or large asset packs. Use a job-specific minimum-free-space threshold when a build is expected to be large.
 6. Blender is a supporting dependency. If Blender is missing, run `python scripts/game_dev_studio.py ensure-blender --install`. Tell the user what is being installed and why while installation occurs.
 7. Major game engines require user approval before installation. If the requested/new project needs Unity, Unreal, Godot, or another major engine and it is absent, explain which engine is needed and ask before installing it.
 8. If an existing project already declares an engine, prefer that engine instead of suggesting a migration.
 9. Use semantic operations first: edit project/source files, invoke documented build/test commands, run Blender Python/background jobs, inspect logs, and capture screenshots. Use Reflex desktop control only when a GUI-only step is genuinely required.
 10. Every material asset must have provenance: source URL/path, license, commercial-use status, attribution requirement, modifications, and project usage. Never scrape or bypass an asset store's access controls.
-11. Do not invent progress. Emit real events using the live-event schema in `references/live-studio-events.md`.
-12. A task is not finished merely because code was written. Build it, launch/playtest it when practical, inspect console/errors, collect visual proof, and record what was actually verified.
-13. Verification and release gates are fail-closed. If lint, tests, build, diff checks, secret scans, or other required gates return nonzero, stop that release sequence and fix or explicitly record the blocker before commit/push. Do not chain later release actions behind a failing command without checking its exit status.
+11. Study references before reinventing mature systems. Use `reference-scan` for public/open-source source trees, explicitly licensed references, or user-owned local builds. Treat unknown-rights sources as analysis-only. Never source pirated ROMs, bypass access controls, or automatically copy reference code/assets/data into the game.
+12. Do not invent progress. Emit real events using the live-event schema in `references/live-studio-events.md`.
+13. A task is not finished merely because code was written. Build it, launch/playtest it when practical, inspect console/errors, collect visual proof, and record what was actually verified.
+14. Verification and release gates are fail-closed. If lint, tests, build, diff checks, secret scans, or other required gates return nonzero, stop that release sequence and fix or explicitly record the blocker before commit/push. Do not chain later release actions behind a failing command without checking its exit status.
 
 ## Live Studio event stream
 
@@ -57,7 +58,7 @@ For web/HTML5/Phaser games, verify in layers instead of treating one browser too
 
 Use `python scripts/game_dev_studio.py unity-create --project <path>` for new Unity projects instead of invoking `-createProject` directly. The wrapper refuses existing targets, runs preflight first, verifies required Unity project markers, and rolls back only newly created partial output when creation fails. Never delete or overwrite a pre-existing target as cleanup.
 
-Before Unity automation, verify three separate facts: the requested Editor version exists, sufficient disk headroom exists for the job, and the Editor can acquire a valid license in batch mode. Installation alone is not proof that Unity is usable. A signed-out Unity Hub may leave the Editor installed but unable to run headlessly. Treat authentication/license activation as an explicit interactive boundary and preserve all other work while waiting for it.
+Before Unity automation, verify four separate facts: the requested Editor version exists, sufficient disk headroom exists for the job, no interactive Unity software-terms prompt is blocking startup, and the Editor can acquire a valid license in batch mode. Installation alone is not proof that Unity is usable. A signed-out Unity Hub may leave the Editor installed but unable to run headlessly. Treat software-terms acceptance and authentication/license activation as explicit interactive boundaries and preserve all other work while waiting for the user.
 
 For storage-constrained machines, keep Unity reference projects intentionally small: built-in primitives, generated materials, compact scenes, no duplicate engine versions, no large sample/asset packs, and no committed `Library`, `Temp`, `Logs`, or build output. Measure free space again before large imports or release builds.
 
@@ -66,6 +67,24 @@ For storage-constrained machines, keep Unity reference projects intentionally sm
 The AI may help the user build their own Unity project by writing/inspecting their project materials and using user-authorized workflows. Do not point unofficial bots/scrapers at Unity services or the Asset Store. Current Unity terms require AI agents/MCP/automated callers interacting with Unity Offerings to use Unity-authorized pathways. If direct agentic editor/service integration is desired, verify the current authorized mechanism before enabling it.
 
 Prefer project-file editing, ordinary documented build tooling, and user-owned content where that fits the current authorization. Keep Unity service/Asset Store acquisition separate from general web/CC0/open-licensed asset acquisition.
+
+## Reference Lab / game-study workflow
+
+Use references to improve how Game Dev Studio builds games without turning reference analysis into silent copying. Run:
+
+`python scripts/game_dev_studio.py reference-scan --source <path> [--source-url <url>] --rights-basis <open-source|licensed|user-owned|unknown> [--license <declared-license>] [--output <study.json>]`
+
+The scanner is intentionally analysis-first:
+
+- **Unity source**: detect direct or nested projects, engine version, package manifest, scenes/prefabs/scripts/tests, and architecture signals such as ScriptableObjects, Addressables, Input System, Cinemachine, UI Toolkit, DOTS/Burst, Netcode, URP/HDRP, Multiplayer Services, Vivox, Localization, Timeline, and NavMesh.
+- **Built Unity games**: identify observable build structure, scripting backend clues, managed assembly names, and executable/data layout without automatically decompiling or extracting content.
+- **Blender references**: inventory `.blend` source, exported models, and texture files. Do not execute embedded/untrusted scripts automatically.
+- **ROM binaries**: default to fingerprint/size/type evidence only. Analyze a ROM only when it is locally provided or otherwise legally obtained by the user; do not locate or download unauthorized ROM copies.
+- **Rights/provenance**: hash root license/notice files where present, retain source URL/path and rights basis, and emit a reuse policy. `unknown` rights always fail safe to analysis-only.
+
+Reference findings should become **transferable design/engineering hypotheses**: camera behavior, content/data modeling, input architecture, enemy/creature systems, progression structure, rendering strategy, networking, asset-production stages, test patterns, and performance constraints. Validate those hypotheses in the target game's own code and benchmarks. Do not copy distinctive protected characters, names, maps, art, audio, dialogue, proprietary datasets, or binary-extracted assets. Even for open-source code, verify the actual license and attribution/redistribution obligations before reuse.
+
+For a genre study (for example, a creature-collection RPG), combine at least one genre-relevant reference with at least one modern engine/reference project. This keeps genre lessons separate from obsolete engine practices. Prefer original game identity and mechanics inspired by generalized patterns rather than a branded clone.
 
 ## Blender automation
 
@@ -141,4 +160,4 @@ For Unity runtime evidence, follow `references/unity-benchmark-contract.md`. Val
 
 For rendered release evidence, verify engine-native screenshot bytes and hash when available, record benchmark presentation settings, and preserve rejected benchmark runs as compact provenance. Diagnose isolated max-frame failures before changing a threshold.
 
-When host contention can invalidate rendered performance evidence, use enchmark-wait instead of manually retrying the player. Require a sustained quiet window (for example --max-cpu-percent 65 --stable-samples 4), block known conflicting engine/player processes, and pass a fingerprint manifest when one exists so source or executable drift aborts the launch. Keep the performance acceptance thresholds unchanged; the idle gate exists to prevent false negatives and cherry-picking, not to make a slow build pass. After the run, validate the resulting artifact separately with enchmark-validate.
+When host contention can invalidate rendered performance evidence, use `benchmark-wait` instead of manually retrying the player. Require a sustained quiet window (for example --max-cpu-percent 65 --stable-samples 4), block known conflicting engine/player processes, and pass a fingerprint manifest when one exists so source or executable drift aborts the launch. Keep the performance acceptance thresholds unchanged; the idle gate exists to prevent false negatives and cherry-picking, not to make a slow build pass. After the run, validate the resulting artifact separately with `benchmark-validate`.

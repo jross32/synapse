@@ -10,6 +10,28 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.210] -- 2026-09-04
+
+### Added
+- **Game Dev Studio Reference Lab (skill v0.1.11)** -- `reference-scan` studies local Unity source projects, compiled Unity builds, Blender workspaces, generic source trees, and common ROM formats without executing or extracting untrusted content. Reports include source/rights metadata, license evidence, deterministic fingerprints/inventory, modern Unity architecture signals, and study targets that future game-building agents can turn into hypotheses.
+- **Nested Unity reference discovery** -- repository-level references that contain one Unity project below the root are resolved to that project automatically, so real-world repos can be studied without hand-picking the inner folder.
+
+### Changed
+- **Reference reuse is provenance-first and fail-safe** -- scans distinguish `open-source`, `licensed`, `user-owned`, and `unknown` rights bases; automatic code/asset copying is always disabled; compiled games/ROMs default to binary observation only; unknown rights remain analysis-only. Source-available licenses such as Unity Companion License are recorded as `licensed`, not assumed open-source.
+- **Game Dev Studio skill guidance now pairs genre references with modern-engine references** -- transferable mechanics/data patterns can be learned from older or genre-specific projects while current Unity samples inform rendering, input, multiplayer, UI, camera, and tooling choices.
+
+### Fixed
+- **Reference Lab handles package-only Unity architecture signals** -- packages such as URP and Multiplayer Services no longer trigger a missing-evidence-map crash when no matching C# namespace is present.
+- **Game Dev Studio verification still respects Unity's interactive boundary** -- the existing v0.1.10 terms-window detection, headless timeout classification, and fail-closed benchmark host probes remain covered after the Reference Lab expansion.
+
+### Verification
+- Game Dev Studio focused suite: **22 passed**.
+- Immutable skill-pack + AI-bundle catalog suites: **14 passed**.
+- Real reference proof: Pok?mon Unity repository resolved its nested Unity 2018.4.36f1 project and exposed data/Cinemachine signals; Unity Technologies' U6 First Person Multiplayer sample resolved Unity 6000.3.5f2 and exposed Netcode, Multiplayer Services, Input System, UI Toolkit, Cinemachine, URP, Vivox, Timeline, and ScriptableObject signals.
+- TypeScript renderer + Electron typechecks: **pass**. Full daemon regression is the final release gate.
+- Post-work AI Council limitation: two fresh Claude reviewer work items launched but became stale before producing a handoff; this was recorded separately in the Synapse backlog as `89dd26cbc48f` and is not counted as successful review evidence.
+
+
 ## [0.1.209] -- 2026-08-30
 
 ### Fixed

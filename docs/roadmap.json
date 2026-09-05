@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-08-27",
+  "generated_at": "2026-09-04",
   "items": [
     {
       "id": "canonical-ai-execution-accounting",
@@ -217,6 +217,14 @@
       "phase": "AI-coding power",
       "adr": "ADR-0022",
       "summary": "A dedicated Web Scraper page for reference capture, provenance/adaptation labeling, component generation, and reference -> generated -> adopted comparison with save-back into project files."
+    },
+    {
+      "id": "game-dev-reference-lab",
+      "title": "Game Dev Studio Reference Lab",
+      "status": "shipped",
+      "phase": "AI-coding power",
+      "adr": null,
+      "summary": "Study authorized/local Unity projects and builds, Blender workspaces, and ROM/game binaries as provenance-tracked references; extract transferable architecture signals without executing or automatically copying protected reference content, then pair genre references with modern-engine references before implementing original game systems."
     },
     {
       "id": "token-efficient-review-loop",
