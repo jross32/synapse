@@ -11,7 +11,7 @@ import asyncio
 import subprocess
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from . import coder_workspace
 from . import project_records
@@ -76,6 +76,21 @@ def _review_pass_summary(plan: review_engine.ReviewPlan, pass_plan: review_engin
     )
 
 
+def _enforce_review_project_scope(request: Request, project_id: str) -> None:
+    """Prevent a project-scoped worker from reviewing another project."""
+
+    subject = request.state.auth_subject
+    if subject.kind == "worker" and subject.project_id != project_id:
+        from .errors import SynapseError
+
+        raise SynapseError(
+            code="auth.worker_scope_denied",
+            message="A worker can only review its assigned project.",
+            status=403,
+            details={"authority": subject.authority or "observe"},
+        )
+
+
 def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
     router = APIRouter(prefix="/review", tags=["review"])
 
@@ -86,17 +101,20 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
     @router.post("/engine/plan/{project_id}", response_model=review_engine.ReviewPlan)
     async def plan_project_review(
         project_id: str,
+        http_request: Request,
         payload: review_engine.ReviewEngineRequest | None = None,
     ) -> review_engine.ReviewPlan:
         """Plan the cheapest useful review for a project change without spending AI tokens."""
 
+        _enforce_review_project_scope(http_request, project_id)
         project = projects_module.get(storage.conn, project_id)
-        request = payload or review_engine.ReviewEngineRequest()
-        return await asyncio.to_thread(review_engine.plan_project_review, project, request)
+        review_request = payload or review_engine.ReviewEngineRequest()
+        return await asyncio.to_thread(review_engine.plan_project_review, project, review_request)
 
     @router.post("/engine/queue/{project_id}", response_model=None, status_code=201)
     async def queue_project_review(
         project_id: str,
+        http_request: Request,
         payload: review_engine.ReviewEngineRequest | None = None,
     ) -> dict[str, Any]:
         """Create targeted coder review passes after deterministic/token-budget planning.
@@ -107,9 +125,10 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
         sandboxing, review verdicts, and quality gates.
         """
 
+        _enforce_review_project_scope(http_request, project_id)
         project = projects_module.get(storage.conn, project_id)
-        request = payload or review_engine.ReviewEngineRequest()
-        plan = await asyncio.to_thread(review_engine.plan_project_review, project, request)
+        review_request = payload or review_engine.ReviewEngineRequest()
+        plan = await asyncio.to_thread(review_engine.plan_project_review, project, review_request)
         queued: list[dict[str, Any]] = []
         thread = None
 
@@ -121,7 +140,7 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                     project_id,
                     coder_workspace.CoderThreadCreate(
                         title=f"Smart review · {project.name}",
-                        active_runtime_id=request.primary_runtime or "codex",
+                        active_runtime_id=review_request.primary_runtime or "codex",
                         thread_kind="review",
                         metadata={"created_by": "review-engine", "review_engine_version": "v1"},
                     ),
@@ -143,7 +162,7 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                                 "review_mode": plan.mode.value,
                                 "token_budget": plan.policy.token_budget,
                                 "estimated_context_tokens": plan.estimated_context_tokens,
-                                "source": request.source,
+                                "source": review_request.source,
                             },
                         ),
                     )

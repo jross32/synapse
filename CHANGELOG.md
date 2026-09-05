@@ -10,6 +10,9 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+### Added
+- **Token-aware Smart Review Engine** -- deterministic/privacy checks run before model spend, risk selects bounded review depth, project contracts can add focused invariants, and targeted passes reuse the existing coder-review runtime across registered projects.
+
 ## [0.1.209] -- 2026-08-30
 
 ### Fixed

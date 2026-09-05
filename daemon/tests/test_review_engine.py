@@ -178,3 +178,44 @@ def test_diff_context_is_truncated_to_policy_cap(tmp_path) -> None:
     assert len(bounded) < len(diff)
     assert "truncated by Synapse review budget" in bounded
     assert plan.estimated_context_tokens <= plan.policy.token_budget
+
+
+
+def test_release_title_triggers_release_mode_without_release_files(tmp_path) -> None:
+    project = _project(tmp_path)
+    plan = review_engine.plan_project_review(
+        project,
+        review_engine.ReviewEngineRequest(
+            change_title="v1.61: make timeline semantics explicit",
+            changed_files=["src/feature.py", "tests/test_feature.py"],
+            diff_text="+TIMELINE_SEMANTICS = 're-evaluation'\n",
+        ),
+    )
+    assert plan.mode == review_engine.ReviewMode.RELEASE
+    assert any(item.review_kind == "release" for item in plan.review_passes)
+
+
+def test_changed_file_without_diff_stays_in_free_evidence_lane(tmp_path) -> None:
+    project = _project(tmp_path)
+    plan = review_engine.plan_project_review(
+        project,
+        review_engine.ReviewEngineRequest(changed_files=["src/new_file.py"]),
+    )
+    assert plan.change.diff_complete is False
+    assert plan.ai_review_required is False
+    assert any(item.id == "diff-evidence-incomplete" for item in plan.deterministic_findings)
+
+
+def test_secret_like_assignment_blocks_ai_even_in_normal_source_file(tmp_path) -> None:
+    project = _project(tmp_path)
+    plan = review_engine.plan_project_review(
+        project,
+        review_engine.ReviewEngineRequest(
+            changed_files=["src/config.py"],
+            diff_text="+API_KEY=sk_live_1234567890abcdef\n",
+            force_ai=True,
+        ),
+    )
+    assert plan.ai_review_required is False
+    assert any(item.id == "secret-like-value-in-diff" for item in plan.deterministic_findings)
+    assert "sk_live_1234567890abcdef" not in review_engine.bounded_diff_for_prompt(plan)

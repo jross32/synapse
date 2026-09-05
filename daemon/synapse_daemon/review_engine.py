@@ -71,6 +71,7 @@ class ReviewEngineRequest(BaseModel):
     diff_text: str | None = Field(default=None, max_length=500_000)
     changed_files: list[str] = Field(default_factory=list, max_length=500)
     primary_runtime: str | None = None
+    change_title: str | None = Field(default=None, max_length=300)
     force_ai: bool = False
 
 
@@ -81,6 +82,9 @@ class ChangeSnapshot(BaseModel):
     estimated_diff_tokens: int = 0
     docs_only: bool = False
     source: str = "local"
+    change_title: str | None = None
+    untracked_files: list[str] = Field(default_factory=list)
+    diff_complete: bool = True
     git_error: str | None = None
 
 
@@ -142,6 +146,21 @@ _TEST_MARKERS = ("test_", "_test.", "/tests/", "\\tests\\", ".spec.", ".test.")
 _SOURCE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".cs")
 _RELEASE_FILES = {"changelog.md", "readme.md", "pyproject.toml", "package.json"}
 _SECRET_FILENAMES = {".env", ".env.local", ".env.production", "credentials.json", "secrets.json"}
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?im)^[+ ]?\s*[A-Z0-9_.-]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL)[A-Z0-9_.-]*\s*[:=]\s*[\"']?([^\s\"']{8,})"
+)
+_BEARER_VALUE_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}")
+_SAFE_SECRET_HINTS = ("example", "placeholder", "redacted", "dummy", "fake", "test-value", "changeme")
+
+
+def _diff_has_secret_like_value(diff_text: str) -> bool:
+    if _BEARER_VALUE_RE.search(diff_text):
+        return True
+    for match in _SECRET_ASSIGNMENT_RE.finditer(diff_text):
+        value = match.group(1).lower()
+        if not any(hint in value for hint in _SAFE_SECRET_HINTS):
+            return True
+    return False
 
 
 def _normalise_path(path: str) -> str:
@@ -222,6 +241,8 @@ def collect_change_snapshot(
             estimated_diff_tokens=math.ceil(len(diff_text) / 4),
             docs_only=bool(changed_files) and all(_is_docs(path) for path in changed_files),
             source=request.source,
+            change_title=request.change_title,
+            diff_complete=bool(diff_text.strip()) or not changed_files,
         )
 
     project_path = Path(project.path)
@@ -230,6 +251,10 @@ def collect_change_snapshot(
 
     status_text, status_error = _git(project.path, ["status", "--porcelain=v1", "--untracked-files=all"])
     changed_files = _status_paths(status_text)
+    untracked_files = _bounded_unique(
+        [line[3:].strip() for line in status_text.splitlines() if line.startswith("?? ")],
+        limit=500,
+    )
     diff_text, diff_error = _git(
         project.path,
         ["diff", "--no-ext-diff", "--unified=3", "HEAD", "--", "."],
@@ -242,6 +267,9 @@ def collect_change_snapshot(
         estimated_diff_tokens=math.ceil(len(diff_text) / 4),
         docs_only=bool(changed_files) and all(_is_docs(path) for path in changed_files),
         source=request.source,
+        change_title=request.change_title,
+        untracked_files=untracked_files,
+        diff_complete=not untracked_files,
         git_error=git_error,
     )
 
@@ -268,8 +296,13 @@ def classify_risk(changed_files: list[str], diff_text: str = "") -> ReviewRisk:
 
 def _auto_mode(change: ChangeSnapshot, risk: ReviewRisk) -> ReviewMode:
     normalized_names = {_normalise_path(path).rsplit("/", 1)[-1] for path in change.changed_files}
-    release_signal = bool(normalized_names & _RELEASE_FILES) and bool(
-        re.search(r"(?i)\b(version|release|changelog)\b", change.diff_text[:100_000])
+    release_title = bool(
+        change.change_title
+        and re.search(r"(?i)(?:\brelease\b|\bv?\d+\.\d+(?:\.\d+)?\b)", change.change_title)
+    )
+    release_signal = release_title or (
+        bool(normalized_names & _RELEASE_FILES)
+        and bool(re.search(r"(?i)\b(version|release|changelog)\b", change.diff_text[:100_000]))
     )
     if release_signal:
         return ReviewMode.RELEASE
@@ -347,6 +380,30 @@ def deterministic_findings(
                 title="Secret-bearing file is part of the change",
                 detail="Do not send secret-bearing files to an AI reviewer or commit them. Review: "
                 + ", ".join(secret_files[:8]),
+            )
+        )
+
+    if not change.diff_complete and change.changed_files:
+        findings.append(
+            ReviewFinding(
+                id="diff-evidence-incomplete",
+                severity="warning",
+                title="Changed-file evidence is incomplete",
+                detail=(
+                    "The exact diff is missing for one or more changed files"
+                    + (f" (including untracked: {', '.join(change.untracked_files[:8])})" if change.untracked_files else "")
+                    + ". Collect an exact bounded diff before spending AI review tokens."
+                ),
+            )
+        )
+
+    if _diff_has_secret_like_value(change.diff_text):
+        findings.append(
+            ReviewFinding(
+                id="secret-like-value-in-diff",
+                severity="blocking",
+                title="Secret-like value detected in the diff",
+                detail="Synapse withheld the diff from AI review. Remove/redact the value or use a clearly fake test placeholder before retrying.",
             )
         )
 
@@ -503,9 +560,11 @@ def plan_project_review(
     remaining = max(policy.token_budget - estimated_context_tokens, 0)
     has_material_change = bool(change.changed_files or change.diff_text.strip())
     has_blocker = any(item.severity == "blocking" for item in findings)
+    evidence_complete = change.diff_complete
     ai_required = (
         has_material_change
         and not has_blocker
+        and evidence_complete
         and policy.max_ai_passes > 0
         and (request.force_ai or not change.docs_only)
         and remaining >= 1_000
@@ -520,6 +579,8 @@ def plan_project_review(
         reason = "Deterministic blocking finding must be resolved before any diff is sent to an AI reviewer."
     elif not has_material_change:
         reason = "No material local change was found, so spending review tokens would add no value."
+    elif not evidence_complete:
+        reason = "Exact diff evidence is incomplete, so Synapse will not spend review tokens or claim the change was reviewed yet."
     elif change.docs_only and not request.force_ai:
         reason = "Docs-only change passed through the token-free deterministic lane; AI review was skipped."
     elif remaining < 1_000:
@@ -546,7 +607,7 @@ def plan_project_review(
 def bounded_diff_for_prompt(plan: ReviewPlan) -> str:
     """Return only the budgeted diff slice; never include a known secret-bearing change."""
 
-    if any(item.id == "secret-file-changed" for item in plan.deterministic_findings):
+    if any(item.id in {"secret-file-changed", "secret-like-value-in-diff"} for item in plan.deterministic_findings):
         return "[diff withheld: deterministic secret-file guard triggered]"
     text = plan.change.diff_text
     cap = plan.policy.max_diff_chars
