@@ -224,3 +224,15 @@ its normal automation credential. Public writes require an expiring, revocable c
 bound to allowed projects, authority, actions, duration, concurrency, and spend. MCP write
 tools must call the same scoped service rather than invoking storage/domain functions through
 a parallel global write switch. Full authority is explicit and never inherited by schedules.
+
+
+### Smart Review privacy boundary
+
+Smart Review never sends a diff to an AI reviewer when deterministic inspection sees a known
+secret-bearing path (including `.env*`, `.npmrc`, key/certificate credential files, and common
+credential/secret config names) or a secret-like assignment/Bearer value. Local changes with
+untracked files also remain in the token-free evidence lane until their exact bounded content is
+available. Review token budgets are **aggregate planning reserves**: repeated prompt context is
+counted once per queued pass and each pass carries an explicit output reserve. Provider-reported
+actual usage remains authoritative in Synapse's normal execution/accounting ledger; the planning
+reserve is not represented as a provider-side hard output cap.

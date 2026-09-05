@@ -19,6 +19,9 @@ Every entry below must include: the date, the new version added, what changed, a
 
 | Date | Endpoint or event | Kind | Notes |
 |---|---|---|---|
+| 2026-09-04 | `POST /api/v1/review/engine/plan/{project_id}` | additive | Token-free Smart Review planner: bounded diff evidence, deterministic/privacy gates, risk classification, token budget, and targeted reviewer plan. |
+| 2026-09-04 | `POST /api/v1/review/engine/queue/{project_id}` | additive | Queues planner-selected existing coder review passes; no second AI execution path. |
+| 2026-09-04 | `v1.review.engine_planned` | additive | Safe project/risk/mode/AI-required/queued summary event; no diff content. |
 | 2026-08-28 | `POST /mcp/{token}` dispatch | corrective | The 16-thread MCP budget is partitioned into 4 reserved control/read workers and 12 blocking-work workers so long shell/network/downstream-MCP calls cannot consume all recovery/context capacity. |
 | 2026-08-28 | MCP response headers | additive | Adds `X-Synapse-MCP-Lane: control|blocking|mixed`. Saturation responses identify which lane is saturated while retaining retryable HTTP 503, JSON-RPC `-32002`, and `Retry-After: 1`. |
 
