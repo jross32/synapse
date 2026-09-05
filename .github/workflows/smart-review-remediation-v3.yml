@@ -1,0 +1,66 @@
+name: Smart Review remediation v3
+
+on:
+  push:
+    branches:
+      - feature/token-aware-review-engine
+    paths:
+      - .github/workflows/smart-review-remediation-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/token-aware-review-engine
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fix replacement escaping and apply remediation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/smart_review_remediation_v2.py')
+          text = path.read_text(encoding='utf-8-sig')
+          replacements = {
+              'runtime_pattern.subn(runtime_replacement, text, count=1)': 'runtime_pattern.subn(lambda _match: runtime_replacement, text, count=1)',
+              'specialist_pattern.subn(specialist_replacement, text, count=1)': 'specialist_pattern.subn(lambda _match: specialist_replacement, text, count=1)',
+              'plan_pattern.subn(plan_replacement, text, count=1)': 'plan_pattern.subn(lambda _match: plan_replacement, text, count=1)',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing remediation helper marker: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          python scripts/smart_review_remediation_v2.py
+
+      - name: Install daemon
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Verify focused Smart Review gates
+        run: |
+          python scripts/docs_sync_check.py
+          python -m compileall -q daemon/synapse_daemon daemon/tests
+          pytest -q daemon/tests/test_review_engine.py daemon/tests/test_smart_review_routes.py
+
+      - name: Commit remediation
+        run: |
+          git config user.name "synapse-review-remediation[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git add CHANGELOG.md docs/security.md daemon/synapse_daemon/review_engine.py daemon/synapse_daemon/routes_review.py daemon/tests/test_review_engine.py daemon/tests/test_smart_review_routes.py
+          if git diff --cached --quiet; then
+            echo "No remediation changes required."
+            exit 0
+          fi
+          git commit -m "Address Smart Review budget, capacity, and safety findings"
+          git push origin HEAD:feature/token-aware-review-engine
