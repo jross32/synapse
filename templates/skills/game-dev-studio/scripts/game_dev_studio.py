@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 import urllib.parse
@@ -1057,6 +1058,53 @@ def _run_benchmark_process(command: list[str], cwd: Path, timeout_seconds: float
     return subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, timeout=timeout_seconds, check=False)
 
 
+def _runtime_host_sampler(stop: threading.Event, samples: list[dict[str, object]], interval_seconds: float) -> None:
+    while not stop.is_set():
+        errors: list[str] = []
+        cpu: float | None = None
+        try:
+            cpu = round(float(_cpu_load_percent()), 2)
+        except Exception as exc:
+            errors.append(f"cpu_probe:{type(exc).__name__}:{exc}")
+        samples.append({"observed_at": _now(), "cpu_percent": cpu, "probe_errors": errors})
+        if len(samples) > 500:
+            del samples[:-500]
+        if stop.wait(interval_seconds):
+            break
+
+
+def _runtime_host_summary(
+    samples: list[dict[str, object]], threshold_cpu_percent: float | None, enabled: bool,
+) -> dict[str, object]:
+    cpu_values = [float(item["cpu_percent"]) for item in samples if item.get("cpu_percent") is not None]
+    probe_errors = [
+        str(error)
+        for item in samples
+        for error in (item.get("probe_errors") or [])
+    ]
+    average = round(sum(cpu_values) / len(cpu_values), 2) if cpu_values else None
+    maximum = round(max(cpu_values), 2) if cpu_values else None
+    reasons: list[str] = []
+    if threshold_cpu_percent is not None:
+        if not enabled or not cpu_values:
+            reasons.append("runtime_host_unobserved")
+        if probe_errors:
+            reasons.append("runtime_host_probe_failed")
+        if maximum is not None and maximum > threshold_cpu_percent:
+            reasons.append("runtime_host_cpu_exceeded")
+    return {
+        "enabled": enabled,
+        "sample_count": len(samples),
+        "cpu_average_percent": average,
+        "cpu_max_percent": maximum,
+        "threshold_cpu_percent": threshold_cpu_percent,
+        "contaminated": bool(reasons),
+        "contamination_reasons": reasons,
+        "probe_errors": probe_errors,
+        "samples": samples,
+    }
+
+
 def benchmark_wait(
     executable: str,
     output: str,
@@ -1068,6 +1116,8 @@ def benchmark_wait(
     sample_interval_seconds: float = 4.0,
     wait_timeout_seconds: float = 21600.0,
     process_timeout_seconds: float = 300.0,
+    runtime_sample_interval_seconds: float = 2.0,
+    runtime_max_cpu_percent: float | None = None,
     block_processes: list[str] | None = None,
     fingerprint_manifest: str | None = None,
     output_flag: str | None = None,
@@ -1094,6 +1144,12 @@ def benchmark_wait(
         raise ValueError("sample_interval_seconds must be >= 0")
     if wait_timeout_seconds < 0 or process_timeout_seconds <= 0:
         raise ValueError("timeouts must be non-negative, with process timeout > 0")
+    if runtime_sample_interval_seconds < 0:
+        raise ValueError("runtime_sample_interval_seconds must be >= 0")
+    if runtime_max_cpu_percent is not None and (runtime_max_cpu_percent <= 0 or runtime_max_cpu_percent > 100):
+        raise ValueError("runtime_max_cpu_percent must be > 0 and <= 100")
+    if runtime_max_cpu_percent is not None and runtime_sample_interval_seconds == 0:
+        raise ValueError("runtime monitoring cannot be disabled when runtime_max_cpu_percent is set")
 
     fingerprint = _verify_benchmark_fingerprints(fingerprint_manifest, workdir, exe)
     if not fingerprint["ok"]:
@@ -1167,9 +1223,25 @@ def benchmark_wait(
     if output_flag:
         command.extend([output_flag, str(out)])
     launched_at = _now()
+    runtime_samples: list[dict[str, object]] = []
+    runtime_monitor_enabled = runtime_sample_interval_seconds > 0
+    runtime_stop = threading.Event()
+    runtime_thread: threading.Thread | None = None
+    if runtime_monitor_enabled:
+        runtime_thread = threading.Thread(
+            target=_runtime_host_sampler,
+            args=(runtime_stop, runtime_samples, runtime_sample_interval_seconds),
+            name="gds-benchmark-host-monitor",
+            daemon=True,
+        )
+        runtime_thread.start()
     try:
         proc = _run_benchmark_process(command, workdir, process_timeout_seconds)
     except subprocess.TimeoutExpired as exc:
+        runtime_stop.set()
+        if runtime_thread is not None:
+            runtime_thread.join(timeout=12.0)
+        runtime_host = _runtime_host_summary(runtime_samples, runtime_max_cpu_percent, runtime_monitor_enabled)
         return {
             "ok": False,
             "blocked_reason": "benchmark_process_timeout",
@@ -1178,14 +1250,24 @@ def benchmark_wait(
             "launch_cpu_percent": launch_cpu,
             "timeout_seconds": process_timeout_seconds,
             "samples": samples,
+            "runtime_host": runtime_host,
             "fingerprint": fingerprint,
             "stdout_tail": (exc.stdout or "")[-2000:] if isinstance(exc.stdout, str) else "",
             "stderr_tail": (exc.stderr or "")[-2000:] if isinstance(exc.stderr, str) else "",
         }
+    finally:
+        runtime_stop.set()
+        if runtime_thread is not None and runtime_thread.is_alive():
+            runtime_thread.join(timeout=12.0)
+    runtime_host = _runtime_host_summary(runtime_samples, runtime_max_cpu_percent, runtime_monitor_enabled)
     artifact_exists = out.exists()
+    base_ok = proc.returncode == 0 and artifact_exists
+    blocked_reason = None if base_ok else ("benchmark_output_missing" if not artifact_exists else "benchmark_process_failed")
+    if base_ok and runtime_host["contaminated"]:
+        blocked_reason = str(runtime_host["contamination_reasons"][0])
     return {
-        "ok": proc.returncode == 0 and artifact_exists,
-        "blocked_reason": None if proc.returncode == 0 and artifact_exists else ("benchmark_output_missing" if not artifact_exists else "benchmark_process_failed"),
+        "ok": base_ok and not runtime_host["contaminated"],
+        "blocked_reason": blocked_reason,
         "command": command,
         "cwd": str(workdir),
         "output": str(out),
@@ -1197,6 +1279,7 @@ def benchmark_wait(
         "threshold_cpu_percent": max_cpu_percent,
         "stable_samples_required": stable_samples,
         "samples": samples,
+        "runtime_host": runtime_host,
         "fingerprint": fingerprint,
         "stdout_tail": (proc.stdout or "")[-2000:],
         "stderr_tail": (proc.stderr or "")[-2000:],
@@ -1405,6 +1488,8 @@ def build_parser() -> argparse.ArgumentParser:
     bench_wait.add_argument("--sample-interval-seconds", type=float, default=4.0)
     bench_wait.add_argument("--wait-timeout-seconds", type=float, default=21600.0)
     bench_wait.add_argument("--process-timeout-seconds", type=float, default=300.0)
+    bench_wait.add_argument("--runtime-sample-interval-seconds", type=float, default=2.0)
+    bench_wait.add_argument("--runtime-max-cpu-percent", type=float)
     bench_wait.add_argument("--block-process", action="append", default=[])
     bench_wait.add_argument("--fingerprint-manifest")
     bench_wait.add_argument("--output-flag")
@@ -1455,7 +1540,10 @@ def main(argv: list[str] | None = None) -> int:
                 args.executable, args.output, args.command_args, cwd=args.cwd,
                 max_cpu_percent=args.max_cpu_percent, stable_samples=args.stable_samples,
                 sample_interval_seconds=args.sample_interval_seconds, wait_timeout_seconds=args.wait_timeout_seconds,
-                process_timeout_seconds=args.process_timeout_seconds, block_processes=args.block_process,
+                process_timeout_seconds=args.process_timeout_seconds,
+                runtime_sample_interval_seconds=args.runtime_sample_interval_seconds,
+                runtime_max_cpu_percent=args.runtime_max_cpu_percent,
+                block_processes=args.block_process,
                 fingerprint_manifest=args.fingerprint_manifest, output_flag=args.output_flag,
                 overwrite_output=args.overwrite_output,
             )

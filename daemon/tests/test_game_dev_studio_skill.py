@@ -219,6 +219,7 @@ def test_benchmark_wait_requires_stable_host_and_verifies_fingerprint(tmp_path, 
         str(exe), str(output), ["--", "--demo"], cwd=str(tmp_path),
         max_cpu_percent=65.0, stable_samples=2, sample_interval_seconds=0,
         wait_timeout_seconds=30, process_timeout_seconds=10,
+        runtime_sample_interval_seconds=0,
         block_processes=["Unity.exe"], fingerprint_manifest=str(manifest),
         output_flag="--output",
     )
@@ -229,7 +230,100 @@ def test_benchmark_wait_requires_stable_host_and_verifies_fingerprint(tmp_path, 
     assert result["fingerprint"]["ok"] is True
     assert result["fingerprint"]["source_files_checked"] == 1
     assert result["fingerprint"]["executable_checked"] is True
+    assert result["runtime_host"]["enabled"] is False
+    assert result["runtime_host"]["contaminated"] is False
     assert launched["command"] == [str(exe.resolve()), "--demo", "--output", str(output.resolve())]
+
+
+def test_benchmark_wait_records_runtime_host_load_without_failing_by_default(tmp_path, monkeypatch):
+    mod = _module()
+    import subprocess
+
+    exe = tmp_path / "game.exe"
+    exe.write_bytes(b"binary")
+    output = tmp_path / "result.json"
+    probe_calls = iter([(30.0, [], []), (32.0, [], [])])
+    monkeypatch.setattr(mod, "_probe_host_state", lambda names: next(probe_calls))
+
+    def fake_sampler(stop, samples, interval_seconds):
+        samples.extend([
+            {"observed_at": "t1", "cpu_percent": 72.0, "probe_errors": []},
+            {"observed_at": "t2", "cpu_percent": 88.0, "probe_errors": []},
+        ])
+
+    monkeypatch.setattr(mod, "_runtime_host_sampler", fake_sampler)
+    def fake_run(command, cwd, timeout_seconds):
+        output.write_text("{}", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+    monkeypatch.setattr(mod, "_run_benchmark_process", fake_run)
+
+    result = mod.benchmark_wait(
+        str(exe), str(output), cwd=str(tmp_path), max_cpu_percent=65.0,
+        stable_samples=1, sample_interval_seconds=0, wait_timeout_seconds=30,
+        runtime_sample_interval_seconds=2.0,
+    )
+
+    assert result["ok"] is True
+    assert result["blocked_reason"] is None
+    assert result["runtime_host"]["enabled"] is True
+    assert result["runtime_host"]["sample_count"] == 2
+    assert result["runtime_host"]["cpu_average_percent"] == 80.0
+    assert result["runtime_host"]["cpu_max_percent"] == 88.0
+    assert result["runtime_host"]["threshold_cpu_percent"] is None
+    assert result["runtime_host"]["contaminated"] is False
+
+
+def test_benchmark_wait_can_fail_closed_on_runtime_cpu_contamination(tmp_path, monkeypatch):
+    mod = _module()
+    import subprocess
+
+    exe = tmp_path / "game.exe"
+    exe.write_bytes(b"binary")
+    output = tmp_path / "result.json"
+    probe_calls = iter([(30.0, [], []), (31.0, [], [])])
+    monkeypatch.setattr(mod, "_probe_host_state", lambda names: next(probe_calls))
+
+    def fake_sampler(stop, samples, interval_seconds):
+        samples.extend([
+            {"observed_at": "t1", "cpu_percent": 58.0, "probe_errors": []},
+            {"observed_at": "t2", "cpu_percent": 91.0, "probe_errors": []},
+        ])
+
+    monkeypatch.setattr(mod, "_runtime_host_sampler", fake_sampler)
+    def fake_run(command, cwd, timeout_seconds):
+        output.write_text("{}", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+    monkeypatch.setattr(mod, "_run_benchmark_process", fake_run)
+
+    result = mod.benchmark_wait(
+        str(exe), str(output), cwd=str(tmp_path), max_cpu_percent=65.0,
+        stable_samples=1, sample_interval_seconds=0, wait_timeout_seconds=30,
+        runtime_sample_interval_seconds=2.0, runtime_max_cpu_percent=80.0,
+    )
+
+    assert result["ok"] is False
+    assert result["blocked_reason"] == "runtime_host_cpu_exceeded"
+    assert result["artifact_exists"] is True
+    assert result["process_returncode"] == 0
+    assert result["runtime_host"]["contaminated"] is True
+    assert result["runtime_host"]["cpu_average_percent"] == 74.5
+    assert result["runtime_host"]["cpu_max_percent"] == 91.0
+    assert result["runtime_host"]["contamination_reasons"] == ["runtime_host_cpu_exceeded"]
+
+
+def test_benchmark_wait_rejects_runtime_cap_when_monitoring_disabled(tmp_path):
+    mod = _module()
+    import pytest
+
+    exe = tmp_path / "game.exe"
+    exe.write_bytes(b"binary")
+    output = tmp_path / "result.json"
+
+    with pytest.raises(ValueError, match="runtime monitoring cannot be disabled"):
+        mod.benchmark_wait(
+            str(exe), str(output), cwd=str(tmp_path),
+            runtime_sample_interval_seconds=0, runtime_max_cpu_percent=80.0,
+        )
 
 
 def test_benchmark_wait_fails_closed_on_fingerprint_mismatch(tmp_path, monkeypatch):

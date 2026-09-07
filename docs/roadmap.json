@@ -1,6 +1,6 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-09-04",
+  "generated_at": "2026-09-07",
   "items": [
     {
       "id": "canonical-ai-execution-accounting",
@@ -225,6 +225,14 @@
       "phase": "AI-coding power",
       "adr": null,
       "summary": "Study authorized/local Unity projects and builds, Blender workspaces, and ROM/game binaries as provenance-tracked references; extract transferable architecture signals without executing or automatically copying protected reference content, then pair genre references with modern-engine references before implementing original game systems."
+    },
+    {
+      "id": "game-dev-runtime-host-evidence",
+      "title": "Game Dev Studio runtime host-load evidence",
+      "status": "shipped",
+      "phase": "AI-coding power",
+      "adr": null,
+      "summary": "Capture whole-host CPU while game benchmarks are actually running, keep runtime-load provenance alongside prelaunch idle/fingerprint evidence, and optionally fail closed on a caller-specified runtime CPU cap without discarding completed benchmark artifacts."
     },
     {
       "id": "token-efficient-review-loop",

@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.211] -- 2026-09-07
+
+### Added
+- **Game Dev Studio runtime host-load evidence (skill v0.1.12)** -- `benchmark-wait` now samples whole-host CPU while the benchmark process is actually running and returns sample count, average/max CPU, probe errors, and raw bounded samples under `runtime_host` instead of proving only that the machine was quiet before launch.
+- **Optional fail-closed runtime contamination gate** -- `--runtime-max-cpu-percent <cap>` keeps a successfully completed benchmark artifact/provenance intact but returns `ok=false` when sampled runtime CPU exceeds the cap, when the runtime probe fails, or when runtime monitoring cannot produce evidence. `--runtime-sample-interval-seconds` controls monitoring cadence.
+
+### Changed
+- **Existing benchmark callers remain compatible** -- runtime monitoring is enabled by default for evidence, but runtime load is informational unless a runtime CPU cap is explicitly supplied; prelaunch CPU/process/fingerprint gates and benchmark acceptance thresholds are unchanged.
+- **Game Dev Studio guidance now distinguishes admission from execution contamination** -- a quiet launch window is not treated as proof that the host stayed quiet during the measured run.
+
+### Verification
+- Game Dev Studio focused suite: **25 passed**; benchmark-wait subset: **9 passed**.
+- Real subprocess smoke: runtime monitoring captured host CPU while a 4-second Python benchmark process was alive and returned **2 samples, 13.46% average, 21.19% max**, with the artifact preserved and `ok=true`.
+- Real fail-closed smoke: the same path with an intentionally impossible **1% runtime cap** completed the process and artifact but returned CLI exit **2**, `ok=false`, and `blocked_reason=runtime_host_cpu_exceeded`; observed runtime load was **55.01% average / 64.19% max**.
+
 ## [0.1.210] -- 2026-09-04
 
 ### Added

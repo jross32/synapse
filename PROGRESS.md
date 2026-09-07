@@ -6,9 +6,11 @@
 
 ## Current version
 
-`0.1.210`
+`0.1.211`
 
-> **Game Dev Studio now has a provenance-first Reference Lab (2026-09-04):** v0.1.210 / skill v0.1.11 adds deterministic `reference-scan` support for Unity source projects/builds, Blender workspaces, generic source trees, and common ROM binaries. It inventories architecture without executing reference content, disables automatic code/asset copying, records rights/license evidence, and keeps unknown/user-owned binary references analysis-only unless separate reuse rights exist. Real dogfood scans now pair an older Pok?mon-style Unity project for genre/data patterns with Unity Technologies' current U6 multiplayer sample for modern engine patterns. Focused Game Dev Studio tests: 22/22; skill/catalog tests: 14/14; TypeScript typechecks pass; full daemon regression remains the final release gate.
+> **Game Dev Studio now records runtime host contamination natively (2026-09-06):** v0.1.211 / skill v0.1.12 extends `benchmark-wait` beyond prelaunch admission: every monitored benchmark returns runtime CPU samples/average/max/probe evidence, and release workflows can opt into `--runtime-max-cpu-percent` to fail closed while preserving the completed artifact. Focused Game Dev Studio suite: 25/25; benchmark-wait subset: 9/9; real pass and fail-closed subprocess smokes both matched the documented contract.
+
+> **Game Dev Studio now has a provenance-first Reference Lab (2026-09-04):** v0.1.210 / skill v0.1.11 adds deterministic `reference-scan` support for Unity source projects/builds, Blender workspaces, generic source trees, and common ROM binaries. It inventories architecture without executing reference content, disables automatic code/asset copying, records rights/license evidence, and keeps unknown/user-owned binary references analysis-only unless separate reuse rights exist. Real dogfood scans now pair an older Pok?mon-style Unity project for genre/data patterns with Unity Technologies' current U6 multiplayer sample for modern engine patterns. Focused Game Dev Studio tests: 22/22; skill/catalog tests: 14/14; TypeScript typechecks pass; full daemon regression: 1259 passed / 14 skipped.
 
 > **MCP control traffic stays reachable under connector saturation (2026-08-28):** v0.1.205
 > keeps the total MCP dispatch budget at 16 threads but reserves 4 for cheap local control/read
