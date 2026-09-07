@@ -1,4 +1,4 @@
-import { Blocks, Bot, Cpu, Inbox, MessagesSquare, Sparkles, Users } from 'lucide-react';
+import { AlarmClock, Blocks, Bot, Cpu, Inbox, MessagesSquare, Sparkles, Users } from 'lucide-react';
 
 import type { AiCodingSection } from '@shared/nav';
 import { cn } from '@shared/utils';
@@ -6,6 +6,7 @@ import { handleTablistKeydown } from '@shared/tablist';
 import { PageHeader } from '../components/PageHeader';
 import { BlueprintsPage } from './Blueprints';
 import { LocalAiPage } from './LocalAi';
+import { ActiveTasksPage } from './ActiveTasks';
 import { AssistantPage } from './Assistant';
 import { ChatgptCompanionPage } from './ChatgptCompanion';
 import { CoderWorkspacePage } from './CoderWorkspace';
@@ -66,6 +67,12 @@ export function AiCodingPage({
           label='Blueprints'
         />
         <TopTab
+          active={section === 'active-tasks'}
+          onClick={() => onSectionChange?.('active-tasks')}
+          icon={AlarmClock}
+          label='Active Tasks'
+        />
+        <TopTab
           active={section === 'assistant'}
           onClick={() => onSectionChange?.('assistant')}
           icon={Bot}
@@ -101,6 +108,7 @@ export function AiCodingPage({
         {section === 'squads' && <SessionsPage headerless defaultMode='squads' />}
         {section === 'local' && <LocalAiPage headerless />}
         {section === 'blueprints' && <BlueprintsPage headerless />}
+        {section === 'active-tasks' && <ActiveTasksPage />}
         {section === 'assistant' && <AssistantPage headerless />}
         {section === 'review' && <ReviewPage headerless />}
         {section === 'chatgpt' && <ChatgptCompanionPage headerless />}

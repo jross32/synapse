@@ -44,6 +44,7 @@ export type AiCodingSection =
   | 'squads'
   | 'local'
   | 'blueprints'
+  | 'active-tasks'
   | 'assistant'
   | 'review'
   | 'chatgpt';

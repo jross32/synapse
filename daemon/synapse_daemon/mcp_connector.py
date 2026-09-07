@@ -232,12 +232,17 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     # anything itself (see the handler), so it genuinely is read-only despite the name.
     "synapse_launch_work_item": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_playbooks": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_active_tasks": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_playbook": {"readOnlyHint": True, "idempotentHint": True},
     # -- additive writes: create a new record, never delete or overwrite an existing one --
     "synapse_add_project_idea": {"readOnlyHint": False, "destructiveHint": False,
                                  "idempotentHint": False},
     "synapse_capture_note": {"readOnlyHint": False, "destructiveHint": False,
                              "idempotentHint": False},
+    "synapse_create_active_task": {"readOnlyHint": False, "destructiveHint": False,
+                                   "idempotentHint": False},
+    "synapse_update_active_task": {"readOnlyHint": False, "destructiveHint": False,
+                                   "idempotentHint": True},
     "synapse_trace_record": {"readOnlyHint": False, "destructiveHint": False,
                           "idempotentHint": False},
     "synapse_create_squad": {"readOnlyHint": False, "destructiveHint": False,
@@ -478,6 +483,21 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
         {
+            "name": "synapse_list_active_tasks",
+            "description": (
+                "List Synapse-owned Active Tasks, optionally filtered by project. These recurring tasks are "
+                "stored/scheduled by Synapse itself and do not consume ChatGPT built-in task slots."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Optional project id filter."},
+                    "enabled": {"type": "boolean", "description": "Optional enabled/disabled filter."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "synapse_list_playbooks",
             "description": (
                 "List AI-facing playbooks -- step-by-step procedures for driving something outside "
@@ -653,6 +673,53 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "title": {"type": "string", "description": "Backlog title (defaults to the first line)."},
                         },
                         "required": ["project_id", "content"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_create_active_task",
+                    "description": (
+                        "Create a durable project-scoped Synapse Active Task. Synapse owns the recurrence and "
+                        "dispatches one guarded Foreman iteration when due; this does not use ChatGPT built-in Tasks."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "prompt": {"type": "string", "description": "Standing directive written into project AI context for workers."},
+                            "interval_seconds": {"type": "integer", "minimum": 60, "description": "Default 3600."},
+                            "preferred_runtime": {"type": "string", "description": "Default chatgpt_web; use auto for Foreman runtime selection."},
+                            "next_run_at": {"type": "string", "description": "Optional ISO-8601 first run time."},
+                            "max_runs": {"type": "integer", "minimum": 1},
+                            "end_at": {"type": "string", "description": "Optional ISO-8601 stop boundary."},
+                            "enabled": {"type": "boolean", "description": "Default true."},
+                            "no_overlap": {"type": "boolean", "description": "Default true; prevents colliding project writers."},
+                        },
+                        "required": ["project_id", "name"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_update_active_task",
+                    "description": (
+                        "Update/pause/resume an existing Synapse Active Task. Pass enabled=false to pause or enabled=true to resume."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "task_id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "prompt": {"type": "string"},
+                            "interval_seconds": {"type": "integer", "minimum": 60},
+                            "preferred_runtime": {"type": "string"},
+                            "next_run_at": {"type": "string"},
+                            "max_runs": {"type": "integer", "minimum": 1},
+                            "end_at": {"type": "string"},
+                            "enabled": {"type": "boolean"},
+                            "no_overlap": {"type": "boolean"},
+                        },
+                        "required": ["task_id"],
                         "additionalProperties": False,
                     },
                 },
@@ -1710,6 +1777,17 @@ def build_mcp_router(
                 "thread": item.model_dump(mode="json"),
             }
 
+        if name == "synapse_list_active_tasks":
+            from . import active_tasks as _active_tasks
+            project_id = str(args.get("project_id") or "").strip() or None
+            enabled_arg = args.get("enabled")
+            enabled = bool(enabled_arg) if enabled_arg is not None else None
+            rows = _active_tasks.list_tasks(storage.conn, project_id=project_id, enabled=enabled)
+            return {
+                "tasks": [row.model_dump(mode="json") for row in rows],
+                "count": len(rows),
+                "note": "Synapse Active Tasks do not consume ChatGPT built-in task slots.",
+            }
         if name == "synapse_add_project_idea":
             if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
@@ -1723,6 +1801,62 @@ def build_mcp_router(
             with storage.transaction() as conn:
                 adr = records.create_adr(conn, project_id, ProjectAdrCreate(title=title))
             return adr.model_dump(mode="json")
+        if name == "synapse_create_active_task":
+            if not writes_allowed():
+                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            from . import active_tasks as _active_tasks
+            from .ai_context_memory import append_capture_note
+            project_id = str(args.get("project_id") or "").strip()
+            project = projects_module.get(storage.conn, project_id)
+            payload = _active_tasks.ActiveTaskCreate(
+                project_id=project_id,
+                name=str(args.get("name") or "").strip(),
+                prompt=str(args.get("prompt") or ""),
+                interval_seconds=int(args.get("interval_seconds") or 3600),
+                preferred_runtime=str(args.get("preferred_runtime") or "chatgpt_web"),
+                next_run_at=args.get("next_run_at"),
+                max_runs=args.get("max_runs"),
+                end_at=args.get("end_at"),
+                enabled=bool(args.get("enabled", True)),
+                no_overlap=bool(args.get("no_overlap", True)),
+                source="auto",
+            )
+            with storage.transaction() as conn:
+                row = _active_tasks.create_task(conn, payload)
+            append_capture_note(
+                data_dir=storage.data_dir,
+                project_id=project.id,
+                project_name=project.name,
+                source="active-task",
+                note=(f"Synapse Active Task enabled: **{row.name}** ({row.id}).\n\n"
+                      f"Recurring directive: {row.prompt or 'Continue the project according to its current AI context and highest-value verified next step.'}\n\n"
+                      f"Cadence: every {row.interval_seconds} seconds; runtime: `{row.preferred_runtime}`."),
+            )
+            return row.model_dump(mode="json")
+        if name == "synapse_update_active_task":
+            if not writes_allowed():
+                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            from . import active_tasks as _active_tasks
+            task_id = str(args.get("task_id") or "").strip()
+            try:
+                existing = _active_tasks.get_task(storage.conn, task_id)
+            except KeyError as exc:
+                raise ValueError(f"Unknown active task: {task_id}") from exc
+            fields = {key: args[key] for key in (
+                "name", "prompt", "interval_seconds", "preferred_runtime", "next_run_at",
+                "max_runs", "end_at", "enabled", "no_overlap"
+            ) if key in args}
+            fields["source"] = "auto"
+            with storage.transaction() as conn:
+                row = _active_tasks.update_task(conn, task_id, _active_tasks.ActiveTaskUpdate(**fields))
+            if "prompt" in fields:
+                from .ai_context_memory import append_capture_note
+                project = projects_module.get(storage.conn, existing.project_id)
+                append_capture_note(
+                    data_dir=storage.data_dir, project_id=project.id, project_name=project.name,
+                    source="active-task", note=f"Synapse Active Task **{row.name}** ({row.id}) directive updated:\n\n{row.prompt}",
+                )
+            return row.model_dump(mode="json")
         if name == "synapse_capture_note":
             if not writes_allowed():
                 raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")

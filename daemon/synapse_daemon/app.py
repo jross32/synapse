@@ -1,4 +1,4 @@
-﻿"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
+"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
 
 For Milestone B this app exposes:
 
@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__, boot_config
 from .api_versions import API_PREFIX, event_name
 from .auth import AuthManager, ensure_local_token, require_token
+from .active_tasks import ActiveTaskScheduler, ForemanDispatcher
 from .chatgpt_child_agents import ChatGPTBrowserPool
 from .errors import ErrorEnvelope, SynapseError
 from .mcp_connector import build_mcp_info_router, build_mcp_router
@@ -38,6 +39,7 @@ from .process_manager import ProcessManager
 from .profile import ProfileManager
 from .pty_sessions import PtySessionManager
 from .routes_about import build_about_router
+from .routes_active_tasks import build_active_tasks_router
 from .routes_activity import build_activity_router
 from .routes_agent_squads import (
     WorkerPresenceRegistry,
@@ -420,6 +422,13 @@ def build_app(
     app.state.worker_presence_registry = worker_presence_registry
     chatgpt_child_pool = ChatGPTBrowserPool(storage.data_dir)
     app.state.chatgpt_child_pool = chatgpt_child_pool
+    active_task_scheduler = ActiveTaskScheduler(storage, ForemanDispatcher())
+    app.state.active_task_scheduler = active_task_scheduler
+    app.include_router(
+        build_active_tasks_router(storage, active_task_scheduler),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
     app.include_router(
         build_pty_router(pty_manager),
         prefix=API_PREFIX,
@@ -804,6 +813,7 @@ def build_app(
 
         await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
+    app.router.on_startup.append(active_task_scheduler.start)
 
     async def _cancel_worker_timeouts() -> None:
         worker_timeout_registry.cancel_all()
@@ -811,6 +821,7 @@ def build_app(
         await chatgpt_child_pool.close()
 
     app.router.on_shutdown.append(_cancel_worker_timeouts)
+    app.router.on_shutdown.append(active_task_scheduler.stop)
 
     # Serve the phone-facing Web UI. Prefer the built React renderer (the
     # full app shell, now mobile-aware); fall back to the legacy standalone
