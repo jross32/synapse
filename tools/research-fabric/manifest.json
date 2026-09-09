@@ -1,0 +1,107 @@
+{
+  "id": "research-fabric",
+  "name": "Research Fabric",
+  "category": "research",
+  "icon": "search",
+  "description": "Production-oriented AI-native open-web research layer for Synapse: multi-provider discovery with failover/cache, authority-aware ranking, domain diversity, HTTP retrieval plus Web Scraper escalation, evidence hashes, corroboration/confidence scoring, prompt-injection diagnostics, and durable citation-ready receipts.",
+  "version": "0.2.0",
+  "publisher": "The WhatIf Company",
+  "verified": true,
+  "bundled": true,
+  "install_default": true,
+  "fields": [
+    {
+      "key": "query",
+      "type": "text",
+      "label": "Research question",
+      "required": true,
+      "placeholder": "What should I know about ...?",
+      "help": "A factual question, comparison, market scan, technical topic, or research goal."
+    },
+    {
+      "key": "mode",
+      "type": "text",
+      "label": "Research mode",
+      "required": false,
+      "default": "balanced",
+      "placeholder": "instant | balanced | deep",
+      "help": "instant favors latency, balanced is the default, deep expands more queries and sources."
+    },
+    {
+      "key": "provider",
+      "type": "text",
+      "label": "Search provider",
+      "required": false,
+      "default": "auto",
+      "placeholder": "auto | duckduckgo | google | brave | yahoo | exa",
+      "help": "auto tries Exa when configured, then independent no-key search providers with failover and short-lived search caching."
+    },
+    {
+      "key": "max_sources",
+      "type": "number",
+      "label": "Maximum sources",
+      "required": false,
+      "min": 3,
+      "max": 20,
+      "default": 10,
+      "help": "Maximum number of ranked URLs to deeply retrieve."
+    }
+  ],
+  "actions": [
+    {
+      "id": "research",
+      "label": "Run research",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/research-fabric/controller.py",
+          "research",
+          "--query",
+          "{query}",
+          "--mode",
+          "{mode}",
+          "--provider",
+          "{provider}",
+          "--max-sources",
+          "{max_sources}"
+        ],
+        "timeout": 180
+      },
+      "primary": true,
+      "scope": "tool"
+    },
+    {
+      "id": "plan",
+      "label": "Preview research plan",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/research-fabric/controller.py",
+          "plan",
+          "--query",
+          "{query}",
+          "--mode",
+          "{mode}"
+        ],
+        "timeout": 10
+      },
+      "scope": "tool"
+    },
+    {
+      "id": "check",
+      "label": "Check readiness",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/research-fabric/controller.py",
+          "check"
+        ],
+        "timeout": 20
+      },
+      "scope": "tool"
+    }
+  ]
+}

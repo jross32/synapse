@@ -1,0 +1,40 @@
+{
+  "id": "research-fabric",
+  "name": "Research Fabric",
+  "publisher": "The WhatIf Company",
+  "version": "0.2.0",
+  "description": "Production-oriented evidence-first web research for Synapse with multi-provider failover/cache, source ranking/diversity, Web Scraper escalation, corroboration/confidence scoring, prompt-injection diagnostics, durable receipts, and direct MCP use.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "research",
+    "deep-research",
+    "web-search",
+    "web-scraper",
+    "citations",
+    "evidence",
+    "source-ranking",
+    "query-planning",
+    "retrieval",
+    "verification",
+    "mcp",
+    "corroboration",
+    "cache",
+    "receipts",
+    "prompt-injection-defense",
+    "provider-failover"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "research-fabric",
+    "web-scraper",
+    "web",
+    "browser"
+  ],
+  "optional_capabilities": [
+    "github",
+    "warden"
+  ],
+  "benchmark_spec": null,
+  "baseline": null
+}
