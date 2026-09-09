@@ -30,7 +30,7 @@ from .time_utils import from_iso, to_iso, utc_now
 MIN_INTERVAL_SECONDS = 60
 DEFAULT_INTERVAL_SECONDS = 3600
 DEFAULT_MAX_RUNTIME_SECONDS = 3600
-ACTIVE_DISPATCH_STATUSES = {"active", "queued", "running", "waiting_for_writer", "waiting_for_capacity", "needs_attention"}
+ACTIVE_DISPATCH_STATUSES = {"active", "queued", "running", "waiting_for_writer", "waiting_for_capacity"}
 
 
 class ActiveTaskScheduleKind(str, Enum):
@@ -383,8 +383,22 @@ class ForemanDispatcher:
         except json.JSONDecodeError:
             return True
         for campaign in campaigns if isinstance(campaigns, list) else []:
-            if str(campaign.get("id")) == ref_id:
-                return str(campaign.get("status") or "").lower() in ACTIVE_DISPATCH_STATUSES
+            if str(campaign.get("id")) != ref_id:
+                continue
+            # Foreman can mark a campaign ``needs_attention`` after its browser
+            # observer gives up even though the actual coding worker has exited.
+            # Treat execution state on the campaign targets as authoritative for
+            # writer overlap; otherwise a historical attention item can deadlock
+            # a recurring Active Task forever.
+            projects = campaign.get("projects")
+            if isinstance(projects, list) and projects:
+                project_statuses = {
+                    str(project.get("status") or "").lower()
+                    for project in projects
+                    if isinstance(project, dict)
+                }
+                return any(status in ACTIVE_DISPATCH_STATUSES for status in project_statuses)
+            return str(campaign.get("status") or "").lower() in ACTIVE_DISPATCH_STATUSES
         return False
 
 

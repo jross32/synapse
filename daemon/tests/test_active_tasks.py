@@ -228,6 +228,50 @@ def test_active_tasks_rest_api_and_summary(storage):
 
 
 @pytest.mark.asyncio
+async def test_foreman_dispatcher_does_not_deadlock_on_terminal_needs_attention(monkeypatch, tmp_path: Path):
+    root = tmp_path / "ChatForeman"
+    root.mkdir()
+    (root / "foreman.py").write_text("# fake", encoding="utf-8")
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps([
+            {
+                "id": "campaign-blocked",
+                "status": "needs_attention",
+                "projects": [{"project_id": "ai-world", "status": "blocked"}],
+            }
+        ])
+        stderr = ""
+
+    monkeypatch.setattr(active_tasks.subprocess, "run", lambda *args, **kwargs: Result())
+    dispatcher = ForemanDispatcher(root=root, python_executable="python")
+    assert await dispatcher.is_active("campaign-blocked") is False
+
+
+@pytest.mark.asyncio
+async def test_foreman_dispatcher_still_blocks_needs_attention_with_live_target(monkeypatch, tmp_path: Path):
+    root = tmp_path / "ChatForeman"
+    root.mkdir()
+    (root / "foreman.py").write_text("# fake", encoding="utf-8")
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps([
+            {
+                "id": "campaign-live",
+                "status": "needs_attention",
+                "projects": [{"project_id": "ai-world", "status": "running"}],
+            }
+        ])
+        stderr = ""
+
+    monkeypatch.setattr(active_tasks.subprocess, "run", lambda *args, **kwargs: Result())
+    dispatcher = ForemanDispatcher(root=root, python_executable="python")
+    assert await dispatcher.is_active("campaign-live") is True
+
+
+@pytest.mark.asyncio
 async def test_foreman_dispatcher_builds_single_iteration_campaign(monkeypatch, tmp_path: Path):
     root = tmp_path / "ChatForeman"
     root.mkdir()
