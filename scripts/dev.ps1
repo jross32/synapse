@@ -25,6 +25,21 @@ $daemonLog = Join-Path $dataDir 'daemon-runtime.log'
 $viteLog = Join-Path $dataDir 'vite-runtime.log'
 $restartExitCode = 75
 
+# The daemon is an editable install (`pip install -e daemon/`) that lives ONLY in
+# .venv, not in whatever `python` happens to resolve to on PATH. A bare `python`
+# here is the machine's system interpreter, which has no `synapse_daemon` module
+# -- the daemon then exits instantly with "No module named synapse_daemon" and
+# the whole launch fails at the first stage. Always prefer the repo venv; fall
+# back to PATH `python` only for a checkout that has not run the venv setup yet.
+$venvPython = Join-Path $root '.venv\Scripts\python.exe'
+if (Test-Path $venvPython) {
+  $pythonExe = $venvPython
+} else {
+  $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+  $pythonExe = if ($pythonCmd -and $pythonCmd.Source) { $pythonCmd.Source } else { 'python' }
+  Write-Warning "Repo venv not found at $venvPython -- falling back to PATH python ($pythonExe). Run 'python -m venv .venv; .venv\Scripts\pip install -e daemon' if the daemon fails to start."
+}
+
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 Write-Host "======================================================="
@@ -272,7 +287,7 @@ function Get-RunningWatchdogPid {
 function Start-DaemonWatchdog {
   param([int]$Port = 7878)
 
-  $existing = Get-RunningWatchdogPid -ScriptName 'daemon-watchdog.ps1'
+  $existing = Get-RunningWatchdogPid -ScriptName 'daemon-watchdog-v2.ps1'
   if ($existing) {
     Write-Host "-> Daemon watchdog already running (PID $existing) -- not starting a duplicate"
     return
@@ -281,7 +296,7 @@ function Start-DaemonWatchdog {
   # Detached, hidden, non-blocking. Self-terminates once this daemon process
   # is gone (see the header comment in daemon-watchdog.ps1) -- nothing here
   # needs to remember to stop it.
-  $watchdogScript = Join-Path $PSScriptRoot 'daemon-watchdog.ps1'
+  $watchdogScript = Join-Path $PSScriptRoot 'daemon-watchdog-v2.ps1'
   $watchdogArgs = @(
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchdogScript,
     '-Port', "$Port", '-DataDir', 'data'
@@ -290,7 +305,7 @@ function Start-DaemonWatchdog {
     $watchdogArgs += '-BindLan'
   }
   $watchdogProc = Start-NoConsoleProcess -FilePath 'powershell.exe' -Arguments $watchdogArgs
-  Write-Host "-> Daemon watchdog armed as PID $($watchdogProc.Id) (polls /api/v1/health, auto-restarts after 3 consecutive failures)"
+  Write-Host "-> Daemon watchdog armed as PID $($watchdogProc.Id) (polls basic + MCP health, preserves managed projects, auto-recovers after 3 consecutive failures)"
 }
 
 function Start-PersistentTunnel {
@@ -343,6 +358,40 @@ function Start-TunnelWatchdog {
   Write-Host "-> Tunnel watchdog armed as PID $($watchdogProc.Id) (checks synapse.whatapc.com, auto-restarts cloudflared after 3 consecutive failures)"
 }
 
+function Start-TerminalCloak {
+  # Prefer the persistent Scheduled Task when installed. It runs pythonw.exe,
+  # has restart-on-failure settings, and is also surfaced in Synapse -> Watchdogs.
+  $task = Get-ScheduledTask -TaskName 'Synapse Terminal Cloak' -ErrorAction SilentlyContinue
+  if ($task) {
+    if ([string]$task.State -ne 'Running') {
+      Start-ScheduledTask -TaskName 'Synapse Terminal Cloak'
+      Write-Host "-> Terminal cloak scheduled task started"
+    } else {
+      Write-Host "-> Terminal cloak scheduled task already running"
+    }
+    return
+  }
+
+  # Portable fallback for a source checkout where the task has not been installed.
+  $pythonw = Join-Path $root '.venv\Scripts\pythonw.exe'
+  if (-not (Test-Path $pythonw)) {
+    $python = (Get-Command python.exe -ErrorAction SilentlyContinue).Source
+    if ($python) {
+      $pythonw = Join-Path (Split-Path -Parent $python) 'pythonw.exe'
+    }
+  }
+  if (-not $pythonw -or -not (Test-Path $pythonw)) {
+    Write-Warning "pythonw.exe not found; terminal cloak not started"
+    return
+  }
+
+  $cloakScript = Join-Path $PSScriptRoot 'terminal_cloak.py'
+  $cloakProc = Start-NoConsoleProcess -FilePath $pythonw -Arguments @(
+    "`"$cloakScript`"", '--poll-ms', '75'
+  )
+  Write-Host "-> Terminal cloak armed as PID $($cloakProc.Id) (Python/Win32, no WMI polling)"
+}
+
 function Start-DaemonOnly {
   $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
   if ($BindLan) {
@@ -354,12 +403,13 @@ function Start-DaemonOnly {
 # connector still requires the auth token on every call.
 $env:SYNAPSE_MCP_ALLOW_WRITES = '1'
 
-  Write-Host "-> Starting daemon (foreground): python $($daemonArgs -join ' ')"
+  Write-Host "-> Starting daemon (foreground): `"$pythonExe`" $($daemonArgs -join ' ')"
   Write-Host ""
   Start-DaemonWatchdog -Port 7878
   Start-PersistentTunnel
   Start-TunnelWatchdog
-  & python @daemonArgs
+  Start-TerminalCloak
+  & $pythonExe @daemonArgs
   exit $LASTEXITCODE
 }
 
@@ -379,7 +429,7 @@ do {
   try {
     if (-not $AppOnly) {
       Clear-StalePort -Port 7878 -Match 'synapse_daemon' -Label 'daemon'
-      $daemonCommand = 'python -m synapse_daemon --port 7878 --data-dir data'
+      $daemonCommand = '"' + $pythonExe + '" -m synapse_daemon --port 7878 --data-dir data'
       if ($BindLan) {
         $daemonCommand += ' --bind-lan'
       }
@@ -393,6 +443,7 @@ do {
       Start-DaemonWatchdog -Port 7878
       Start-PersistentTunnel
       Start-TunnelWatchdog
+      Start-TerminalCloak
     }
 
     Write-Host "-> Compiling Electron main -> dist-electron/"
@@ -440,3 +491,5 @@ do {
 } while ($restartRequested)
 
 exit $electronExitCode
+
+
