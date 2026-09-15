@@ -6,7 +6,15 @@
 
 ## Current version
 
-`0.1.205`
+`0.1.210`
+
+
+> **Smart Review is the default token-aware review decision layer (2026-09-04):** v0.1.210
+> adds deterministic risk/evidence/privacy checks before AI spend, aggregate planning reserves
+> that count repeated per-pass context plus output reserve, canonical runtime-capacity reviewer
+> selection, project-scoped authorization, broad secret withholding, fail-closed untracked
+> evidence, dedicated engine-owned review threads, and AI-discoverable plan/queue endpoints.
+> Focused Smart Review verification: 18 passed; docs-sync, compileall, and Node typecheck pass.
 
 > **MCP control traffic stays reachable under connector saturation (2026-08-28):** v0.1.205
 > keeps the total MCP dispatch budget at 16 threads but reserves 4 for cheap local control/read
