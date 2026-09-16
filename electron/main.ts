@@ -326,6 +326,20 @@ function resolvePackagedDaemonPath(): string {
   );
 }
 
+function resolveDevPythonExecutable(): string {
+  // `synapse_daemon` is an editable install that lives only in the repo venv
+  // (see scripts/dev.ps1's identical $pythonExe resolution). A bare 'python'
+  // here resolves to whatever system interpreter happens to be on PATH --
+  // confirmed live 2026-09-16: a second, independent Python (3.12, not the
+  // venv) was racing dev.ps1's own venv-launched daemon for port 7878, since
+  // this was the only daemon-spawn call site never updated when dev.ps1 and
+  // daemon-watchdog-v2.ps1 got the same fix. Two live daemons on one port is
+  // wrong regardless of which one wins the bind race.
+  const venvPython = path.join(repoRoot, '.venv', 'Scripts', 'python.exe');
+  if (fs.existsSync(venvPython)) return venvPython;
+  return 'python';
+}
+
 function buildDaemonLaunch(): { command: string; args: string[]; cwd: string } {
   if (app.isPackaged) {
     return {
@@ -342,7 +356,7 @@ function buildDaemonLaunch(): { command: string; args: string[]; cwd: string } {
     };
   }
   return {
-    command: 'python',
+    command: resolveDevPythonExecutable(),
     args: ['-m', 'synapse_daemon', '--port', String(daemonPort), '--data-dir', 'data'],
     cwd: repoRoot,
   };
@@ -704,6 +718,65 @@ async function applyBootstrapAiBundles(): Promise<void> {
 }
 
 // ── window + tray ─────────────────────────────────────────────────────────
+
+function optionalToolsBootstrapFilePath(): string {
+  return path.join(app.getPath('userData'), 'bootstrap-optional-tools.json');
+}
+
+async function applyBootstrapOptionalTools(): Promise<void> {
+  const target = optionalToolsBootstrapFilePath();
+  if (!fs.existsSync(target)) return;
+
+  let installToolIds: string[] = [];
+  let uninstallToolIds: string[] = [];
+  try {
+    const raw = JSON.parse(fs.readFileSync(target, 'utf-8')) as {
+      install_tool_ids?: unknown;
+      uninstall_tool_ids?: unknown;
+    };
+    if (Array.isArray(raw.install_tool_ids)) {
+      installToolIds = raw.install_tool_ids.filter(
+        (value): value is string => typeof value === 'string' && value.length > 0
+      );
+    }
+    if (Array.isArray(raw.uninstall_tool_ids)) {
+      uninstallToolIds = raw.uninstall_tool_ids.filter(
+        (value): value is string => typeof value === 'string' && value.length > 0
+      );
+    }
+  } catch (error) {
+    console.error('[synapse] could not read optional-tools bootstrap file:', error);
+  }
+
+  try {
+    for (const toolId of installToolIds) {
+      try {
+        await daemonRequest(
+          'POST',
+          '/marketplace/install/' + encodeURIComponent(toolId) + '?force=true'
+        );
+      } catch (error) {
+        console.error('[synapse] failed to bootstrap optional tool ' + toolId + ':', error);
+      }
+    }
+
+    for (const toolId of uninstallToolIds) {
+      try {
+        await daemonRequest('DELETE', '/marketplace/install/' + encodeURIComponent(toolId));
+      } catch {
+        // Fresh installs can explicitly opt out before the tool has ever existed.
+        console.info('[synapse] optional tool ' + toolId + ' already absent during bootstrap.');
+      }
+    }
+  } finally {
+    try {
+      fs.unlinkSync(target);
+    } catch (error) {
+      console.error('[synapse] failed to remove optional-tools bootstrap file:', error);
+    }
+  }
+}
+
 function createWindow(): void {
   let interfaceReady = false;
   let interfaceDocumentLoaded = false;
@@ -1307,6 +1380,7 @@ app.whenReady().then(async () => {
     }
     await waitForDaemon();
     await applyBootstrapAiBundles();
+    await applyBootstrapOptionalTools();
     console.log('[synapse] daemon ready');
     setRestartStage('daemon', 'success', 'Health check passed; Synapse services are running.');
     if (currentRestartProgress?.kind === 'restart') {
