@@ -137,6 +137,9 @@ Write-TunnelWatchdogLog "started -- watching tunnel '$TunnelName' every ${Interv
 $consecutiveFailures = 0
 $wasReachable = $true
 $consecutiveAbsent = 0
+# Counts consecutive ticks where cloudflared.exe itself is missing entirely
+# (crashed/killed), separate from $consecutiveFailures (alive-but-unreachable).
+$consecutiveMissingRestarts = 0
 # Mirrors daemon-watchdog.ps1's $autoRestartOnAbsenceUsed: reset to $false the
 # moment the daemon is seen listening again, so a recurring mystery-death still
 # gets a full extra window of patience every time it happens.
@@ -173,17 +176,35 @@ while ($true) {
       $reachable = Test-TunnelReachable -Url $PublicUrl -TimeoutSeconds $CheckTimeoutSeconds
 
       if (-not $tunnelPid) {
-        Write-TunnelWatchdogLog "cloudflared process for tunnel '$TunnelName' not found -- restarting immediately"
+        # Confirmed live 2026-09-15 19:31-20:00: cloudflared crash-looped for
+        # ~30 minutes (25+ back-to-back relaunches, one per 45s tick) during a
+        # window with Windows-reported TCP ephemeral port exhaustion plus a
+        # WLAN reconnect blip. Restarting on EVERY tick with no backoff (unlike
+        # the alive-but-unreachable branch below, which already waits for a
+        # 3-strike threshold) turned a transient outage into a restart storm
+        # that itself adds connection/port pressure right when the system
+        # needs room to recover -- likely extending the outage, not shortening
+        # it. Back off exponentially once the immediate retry doesn't stick.
+        $consecutiveMissingRestarts += 1
+        if ($consecutiveMissingRestarts -gt 1) {
+          $backoffSeconds = [Math]::Min(300, [int]($IntervalSeconds * [Math]::Pow(2, [Math]::Min($consecutiveMissingRestarts - 1, 4))))
+          Write-TunnelWatchdogLog "cloudflared for '$TunnelName' still not found after $($consecutiveMissingRestarts - 1) immediate restart attempt(s) -- backing off ${backoffSeconds}s before retrying (likely a real outage, not a one-off crash)"
+          Start-Sleep -Seconds $backoffSeconds
+        } else {
+          Write-TunnelWatchdogLog "cloudflared process for tunnel '$TunnelName' not found -- restarting immediately"
+        }
         Restart-Tunnel -ExistingPid $null -TunnelName $TunnelName
         $consecutiveFailures = 0
         $wasReachable = $true
       } elseif ($reachable) {
+        $consecutiveMissingRestarts = 0
         if (-not $wasReachable) {
           Write-TunnelWatchdogLog "tunnel reachable again (PID $tunnelPid)"
         }
         $consecutiveFailures = 0
         $wasReachable = $true
       } else {
+        $consecutiveMissingRestarts = 0
         $wasReachable = $false
         $consecutiveFailures += 1
         Write-TunnelWatchdogLog "public URL check failed ($consecutiveFailures/$FailureThreshold) for PID $tunnelPid"
