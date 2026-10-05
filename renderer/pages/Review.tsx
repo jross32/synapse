@@ -9,6 +9,7 @@ import {
   Inbox,
   Lightbulb,
   Loader2,
+  Sparkles,
   RotateCcw,
   XCircle,
 } from 'lucide-react';
@@ -59,9 +60,10 @@ function categoryOf(proposal: Proposal): string {
 
 export interface ReviewPageProps {
   headerless?: boolean;
+  onOpenWorkspace?: () => void;
 }
 
-export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element {
+export function ReviewPage({ headerless = false, onOpenWorkspace }: ReviewPageProps): JSX.Element {
   const { subscribeRaw } = useDaemon();
   const [inbox, setInbox] = useState<ReviewInbox | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,26 +116,44 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
   const sortedGroups = [...proposalGroups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const header = headerless ? null : (
     <PageHeader
-      title='Review'
-      subtitle='Work your AI workforce handed back plus improvement ideas it filed — approve, send back, block, or promote.'
+      title='Smart Review'
+      subtitle='Run focused AI review passes, then decide what to approve, revise, reject, or promote from one place.'
+      helpText='Smart Review uses the existing Workspace reviewer controls for targeted UX, QA, token-efficiency, judge, and sidecar passes. Their handoffs and AI-filed improvement ideas come back here for your decision.'
     />
   );
 
   return (
     <div className='flex h-full flex-col gap-4'>
       {header}
+      <SmartReviewIntro pendingCount={count} onOpenWorkspace={onOpenWorkspace} />
+
+      <div className='flex items-center justify-between gap-3'>
+        <div>
+          <h2 className='text-sm font-semibold'>Decision queue</h2>
+          <p className='text-xs text-muted-foreground'>
+            Reviewer handoffs, blocked work, and AI-filed improvement ideas that need your call.
+          </p>
+        </div>
+        <span
+          className='min-w-8 rounded-full bg-secondary px-2 py-1 text-center text-xs font-semibold text-foreground'
+          aria-label={loading ? 'Review queue is loading' : `${count} items need review`}
+        >
+          {loading ? '...' : count}
+        </span>
+      </div>
+
       {/* Stale-refresh error: a prior load succeeded but a later refresh failed -- show the message
           above the still-rendered data. A first-load failure (no inbox) uses the dedicated card below. */}
       {error && inbox && <p role='alert' className='text-xs text-destructive'>{error}</p>}
 
       {loading ? (
         <Card className='flex items-center gap-2 p-6 text-sm text-muted-foreground'>
-          <Loader2 className='h-4 w-4 animate-spin' /> Loading the inbox…
+          <Loader2 className='h-4 w-4 animate-spin' /> Loading the inboxâ€¦
         </Card>
       ) : error && !inbox ? (
         <Card role='alert' className='mx-auto flex max-w-md flex-col items-center gap-3 p-10 text-center'>
           <AlertTriangle className='h-8 w-8 text-destructive' />
-          <h2 className='text-lg font-semibold'>Couldn’t load the inbox</h2>
+          <h2 className='text-lg font-semibold'>Couldnâ€™t load the inbox</h2>
           <p className='text-sm text-muted-foreground'>{error}</p>
           <Button
             variant='outline'
@@ -153,7 +173,7 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
             When an AI squad finishes a chunk of work, gets stuck, or files an improvement idea, it
             shows up here to <span className='text-foreground'>approve</span>,
             <span className='text-foreground'> revise</span>, or
-            <span className='text-foreground'> reject</span> — from your desk or your phone.
+            <span className='text-foreground'> reject</span> â€” from your desk or your phone.
           </p>
           <p className='text-xs text-muted-foreground'>Start a squad from the Sessions tab to put your AI workforce to work.</p>
         </Card>
@@ -202,6 +222,63 @@ export function ReviewPage({ headerless = false }: ReviewPageProps): JSX.Element
         />
       )}
     </div>
+  );
+}
+
+function SmartReviewIntro({
+  pendingCount,
+  onOpenWorkspace,
+}: {
+  pendingCount: number;
+  onOpenWorkspace?: () => void;
+}): JSX.Element {
+  return (
+    <Card className='overflow-hidden border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card'>
+      <div className='flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between'>
+        <div className='max-w-2xl'>
+          <div className='flex items-center gap-2'>
+            <span className='rounded-lg bg-primary/15 p-2 text-primary'>
+              <Sparkles className='h-5 w-5' aria-hidden='true' />
+            </span>
+            <div>
+              <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary'>Smart Review</p>
+              <h2 className='text-xl font-semibold'>Put a second AI on the work before you accept it.</h2>
+            </div>
+          </div>
+          <p className='mt-3 text-sm text-muted-foreground'>
+            Launch a targeted reviewer against the active coding thread, keep the primary builder intact,
+            and bring the result back here for a human decision. Use a focused pass first; escalate to a
+            stronger judge only when the risk or evidence calls for it.
+          </p>
+          <div className='mt-4 flex flex-wrap gap-2'>
+            {['UX & UI', 'QA & reliability', 'Token efficiency', 'Judge escalation', 'Sidecar AI'].map((label) => (
+              <span
+                key={label}
+                className='rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs text-muted-foreground'
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className='flex shrink-0 flex-col gap-2 sm:items-end'>
+          <div className='rounded-lg border border-border bg-background/70 px-3 py-2 text-sm'>
+            <span className='font-semibold'>{pendingCount}</span>{' '}
+            <span className='text-muted-foreground'>awaiting your decision</span>
+          </div>
+          {onOpenWorkspace && (
+            <Button type='button' onClick={onOpenWorkspace}>
+              <Sparkles className='h-4 w-4' /> Run a Smart Review
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
+            </Button>
+          )}
+          <p className='max-w-[220px] text-right text-[11px] text-muted-foreground'>
+            Opens Workspace, where Smart Review presets and reviewer history live beside the active thread.
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -320,7 +397,7 @@ function ProposalDetailModal({
 
         <p className='text-xs text-muted-foreground'>
           Filed by <span className='text-foreground'>{proposal.source_runtime || 'an AI'}</span>
-          {proposal.project_id ? <> · {proposal.project_id}</> : null}
+          {proposal.project_id ? <> Â· {proposal.project_id}</> : null}
         </p>
 
         {err && <p role='alert' className='text-xs text-destructive'>{err}</p>}
@@ -392,7 +469,7 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
         </span>
         <h3 className='font-semibold'>{item.title}</h3>
         <span className='ml-auto text-xs text-muted-foreground'>
-          {item.project_name ?? item.project_id} · {item.squad_name}
+          {item.project_name ?? item.project_id} Â· {item.squad_name}
         </span>
       </div>
 

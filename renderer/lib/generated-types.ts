@@ -389,6 +389,10 @@ export interface ToolManifest {
   icon: string;
   description: string;
   version: string;
+  publisher: string | null;
+  verified: boolean;
+  bundled: boolean;
+  install_default: boolean;
   fields: ToolField[];
   actions: ToolAction[];
   /** True when a compiled-in handler backs this tool's actions. */

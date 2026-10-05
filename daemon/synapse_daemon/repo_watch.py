@@ -23,6 +23,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from .subprocess_utils import headless_creationflags
+
 MAX_TIMEOUT_SECONDS = 120.0
 DEFAULT_TIMEOUT_SECONDS = 60.0
 POLL_INTERVAL_SECONDS = 2.0
@@ -44,7 +46,8 @@ def _git_status(path: Path) -> tuple[str | None, str | None]:
             capture_output=True,
             text=True,
             timeout=10,
-        )
+                             creationflags=headless_creationflags(),
+)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return None, f"{type(exc).__name__}: {exc}"
     if result.returncode != 0:

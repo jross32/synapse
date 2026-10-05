@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "ui-forge-v1",
+  "updated_at": null,
+  "policy": {
+    "minimum_runs_per_role": 5,
+    "notes": "Populate only from comparable UI Forge benchmark runs. Do not seed subjective vendor/model rankings."
+  },
+  "candidates": []
+}

@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from synapse_daemon import boot_config
+from synapse_daemon.routes_system import RestartRequest, create_restart_operation
 from synapse_daemon.app import build_app
 from synapse_daemon.models import EntityStatus, ToolItem, ToolState
 from synapse_daemon.time_utils import utc_now
@@ -194,6 +195,29 @@ def test_restart_operation_tracks_stages_and_error_catalog(tmp_path: Path) -> No
         sticky_stage = late_success.json()["operation"]["stages"][3]
         assert sticky_stage["state"] == "error"
         assert sticky_stage["error_code"] == "SYN-BOOT-102"
+
+
+def test_restart_helper_matches_rest_conflict_semantics(tmp_path: Path) -> None:
+    _client, storage = _harness(tmp_path)
+    operation = create_restart_operation(
+        storage,
+        RestartRequest(operation_id="restart-helper", source="auto"),
+    )
+    assert operation["operation_id"] == "restart-helper"
+    assert operation["status"] == "requested"
+
+    from synapse_daemon.errors import SynapseError
+
+    try:
+        create_restart_operation(
+            storage,
+            RestartRequest(operation_id="restart-helper-second", source="auto"),
+        )
+    except SynapseError as exc:
+        assert exc.envelope.code == "system_restart.conflict"
+        assert exc.envelope.details["diagnostic_code"] == "SYN-RST-001"
+    else:
+        raise AssertionError("second live restart request should conflict")
 
 
 def test_restart_request_refuses_a_second_live_operation(tmp_path: Path) -> None:

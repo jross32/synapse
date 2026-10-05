@@ -83,6 +83,11 @@ Set-HeadlessTask -Name 'Synapse Live Monitor' -Execute $systemPythonw -Arguments
 
 Set-HeadlessTask -Name 'Synapse Repair Watchdog' -Execute $systemPythonw -Arguments ('"' + (Join-Path $root 'data\system-watchdog\repair_watchdog.py') + '"')
 
+$synapsePythonw = Join-Path $root '.venv\Scripts\pythonw.exe'
+if (Test-Path $synapsePythonw) {
+  Set-HeadlessTask -Name 'Synapse Terminal Cloak' -Execute $synapsePythonw -Arguments ('"' + (Join-Path $root 'scripts\terminal_cloak.py') + '" --poll-ms 75') -WorkingDirectory $root -RestartIfRunning
+}
+
 if ($stockPythonw) {
   Set-HeadlessTask -Name 'StockHunterSupervisor' -Execute $stockPythonw -Arguments '-m stock_hunter.runtime_supervisor serve' -WorkingDirectory $stockRoot -RestartIfRunning
 

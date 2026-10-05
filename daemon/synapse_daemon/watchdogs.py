@@ -7,7 +7,10 @@ Future services can be added without changing the UI by extending DEFAULT_SPECS.
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -126,6 +129,28 @@ def default_specs(data_dir: Path) -> list[WatchdogSpec]:
             tags=("telemetry",),
         ),
         WatchdogSpec(
+            id="synapse-terminal-cloak",
+            name="Synapse Terminal Cloak",
+            kind="watchdog",
+            description=(
+                "Keeps background-owned CMD, PowerShell, OpenConsole, and Windows Terminal "
+                "windows off the desktop without stopping the processes behind them."
+            ),
+            command_any=(("pythonw", "terminal_cloak.py"), ("python", "terminal_cloak.py")),
+            task_names=("Synapse Terminal Cloak",),
+            protects=(
+                "synapse-daemon-watchdog",
+                "synapse-tunnel-watchdog",
+                "synapse-ai-supervisor",
+                "synapse-live-monitor",
+                "stock-hunter-supervisor",
+                "web-scraper-mcp",
+            ),
+            log_path=data_dir / "terminal-cloak" / "events.jsonl",
+            group="synapse",
+            tags=("desktop", "console", "visibility"),
+        ),
+        WatchdogSpec(
             id="synapse-repair-watchdog",
             name="Synapse Repair Watchdog",
             kind="watchdog",
@@ -201,7 +226,78 @@ def default_specs(data_dir: Path) -> list[WatchdogSpec]:
     ]
 
 
+def _windows_process_inventory() -> list[dict[str, Any]]:
+    """Collect only watchdog-relevant Windows processes with a hard timeout.
+
+    psutil's remote command-line lookup can occasionally block on a single
+    process on Windows. The Watchdogs page must never inherit that unbounded
+    stall, so isolate CIM collection in a no-console helper process and cap it.
+    """
+    script = (
+        "$names=@('python.exe','pythonw.exe','powershell.exe','pwsh.exe',"
+        "'cloudflared.exe','node.exe','npm.exe','cmd.exe');"
+        "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
+        "Where-Object {$names -contains $_.Name.ToLowerInvariant()} | "
+        "Select-Object ProcessId,Name,CommandLine,CreationDate | "
+        "ConvertTo-Json -Compress"
+    )
+    flags = int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        proc = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=4,
+            check=False,
+            creationflags=flags,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return []
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return []
+    rows = payload if isinstance(payload, list) else [payload]
+    now = time.time()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            pid = int(row.get("ProcessId"))
+        except (TypeError, ValueError):
+            continue
+        name = str(row.get("Name") or "")
+        cmdline = str(row.get("CommandLine") or "")
+        created = str(row.get("CreationDate") or "")
+        match = re.search(r"/Date\((\d+)", created)
+        created_epoch = (int(match.group(1)) / 1000.0) if match else now
+        combined = f"{name} {cmdline}".strip()
+        out.append(
+            {
+                "pid": pid,
+                "name": name,
+                "command_line": cmdline,
+                "match_text": combined.lower(),
+                "status": "running",
+                "uptime_seconds": max(0, int(now - created_epoch)),
+            }
+        )
+    return out
+
+
 def _process_inventory() -> list[dict[str, Any]]:
+    if os.name == "nt":
+        return _windows_process_inventory()
+
     out: list[dict[str, Any]] = []
     now = time.time()
     for proc in psutil.process_iter(["pid", "name", "cmdline", "create_time", "status"]):

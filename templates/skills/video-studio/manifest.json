@@ -1,0 +1,30 @@
+{
+  "id": "video-studio",
+  "name": "Synapse Video Director",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "AI director workflow for coherent long-form generated video: story/character/style bibles, reference locking, continuity blocks, native dialogue/audio, retryable short shots, local assembly, and provenance-aware final delivery through Synapse Video Studio.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "video-generation",
+    "ai-video",
+    "storyboard",
+    "continuity",
+    "character-consistency",
+    "native-audio",
+    "dialogue",
+    "cinematography",
+    "long-form-video",
+    "provenance"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "synapse-video-studio",
+    "synapse-image-studio"
+  ],
+  "optional_capabilities": [
+    "web",
+    "image-generation"
+  ]
+}

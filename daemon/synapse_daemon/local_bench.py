@@ -33,6 +33,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .runtime_paths import repo_root
+from .subprocess_utils import headless_creationflags
 
 OLLAMA = "http://127.0.0.1:11434"
 
@@ -201,7 +202,8 @@ def run_code_check(code: str, asserts: str) -> tuple[bool, str]:
     (workdir / "t.py").write_text(asserts + "\nprint('OK')\n", encoding="utf-8")
     try:
         proc = subprocess.run([sys.executable, "t.py"], capture_output=True, text=True,
-                              timeout=30, cwd=str(workdir))
+                              timeout=30, cwd=str(workdir),
+                   creationflags=headless_creationflags(),)
         return proc.returncode == 0, (proc.stderr or "")[-200:]
     except Exception as exc:  # noqa: BLE001
         return False, f"{type(exc).__name__}: {exc}"
@@ -385,7 +387,8 @@ def host_info() -> dict[str, Any]:
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total",
                               "--format=csv,noheader"], capture_output=True, text=True,
-                             timeout=15)
+                             timeout=15,
+                  creationflags=headless_creationflags(),)
         if out.returncode == 0 and out.stdout.strip():
             name, mem = out.stdout.strip().splitlines()[0].split(",")
             gpu, vram = name.strip(), round(int(re.sub(r"\D", "", mem)) / 1024, 1)

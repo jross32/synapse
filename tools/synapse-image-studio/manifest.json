@@ -1,0 +1,22 @@
+{
+  "id": "synapse-image-studio",
+  "name": "Synapse Image Studio",
+  "category": "dev-tools",
+  "icon": "image",
+  "description": "AI-first photorealistic image generation and precision editing for every AI connected to Synapse, with native-image import, chunked transfer, project-scoped outputs, provenance, and integrity auditing.",
+  "version": "1.1.0",
+  "publisher": "The WhatIf Company",
+  "verified": true,
+  "bundled": true,
+  "install_default": true,
+  "fields": [],
+  "actions": [
+    {
+      "id": "check",
+      "label": "Check readiness",
+      "handler": "synapse-image-studio:check",
+      "primary": true,
+      "scope": "tool"
+    }
+  ]
+}

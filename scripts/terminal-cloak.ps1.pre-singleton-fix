@@ -1,0 +1,197 @@
+# Synapse Terminal Cloak
+# Keeps background-owned console/terminal windows off the user's desktop without
+# terminating or suspending the process behind them. Intended for Synapse,
+# ChatGPT/Codex MCP helpers, Playwright MCP, browser native-messaging helpers,
+# Ollama, and Synapse watchdog/monitor processes.
+
+param(
+  [int]$PollMilliseconds = 25,
+  [string]$LogPath = "$PSScriptRoot\..\data\terminal-cloak.log"
+)
+
+$ErrorActionPreference = 'SilentlyContinue'
+$PollMilliseconds = [Math]::Max(25, [Math]::Min(1000, $PollMilliseconds))
+$logDir = Split-Path -Parent $LogPath
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+Add-Type @"
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class SynapseTerminalCloakNative {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    public static List<Tuple<IntPtr,uint,string>> VisibleWindows() {
+        var result = new List<Tuple<IntPtr,uint,string>>();
+        EnumWindows((hWnd, lParam) => {
+            if (!IsWindowVisible(hWnd)) return true;
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+            var sb = new StringBuilder(1024);
+            GetWindowText(hWnd, sb, sb.Capacity);
+            result.Add(Tuple.Create(hWnd, pid, sb.ToString()));
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
+}
+"@
+
+$terminalNames = @(
+  'cmd.exe', 'powershell.exe', 'pwsh.exe', 'windowsterminal.exe',
+  'openconsole.exe', 'conhost.exe'
+)
+
+$backgroundMarkers = @(
+  'synapse_daemon',
+  'pc-watch.ps1',
+  'daemon-watchdog.ps1',
+  'tunnel-watchdog.ps1',
+  'terminal-cloak.ps1',
+  'launch_codex_app_tools_mcp.cmd',
+  '@playwright/mcp',
+  'playwright-mcp',
+  'chrome.nativeMessaging',
+  'extension-host.exe',
+  'uvicorn app:app',
+  'ollama.exe serve',
+  'ollama app.exe',
+  'cloudflared.exe tunnel run',
+  '-m http.server',
+  'VoidHaulersServer',
+  'reflex-overlay.ps1'
+)
+
+$recentBackgroundShells = @{}
+$alreadyHidden = @{}
+
+function Write-CloakLog([string]$Message) {
+  $line = "{0} {1}" -f (Get-Date).ToString('o'), $Message
+  Add-Content -Path $LogPath -Value $line -Encoding utf8
+}
+
+function Get-ProcessRow([int]$ProcessId) {
+  return Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue
+}
+
+function Get-AncestryText([int]$ProcessId, [int]$MaxDepth = 7) {
+  $parts = New-Object System.Collections.Generic.List[string]
+  $seen = @{}
+  $cur = Get-ProcessRow $ProcessId
+  for ($i = 0; $i -lt $MaxDepth -and $cur; $i++) {
+    if ($seen.ContainsKey([string]$cur.ProcessId)) { break }
+    $seen[[string]$cur.ProcessId] = $true
+    $parts.Add("$($cur.Name) $($cur.CommandLine)")
+    if (-not $cur.ParentProcessId -or $cur.ParentProcessId -eq 0) { break }
+    $cur = Get-ProcessRow ([int]$cur.ParentProcessId)
+  }
+  return ($parts -join ' || ')
+}
+
+function Has-BackgroundMarker([string]$Text) {
+  if (-not $Text) { return $false }
+  foreach ($marker in $backgroundMarkers) {
+    if ($Text.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+      return $true
+    }
+  }
+  # Codex app-server children belong to the ChatGPT desktop runtime. Do not
+  # classify an arbitrary user-opened codex shell this way.
+  if ($Text -match '(?i)codex\.exe.+app-server' -and $Text -match '(?i)ChatGPT\.exe') {
+    return $true
+  }
+  return $false
+}
+
+function Hide-Window([IntPtr]$Hwnd, [int]$Pid, [string]$ProcessName, [string]$Title, [string]$Reason) {
+  if ($Hwnd -eq [IntPtr]::Zero) { return }
+  [void][SynapseTerminalCloakNative]::ShowWindow($Hwnd, 0) # SW_HIDE
+  $key = $Hwnd.ToInt64().ToString()
+  if (-not $alreadyHidden.ContainsKey($key)) {
+    $alreadyHidden[$key] = Get-Date
+    $safeTitle = if ($Title.Length -gt 180) { $Title.Substring(0,180) } else { $Title }
+    Write-CloakLog "hidden hwnd=$key pid=$Pid process=$ProcessName reason=$Reason title=$safeTitle"
+  }
+}
+
+Write-CloakLog "started pid=$PID pollMs=$PollMilliseconds"
+
+while ($true) {
+  $now = Get-Date
+
+  # Remember newly-running background shell clients. Windows Terminal is a
+  # brokered host, so its visible window PID is not always the PID of the cmd /
+  # PowerShell client that caused it to appear. This short correlation window
+  # lets us hide the host window without treating every user-opened terminal as
+  # background-owned.
+  $shellRows = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object { $backgroundClientNames -contains $_.Name.ToLowerInvariant() }
+  foreach ($row in $shellRows) {
+    $pidKey = [string]$row.ProcessId
+    if (-not $recentBackgroundShells.ContainsKey($pidKey)) {
+      $ancestry = Get-AncestryText ([int]$row.ProcessId)
+      if (Has-BackgroundMarker $ancestry) {
+        $recentBackgroundShells[$pidKey] = $now
+      }
+    }
+  }
+
+  foreach ($key in @($recentBackgroundShells.Keys)) {
+    $age = ($now - $recentBackgroundShells[$key]).TotalSeconds
+    $stillRunning = Get-Process -Id ([int]$key) -ErrorAction SilentlyContinue
+    if ($age -gt 4 -or -not $stillRunning) {
+      $recentBackgroundShells.Remove($key)
+    }
+  }
+
+  $recentBackgroundLaunch = ($recentBackgroundShells.Count -gt 0)
+
+  foreach ($win in [SynapseTerminalCloakNative]::VisibleWindows()) {
+    $hwnd = $win.Item1
+    $pid = [int]$win.Item2
+    $title = [string]$win.Item3
+    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    if (-not $proc) { continue }
+    $name = ($proc.ProcessName + '.exe').ToLowerInvariant()
+    if ($terminalNames -notcontains $name) { continue }
+
+    $ancestry = Get-AncestryText $pid
+    if (Has-BackgroundMarker $ancestry) {
+      Hide-Window $hwnd $pid $name $title 'background-ancestry'
+      continue
+    }
+
+    # Brokered Windows Terminal / OpenConsole host: only cloak it when it
+    # appears alongside a newly detected background shell client. Existing
+    # terminals are not hidden just because Synapse is running in the system.
+    if (($name -eq 'windowsterminal.exe' -or $name -eq 'openconsole.exe') -and $recentBackgroundLaunch) {
+      Hide-Window $hwnd $pid $name $title 'correlated-background-shell'
+      continue
+    }
+  }
+
+  # Bound bookkeeping for windows that no longer exist.
+  if ($alreadyHidden.Count -gt 500) {
+    $alreadyHidden = @{}
+  }
+
+  Start-Sleep -Milliseconds $PollMilliseconds
+}
+

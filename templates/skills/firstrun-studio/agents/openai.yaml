@@ -1,0 +1,6 @@
+interface:
+  display_name: "FirstRun Studio"
+  short_description: "Professional signup, auth, activation, and onboarding UX"
+  default_prompt: "Use $firstrun-studio to inspect this product, define its activation event, research relevant first-run patterns, and produce an original, implementation-ready landing/auth/onboarding experience with accessibility, recovery, responsive, analytics, and browser-proof quality gates."
+policy:
+  allow_implicit_invocation: true

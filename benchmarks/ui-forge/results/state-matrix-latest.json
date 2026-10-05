@@ -1,0 +1,550 @@
+{
+  "schema": "ui-forge-state-matrix-benchmark-v1",
+  "generated_at": "2026-09-09T12:21:56.054684+00:00",
+  "checks": {
+    "matrix_runner_succeeds": true,
+    "all_required_states_pass": true,
+    "desktop_and_mobile_both_run": true,
+    "loading_disabled_state_proven": true,
+    "error_state_proven": true,
+    "recovery_after_failure_proven": true,
+    "objective_audits_clean": true,
+    "console_and_page_errors_clean": true,
+    "missing_required_state_fails_validation": true
+  },
+  "passed": 9,
+  "total": 9,
+  "overall_pass": true,
+  "matrix_result": {
+    "ok": true,
+    "schema": "ui-forge-state-matrix-result-v1",
+    "generated_at": "2026-09-09T12:21:54.682Z",
+    "duration_ms": 3925.057,
+    "base_url": "http://127.0.0.1:52096/",
+    "required_states": [
+      "loading",
+      "empty",
+      "error",
+      "success",
+      "recovery"
+    ],
+    "state_summary": [
+      {
+        "id": "loading",
+        "passed": true,
+        "viewport_passes": 2,
+        "viewport_total": 2
+      },
+      {
+        "id": "empty",
+        "passed": true,
+        "viewport_passes": 2,
+        "viewport_total": 2
+      },
+      {
+        "id": "error",
+        "passed": true,
+        "viewport_passes": 2,
+        "viewport_total": 2
+      },
+      {
+        "id": "success",
+        "passed": true,
+        "viewport_passes": 2,
+        "viewport_total": 2
+      },
+      {
+        "id": "recovery",
+        "passed": true,
+        "viewport_passes": 2,
+        "viewport_total": 2
+      }
+    ],
+    "cases": [
+      {
+        "state": "loading",
+        "viewport": "desktop",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#loading",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "disabled",
+            "selector": "#refresh",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "hidden",
+            "selector": "#error",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "loading",
+        "viewport": "mobile",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#loading",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "disabled",
+            "selector": "#refresh",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "hidden",
+            "selector": "#error",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "empty",
+        "viewport": "desktop",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#empty",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "text_equals",
+            "selector": "#empty",
+            "value": "No items yet.",
+            "passed": true,
+            "actual": "No items yet."
+          },
+          {
+            "type": "visible",
+            "selector": "#add",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "empty",
+        "viewport": "mobile",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#empty",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "text_equals",
+            "selector": "#empty",
+            "value": "No items yet.",
+            "passed": true,
+            "actual": "No items yet."
+          },
+          {
+            "type": "visible",
+            "selector": "#add",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "error",
+        "viewport": "desktop",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#error",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "text_contains",
+            "selector": "#error",
+            "value": "Could not load inventory.",
+            "passed": true,
+            "actual": "Could not load inventory.Try again."
+          },
+          {
+            "type": "visible",
+            "selector": "#retry",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [
+          {
+            "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+            "location": {
+              "url": "http://127.0.0.1:52096/api/items",
+              "line": 0,
+              "column": 0,
+              "lineNumber": 0,
+              "columnNumber": 0
+            }
+          }
+        ],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "error",
+        "viewport": "mobile",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#error",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "text_contains",
+            "selector": "#error",
+            "value": "Could not load inventory.",
+            "passed": true,
+            "actual": "Could not load inventory.Try again."
+          },
+          {
+            "type": "visible",
+            "selector": "#retry",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [
+          {
+            "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+            "location": {
+              "url": "http://127.0.0.1:52096/api/items",
+              "line": 0,
+              "column": 0,
+              "lineNumber": 0,
+              "columnNumber": 0
+            }
+          }
+        ],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "success",
+        "viewport": "desktop",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#items",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "count_equals",
+            "selector": ".item",
+            "value": 2,
+            "passed": true,
+            "actual": 2
+          },
+          {
+            "type": "text_contains",
+            "selector": "#items",
+            "value": "Alpha",
+            "passed": true,
+            "actual": "AlphaBeta"
+          },
+          {
+            "type": "enabled",
+            "selector": "#refresh",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "success",
+        "viewport": "mobile",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#items",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "count_equals",
+            "selector": ".item",
+            "value": 2,
+            "passed": true,
+            "actual": 2
+          },
+          {
+            "type": "text_contains",
+            "selector": "#items",
+            "value": "Alpha",
+            "passed": true,
+            "actual": "AlphaBeta"
+          },
+          {
+            "type": "enabled",
+            "selector": "#refresh",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "recovery",
+        "viewport": "desktop",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#items",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "text_contains",
+            "selector": "#items",
+            "value": "Recovered",
+            "passed": true,
+            "actual": "Recovered"
+          },
+          {
+            "type": "hidden",
+            "selector": "#error",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "enabled",
+            "selector": "#refresh",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [
+          {
+            "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+            "location": {
+              "url": "http://127.0.0.1:52096/api/items",
+              "line": 0,
+              "column": 0,
+              "lineNumber": 0,
+              "columnNumber": 0
+            }
+          }
+        ],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      },
+      {
+        "state": "recovery",
+        "viewport": "mobile",
+        "passed": true,
+        "url": "http://127.0.0.1:52096/",
+        "assertions": [
+          {
+            "type": "visible",
+            "selector": "#items",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "text_contains",
+            "selector": "#items",
+            "value": "Recovered",
+            "passed": true,
+            "actual": "Recovered"
+          },
+          {
+            "type": "hidden",
+            "selector": "#error",
+            "passed": true,
+            "actual": true
+          },
+          {
+            "type": "enabled",
+            "selector": "#refresh",
+            "passed": true,
+            "actual": true
+          }
+        ],
+        "objective_audit": {
+          "horizontal_overflow": false,
+          "small_target_count": 0,
+          "missing_interactive_name_count": 0,
+          "unlabeled_form_control_count": 0,
+          "missing_image_alt_count": 0,
+          "heading_level_jump_count": 0,
+          "h1_count": 1
+        },
+        "audit_blockers": [],
+        "expected_failure_console_errors": [
+          {
+            "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+            "location": {
+              "url": "http://127.0.0.1:52096/api/items",
+              "line": 0,
+              "column": 0,
+              "lineNumber": 0,
+              "columnNumber": 0
+            }
+          }
+        ],
+        "console_errors": [],
+        "page_errors": [],
+        "screenshot": null
+      }
+    ],
+    "overall_pass": true
+  },
+  "claims": {
+    "loading_empty_error_success_recovery_matrix_proven": true,
+    "desktop_mobile_state_proof_proven": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

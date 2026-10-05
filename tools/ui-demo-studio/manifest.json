@@ -1,0 +1,126 @@
+{
+  "id": "ui-demo-studio",
+  "name": "UI Demo Studio",
+  "category": "dev-tools",
+  "icon": "wrench",
+  "description": "Record polished product walkthroughs and benchmark UI, UX, performance, accessibility, reliability, desktop/mobile behavior, mobile navigation access, keyboard focus, modal recovery, usable controls, task success, target identity, and before/after deltas. Produces videos, traces, scorecards, and AI remediation briefs.",
+  "version": "0.5.0",
+  "publisher": "The WhatIf Company",
+  "verified": true,
+  "bundled": true,
+  "install_default": true,
+  "fields": [
+    {
+      "key": "target",
+      "type": "text",
+      "label": "Project id or URL",
+      "required": true,
+      "placeholder": "stock-hunter or http://localhost:5173",
+      "help": "Use a Synapse project id when the project has a known local port, or paste a local/public http(s) URL. Project lookup happens in the detached worker so the action receipt is not blocked by target resolution."
+    },
+    {
+      "key": "duration",
+      "type": "number",
+      "label": "Video length (seconds)",
+      "required": false,
+      "min": 8,
+      "max": 60,
+      "default": 30,
+      "help": "Target duration. Recording happens in a detached worker so 30?60 second demos do not block Synapse."
+    },
+    {
+      "key": "journey",
+      "type": "text",
+      "label": "Guided journey (optional)",
+      "required": false,
+      "placeholder": "Dashboard > Rankings > Stock details",
+      "help": "Page/link/button labels separated by >, commas, or new lines. Leave blank for a safe automatic tour."
+    },
+    {
+      "key": "viewport",
+      "type": "text",
+      "label": "Viewport",
+      "required": false,
+      "default": "1280x720",
+      "placeholder": "1280x720",
+      "help": "Recording size such as 1280x720 or 390x844."
+    },
+    {
+      "key": "headless",
+      "type": "boolean",
+      "label": "Run browser headless",
+      "required": false,
+      "default": true,
+      "help": "Headless is best for unattended AI runs. Disable when you want to watch the browser tour live."
+    }
+  ],
+  "actions": [
+    {
+      "id": "record",
+      "label": "Record + benchmark",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "node",
+          "tools/ui-demo-studio/controller.mjs",
+          "record",
+          "--target",
+          "{target}",
+          "--duration",
+          "{duration}",
+          "--journey",
+          "{journey}",
+          "--viewport",
+          "{viewport}",
+          "--headless",
+          "{headless}"
+        ],
+        "timeout": 5
+      },
+      "primary": true,
+      "scope": "tool"
+    },
+    {
+      "id": "status",
+      "label": "Check latest",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "node",
+          "tools/ui-demo-studio/controller.mjs",
+          "status"
+        ],
+        "timeout": 3
+      },
+      "scope": "tool"
+    },
+    {
+      "id": "rebenchmark",
+      "label": "Re-benchmark latest",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "node",
+          "tools/ui-demo-studio/controller.mjs",
+          "benchmark-latest"
+        ],
+        "timeout": 5
+      },
+      "scope": "tool"
+    },
+    {
+      "id": "open-report",
+      "label": "Open latest report",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "node",
+          "tools/ui-demo-studio/controller.mjs",
+          "open-latest"
+        ],
+        "timeout": 3
+      },
+      "scope": "tool"
+    }
+  ]
+}

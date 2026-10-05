@@ -17,6 +17,7 @@ from synapse_daemon.mcp_connector import (
     McpExecutorBusy,
     _mcp_dispatch_executor,
     _proxy_tool_arguments,
+    _run_captured_command,
 )
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -110,6 +111,31 @@ def test_tools_call_list_projects(tmp_path: Path) -> None:
     assert result["isError"] is False
     text = result["content"][0]["text"]
     assert "demo-project" in text
+
+
+def test_ui_forge_status_is_ai_readable_and_read_only(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+    listed = _rpc(client, token, "tools/list", url_suffix="?mode=read")
+    tools = {tool["name"]: tool for tool in listed.json()["result"]["tools"]}
+    assert "synapse_ui_forge_status" in tools
+    assert tools["synapse_ui_forge_status"]["annotations"]["readOnlyHint"] is True
+
+    res = _rpc(
+        client, token, "tools/call",
+        {"name": "synapse_ui_forge_status", "arguments": {}},
+        url_suffix="?mode=read",
+    )
+    assert res.status_code == 200, res.text
+    result = res.json()["result"]
+    assert result["isError"] is False
+    payload = json.loads(result["content"][0]["text"] )
+    assert payload["workflow"]["id"] == "ui-forge"
+    assert "runtime_readiness" in payload
+    assert "benchmark" in payload
+    # The isolated test data dir has no installed skill; status reports the blocker rather
+    # than mutating state or silently installing anything.
+    assert payload["skill"] is None
+    assert "ui-forge skill pack is not installed" in payload["blockers"]
 
 
 def test_tools_call_get_records(tmp_path: Path) -> None:
@@ -581,6 +607,69 @@ def test_recent_activity_returns_the_feed(tmp_path: Path) -> None:
 # _command_jobs for why that matters (a tunnel/proxy's own gateway timeout killing
 # the connection reads as an opaque 502 indistinguishable from the daemon being down).
 
+def test_request_restart_is_control_lane_and_persists_operation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("SYNAPSE_MCP_ALLOW_WRITES", "1")
+    client, token = _harness(tmp_path)
+
+    lane, _executor = _mcp_dispatch_executor(
+        {
+            "method": "tools/call",
+            "params": {"name": "synapse_request_restart", "arguments": {}},
+        }
+    )
+    assert lane == "control"
+
+    response = _rpc(
+        client,
+        token,
+        "tools/call",
+        {
+            "name": "synapse_request_restart",
+            "arguments": {
+                "operation_id": "restart-mcp-recovery",
+                "source": "auto",
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert result["isError"] is False, result
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["operation"]["operation_id"] == "restart-mcp-recovery"
+    assert payload["operation"]["status"] == "requested"
+
+    status = client.get(
+        "/api/v1/system/restart",
+        headers={"X-Synapse-Token": token},
+    )
+    assert status.status_code == 200
+    assert status.json()["operation"]["operation_id"] == "restart-mcp-recovery"
+
+
+def test_captured_command_timeout_kills_descendant_pipe_holders(tmp_path: Path) -> None:
+    import sys
+
+    child = (
+        "import subprocess,sys,time; "
+        "subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
+        "time.sleep(30)"
+    )
+    started = time.perf_counter()
+    result = _run_captured_command(
+        [sys.executable, "-c", child],
+        cwd=str(tmp_path),
+        timeout=0.2,
+    )
+    elapsed = time.perf_counter() - started
+
+    assert result["ok"] is False
+    assert result["timed_out"] is True
+    assert "process tree terminated" in result["detail"]
+    assert elapsed < 5.0
+
+
 def test_run_command_async_returns_immediately_then_pollable_to_done(tmp_path: Path, monkeypatch) -> None:
     import json
     import time
@@ -741,25 +830,115 @@ def test_mcp_dispatch_executor_bounds_queue_and_fails_fast() -> None:
     asyncio.run(scenario())
 
 
-def test_mcp_dispatch_reserves_control_lane_for_local_reads() -> None:
-    control_lane, control_executor = _mcp_dispatch_executor(
-        {
-            "method": "tools/call",
-            "params": {"name": "synapse_get_context", "arguments": {}},
-        }
-    )
-    blocking_lane, blocking_executor = _mcp_dispatch_executor(
-        {
-            "method": "tools/call",
-            "params": {
-                "name": "synapse_run_command",
-                "arguments": {"command": "echo ok"},
-            },
-        }
-    )
+def test_mcp_dispatch_reserves_control_lane_and_isolates_slow_workloads() -> None:
+    def routed(tool_name: str) -> tuple[str, McpDispatchExecutor]:
+        return _mcp_dispatch_executor(
+            {
+                "method": "tools/call",
+                "params": {"name": tool_name, "arguments": {}},
+            }
+        )
+
+    control_lane, control_executor = routed("synapse_get_context")
+    async_lane, async_executor = routed("synapse_run_command_async")
+    command_lane, command_executor = routed("synapse_run_command")
+    delegate_lane, delegate_executor = routed("synapse_delegate_module")
+    inspection_lane, inspection_executor = routed("synapse_runtime_status")
+    watch_lane, watch_executor = routed("synapse_watch_repo")
+    network_lane, network_executor = routed("synapse_http")
+    proxy_lane, proxy_executor = routed("synapse_list_mcp_tools")
+    media_lane, media_executor = routed("synapse_generate_image")
+
     assert control_lane == "control"
-    assert blocking_lane == "blocking"
-    assert control_executor is not blocking_executor
+    assert async_lane == "control"
+    assert command_lane == "command"
+    assert delegate_lane == "delegate"
+    assert inspection_lane == "inspection"
+    assert watch_lane == "repo-watch"
+    assert network_lane == "network"
+    assert proxy_lane == "mcp-proxy"
+    assert media_lane == "media"
+    assert async_executor is control_executor
+    assert len(
+        {
+            id(control_executor),
+            id(command_executor),
+            id(delegate_executor),
+            id(inspection_executor),
+            id(watch_executor),
+            id(network_executor),
+            id(proxy_executor),
+            id(media_executor),
+        }
+    ) == 8
+
+
+def test_cancelled_request_keeps_capacity_until_worker_really_exits() -> None:
+    async def scenario() -> None:
+        started = threading.Event()
+        release = threading.Event()
+        executor = McpDispatchExecutor(name="cancel-test", max_workers=1, max_queue=0)
+
+        def blocked() -> str:
+            started.set()
+            release.wait(timeout=5)
+            return "done"
+
+        task = asyncio.create_task(executor.run(blocked, label="test:cancel"))
+        assert await asyncio.to_thread(started.wait, 1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        try:
+            snapshot = executor.snapshot()
+            assert snapshot["in_flight"] == 1
+            assert snapshot["active"] == 1
+            with pytest.raises(McpExecutorBusy):
+                await executor.run(lambda: "must-not-submit", label="test:overflow-after-cancel")
+        finally:
+            release.set()
+
+        deadline = time.monotonic() + 2
+        while executor.snapshot()["in_flight"] and time.monotonic() < deadline:
+            await asyncio.sleep(0.02)
+        assert executor.snapshot()["in_flight"] == 0
+        executor.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_connector_health_route_and_status_tool_are_control_plane_reads(tmp_path: Path) -> None:
+    client, token = _harness(tmp_path)
+
+    health = client.get("/api/v1/health/mcp")
+    assert health.status_code == 200, health.text
+    payload = health.json()
+    assert payload["ok"] is True
+    assert "command" in payload["lanes"]
+    assert "network" in payload["lanes"]
+    assert payload["stalled_lanes"] == []
+
+    lane, _executor = _mcp_dispatch_executor(
+        {
+            "method": "tools/call",
+            "params": {"name": "synapse_mcp_executor_status", "arguments": {}},
+        }
+    )
+    assert lane == "control"
+
+    response = _rpc(
+        client,
+        token,
+        "tools/call",
+        {"name": "synapse_mcp_executor_status", "arguments": {}},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert result["isError"] is False, result
+    status = json.loads(result["content"][0]["text"])
+    assert status["ok"] is True
+    assert "control" in status["lanes"]
 
 
 def test_reserved_control_lane_survives_saturated_blocking_lane() -> None:

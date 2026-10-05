@@ -13,6 +13,7 @@ import {
   Copy,
   ExternalLink,
   Info,
+  Image as ImageIcon,
   Loader2,
   TerminalSquare,
   Wrench,
@@ -38,6 +39,7 @@ import { ToolDetailModal } from './ToolDetailModal';
 
 const ICONS: Record<string, typeof Wrench> = {
   cloud: Cloud,
+  image: ImageIcon,
   wrench: Wrench,
   terminal: TerminalSquare,
 };
@@ -267,7 +269,24 @@ export function ToolCard({
           </div>
           <div className='min-w-0'>
             <h3 className='truncate text-lg font-semibold tracking-tight'>{manifest.name}</h3>
-            <p className='font-mono text-xs text-muted-foreground'>v{manifest.version}</p>
+            <div className='flex flex-wrap items-center gap-1.5'>
+              <p className='font-mono text-xs text-muted-foreground'>v{manifest.version}</p>
+              {manifest.publisher && (
+                <Badge variant='outline' className='text-[10px]'>
+                  By {manifest.publisher}
+                </Badge>
+              )}
+              {manifest.verified && (
+                <Badge variant='secondary' className='text-[10px]'>
+                  Verified
+                </Badge>
+              )}
+              {manifest.bundled && (
+                <Badge variant='secondary' className='text-[10px]'>
+                  Synapse bundled
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         <div className='flex items-center gap-1.5'>

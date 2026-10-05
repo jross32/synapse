@@ -30,7 +30,21 @@ from typing import Any
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import __version__, boot_config, local_agent, mcp_servers, quality_os, skill_packs
+from . import (
+    __version__,
+    boot_config,
+    image_asset_catalog,
+    image_assets,
+    image_editing,
+    image_imports,
+    image_uploads,
+    local_agent,
+    mcp_servers,
+    quality_os,
+    skill_packs,
+    video_asset_catalog,
+    video_assets,
+)
 from . import agent_squads as squads
 from . import collaboration_rooms as collaboration_rooms_module
 from . import project_records as records
@@ -42,6 +56,7 @@ from .quick_actions import load_templates
 from .runtime_paths import repo_root
 from .runtime_resolution import resolve_command
 from .storage import Storage
+from .subprocess_utils import headless_creationflags
 from .time_utils import from_iso, to_iso, utc_now
 from .tools_registry import ToolRegistry
 from .ws import EventBus
@@ -141,15 +156,17 @@ def _http_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) ->
 def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -> Any:
     """Speak MCP to a stdio server for exactly one call, then shut it down.
 
-    A short-lived process per call rather than a pool: these servers are cheap to start,
-    and a long-lived one held across a remote chat's idle time is a process nobody is
-    watching. Correctness first; if the startup cost ever matters it can be pooled later.
-
-    Handshake is required - a server that has not seen `initialize` is entitled to refuse
-    everything after it, and several do.
+    MCP initialization is a round trip: the client must wait for the server's
+    initialize response before sending ``notifications/initialized`` and the
+    real request. Some servers used to tolerate all three messages being piped
+    at once; newer Playwright MCP releases correctly ignore the premature
+    ``tools/call``. Keep one bounded deadline across the whole exchange.
     """
     import json as _json
+    import queue
     import subprocess
+    import threading
+    import time
 
     # `npx` and friends are `.cmd` shims on Windows, and CreateProcess will not find them
     # from a bare name - every npx-launched server failed with
@@ -158,39 +175,93 @@ def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -
     executable = resolve_command(server.command) or server.command
     argv = [executable, *(server.args or [])]
     env = {**os.environ, **{k: str(v) for k, v in (server.env or {}).items()}}
-    proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                            env=env)
-    try:
-        lines = [
-            _json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-                "protocolVersion": "2024-11-05", "capabilities": {},
-                "clientInfo": {"name": "synapse", "version": __version__}}}),
-            _json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
-            _json.dumps({"jsonrpc": "2.0", "id": 2, "method": method, "params": params}),
-        ]
-        out, err = proc.communicate("\n".join(lines) + "\n", timeout=timeout)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        raise ValueError(f"{server.id} did not answer within {timeout}s") from None
-    finally:
-        if proc.poll() is None:
-            proc.kill()
+    proc = subprocess.Popen(
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        env=env,
+        creationflags=headless_creationflags(),
+    )
+    stdout_lines: queue.Queue[str | None] = queue.Queue()
+    stderr_lines: list[str] = []
 
-    for line in (out or "").splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            message = _json.loads(line)
-        except ValueError:
-            continue
-        if message.get("id") == 2:
+    def _pump_stdout() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            stdout_lines.put(line)
+        stdout_lines.put(None)
+
+    def _pump_stderr() -> None:
+        assert proc.stderr is not None
+        stderr_lines.extend(proc.stderr)
+
+    stdout_thread = threading.Thread(target=_pump_stdout, daemon=True)
+    stderr_thread = threading.Thread(target=_pump_stderr, daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+    deadline = time.monotonic() + max(1, timeout)
+
+    def _send(message: dict[str, Any]) -> None:
+        if proc.stdin is None or proc.poll() is not None:
+            raise ValueError(f"{server.id} exited before {message.get('method')}")
+        proc.stdin.write(_json.dumps(message) + "\n")
+        proc.stdin.flush()
+
+    def _wait_for(reply_id: int, phase: str) -> Any:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError(f"{server.id} did not answer {phase} within {timeout}s")
+            try:
+                line = stdout_lines.get(timeout=min(remaining, 0.25))
+            except queue.Empty:
+                if proc.poll() is not None:
+                    raise ValueError(
+                        f"{server.id} exited before replying to {phase}. stderr: {''.join(stderr_lines)[-400:]}"
+                    )
+                continue
+            if line is None:
+                raise ValueError(
+                    f"{server.id} returned no reply to {phase}. stderr: {''.join(stderr_lines)[-400:]}"
+                )
+            stripped = line.strip()
+            if not stripped.startswith("{"):
+                continue
+            try:
+                message = _json.loads(stripped)
+            except ValueError:
+                continue
+            if message.get("id") != reply_id:
+                continue
             if "error" in message:
                 raise ValueError(f"{server.id}: {message['error']}")
             return message.get("result")
-    raise ValueError(
-        f"{server.id} returned no reply to {method}. stderr: {(err or '')[-400:]}")
+
+    try:
+        _send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2024-11-05", "capabilities": {},
+            "clientInfo": {"name": "synapse", "version": __version__}}})
+        _wait_for(1, "initialize")
+        _send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        _send({"jsonrpc": "2.0", "id": 2, "method": method, "params": params})
+        return _wait_for(2, method)
+    finally:
+        try:
+            if proc.stdin is not None:
+                proc.stdin.close()
+        except OSError:
+            pass
+        if proc.poll() is None:
+            proc.kill()
+        try:
+            proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        stdout_thread.join(timeout=0.2)
+        stderr_thread.join(timeout=0.2)
 
 _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     # ChatGPT (and other MCP clients) read `annotations.readOnlyHint` to decide whether a
@@ -207,10 +278,22 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     #
     # -- genuinely read-only: nothing here can change state on this machine --
     "synapse_get_context": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_mcp_executor_status": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_projects": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_records": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_project_doctor": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_repair_candidate_evaluate": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_ai_context": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_image_generation_status": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_project_images": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_image_asset": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_audit_image_assets": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_video_generation_status": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_video_plan": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_video_job": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_project_videos": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_video_asset": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_audit_video_assets": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_tools": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_quick_actions": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_skill_packs": {"readOnlyHint": True, "idempotentHint": True},
@@ -225,14 +308,15 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_quality_summary": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_watch_repo": {"readOnlyHint": True, "idempotentHint": False},
     "synapse_runtime_status": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_ui_forge_status": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_blueprints": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_mcp_tools": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_read_file": {"readOnlyHint": True, "idempotentHint": True},
     # Looks up a work item and returns the REST call that starts it - it does not spawn
     # anything itself (see the handler), so it genuinely is read-only despite the name.
     "synapse_launch_work_item": {"readOnlyHint": True, "idempotentHint": True},
-    "synapse_list_playbooks": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_active_tasks": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_list_playbooks": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_playbook": {"readOnlyHint": True, "idempotentHint": True},
     # -- additive writes: create a new record, never delete or overwrite an existing one --
     "synapse_add_project_idea": {"readOnlyHint": False, "destructiveHint": False,
@@ -269,11 +353,33 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                                      "idempotentHint": True},
     "synapse_report_playbook_status": {"readOnlyHint": False, "destructiveHint": False,
                                        "idempotentHint": False},
+    "synapse_request_restart": {"readOnlyHint": False, "destructiveHint": True,
+                                "idempotentHint": False},
     # -- writes that can overwrite or replace content that already exists --
+    "synapse_repair_arena": {"readOnlyHint": False, "destructiveHint": False,
+                              "idempotentHint": False, "openWorldHint": True},
     "synapse_delegate_module": {"readOnlyHint": False, "destructiveHint": True,
                                 "idempotentHint": False, "openWorldHint": True},
     "synapse_write_file": {"readOnlyHint": False, "destructiveHint": True,
                            "idempotentHint": False},
+    "synapse_generate_image": {"readOnlyHint": False, "destructiveHint": True,
+                               "idempotentHint": False, "openWorldHint": True},
+    "synapse_edit_image": {"readOnlyHint": False, "destructiveHint": True,
+                           "idempotentHint": False, "openWorldHint": True},
+    "synapse_import_image_file": {"readOnlyHint": False, "destructiveHint": True,
+                                  "idempotentHint": False, "openWorldHint": False},
+    "synapse_begin_image_upload": {"readOnlyHint": False, "destructiveHint": False,
+                                   "idempotentHint": False, "openWorldHint": False},
+    "synapse_append_image_upload": {"readOnlyHint": False, "destructiveHint": False,
+                                    "idempotentHint": False, "openWorldHint": False},
+    "synapse_finish_image_upload": {"readOnlyHint": False, "destructiveHint": True,
+                                    "idempotentHint": False, "openWorldHint": False},
+    "synapse_create_video_plan": {"readOnlyHint": False, "destructiveHint": False,
+                                  "idempotentHint": False, "openWorldHint": False},
+    "synapse_start_video_render": {"readOnlyHint": False, "destructiveHint": True,
+                                    "idempotentHint": False, "openWorldHint": True},
+    "synapse_cancel_video_render": {"readOnlyHint": False, "destructiveHint": False,
+                                     "idempotentHint": True, "openWorldHint": False},
     # -- genuinely open-ended. Annotated as what they are, not softened to get past a
     #    client's safety layer: synapse_run_command runs arbitrary shell, synapse_http can
     #    issue DELETE against anything on the local network, and synapse_call_mcp_tool
@@ -311,6 +417,14 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
         {
+            "name": "synapse_mcp_executor_status",
+            "description": (
+                "Read bounded MCP executor health and saturation telemetry. This is a "
+                "lock-only control-lane diagnostic and does not submit work to slow lanes."
+            ),
+            "inputSchema": empty,
+        },
+        {
             "name": "synapse_list_projects",
             "description": "List the projects (apps) registered in Synapse, with status, kind, path, and port.",
             "inputSchema": empty,
@@ -342,6 +456,28 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "synapse_repair_candidate_evaluate",
+            "description": (
+                "Read-only evaluation of one Repair Arena staged candidate. Resolves the candidate by "
+                "registered project id + tournament id, inspects its Git diff, re-runs App Doctor's "
+                "read-only scan, and reports finding/score deltas. It does not execute tests, project "
+                "code, browser actions, or merges, so the result is provisional evidence only."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Registered Synapse project id."},
+                    "tournament_id": {"type": "string", "description": "Repair Arena tournament/staging id."},
+                    "candidate": {
+                        "type": "string",
+                        "description": "Optional candidate agent id/name or numeric rank as text. Defaults to rank 1.",
+                    },
+                },
+                "required": ["project_id", "tournament_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "synapse_get_project_ai_context",
             "description": (
                 "Read a project's shared AI memory (.synapse-ai-context.md) -- the running "
@@ -354,6 +490,140 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                     "project_id": {"type": "string", "description": "The project id (kebab-case)."},
                     "max_chars": {"type": "integer", "description": "Default 40000."},
                 },
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_image_generation_status",
+            "description": (
+                "Report whether Synapse image generation is configured and which provider/model "
+                "is behind the provider-neutral capability. This makes no image request and "
+                "does not reveal provider credentials."
+            ),
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_list_project_images",
+            "description": (
+                "List generated/edited image assets recorded for one registered project. "
+                "Reads the project-local .synapse/image-assets.jsonl provenance catalog."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Registered Synapse project id."},
+                    "verify_hashes": {
+                        "type": "boolean",
+                        "description": "Default false. Re-hash current files to detect modification.",
+                    },
+                },
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_get_image_asset",
+            "description": (
+                "Get the newest provenance record for one generated/edited project image."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Registered Synapse project id."},
+                    "relative_path": {
+                        "type": "string",
+                        "description": "Project-relative asset path.",
+                    },
+                    "verify_hash": {
+                        "type": "boolean",
+                        "description": "Default false. Re-hash the current file for integrity proof.",
+                    },
+                },
+                "required": ["project_id", "relative_path"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_audit_image_assets",
+            "description": (
+                "Verify the integrity of a project's generated/edited image catalog, including "
+                "missing files, modified hashes, malformed manifest lines, and duplicate paths."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Registered Synapse project id."},
+                },
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_video_generation_status",
+            "description": (
+                "Report Synapse Video Studio readiness: local backend/model, optional external adapter status, local "
+                "assembler readiness, five-minute orchestration limits, audio/dialogue support, and "
+                "continuity-group capabilities. Local generation is the default and does not require a cloud API key."
+            ),
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_get_video_plan",
+            "description": "Read one persisted project-scoped Video Studio storyboard/continuity plan.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"project_id": {"type": "string"}, "plan_id": {"type": "string"}},
+                "required": ["project_id", "plan_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_get_video_job",
+            "description": (
+                "Read durable progress for a detached Video Studio render job: queued/rendering/assembling/"
+                "completed/error/cancelled plus shot/group progress and final asset evidence."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {"project_id": {"type": "string"}, "job_id": {"type": "string"}},
+                "required": ["project_id", "job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_list_project_videos",
+            "description": "List generated project videos from .synapse/video-assets.jsonl provenance.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "verify_hashes": {"type": "boolean", "description": "Default false."},
+                },
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_get_video_asset",
+            "description": "Get the newest provenance/integrity record for one project-relative generated MP4.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "relative_path": {"type": "string"},
+                    "verify_hash": {"type": "boolean", "description": "Default false."},
+                },
+                "required": ["project_id", "relative_path"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_audit_video_assets",
+            "description": "Verify generated-video files against their project provenance manifest and SHA-256 hashes.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"project_id": {"type": "string"}},
                 "required": ["project_id"],
                 "additionalProperties": False,
             },
@@ -479,6 +749,15 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                 "failing UI contracts, and the latest browser-proof evidence. Call this before "
                 "claiming a UI change is done -- a gate opened by a real failure stays open until "
                 "a passing contract run closes it."
+            ),
+            "inputSchema": empty,
+        },
+        {
+            "name": "synapse_ui_forge_status",
+            "description": (
+                "AI-facing UI Forge preflight. Reports the installed UI Forge skill/version, "
+                "one-click workflow availability, benchmark spec/recent runs, and current coding-runtime "
+                "readiness without starting work. Call this before a substantial UI Forge run or benchmark."
             ),
             "inputSchema": empty,
         },
@@ -619,6 +898,53 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                     },
                 },
             ]
+        )
+
+        specs.append(
+            {
+                "name": "synapse_repair_arena",
+                "description": (
+                    "Run App Doctor -> Agent Arcade for a registered Synapse project. By default this "
+                    "is a planning-only repair tournament: read-only scan, discovered-but-not-executed "
+                    "tests, competing repair plans, and a persisted receipt. Optionally set "
+                    "prepare_candidates=true to stage the top plans into isolated Git worktrees while "
+                    "preserving the primary working tree. Nothing is auto-merged and project tests/code "
+                    "are still not executed by this tool. demo is deterministic/local; gemini may use "
+                    "Agent Arcade's external runtime."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {
+                            "type": "string",
+                            "description": "Registered Synapse project id (kebab-case).",
+                        },
+                        "rounds": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3,
+                            "description": "Competition rounds. Default 2.",
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["demo", "gemini"],
+                            "description": "Default demo. gemini may use an external runtime.",
+                        },
+                        "prepare_candidates": {
+                            "type": "boolean",
+                            "description": "Default false. If true, create isolated Git worktrees for the top candidate plans.",
+                        },
+                        "candidate_count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3,
+                            "description": "How many candidate worktrees to prepare when prepare_candidates=true. Default 3.",
+                        },
+                    },
+                    "required": ["project_id"],
+                    "additionalProperties": False,
+                },
+            }
         )
 
         # Drive tools -- only advertised when SYNAPSE_MCP_ALLOW_WRITES is set. These let a
@@ -984,6 +1310,320 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                     },
                 },
                 {
+                    "name": "synapse_generate_image",
+                    "description": (
+                        "Generate one production image through Synapse and save it directly inside "
+                        "a registered project's folder. Paths are project-relative, never arbitrary "
+                        "filesystem destinations. Existing files are protected unless overwrite=true. "
+                        "Synapse records provenance in .synapse/image-assets.jsonl."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {
+                                "type": "string",
+                                "description": "Registered Synapse project id.",
+                            },
+                            "prompt": {
+                                "type": "string",
+                                "description": "Detailed image-generation instruction.",
+                            },
+                            "relative_path": {
+                                "type": "string",
+                                "description": "Project-relative output path, e.g. public/images/hero.webp.",
+                            },
+                            "size": {
+                                "type": "string",
+                                "description": "Default auto; otherwise WIDTHxHEIGHT within provider limits.",
+                            },
+                            "quality": {
+                                "type": "string",
+                                "enum": ["auto", "low", "medium", "high", "xhigh", "max"],
+                                "description": "Default auto. Use max for highest-fidelity photorealistic or precision work; xhigh for production-quality work.",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["png", "jpeg", "webp"],
+                                "description": "Default png. File extension must match.",
+                            },
+                            "background": {
+                                "type": "string",
+                                "enum": ["auto", "opaque", "transparent"],
+                                "description": "Default auto. Transparent requires PNG or WebP.",
+                            },
+                            "overwrite": {
+                                "type": "boolean",
+                                "description": "Default false. Explicitly allow replacement of an existing asset.",
+                            },
+                        },
+                        "required": ["project_id", "prompt", "relative_path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_edit_image",
+                    "description": (
+                        "Edit or composite one or more existing project images through Synapse and "
+                        "save the result back into the same registered project. Supports an optional "
+                        "project-relative mask. All input/output paths stay inside the project root."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {
+                                "type": "string",
+                                "description": "Registered Synapse project id.",
+                            },
+                            "prompt": {
+                                "type": "string",
+                                "description": "Detailed image-editing instruction.",
+                            },
+                            "input_paths": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "minItems": 1,
+                                "description": "One or more project-relative source image paths.",
+                            },
+                            "relative_path": {
+                                "type": "string",
+                                "description": "Project-relative output path.",
+                            },
+                            "mask_path": {
+                                "type": "string",
+                                "description": "Optional project-relative mask image path.",
+                            },
+                            "size": {
+                                "type": "string",
+                                "description": "Default auto; otherwise WIDTHxHEIGHT within provider limits.",
+                            },
+                            "quality": {
+                                "type": "string",
+                                "enum": ["auto", "low", "medium", "high", "xhigh", "max"],
+                                "description": "Default auto. Use max for highest-fidelity photorealistic or precision work; xhigh for production-quality work.",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["png", "jpeg", "webp"],
+                                "description": "Default png. File extension must match.",
+                            },
+                            "background": {
+                                "type": "string",
+                                "enum": ["auto", "opaque", "transparent"],
+                                "description": "Default auto. Transparent requires PNG or WebP.",
+                            },
+                            "overwrite": {
+                                "type": "boolean",
+                                "description": "Default false. Explicitly allow replacement of an existing asset.",
+                            },
+                        },
+                        "required": ["project_id", "prompt", "input_paths", "relative_path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_import_image_file",
+                    "description": (
+                        "Import an existing local PNG/JPEG/WebP into a registered project with "
+                        "strict image validation, project-scoped output, SHA-256 provenance, and "
+                        "a Synapse audit receipt. Useful when an AI runtime already generated or "
+                        "downloaded the image itself. The original absolute source path is not "
+                        "stored in project provenance or the global audit log."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {
+                                "type": "string",
+                                "description": "Registered Synapse project id.",
+                            },
+                            "source_path": {
+                                "type": "string",
+                                "description": "Absolute path to an existing local PNG/JPEG/WebP.",
+                            },
+                            "relative_path": {
+                                "type": "string",
+                                "description": "Project-relative output path with matching image extension.",
+                            },
+                            "origin": {
+                                "type": "string",
+                                "description": "Optional origin label, e.g. chatgpt_native or local_file.",
+                            },
+                            "provider": {
+                                "type": "string",
+                                "description": "Optional provider provenance label.",
+                            },
+                            "model": {
+                                "type": "string",
+                                "description": "Optional model provenance label.",
+                            },
+                            "prompt": {
+                                "type": "string",
+                                "description": "Optional generation prompt stored only in the project-local manifest.",
+                            },
+                            "overwrite": {
+                                "type": "boolean",
+                                "description": "Default false. Explicitly allow replacement of an existing asset.",
+                            },
+                        },
+                        "required": ["project_id", "source_path", "relative_path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_begin_image_upload",
+                    "description": (
+                        "Begin a short-lived chunked image transfer for an AI runtime that has image "
+                        "bytes but cannot write directly to the PC. Returns an upload_id. Prompts are "
+                        "encrypted in temporary Synapse staging metadata."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string", "description": "Registered Synapse project id."},
+                            "relative_path": {
+                                "type": "string",
+                                "description": "Final project-relative .png/.jpg/.jpeg/.webp destination.",
+                            },
+                            "source_name": {
+                                "type": "string",
+                                "description": "Optional original/native filename for provenance.",
+                            },
+                            "origin": {
+                                "type": "string",
+                                "description": "Optional origin label, default ai_native_upload.",
+                            },
+                            "provider": {"type": "string", "description": "Optional provider label."},
+                            "model": {"type": "string", "description": "Optional model label."},
+                            "prompt": {
+                                "type": "string",
+                                "description": "Optional prompt; encrypted while staged, then stored project-locally.",
+                            },
+                            "overwrite": {
+                                "type": "boolean",
+                                "description": "Default false. Finalization may replace destination only when true.",
+                            },
+                            "expected_sha256": {
+                                "type": "string",
+                                "description": "Optional expected 64-character SHA-256 hex digest.",
+                            },
+                        },
+                        "required": ["project_id", "relative_path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_append_image_upload",
+                    "description": (
+                        "Append one base64-encoded chunk to a Synapse image upload. Keep chunks within "
+                        "the max_chunk_bytes returned by synapse_begin_image_upload."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "upload_id": {"type": "string"},
+                            "chunk_base64": {"type": "string"},
+                        },
+                        "required": ["upload_id", "chunk_base64"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_finish_image_upload",
+                    "description": (
+                        "Finalize a chunked image upload: verify optional SHA-256, validate real image "
+                        "headers/dimensions, save into the registered project, record provenance, then "
+                        "remove temporary staging files."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "upload_id": {"type": "string"},
+                        },
+                        "required": ["upload_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_create_video_plan",
+                    "description": (
+                        "Create a coherent project-scoped long-form video plan (up to 300 seconds). The calling AI "
+                        "supplies a story/character/style bible plus ordered 3-10 second shots. Shots sharing a "
+                        "contiguous continuity_group can preserve characters, motion, voice, ambience, and scene state "
+                        "through Synapse-controlled local/model continuity (max 40 seconds per group)."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "brief": {"type": "string"},
+                            "shots": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "prompt": {"type": "string"},
+                                        "duration_seconds": {"type": "integer", "minimum": 3, "maximum": 10},
+                                        "continuity_group": {"type": "string"},
+                                        "dialogue": {"type": "string"},
+                                        "audio_cues": {"type": "string"},
+                                        "transition": {"type": "string"},
+                                        "bridge_from_previous": {
+                                            "type": "boolean",
+                                            "description": "Default false. If true on the first shot of a new continuity group, seed it from the prior block's final frame for a seamless/match transition.",
+                                        },
+                                    },
+                                    "required": ["prompt"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                            "aspect_ratio": {"type": "string", "enum": ["16:9", "9:16"]},
+                            "resolution": {"type": "string", "enum": ["360p", "720p", "1080p", "4k"]},
+                            "audio_mode": {"type": "string", "enum": ["native", "silent"]},
+                            "story_bible": {"type": "string"},
+                            "character_bible": {"type": "string"},
+                            "style_bible": {"type": "string"},
+                            "reference_paths": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Optional project-relative PNG/JPEG/WebP character/style reference images.",
+                            },
+                        },
+                        "required": ["project_id", "title", "brief", "shots"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_start_video_render",
+                    "description": (
+                        "Start a detached Video Studio render from a saved plan. Returns immediately with job_id. "
+                        "The worker generates coherent continuity blocks with native audio/dialogue, locally assembles "
+                        "the final MP4, and writes project provenance. Poll with synapse_get_video_job."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "plan_id": {"type": "string"},
+                            "relative_path": {"type": "string", "description": "Project-relative .mp4 output path."},
+                            "overwrite": {"type": "boolean", "description": "Default false."},
+                        },
+                        "required": ["project_id", "plan_id", "relative_path"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_cancel_video_render",
+                    "description": "Request cooperative cancellation of a running Video Studio job between generation turns.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"project_id": {"type": "string"}, "job_id": {"type": "string"}},
+                        "required": ["project_id", "job_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
                     "name": "synapse_write_file",
                     "description": (
                         "Write a UTF-8 text file anywhere on this machine, creating parent directories. "
@@ -998,6 +1638,30 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                             "overwrite": {"type": "boolean", "description": "Default false."},
                         },
                         "required": ["path", "content"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "synapse_request_restart",
+                    "description": (
+                        "Request a clean Synapse desktop/daemon restart through the protected "
+                        "control lane. Use this as the recovery path when slow command/network "
+                        "workers are saturated; Electron polls the durable request and performs "
+                        "the normal graceful restart sequence."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "operation_id": {
+                                "type": "string",
+                                "description": "Optional stable request id (6-80 safe characters).",
+                            },
+                            "source": {
+                                "type": "string",
+                                "enum": ["auto", "desktop", "mobile", "tray", "cli"],
+                                "description": "Audit source; default auto.",
+                            },
+                        },
                         "additionalProperties": False,
                     },
                 },
@@ -1187,6 +1851,12 @@ class McpDispatchExecutor:
             max_workers=max_workers, thread_name_prefix=f"synapse-mcp-{name}"
         )
         self._slots = threading.BoundedSemaphore(max_workers + max_queue)
+        self._state_lock = threading.Lock()
+        self._in_flight = 0
+        self._active = 0
+        self._next_job_id = 0
+        self._started: dict[int, float] = {}
+        self._last_completed_monotonic = time.monotonic()
 
     async def run(
         self, func: Any, *args: Any, label: str = "mcp"
@@ -1200,29 +1870,56 @@ class McpDispatchExecutor:
 
         queued_at = time.perf_counter()
         loop = asyncio.get_running_loop()
+        with self._state_lock:
+            self._in_flight += 1
+            self._next_job_id += 1
+            job_id = self._next_job_id
 
         def invoke() -> tuple[Any, Exception | None, McpDispatchTiming]:
             started = time.perf_counter()
+            with self._state_lock:
+                self._active += 1
+                self._started[job_id] = time.monotonic()
             value: Any = None
             error: Exception | None = None
             try:
-                value = func(*args)
-            except Exception as exc:  # noqa: BLE001 -- preserve original tool error semantics
-                error = exc
-            finished = time.perf_counter()
-            return (
-                value,
-                error,
-                McpDispatchTiming(
-                    queue_ms=max(0.0, (started - queued_at) * 1000.0),
-                    execution_ms=max(0.0, (finished - started) * 1000.0),
-                ),
-            )
+                try:
+                    value = func(*args)
+                except Exception as exc:  # noqa: BLE001 -- preserve original tool error semantics
+                    error = exc
+                finished = time.perf_counter()
+                return (
+                    value,
+                    error,
+                    McpDispatchTiming(
+                        queue_ms=max(0.0, (started - queued_at) * 1000.0),
+                        execution_ms=max(0.0, (finished - started) * 1000.0),
+                    ),
+                )
+            finally:
+                # The worker owns its capacity slot until the actual synchronous
+                # work exits. Releasing from the awaiting coroutine is unsafe:
+                # client/proxy cancellation does not stop a Python worker thread,
+                # and releasing there lets unbounded work pile into
+                # ThreadPoolExecutor's private queue behind still-running calls.
+                with self._state_lock:
+                    self._active = max(0, self._active - 1)
+                    self._in_flight = max(0, self._in_flight - 1)
+                    self._started.pop(job_id, None)
+                    self._last_completed_monotonic = time.monotonic()
+                self._slots.release()
 
         try:
-            value, error, timing = await loop.run_in_executor(self._executor, invoke)
-        finally:
+            future = loop.run_in_executor(self._executor, invoke)
+        except Exception:
+            with self._state_lock:
+                self._in_flight = max(0, self._in_flight - 1)
             self._slots.release()
+            raise
+        # Shield because cancelling the HTTP request cannot cancel a worker
+        # thread. The slot is released by invoke() only when the work really
+        # exits, preserving the bounded-capacity contract under disconnects.
+        value, error, timing = await asyncio.shield(future)
 
         log = logger.debug
         if timing.queue_ms >= 1000:
@@ -1237,50 +1934,144 @@ class McpDispatchExecutor:
             raise error
         return value, timing
 
+    def snapshot(self) -> dict[str, Any]:
+        """Cheap lock-only telemetry safe to call from the protected control lane."""
+        now = time.monotonic()
+        with self._state_lock:
+            oldest_active_seconds = (
+                max(0.0, now - min(self._started.values()))
+                if self._started
+                else 0.0
+            )
+            return {
+                "name": self.name,
+                "max_workers": self.max_workers,
+                "queue_capacity": self.max_queue,
+                "in_flight": self._in_flight,
+                "active": self._active,
+                "queued": max(0, self._in_flight - self._active),
+                "saturated": self._in_flight >= self.max_workers + self.max_queue,
+                "oldest_active_seconds": round(oldest_active_seconds, 3),
+                "seconds_since_completion": round(
+                    max(0.0, now - self._last_completed_monotonic), 3
+                ),
+            }
+
     def shutdown(self, *, wait: bool = True) -> None:
         self._executor.shutdown(wait=wait, cancel_futures=True)
 
 
-# Reserve a small dedicated pool for cheap local control/read operations so
-# get_context, session inspection, thread heartbeats, command-result polling, and
-# recovery controls are never starved by long-running blocking work. The blocking
-# lane serves shell/network/downstream-MCP calls; these are I/O-bound waits (subprocess
-# and HTTP calls sitting idle on a syscall, not CPU-bound work), so sizing it well past
-# the CPU count is safe -- an oversubscribed thread here costs a stack, not a core.
-# Live production load (2026-08-30) showed the previous 12-worker/zero-queue blocking
-# lane saturating repeatedly under real concurrent usage (many standing sessions each
-# running synapse_run_command/synapse_watch_repo at once), rejecting calls outright
-# with no buffer -- raised to 32 workers, and both lanes now carry a small queue so a
-# brief burst waits a beat instead of failing immediately.
-_MCP_CONTROL_EXECUTOR = McpDispatchExecutor(name="control", max_workers=6, max_queue=6)
-_MCP_BLOCKING_EXECUTOR = McpDispatchExecutor(name="blocking", max_workers=32, max_queue=16)
+# Reserve independent bounded pools for different kinds of slow work. A single
+# "blocking" pool is not enough isolation: production load on 2026-08-30 filled all
+# 32 workers plus the 16-request queue with long shell commands, which made unrelated
+# localhost HTTP calls, downstream MCP discovery, repo/status checks, and Foreman
+# launches fail with the same opaque connector error. Sharding the slow work means one
+# workload can saturate and fail fast without taking the other recovery/control paths
+# down with it.
+#
+# synapse_run_command_async is intentionally left on the control lane. Its handler only
+# records a job and starts a daemon thread; it does not wait for the command itself, so
+# keeping that start path available is also the escape hatch when the synchronous
+# command lane is full.
+_MCP_CONTROL_EXECUTOR = McpDispatchExecutor(name="control", max_workers=8, max_queue=8)
+_MCP_COMMAND_EXECUTOR = McpDispatchExecutor(name="command", max_workers=32, max_queue=16)
+_MCP_DELEGATE_EXECUTOR = McpDispatchExecutor(name="delegate", max_workers=4, max_queue=4)
+_MCP_INSPECTION_EXECUTOR = McpDispatchExecutor(name="inspection", max_workers=8, max_queue=8)
+_MCP_WATCH_EXECUTOR = McpDispatchExecutor(name="repo-watch", max_workers=8, max_queue=8)
+_MCP_NETWORK_EXECUTOR = McpDispatchExecutor(name="network", max_workers=12, max_queue=12)
+_MCP_PROXY_EXECUTOR = McpDispatchExecutor(name="mcp-proxy", max_workers=12, max_queue=12)
+_MCP_MEDIA_EXECUTOR = McpDispatchExecutor(name="media", max_workers=6, max_queue=6)
 
-_BLOCKING_MCP_TOOLS = frozenset(
+_COMMAND_MCP_TOOLS = frozenset({"synapse_run_command"})
+_DELEGATE_MCP_TOOLS = frozenset({"synapse_delegate_module"})
+_INSPECTION_MCP_TOOLS = frozenset({"synapse_runtime_status", "synapse_ui_forge_status"})
+_WATCH_MCP_TOOLS = frozenset({"synapse_watch_repo"})
+
+_NETWORK_MCP_TOOLS = frozenset(
     {
-        "synapse_delegate_module",
-        "synapse_runtime_status",
-        "synapse_run_command",
-        "synapse_run_command_async",
-        "synapse_watch_repo",
         "synapse_http",
         "synapse_web_search",
+    }
+)
+
+_PROXY_MCP_TOOLS = frozenset(
+    {
         "synapse_list_mcp_tools",
         "synapse_call_mcp_tool",
     }
 )
 
+_MEDIA_MCP_TOOLS = frozenset(
+    {
+        "synapse_generate_image",
+        "synapse_edit_image",
+        "synapse_import_image_file",
+        "synapse_begin_image_upload",
+        "synapse_append_image_upload",
+        "synapse_finish_image_upload",
+        "synapse_start_video_render",
+        "synapse_cancel_video_render",
+    }
+)
+
 
 def _mcp_dispatch_executor(msg: Any) -> tuple[str, McpDispatchExecutor]:
-    """Choose the reserved control lane or the bounded blocking-work lane."""
+    """Choose an isolated bounded executor for this MCP workload."""
     if not isinstance(msg, dict) or msg.get("method") != "tools/call":
         return ("control", _MCP_CONTROL_EXECUTOR)
     params = msg.get("params") or {}
     if not isinstance(params, dict):
         return ("control", _MCP_CONTROL_EXECUTOR)
     tool_name = str(params.get("name") or "")
-    if tool_name in _BLOCKING_MCP_TOOLS:
-        return ("blocking", _MCP_BLOCKING_EXECUTOR)
+    if tool_name in _COMMAND_MCP_TOOLS:
+        return ("command", _MCP_COMMAND_EXECUTOR)
+    if tool_name in _DELEGATE_MCP_TOOLS:
+        return ("delegate", _MCP_DELEGATE_EXECUTOR)
+    if tool_name in _INSPECTION_MCP_TOOLS:
+        return ("inspection", _MCP_INSPECTION_EXECUTOR)
+    if tool_name in _WATCH_MCP_TOOLS:
+        return ("repo-watch", _MCP_WATCH_EXECUTOR)
+    if tool_name in _NETWORK_MCP_TOOLS:
+        return ("network", _MCP_NETWORK_EXECUTOR)
+    if tool_name in _PROXY_MCP_TOOLS:
+        return ("mcp-proxy", _MCP_PROXY_EXECUTOR)
+    if tool_name in _MEDIA_MCP_TOOLS:
+        return ("media", _MCP_MEDIA_EXECUTOR)
     return ("control", _MCP_CONTROL_EXECUTOR)
+
+
+_MCP_EXECUTORS: tuple[McpDispatchExecutor, ...] = (
+    _MCP_CONTROL_EXECUTOR,
+    _MCP_COMMAND_EXECUTOR,
+    _MCP_DELEGATE_EXECUTOR,
+    _MCP_INSPECTION_EXECUTOR,
+    _MCP_WATCH_EXECUTOR,
+    _MCP_NETWORK_EXECUTOR,
+    _MCP_PROXY_EXECUTOR,
+    _MCP_MEDIA_EXECUTOR,
+)
+
+
+def mcp_executor_status() -> dict[str, Any]:
+    """Return lock-only executor telemetry; never submits work to a slow lane."""
+    lanes = {executor.name: executor.snapshot() for executor in _MCP_EXECUTORS}
+    # These lanes have bounded operations that should not stay fully occupied
+    # past the 90s blocking-call ceiling plus cleanup slack. Long-running
+    # delegate/repo-watch/media work is intentionally excluded from the
+    # automatic stall verdict.
+    critical_names = ("command", "inspection", "network", "mcp-proxy")
+    stalled = [
+        name
+        for name in critical_names
+        if lanes[name]["active"] >= lanes[name]["max_workers"]
+        and lanes[name]["oldest_active_seconds"] > (_BLOCKING_CALL_TIMEOUT_MAX + 15)
+        and lanes[name]["seconds_since_completion"] > (_BLOCKING_CALL_TIMEOUT_MAX + 15)
+    ]
+    return {
+        "ok": not stalled,
+        "stalled_lanes": stalled,
+        "lanes": lanes,
+    }
 
 
 def _mcp_request_label(msg: Any) -> str:
@@ -1350,19 +2141,105 @@ def _prune_old_command_jobs() -> None:
         _command_jobs.pop(job_id, None)
 
 
-def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float) -> None:
-    import subprocess
+def _terminate_command_tree(root_pid: int, grace_seconds: float = 0.75) -> None:
+    """Best-effort process-tree termination for connector shell commands.
+
+    subprocess.run(timeout=...) only guarantees that the direct child is killed. On
+    Windows, PowerShell/npm/test runners can leave descendants holding inherited stdout
+    or stderr handles open; subprocess then waits forever for pipe EOF after the timeout.
+    That exact failure can permanently consume every MCP executor worker. Snapshot the
+    descendant tree before terminating the root, then escalate survivors.
+    """
+
+    import psutil
 
     try:
-        done = subprocess.run(shell_argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
-        result = {
-            "ok": done.returncode == 0,
-            "exit_code": done.returncode,
-            "stdout": (done.stdout or "")[-20000:],
-            "stderr": (done.stderr or "")[-8000:],
-        }
+        root = psutil.Process(root_pid)
+    except psutil.NoSuchProcess:
+        return
+
+    procs = [root]
+    try:
+        procs.extend(root.children(recursive=True))
+    except psutil.NoSuchProcess:
+        pass
+
+    # Children first reduces the chance that the root exits and reparents them before
+    # they are signalled.
+    for proc in reversed(procs):
+        try:
+            proc.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    _gone, alive = psutil.wait_procs(procs, timeout=max(0.0, grace_seconds))
+    for proc in alive:
+        try:
+            proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    if alive:
+        psutil.wait_procs(alive, timeout=1.0)
+
+
+def _run_captured_command(
+    shell_argv: list[str], *, cwd: str, timeout: float
+) -> dict[str, Any]:
+    """Run one captured command with a hard, tree-aware wall-clock timeout."""
+
+    import subprocess
+
+    process = subprocess.Popen(
+        shell_argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=cwd,
+        creationflags=headless_creationflags(
+            int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+        ),
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        result = {"ok": False, "timed_out": True, "detail": f"did not finish within {timeout}s"}
+        _terminate_command_tree(process.pid)
+        try:
+            stdout, stderr = process.communicate(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            # A broken descendant can still retain an inherited pipe even after process-tree
+            # termination. Do not let pipe EOF keep the executor worker alive forever.
+            for stream in (process.stdout, process.stderr):
+                try:
+                    if stream is not None:
+                        stream.close()
+                except OSError:
+                    pass
+            stdout, stderr = "", ""
+        return {
+            "ok": False,
+            "timed_out": True,
+            "exit_code": process.poll(),
+            "stdout": (stdout or "")[-20000:],
+            "stderr": (stderr or "")[-8000:],
+            "detail": f"did not finish within {timeout}s; process tree terminated",
+        }
+
+    return {
+        "ok": process.returncode == 0,
+        "exit_code": process.returncode,
+        "stdout": (stdout or "")[-20000:],
+        "stderr": (stderr or "")[-8000:],
+    }
+
+
+def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float) -> None:
+    try:
+        # _run_captured_command uses explicit UTF-8 replacement decoding and tree-aware
+        # timeout cleanup so malformed output and descendant-held pipes cannot strand this
+        # background worker.
+        result = _run_captured_command(shell_argv, cwd=cwd, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 -- report it through the job, not an unhandled thread crash
         result = {"ok": False, "error": str(exc)}
     job = _command_jobs.get(job_id)
@@ -1533,6 +2410,51 @@ def build_mcp_router(
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown
             return records.get_records(storage.conn, project_id).model_dump(mode="json")
+        if name == "synapse_repair_candidate_evaluate":
+            from .repair_arena_candidates import evaluate_staged_candidate
+
+            project_id = str(args.get("project_id") or "").strip()
+            tournament_id = str(args.get("tournament_id") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            if not tournament_id:
+                raise ValueError("tournament_id is required")
+            projects_module.get(storage.conn, project_id)  # prove the project id is registered
+            candidate_raw = str(args.get("candidate") or "").strip()
+            candidate: str | int | None = candidate_raw or None
+            if candidate_raw.isdigit():
+                candidate = int(candidate_raw)
+            return evaluate_staged_candidate(
+                project_id,
+                tournament_id,
+                candidate=candidate,
+            )
+        if name == "synapse_repair_arena":
+            _require_writes()
+            from .repair_arena import run_repair_arena
+
+            project_id = str(args.get("project_id") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            rounds = args.get("rounds", 2)
+            if isinstance(rounds, bool) or not isinstance(rounds, int):
+                raise ValueError("rounds must be an integer between 1 and 3")
+            mode = str(args.get("mode") or "demo").strip().lower()
+            prepare_candidates = bool(args.get("prepare_candidates", False))
+            candidate_count = args.get("candidate_count", 3)
+            if isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or not 1 <= candidate_count <= 3:
+                raise ValueError("candidate_count must be an integer between 1 and 3")
+            project = projects_module.get(storage.conn, project_id)
+            return run_repair_arena(
+                project.path,
+                project_id=project.id,
+                project_name=project.name,
+                rounds=rounds,
+                mode=mode,
+                persist=True,
+                prepare_candidates=prepare_candidates,
+                candidate_count=candidate_count,
+            )
         if name == "synapse_project_doctor":
             from .project_doctor import diagnose_project
 
@@ -1563,6 +2485,71 @@ def build_mcp_router(
             path = ai_context_memory.ai_context_path(storage.data_dir, project_id)
             text = path.read_text(encoding="utf-8", errors="replace")
             return {**meta, "content": text[:limit], "truncated": len(text) > limit}
+        if name == "synapse_image_generation_status":
+            return image_assets.image_generation_status(storage)
+        if name in {"synapse_list_project_images", "synapse_get_image_asset", "synapse_audit_image_assets"}:
+            project_id = str(args.get("project_id") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            project = projects_module.get(storage.conn, project_id)
+            if name == "synapse_list_project_images":
+                return image_asset_catalog.load_image_assets(
+                    project.path,
+                    verify_hashes=bool(args.get("verify_hashes", False)),
+                )
+            if name == "synapse_get_image_asset":
+                relative_path = str(args.get("relative_path") or "").strip()
+                if not relative_path:
+                    raise ValueError("relative_path is required")
+                return {
+                    "project_id": project_id,
+                    "asset": image_asset_catalog.get_image_asset(
+                        project.path,
+                        relative_path,
+                        verify_hash=bool(args.get("verify_hash", False)),
+                    ),
+                }
+            return {
+                "project_id": project_id,
+                **image_asset_catalog.audit_image_assets(project.path),
+            }
+        if name == "synapse_video_generation_status":
+            return video_assets.video_generation_status(storage)
+        if name == "synapse_get_video_plan":
+            return video_assets.get_video_plan(
+                storage,
+                project_id=str(args.get("project_id") or "").strip(),
+                plan_id=str(args.get("plan_id") or "").strip(),
+            )
+        if name == "synapse_get_video_job":
+            return video_assets.get_video_job(
+                storage,
+                project_id=str(args.get("project_id") or "").strip(),
+                job_id=str(args.get("job_id") or "").strip(),
+            )
+        if name in {"synapse_list_project_videos", "synapse_get_video_asset", "synapse_audit_video_assets"}:
+            project_id = str(args.get("project_id") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            project = projects_module.get(storage.conn, project_id)
+            if name == "synapse_list_project_videos":
+                return video_asset_catalog.load_video_assets(
+                    project.path,
+                    verify_hashes=bool(args.get("verify_hashes", False)),
+                )
+            if name == "synapse_get_video_asset":
+                relative_path = str(args.get("relative_path") or "").strip()
+                if not relative_path:
+                    raise ValueError("relative_path is required")
+                return {
+                    "project_id": project_id,
+                    "asset": video_asset_catalog.get_video_asset(
+                        project.path,
+                        relative_path,
+                        verify_hash=bool(args.get("verify_hash", False)),
+                    ),
+                }
+            return {"project_id": project_id, **video_asset_catalog.audit_video_assets(project.path)}
         if name == "synapse_get_context":
             projects = projects_module.list_projects(storage.conn)
             squad_list = squads.list_squads(storage.conn)
@@ -1587,6 +2574,8 @@ def build_mcp_router(
                     "why": "Synapse uses this durable identity to show exact active/idle/error/stale threads and cumulative worked time.",
                 },
             }
+        if name == "synapse_mcp_executor_status":
+            return mcp_executor_status()
         if name == "synapse_trace_record":
             _require_writes()
             from . import trace_recorder as _trace
@@ -1913,6 +2902,80 @@ def build_mcp_router(
                     ),
                 )
             return work_item.model_dump(mode="json")
+        if name == "synapse_ui_forge_status":
+            from . import benchmarks as _benchmarks
+            from . import coder_runtimes as _cr
+
+            installed = next(
+                (item for item in skill_packs.list_installed(storage.data_dir) if item.manifest.id == "ui-forge"),
+                None,
+            )
+            quick_action = next((a for a in load_templates() if a.id == "ui-forge"), None)
+            try:
+                spec = _benchmarks.get_spec_bundle(storage.conn, "ui-forge-v1")
+                spec_payload = {
+                    "id": spec.spec.id,
+                    "name": spec.spec.name,
+                    "scenario_count": len(spec.scenarios),
+                    "default_repeat_count": spec.spec.default_repeat_count,
+                    "scenario_ids": [scenario.id for scenario in spec.scenarios],
+                }
+            except Exception:  # noqa: BLE001 -- preflight should report absence, not fail entirely
+                spec_payload = None
+            recent_runs = [
+                run.model_dump(mode="json")
+                for run in _benchmarks.list_runs(storage.conn)
+                if run.spec_id == "ui-forge-v1"
+            ][:5]
+            runtimes = [status.model_dump(mode="json") for status in _cr.preflight()]
+            ready_runtimes = [item["runtime"] for item in runtimes if item.get("usable_now")]
+            blockers: list[str] = []
+            if installed is None:
+                blockers.append("ui-forge skill pack is not installed")
+            if quick_action is None:
+                blockers.append("ui-forge quick action is not available")
+            if spec_payload is None:
+                blockers.append("ui-forge-v1 benchmark spec is not registered")
+            if not ready_runtimes:
+                blockers.append("no coding runtime is currently ready")
+            return {
+                "ready": installed is not None and quick_action is not None and spec_payload is not None,
+                "skill": (
+                    {
+                        "id": installed.manifest.id,
+                        "version": installed.manifest.version,
+                        "package_sha256": installed.package_sha256,
+                        "resource_count": len(installed.resources),
+                        "benchmark_spec_id": installed.benchmark_spec_id,
+                    }
+                    if installed is not None
+                    else None
+                ),
+                "workflow": (
+                    {
+                        "id": quick_action.id,
+                        "name": quick_action.name,
+                        "launch_mode": getattr(quick_action, "launch_mode", None),
+                        "prompt_filename": getattr(quick_action, "prompt_filename", None),
+                    }
+                    if quick_action is not None
+                    else None
+                ),
+                "benchmark": {
+                    "spec": spec_payload,
+                    "recent_runs": recent_runs,
+                },
+                "runtime_readiness": {
+                    "ready_runtimes": ready_runtimes,
+                    "runtimes": runtimes,
+                },
+                "blockers": blockers,
+                "hint": (
+                    "Read synapse_get_skill_pack(skill_id='ui-forge') before execution. "
+                    "Use the ui-forge quick action for a normal run; use its benchmark_matrix.py helper for a measured baseline/challenger run."
+                ),
+            }
+
         if name == "synapse_runtime_status":
             _require_writes()
             from . import ai_executions as _ai_executions
@@ -2012,9 +3075,25 @@ def build_mcp_router(
                 ),
             }
 
+        if name == "synapse_request_restart":
+            _require_writes()
+            from .routes_system import RestartRequest, create_restart_operation
+
+            payload = RestartRequest(
+                operation_id=(str(args.get("operation_id") or "").strip() or None),
+                source=str(args.get("source") or "auto"),
+            )
+            operation = create_restart_operation(storage, payload)
+            return {
+                "operation": operation,
+                "note": (
+                    "Restart request persisted on the MCP control lane. The Electron "
+                    "recovery poller will perform the normal graceful restart sequence."
+                ),
+            }
+
         if name == "synapse_run_command":
             _require_writes()
-            import subprocess
             import sys as _sys
 
             command = str(args.get("command", "")).strip()
@@ -2030,21 +3109,10 @@ def build_mcp_router(
             # has no such ceiling because it never holds the HTTP request open in the first place.
             timeout = min(int(args.get("timeout_seconds") or 120), _SYNC_RUN_TIMEOUT_MAX)
             cwd = str(args.get("cwd") or repo_root())
-            shell_argv = (["powershell", "-NoProfile", "-Command", command]
+            shell_argv = (["powershell", "-NoProfile", "-NonInteractive", "-Command", command]
                           if _sys.platform == "win32" else ["bash", "-lc", command])
-            try:
-                done = subprocess.run(shell_argv, capture_output=True, text=True,
-                                      timeout=timeout, cwd=cwd)
-            except subprocess.TimeoutExpired:
-                return {"ok": False, "timed_out": True,
-                        "detail": f"did not finish within {timeout}s"}
-            return {
-                "ok": done.returncode == 0,
-                "exit_code": done.returncode,
-                "stdout": (done.stdout or "")[-20000:],
-                "stderr": (done.stderr or "")[-8000:],
-                "cwd": cwd,
-            }
+            result = _run_captured_command(shell_argv, cwd=cwd, timeout=timeout)
+            return {"cwd": cwd, **result}
 
         if name == "synapse_run_command_async":
             _require_writes()
@@ -2055,7 +3123,7 @@ def build_mcp_router(
                 raise ValueError("command is required")
             timeout = min(int(args.get("timeout_seconds") or 120), 1800)
             cwd = str(args.get("cwd") or repo_root())
-            shell_argv = (["powershell", "-NoProfile", "-Command", command]
+            shell_argv = (["powershell", "-NoProfile", "-NonInteractive", "-Command", command]
                           if _sys.platform == "win32" else ["bash", "-lc", command])
             job_id = uuid.uuid4().hex[:12]
             _command_jobs[job_id] = {
@@ -2118,6 +3186,172 @@ def build_mcp_router(
             timeout = float(args.get("timeout_seconds") or _repo_watch.DEFAULT_TIMEOUT_SECONDS)
             result = _repo_watch.wait_for_repo_change_sync(target, timeout_seconds=timeout)
             return result.model_dump(mode="json")
+
+        if name == "synapse_generate_image":
+            _require_writes()
+            project_id = str(args.get("project_id") or "").strip()
+            prompt = str(args.get("prompt") or "").strip()
+            relative_path = str(args.get("relative_path") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            if not prompt:
+                raise ValueError("prompt is required")
+            if not relative_path:
+                raise ValueError("relative_path is required")
+            return image_assets.generate_project_image(
+                storage,
+                project_id=project_id,
+                prompt=prompt,
+                relative_path=relative_path,
+                size=str(args.get("size") or "auto"),
+                quality=str(args.get("quality") or "auto"),
+                output_format=str(args.get("output_format") or "png"),
+                background=str(args.get("background") or "auto"),
+                overwrite=bool(args.get("overwrite", False)),
+                audit_source="auto",
+            )
+
+        if name == "synapse_edit_image":
+            _require_writes()
+            project_id = str(args.get("project_id") or "").strip()
+            prompt = str(args.get("prompt") or "").strip()
+            relative_path = str(args.get("relative_path") or "").strip()
+            input_paths = args.get("input_paths") or []
+            if not project_id:
+                raise ValueError("project_id is required")
+            if not prompt:
+                raise ValueError("prompt is required")
+            if not isinstance(input_paths, list) or not input_paths:
+                raise ValueError("input_paths must contain at least one project-relative image path")
+            if not relative_path:
+                raise ValueError("relative_path is required")
+            return image_editing.edit_project_image(
+                storage,
+                project_id=project_id,
+                prompt=prompt,
+                input_paths=[str(value) for value in input_paths],
+                relative_path=relative_path,
+                mask_path=(str(args.get("mask_path") or "").strip() or None),
+                size=str(args.get("size") or "auto"),
+                quality=str(args.get("quality") or "auto"),
+                output_format=str(args.get("output_format") or "png"),
+                background=str(args.get("background") or "auto"),
+                overwrite=bool(args.get("overwrite", False)),
+                audit_source="auto",
+            )
+
+        if name == "synapse_begin_image_upload":
+            _require_writes()
+            project_id = str(args.get("project_id") or "").strip()
+            relative_path = str(args.get("relative_path") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            if not relative_path:
+                raise ValueError("relative_path is required")
+            return image_uploads.begin_image_upload(
+                storage,
+                project_id=project_id,
+                relative_path=relative_path,
+                source_name=(str(args.get("source_name") or "").strip() or None),
+                origin=str(args.get("origin") or "ai_native_upload"),
+                provider=(str(args.get("provider") or "").strip() or None),
+                model=(str(args.get("model") or "").strip() or None),
+                prompt=(str(args.get("prompt") or "").strip() or None),
+                overwrite=bool(args.get("overwrite", False)),
+                expected_sha256=(str(args.get("expected_sha256") or "").strip() or None),
+            )
+
+        if name == "synapse_append_image_upload":
+            _require_writes()
+            upload_id = str(args.get("upload_id") or "").strip()
+            chunk_base64 = str(args.get("chunk_base64") or "").strip()
+            if not upload_id:
+                raise ValueError("upload_id is required")
+            if not chunk_base64:
+                raise ValueError("chunk_base64 is required")
+            return image_uploads.append_image_upload_chunk(
+                storage,
+                upload_id=upload_id,
+                chunk_base64=chunk_base64,
+            )
+
+        if name == "synapse_finish_image_upload":
+            _require_writes()
+            upload_id = str(args.get("upload_id") or "").strip()
+            if not upload_id:
+                raise ValueError("upload_id is required")
+            return image_uploads.finish_image_upload(
+                storage,
+                upload_id=upload_id,
+                audit_source="auto",
+            )
+
+        if name == "synapse_import_image_file":
+            _require_writes()
+            project_id = str(args.get("project_id") or "").strip()
+            source_path = str(args.get("source_path") or "").strip()
+            relative_path = str(args.get("relative_path") or "").strip()
+            if not project_id:
+                raise ValueError("project_id is required")
+            if not source_path:
+                raise ValueError("source_path is required")
+            if not Path(source_path).expanduser().is_absolute():
+                raise ValueError("source_path must be absolute")
+            if not relative_path:
+                raise ValueError("relative_path is required")
+            return image_imports.import_project_image_file(
+                storage,
+                project_id=project_id,
+                source_path=source_path,
+                relative_path=relative_path,
+                origin=str(args.get("origin") or "local_file"),
+                provider=(str(args.get("provider") or "").strip() or None),
+                model=(str(args.get("model") or "").strip() or None),
+                prompt=(str(args.get("prompt") or "").strip() or None),
+                overwrite=bool(args.get("overwrite", False)),
+                audit_source="auto",
+            )
+
+        if name == "synapse_create_video_plan":
+            _require_writes()
+            shots = args.get("shots") or []
+            if not isinstance(shots, list):
+                raise ValueError("shots must be an array")
+            references = args.get("reference_paths") or []
+            if not isinstance(references, list):
+                raise ValueError("reference_paths must be an array")
+            return video_assets.create_video_plan(
+                storage,
+                project_id=str(args.get("project_id") or "").strip(),
+                title=str(args.get("title") or "").strip(),
+                brief=str(args.get("brief") or "").strip(),
+                shots=shots,
+                aspect_ratio=str(args.get("aspect_ratio") or "16:9"),
+                resolution=str(args.get("resolution") or "720p"),
+                audio_mode=str(args.get("audio_mode") or "native"),
+                story_bible=str(args.get("story_bible") or ""),
+                character_bible=str(args.get("character_bible") or ""),
+                style_bible=str(args.get("style_bible") or ""),
+                reference_paths=[str(item) for item in references],
+            )
+
+        if name == "synapse_start_video_render":
+            _require_writes()
+            return video_assets.start_video_render(
+                storage,
+                project_id=str(args.get("project_id") or "").strip(),
+                plan_id=str(args.get("plan_id") or "").strip(),
+                relative_path=str(args.get("relative_path") or "").strip(),
+                overwrite=bool(args.get("overwrite", False)),
+            )
+
+        if name == "synapse_cancel_video_render":
+            _require_writes()
+            return video_assets.cancel_video_render(
+                storage,
+                project_id=str(args.get("project_id") or "").strip(),
+                job_id=str(args.get("job_id") or "").strip(),
+            )
 
         if name == "synapse_write_file":
             _require_writes()

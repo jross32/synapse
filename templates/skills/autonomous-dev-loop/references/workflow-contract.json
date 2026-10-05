@@ -1,0 +1,112 @@
+{
+  "id": "autonomous-dev-loop-v2",
+  "state_schema_version": 2,
+  "state_file": ".synapse/autonomous-dev-loop.json",
+  "history_file": ".synapse/autonomous-dev-history.jsonl",
+  "default_batch_iterations": 6,
+  "default_failure_budget": 2,
+  "default_soft_turn_minutes": 15,
+  "default_soft_turn_actions": 12,
+  "checkpoint_recommendation_fraction": 0.7,
+  "writer_policy": "one bounded writer lane per canonical project checkout/repo area; specialists may research/review concurrently but must not edit overlapping files",
+  "chat_policy": {
+    "default": "one durable home conversation per canonical project checkout",
+    "reuse": "reuse the healthy home conversation for subsequent bounded work items; for Synapse ChatGPT-Web prefer reuse_chat_from_work_item_id when available",
+    "replacement": "create a replacement only when the home chat is missing, inaccessible, corrupted, length-limited, or explicitly separated by the user",
+    "retirement": "persist the replacement home identity before archiving temporary/retired worker records; archive real provider conversations only from exact known identifiers and never from approximate title matching"
+  },
+  "iteration_phases": [
+    "orient",
+    "observe",
+    "prioritize",
+    "plan_proof",
+    "implement",
+    "verify",
+    "review",
+    "record",
+    "decide_continue"
+  ],
+  "continuity_phases": [
+    "turn_start",
+    "progress",
+    "checkpoint",
+    "pause_or_continue",
+    "resume",
+    "handoff"
+  ],
+  "checkpoint_triggers": [
+    "70 percent of configured soft time budget",
+    "70 percent of configured material action budget",
+    "before a long build/test/browser/package/migration operation",
+    "after material source mutation",
+    "after successful verification",
+    "before switching projects/worktrees/writer lanes",
+    "before handoff",
+    "on tool/runtime instability",
+    "at every verified iteration boundary",
+    "before a known batch or turn boundary"
+  ],
+  "required_checkpoint_fields": [
+    "resume_token",
+    "reason",
+    "phase",
+    "summary",
+    "next_step",
+    "pending",
+    "evidence",
+    "dirty_state",
+    "iteration_number",
+    "current_iteration",
+    "budget_snapshot",
+    "chat_home"
+  ],
+  "required_iteration_fields": [
+    "hypothesis",
+    "scope",
+    "acceptance_criteria",
+    "proof_plan",
+    "files_or_surfaces",
+    "risk",
+    "outcome",
+    "evidence",
+    "next_step"
+  ],
+  "resume_protocol": [
+    "load Synapse orientation and project AI context",
+    "load project-local loop state and latest checkpoint",
+    "reinspect repository status, runtime health, and concurrent writers",
+    "continue the checkpointed in-progress iteration before selecting a new one",
+    "rerun only the minimum evidence needed to detect material drift",
+    "continue from checkpoint next_step",
+    "checkpoint again before the next risky execution boundary"
+  ],
+  "continue_only_if": [
+    "project goal is not yet satisfied",
+    "no user decision or secret is required",
+    "failure budget is not exhausted",
+    "no unresolved concurrent-writer conflict exists",
+    "verification gates can still be run honestly",
+    "the next iteration is materially connected to the project goal"
+  ],
+  "hard_stop_conditions": [
+    "user pause or stop",
+    "credential, payment, legal acceptance, production data deletion, or other consequential external action needs human authorization",
+    "two consecutive failed or non-improving iterations by default",
+    "baseline is too broken or ambiguous to attribute the proposed change safely",
+    "a concurrent writer owns the same files or worktree lane",
+    "verification evidence contradicts the claimed improvement",
+    "scope has drifted away from the declared project goal"
+  ],
+  "recoverable_boundaries": [
+    "tool-call timeout",
+    "model-turn cutoff",
+    "browser worker death",
+    "machine or service restart",
+    "network interruption",
+    "stale heartbeat",
+    "user-requested pause",
+    "iteration batch boundary"
+  ],
+  "success_rule": "Never mark an iteration improved from self-description, transport text, worker disappearance, or chat completion alone. Require task-proportionate evidence from tests, build output, runtime/browser/playtest observation, static checks, or other objective project proof.",
+  "resume_query": "Use `resume-plan` to get the latest checkpoint, exact next action, in-progress iteration, budget snapshot, chat home, and archive queue size in one machine-readable response."
+}

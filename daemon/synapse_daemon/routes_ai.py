@@ -31,6 +31,7 @@ from . import benchmarks as benchmarks_module
 from . import blueprints as blueprints_module
 from . import coder_workspace as coder_workspace_module
 from . import collaboration_rooms as collaboration_rooms_module
+from . import image_assets as image_assets_module
 from . import local_models as local_models_module
 from . import mcp_servers as mcp_servers_module
 from . import projects as projects_module
@@ -619,6 +620,7 @@ def build_ai_router(
             "tools": tools,
             "mcp_servers": mcp_block,
             "local_ai": local_ai_block,
+            "image_generation": image_assets_module.image_generation_status(storage),
             "runtime_execution": {
                 "schema": "synapse.ai.runtimes/v1",
                 "capacity": [
@@ -694,6 +696,19 @@ def build_ai_router(
                     "purpose": "record local-operator knowledge that a runtime is quota exhausted, disabled, or unknown without spending a provider call",
                     "method": "POST",
                     "path": "/api/v1/ai/runtimes/{runtime_id}/capacity",
+                },
+                {
+                    "purpose": (
+                        "check image readiness; generate/edit/import project-scoped images; or inspect "
+                        "and integrity-audit the project-local image provenance catalog"
+                    ),
+                    "method": "GET | POST",
+                    "path": (
+                        "/api/v1/image-generation/status | /api/v1/image-generation/generate | "
+                        "/api/v1/image-generation/edit | /api/v1/image-generation/import-file | "
+                        "/api/v1/image-generation/uploads/begin | "
+                        "/api/v1/image-generation/assets/{project_id}"
+                    ),
                 },
                 {
                     "purpose": "list registered projects",

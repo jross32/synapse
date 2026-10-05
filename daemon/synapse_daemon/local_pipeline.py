@@ -30,7 +30,7 @@ from typing import Any, Callable
 from pydantic import BaseModel, Field
 
 from .local_agent import DEFAULT_CODER_MODEL, generate_code
-
+from .subprocess_utils import headless_creationflags
 
 RESAMPLE_TEMPERATURES = (0.4, 0.8)
 """Temperatures to retry a repair at when the model returns byte-identical code.
@@ -266,7 +266,8 @@ def _run(path: Path, cwd: Path, timeout: float = 45.0) -> tuple[bool, str]:
         # -B as well as the variable: the flag stops it writing a new cache, and deleting
         # the directory stops it reading an old one. Either alone leaves the hole open.
         proc = subprocess.run([sys.executable, "-B", path.name], capture_output=True,
-                              text=True, timeout=timeout, cwd=str(cwd), env=env)
+                              text=True, timeout=timeout, cwd=str(cwd), env=env,
+                   creationflags=headless_creationflags(),)
     except subprocess.TimeoutExpired:
         # Report the timeout that was actually applied. Hardcoding "45s" here meant a
         # caller-supplied budget produced an error message contradicting it, which sends

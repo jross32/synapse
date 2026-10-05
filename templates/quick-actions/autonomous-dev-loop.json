@@ -1,0 +1,24 @@
+{
+  "id": "autonomous-dev-loop",
+  "name": "Autonomous Dev Loop",
+  "description": "Keep improving a Synapse project through bounded verified iterations with execution checkpoints, durable chat reuse, resumable handoffs, and fail-safe stop conditions.",
+  "icon": "repeat",
+  "category": "workflows",
+  "tags": [
+    "autonomous",
+    "development",
+    "foreman",
+    "verification",
+    "checkpoint",
+    "resume",
+    "durable-chat",
+    "continuous-improvement"
+  ],
+  "launch_mode": "coder-thread",
+  "thread_title": "Autonomous Dev Loop",
+  "prompt_filename": "AUTONOMOUS-DEV-LOOP.md",
+  "prompt": "Run the installed Synapse skill `autonomous-dev-loop` against this project. Read its full SKILL.md, `references/workflow-contract.json`, and `references/execution-continuity.md` before making changes. Load the project's Synapse AI context and records, inspect the real repository/runtime and concurrent workers, then create or resume the project-local loop state. Treat this model/tool window as interruptible. If loop state already exists, call `resume-plan` before selecting work so the exact checkpoint and in-progress iteration win over a fresh brainstorm. Then: start a soft execution budget, record progress, checkpoint before long/risky tool calls and whenever the budget recommends it, and resume an existing in-progress checkpoint before selecting new work. Do not ask me to choose the next coding task if the project goal/milestone and evidence make the next step reasonably clear. Choose exactly one highest-value bounded iteration at a time, define acceptance criteria and proof before editing, use specialized Synapse skills/workers where useful, keep one overlapping writer lane, implement, verify fail-closed, review, record evidence + handoff, and continue automatically while `can_continue` remains true. Default to a six-iteration worker batch and two-consecutive-failure budget. For ChatGPT Web or other chat-backed runtimes, preserve one durable home conversation per canonical project checkout and reuse it for later work items when supported; do not spawn a new chat merely because a new iteration starts. Queue redundant/temporary chats for retirement only after the replacement home is persisted, and never archive real conversations by approximate title matching. At the batch/tool boundary, checkpoint exact state and hand off to Foreman/continuation rather than pretending one AI turn runs forever. Stop for human authorization on secrets, payments, destructive production actions, legal acceptance, or other consequential external actions. The success metric is measurable improvement in the running product, not agent activity, chat count, or diff size.",
+  "default_argv": [
+    "chatgpt"
+  ]
+}

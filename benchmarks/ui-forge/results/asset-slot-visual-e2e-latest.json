@@ -1,0 +1,100 @@
+{
+  "schema": "ui-forge-asset-slot-visual-e2e-v1",
+  "generated_at": "2026-09-09T12:21:25.183Z",
+  "overall_pass": true,
+  "duration_ms": 21530.616,
+  "initial": {
+    "src": "/old.png",
+    "alt": "Old hero",
+    "source": "src/App.jsx:2:81",
+    "id": "uif-l83rvd",
+    "naturalWidth": 20,
+    "naturalHeight": 12
+  },
+  "stage_asset": {
+    "sha256": "fa96391d4413156ea0ac43b3a8dfc3913123dbd9498a558b98fc39ed8b8fb99b",
+    "bytes": 98,
+    "width": 42,
+    "height": 24,
+    "public_url": "/ui-forge-assets/fa96391d4413156e-candidate.png"
+  },
+  "preview": {
+    "decoded": true,
+    "natural_width": 42,
+    "natural_height": 24,
+    "reverted": true,
+    "source_commit_ready": true
+  },
+  "source_commit": {
+    "ok": true,
+    "schema": "ui-forge-asset-slot-v1",
+    "dry_run": false,
+    "atomic": true,
+    "file": "src/App.jsx",
+    "source": "src/App.jsx:2:81",
+    "asset": {
+      "sha256": "fa96391d4413156ea0ac43b3a8dfc3913123dbd9498a558b98fc39ed8b8fb99b",
+      "bytes": 98,
+      "width": 42,
+      "height": 24,
+      "public_url": "/ui-forge-assets/fa96391d4413156e-candidate.png",
+      "project_asset": "public/ui-forge-assets/fa96391d4413156e-candidate.png"
+    },
+    "changes": [
+      {
+        "before": "/old.png",
+        "after": "/ui-forge-assets/fa96391d4413156e-candidate.png"
+      },
+      {
+        "before": "Old hero",
+        "after": "Generated hero"
+      }
+    ],
+    "syntax_reparse_passed": true,
+    "verification_required": [
+      "rerender application",
+      "verify image decodes and natural dimensions are non-zero",
+      "verify alt text and surrounding layout",
+      "run desktop/mobile browser proof",
+      "check console/runtime errors"
+    ]
+  },
+  "committed": {
+    "src": "/ui-forge-assets/fa96391d4413156e-candidate.png",
+    "alt": "Generated hero",
+    "source": "src/App.jsx:2:81",
+    "id": "uif-l83rvd",
+    "naturalWidth": 42,
+    "naturalHeight": 24
+  },
+  "identity_stable": true,
+  "provenance_receipt": true,
+  "browser": {
+    "console_errors": [],
+    "page_errors": [],
+    "desktop_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    },
+    "mobile_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    }
+  },
+  "claims": {
+    "generated_or_imported_raster_can_flow_preview_to_exact_source": true,
+    "asset_integrity_and_provenance_proven": true,
+    "not_a_provider_generation_quality_claim": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

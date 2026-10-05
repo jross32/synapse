@@ -126,7 +126,7 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     id: 'ai-coding',
     label: 'AI Coding',
     icon: Sparkles,
-    description: 'Coder workspace, ChatGPT companion, assistant, and review inbox',
+    description: 'Coder workspace, ChatGPT companion, assistant, and Smart Review',
     section: 'ai',
   },
   {

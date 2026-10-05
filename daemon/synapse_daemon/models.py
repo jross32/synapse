@@ -200,6 +200,10 @@ class ToolManifest(BaseModel):
     icon: str = "wrench"
     description: str = ""
     version: str = "0.1.0"
+    publisher: str | None = None
+    verified: bool = False
+    bundled: bool = False
+    install_default: bool = False
     fields: list[ToolField] = Field(default_factory=list)
     actions: list[ToolAction] = Field(default_factory=list)
     # True once a compiled-in handler has been bound; a manifest with no

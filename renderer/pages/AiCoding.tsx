@@ -31,8 +31,8 @@ export function AiCodingPage({
       <div className='shrink-0'>
         <PageHeader
           title='AI Coding'
-          subtitle='One workspace for project threads, AI runtimes, squads, tools, and review.'
-          helpText='Start in Workspace for a chat-first coding loop. Synapse keeps the selected project, runtime, files, reviews, and linked terminal work together while Squads, Assistant, Review, and ChatGPT remain one click away.'
+          subtitle='One workspace for project threads, AI runtimes, squads, tools, and Smart Review.'
+          helpText='Start in Workspace for a chat-first coding loop. Synapse keeps the selected project, runtime, files, Smart Review passes, and linked terminal work together while Squads, Assistant, Smart Review, and ChatGPT remain one click away.'
         />
       </div>
 
@@ -82,7 +82,7 @@ export function AiCodingPage({
           active={section === 'review'}
           onClick={() => onSectionChange?.('review')}
           icon={Inbox}
-          label='Review'
+          label='Smart Review'
         />
         <TopTab
           active={section === 'chatgpt'}
@@ -110,7 +110,9 @@ export function AiCodingPage({
         {section === 'blueprints' && <BlueprintsPage headerless />}
         {section === 'active-tasks' && <ActiveTasksPage />}
         {section === 'assistant' && <AssistantPage headerless />}
-        {section === 'review' && <ReviewPage headerless />}
+        {section === 'review' && (
+          <ReviewPage headerless onOpenWorkspace={() => onSectionChange?.('sessions')} />
+        )}
         {section === 'chatgpt' && <ChatgptCompanionPage headerless />}
       </div>
     </div>

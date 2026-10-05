@@ -1,0 +1,40 @@
+{
+  "id": "ui-forge",
+  "name": "UI Forge",
+  "description": "Build or overhaul a UI with isolated drafts, precise/atomic visual edits, Theme Capsules, real interaction/state-matrix proof, provenance-tracked image Asset Slots, runtime-owner tracing, desktop/mobile tests, scoring, and repair.",
+  "icon": "sparkles",
+  "category": "workflows",
+  "tags": [
+    "ui",
+    "ux",
+    "design",
+    "frontend",
+    "quality-os",
+    "browser-proof",
+    "model-routing",
+    "benchmark",
+    "source-mapping",
+    "workflow-state",
+    "visual-edit-bridge",
+    "self-improvement",
+    "conductor",
+    "direct-edit",
+    "visual-preview",
+    "drafts",
+    "parallel-directions",
+    "preview-before-merge",
+    "runtime-owner",
+    "runtime-writer",
+    "state-matrix",
+    "recovery-proof",
+    "asset-slots",
+    "image-provenance"
+  ],
+  "default_argv": [
+    "claude"
+  ],
+  "launch_mode": "coder-thread",
+  "thread_title": "UI Forge",
+  "prompt_filename": "UI-FORGE-BRIEF.md",
+  "prompt": "Use the installed Synapse skill pack `ui-forge` and its machine-readable `references/workflow-contract.json`. Treat the running application as the deliverable, not the code response. Inspect the real project/current UI first and preserve product truth, working behavior, auth, and brand constraints. For substantial work use `scripts/conductor.py` as the fail-closed run controller. For exploratory redesigns or multiple materially different directions, create isolated workspaces with `scripts/draft_workspace.py`; run UI Forge inside the returned draft workspace and do not accept it into live until browser/quality proof passes, its diff/risk status is reviewed, and conflict-aware accept succeeds. Research public/authorized references only when useful and borrow patterns rather than pixels. Recover or define semantic tokens/component rules before broad edits; plan bounded slices. For precise edits prefer compile-time source tags plus `scripts/visual_edit_bridge.js`; preview reversible text/class/allowlisted-attribute changes in-browser first, then commit only mechanically safe static JSX through `scripts/direct_ast_edit.mjs`, otherwise use the main coding worker. If a static edit does not persist or the rendered value is owned by runtime JavaScript/TypeScript, use `scripts/runtime_owner_locator.py` to find the actual DOM writer before making another edit. Run desktop/mobile and critical states in a real browser; use `scripts/browser_audit.js` and design drift checks where relevant. Score evidence, use the repair planner, and stop when the gate and structural stop rule pass. Record repeated tool/repair friction with `scripts/friction_ledger.py` and persist promoted reusable failures into Synapse. For workflow performance claims use `scripts/benchmark_matrix.py` with the `ui-forge-v1` same-model benchmark and preserve identical tasks with explicit treatment separation. For spacing, radius, color, border, shadow, typography, sizing, or layout tweaks, preview `style_props` in-browser, revert the preview, then commit via `scripts/css_style_editor.mjs`; do not leave inline-style debt. When reusing a proven brand/design language across projects, extract/validate/apply a semantic Theme Capsule with `scripts/theme_capsule.mjs`; dry-run first, update only matching target tokens, and never use blind global value replacement. For hover/focus/focus-visible/active/disabled/checked styling, treat inline preview as simulated only, commit to the exact pseudo-state CSS owner, then exercise that real browser state before completion. For substantial data-driven/stateful UI, define and run `scripts/state_matrix_runner.mjs` across every relevant required loading/empty/error/success/recovery state and desktop/mobile viewport; mocked failures may be expected evidence, but unexpected console/page errors and missing required states remain blockers. For generated/imported imagery, use the authorized image capability/provider first, then stage with `scripts/asset_slot.mjs`, preview the project-local asset on the exact rendered `<img>` with `scripts/asset_preview_bridge.js`, revert, dry-run/commit only static exact-source image slots, preserve alt/provenance, and browser-verify decode/layout."
+}

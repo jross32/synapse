@@ -36,6 +36,8 @@ from .storage import Storage
 from .tools import ToolHandler
 from .tools.cloudtap import CloudtapTool
 from .tools.fast_money import FastMoneyTool
+from .tools.image_studio import ImageStudioTool
+from .tools.video_studio import VideoStudioTool
 from .tools_primitives import is_known_primitive, run_primitive
 from .ws import EventBus
 
@@ -51,6 +53,8 @@ log = logging.getLogger(__name__)
 _BUILTIN_HANDLER_FACTORIES: dict[str, type[ToolHandler]] = {
     "cloudtap": CloudtapTool,
     "fast-money": FastMoneyTool,
+    "synapse-image-studio": ImageStudioTool,
+    "synapse-video-studio": VideoStudioTool,
 }
 
 

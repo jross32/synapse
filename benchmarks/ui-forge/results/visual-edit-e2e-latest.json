@@ -1,0 +1,87 @@
+{
+  "schema": "ui-forge-visual-edit-e2e-v1",
+  "generated_at": "2026-09-21T01:38:19.195Z",
+  "overall_pass": true,
+  "duration_ms": 5470.27,
+  "initial": {
+    "text": "Go",
+    "source": "src/App.jsx:8:7",
+    "forgeId": "uif-188xlx8",
+    "className": "cta"
+  },
+  "preview": {
+    "during": "Launch",
+    "after_revert": "Go",
+    "source_edit": {
+      "source": "src/App.jsx:8:7",
+      "operation": {
+        "type": "set_text",
+        "value": "Launch"
+      }
+    }
+  },
+  "direct_edit": {
+    "ok": true,
+    "schema": "ui-forge-direct-ast-edit-v2",
+    "dry_run": false,
+    "file": "src/App.jsx",
+    "source": "src/App.jsx:8:7",
+    "tag": "button",
+    "operation": {
+      "type": "set_text",
+      "before": "Go",
+      "after": "Launch"
+    },
+    "patch": {
+      "start": 230,
+      "end": 232,
+      "replacement_bytes": 6,
+      "changed_span_bytes": 2
+    },
+    "bytes_before": 261,
+    "bytes_after": 265,
+    "syntax_reparse_passed": true,
+    "verification_required": [
+      "rerender application",
+      "reselect or re-probe the same UI Forge element",
+      "check surrounding layout and critical behavior",
+      "check console/runtime errors"
+    ]
+  },
+  "committed": {
+    "text": "Launch",
+    "source": "src/App.jsx:8:7",
+    "forgeId": "uif-188xlx8",
+    "className": "cta"
+  },
+  "browser": {
+    "console_errors": [],
+    "page_errors": [],
+    "desktop_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    },
+    "mobile_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    }
+  },
+  "claims": {
+    "real_vite_compile_time_source_tag": true,
+    "reversible_browser_preview": true,
+    "exact_source_commit": true,
+    "hmr_preserved_source_identity": true,
+    "desktop_mobile_objective_audit_pass": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

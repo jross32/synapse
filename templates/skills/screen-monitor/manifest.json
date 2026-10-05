@@ -1,0 +1,13 @@
+{
+  "id": "screen-monitor",
+  "name": "Screen Monitor",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Read-only visual screen observation and human-view audit workflow for Synapse. Uses Reflex screenshots and window state to watch what a real user sees, detect meaningful visual changes, verify UI behavior, and record evidence without taking desktop input control.",
+  "entrypoint": "SKILL.md",
+  "tags": ["screen-monitoring", "visual-audit", "desktop", "reflex", "screenshots", "human-view", "ui-testing", "remote-cockpit", "evidence"],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": ["reflex", "desktop", "vision"],
+  "optional_capabilities": ["playwright", "browser", "github"]
+}

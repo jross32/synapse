@@ -1,0 +1,32 @@
+{
+  "id": "firstrun-studio",
+  "name": "FirstRun Studio",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Design-system-aware SaaS first-run experience architect for landing-page continuity, signup/signin, authentication, activation, onboarding, first-value moments, product tours, recovery paths, and verification. Researches references safely, creates original implementation-ready flows, and quality-gates the result.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "ux",
+    "onboarding",
+    "signup",
+    "signin",
+    "authentication",
+    "activation",
+    "landing-pages",
+    "product-tours",
+    "design-systems",
+    "accessibility"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "web-scraper",
+    "playwright",
+    "browser",
+    "web"
+  ],
+  "optional_capabilities": [
+    "github",
+    "warden"
+  ]
+}

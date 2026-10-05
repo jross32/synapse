@@ -1,0 +1,200 @@
+{
+  "schema": "ui-forge-batch-edit-benchmark-v1",
+  "generated_at": "2026-09-09T05:35:20.342605+00:00",
+  "checks": {
+    "multi_edit_apply_succeeds": true,
+    "same_file_reverse_order_preserves_pointers": true,
+    "cross_file_edit_succeeds": true,
+    "batch_reports_atomic": true,
+    "mixed_unsafe_batch_fails": true,
+    "mixed_unsafe_batch_writes_nothing": true,
+    "validation_failure_is_explicit": true,
+    "duplicate_source_is_refused": true,
+    "duplicate_refusal_writes_nothing": true,
+    "dry_run_is_non_mutating": true
+  },
+  "passed": 10,
+  "total": 10,
+  "overall_pass": true,
+  "positive": {
+    "ok": true,
+    "schema": "ui-forge-batch-ast-edit-v1",
+    "dry_run": false,
+    "atomic": true,
+    "rolled_back": false,
+    "edit_count": 3,
+    "file_count": 2,
+    "files": [
+      "src/App.jsx",
+      "src/Other.jsx"
+    ],
+    "apply_order": [
+      "src/App.jsx:1:69",
+      "src/App.jsx:1:35",
+      "src/Other.jsx:1:32"
+    ],
+    "applied": [
+      {
+        "index": 0,
+        "source": "src/App.jsx:1:35",
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": false,
+          "file": "src/App.jsx",
+          "source": "src/App.jsx:1:35",
+          "tag": "button",
+          "operation": {
+            "type": "set_text",
+            "before": "One",
+            "after": "First"
+          },
+          "patch": {
+            "start": 56,
+            "end": 59,
+            "replacement_bytes": 5,
+            "changed_span_bytes": 3
+          },
+          "bytes_before": 153,
+          "bytes_after": 155,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        }
+      },
+      {
+        "index": 1,
+        "source": "src/App.jsx:1:69",
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": false,
+          "file": "src/App.jsx",
+          "source": "src/App.jsx:1:69",
+          "tag": "button",
+          "operation": {
+            "type": "set_text",
+            "before": "Two",
+            "after": "Second"
+          },
+          "patch": {
+            "start": 90,
+            "end": 93,
+            "replacement_bytes": 6,
+            "changed_span_bytes": 3
+          },
+          "bytes_before": 150,
+          "bytes_after": 153,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        }
+      },
+      {
+        "index": 2,
+        "source": "src/Other.jsx:1:32",
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": false,
+          "file": "src/Other.jsx",
+          "source": "src/Other.jsx:1:32",
+          "tag": "button",
+          "operation": {
+            "type": "class_tokens",
+            "before": "other",
+            "after": "other selected"
+          },
+          "patch": {
+            "start": 49,
+            "end": 56,
+            "replacement_bytes": 16,
+            "changed_span_bytes": 7
+          },
+          "bytes_before": 74,
+          "bytes_after": 83,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        }
+      }
+    ],
+    "verification_required": [
+      "rerender application",
+      "re-probe every selected UI Forge source id",
+      "run affected desktop/mobile browser proof",
+      "check console/runtime errors"
+    ]
+  },
+  "negative": {
+    "ok": false,
+    "error": "batch validation failed; nothing was written",
+    "schema": "ui-forge-batch-ast-edit-v1",
+    "atomic": true,
+    "failed_index": 1,
+    "failed_source": "src/App.jsx:1:103",
+    "validation": [
+      {
+        "index": 0,
+        "source": "src/App.jsx:1:35",
+        "ok": true,
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": true,
+          "file": "src/App.jsx",
+          "source": "src/App.jsx:1:35",
+          "tag": "button",
+          "operation": {
+            "type": "set_text",
+            "before": "One",
+            "after": "ShouldNotLand"
+          },
+          "patch": {
+            "start": 56,
+            "end": 59,
+            "replacement_bytes": 13,
+            "changed_span_bytes": 3
+          },
+          "bytes_before": 150,
+          "bytes_after": 160,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        },
+        "stderr": ""
+      },
+      {
+        "index": 1,
+        "source": "src/App.jsx:1:103",
+        "ok": false,
+        "result": {
+          "ok": false,
+          "error": "refusing to edit dynamic className: attribute is not a static string"
+        },
+        "stderr": ""
+      }
+    ]
+  },
+  "claims": {
+    "atomic_batch_gate_proven": true,
+    "same_file_pointer_stability_proven": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

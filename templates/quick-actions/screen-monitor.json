@@ -1,0 +1,10 @@
+{
+  "id": "screen-monitor",
+  "name": "Screen Monitor",
+  "description": "Observe the real desktop or app window through Reflex, detect meaningful visual changes, and turn what a human would see into evidence-backed findings or verification.",
+  "prompt": "Use the installed Synapse skill pack `screen-monitor`. Observe the real visible screen through Synapse + Reflex in read-only mode. Identify the active window or requested target, capture a baseline screenshot, then inspect meaningful visual changes rather than narrating every frame. If this is project work, correlate visible findings with project context and record actionable issues. Do not use mouse, keyboard, window-mutation, process-kill, or file-mutation tools as part of this workflow.",
+  "icon": "eye",
+  "category": "workflows",
+  "tags": ["screen-monitoring", "visual-audit", "reflex", "desktop", "evidence"],
+  "default_argv": ["chatgpt_web"]
+}

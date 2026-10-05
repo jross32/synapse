@@ -6,6 +6,8 @@ the ones that would have been driving the build. Preflight reads the ledger inst
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from synapse_daemon import coder_runtimes as cr
 from synapse_daemon import runtime_ledger
 
@@ -47,6 +49,30 @@ def test_a_cooling_rung_is_not_usable_and_says_when_it_returns(tmp_path, monkeyp
         assert "retrying in" in status.note
     finally:
         cr.clear_exhausted()
+
+
+def test_expired_claude_oauth_is_not_reported_usable(tmp_path, monkeypatch):
+    monkeypatch.setattr(cr, "resolve_command", lambda command: f"/fake/{command}")
+    monkeypatch.setattr(
+        cr,
+        "_claude_oauth_expiry",
+        lambda: datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    status = {s.runtime: s for s in cr.preflight(path=tmp_path / "l.jsonl")}["claude"]
+    assert status.installed
+    assert not status.usable_now
+    assert "OAuth access expired" in status.note
+
+
+def test_future_claude_oauth_expiry_keeps_runtime_eligible(tmp_path, monkeypatch):
+    monkeypatch.setattr(cr, "resolve_command", lambda command: f"/fake/{command}")
+    monkeypatch.setattr(
+        cr,
+        "_claude_oauth_expiry",
+        lambda: datetime(2100, 1, 1, tzinfo=timezone.utc),
+    )
+    status = {s.runtime: s for s in cr.preflight(path=tmp_path / "l.jsonl")}["claude"]
+    assert status.installed and status.usable_now
 
 
 def test_local_is_always_installed_and_says_what_it_costs_in_time(tmp_path):

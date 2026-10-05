@@ -1,0 +1,23 @@
+{
+  "id": "rgv-prospect-hunter",
+  "name": "RGV Prospect Hunter",
+  "description": "Find public local-business websites, validate each through the Web Scraper, score evidence-backed website opportunities, and generate personalized outreach drafts for WhatIf Web.",
+  "icon": "search",
+  "category": "workflows",
+  "tags": [
+    "sales",
+    "prospecting",
+    "web-design",
+    "web-scraper",
+    "rgv",
+    "outreach"
+  ],
+  "default_argv": [
+    "python",
+    "prospect_workflow.py"
+  ],
+  "project_id": "whatif-web",
+  "launch_mode": "pty",
+  "prompt_filename": "PROSPECT-HUNTER-BRIEF.md",
+  "prompt": "Run the WhatIf Web Prospect Hunter from this project. Ask for a target location (default Brownsville, TX) and industry, then discover public official business websites, validate each candidate through the local Web Scraper, keep claims evidence-backed and customer-facing, generate a concise outreach subject/body, and save the full packet under data/prospects with LATEST.md updated. Do not send email automatically. Do not imply that missing security headers mean a business is hacked or insecure. Public outreach must use only verified public business contact details, and the human reviews every message before sending."
+}

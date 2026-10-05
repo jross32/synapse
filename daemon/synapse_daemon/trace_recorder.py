@@ -321,6 +321,7 @@ def ingest_runtime_sources(storage: Storage, *, per_source_limit: int = 1200) ->
     sources: list[tuple[str, Path, bool]] = [
         ("live-monitor", storage.data_dir / "live-monitor" / "events.jsonl", True),
         ("repair-watchdog", storage.data_dir / "system-watchdog" / "watchdog-events.jsonl", True),
+        ("terminal-cloak", storage.data_dir / "terminal-cloak" / "events.jsonl", True),
         ("ai-supervisor", storage.data_dir / "ai-supervisor" / "supervisor-events.jsonl", True),
         ("stock-hunter-supervisor", local_appdata / "StockHunter" / "runtime-supervisor.jsonl", True),
         ("stock-hunter-campaign", local_appdata / "StockHunter" / "daily-campaign.jsonl", True),

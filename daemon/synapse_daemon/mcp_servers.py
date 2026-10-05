@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from .errors import SynapseError, conflict, invalid, not_found
 from .runtime_paths import bundled_mcp_servers_sample, repo_root
 from .secrets import SECRET_PLACEHOLDER
+from .subprocess_utils import headless_creationflags
 from .time_utils import to_iso, utc_now
 
 WEB_SCRAPER_SERVER_ID = "web-scraper"
@@ -232,7 +233,8 @@ def _run_setup_command(args: list[str], *, cwd: Path, step: str) -> None:
             text=True,
             timeout=600,
             check=False,
-        )
+                                creationflags=headless_creationflags(),
+)
     except FileNotFoundError as exc:
         raise invalid(
             "mcp_server",

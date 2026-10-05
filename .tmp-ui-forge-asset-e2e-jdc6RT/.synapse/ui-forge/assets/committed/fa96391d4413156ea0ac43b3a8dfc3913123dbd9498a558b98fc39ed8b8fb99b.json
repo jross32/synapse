@@ -1,0 +1,18 @@
+{
+  "schema": "ui-forge-asset-commit-v1",
+  "staged_at": "2026-09-09T12:12:52.843Z",
+  "project_root": "C:\\Users\\justi\\synapse\\.tmp-ui-forge-asset-e2e-jdc6RT",
+  "source_asset": "C:\\Users\\justi\\synapse\\.tmp-ui-forge-asset-e2e-jdc6RT\\candidate.png",
+  "sha256": "fa96391d4413156ea0ac43b3a8dfc3913123dbd9498a558b98fc39ed8b8fb99b",
+  "bytes": 98,
+  "media_type": "png",
+  "width": 42,
+  "height": 24,
+  "project_asset": "public/ui-forge-assets/fa96391d4413156e-candidate.png",
+  "public_url": "/ui-forge-assets/fa96391d4413156e-candidate.png",
+  "created_new": true,
+  "committed_at": "2026-09-09T12:13:39.124Z",
+  "source": "src/App.jsx:2:81",
+  "previous_src": "/old.png",
+  "alt": "Generated hero"
+}

@@ -1,0 +1,37 @@
+{
+  "id": "repair-arena",
+  "name": "Repair Arena",
+  "publisher": "The WhatIf Company",
+  "version": "0.3.1",
+  "description": "Evidence-first multi-agent repair planning, isolated candidate staging, and read-only candidate evaluation for Synapse projects. App Doctor establishes the baseline, Agent Arcade competes strategies, and Repair Arena compares real worktree deltas behind fail-closed promotion gates.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "repair",
+    "diagnostics",
+    "app-doctor",
+    "agent-arcade",
+    "multi-agent",
+    "verification",
+    "regression-testing",
+    "evidence-gates",
+    "quality",
+    "git-worktrees",
+    "candidate-staging",
+    "isolated-implementation",
+    "candidate-evaluation",
+    "diff-evidence"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "repair-arena",
+    "playwright",
+    "browser"
+  ],
+  "optional_capabilities": [
+    "warden",
+    "github"
+  ],
+  "benchmark_spec": null,
+  "baseline": null
+}

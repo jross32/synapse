@@ -14,6 +14,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .subprocess_utils import headless_creationflags
+
 
 def _run(args: list[str], cwd: Path, timeout: float = 5.0) -> dict[str, Any]:
     try:
@@ -24,7 +26,8 @@ def _run(args: list[str], cwd: Path, timeout: float = 5.0) -> dict[str, Any]:
             text=True,
             timeout=timeout,
             check=False,
-        )
+                           creationflags=headless_creationflags(),
+)
         return {
             "ok": proc.returncode == 0,
             "exit_code": proc.returncode,

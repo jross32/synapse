@@ -1,4 +1,4 @@
-"""ChatGPT UI child-agent pool.
+﻿"""ChatGPT UI child-agent pool.
 
 A ChatGPT parent may delegate bounded squad work to real chatgpt.com chats
 instead of local/vendor CLI runtimes. One persistent Chromium context owns the
@@ -286,6 +286,38 @@ async def _click_first_visible(locator: Any) -> bool:
     return False
 
 
+async def _human_verification_blocker(page: Any) -> str | None:
+    """Detect anti-bot interstitials without attempting to solve or bypass them."""
+    title = ""
+    body = ""
+    try:
+        title = str(await page.title() or "")
+    except Exception:
+        pass
+    try:
+        locator = page.locator("body")
+        inner_text = getattr(locator, "inner_text", None)
+        if inner_text is not None:
+            body = str(await inner_text(timeout=1000) or "")
+    except Exception:
+        pass
+    evidence = (title + chr(10) + body).casefold()
+    challenge_markers = (
+        "just a moment",
+        "verify you are human",
+        "performing security verification",
+        "checking your browser",
+        "cloudflare",
+    )
+    if not any(marker in evidence for marker in challenge_markers):
+        return None
+    return (
+        "ChatGPT/Cloudflare requires human verification in the dedicated Synapse "
+        "browser profile. Open that profile, complete the verification manually, "
+        "then retry the worker. Synapse will not automate or bypass human verification."
+    )
+
+
 async def open_connector_chat(page: Any, launch_url: str) -> str | None:
     """Navigate through ChatGPT's connector detail page into a normal Chat."""
 
@@ -293,6 +325,10 @@ async def open_connector_chat(page: Any, launch_url: str) -> str | None:
         await page.goto(launch_url, wait_until="domcontentloaded")
     except Exception as exc:
         return f"could not open the Synapse connector page in ChatGPT: {type(exc).__name__}: {exc}"
+
+    blocker = await _human_verification_blocker(page)
+    if blocker:
+        return blocker
 
     current_url = str(getattr(page, "url", "") or "")
     if "/auth/" in current_url or "/login" in current_url:
@@ -305,15 +341,37 @@ async def open_connector_chat(page: Any, launch_url: str) -> str | None:
     if not await _click_first_visible(try_in_chat):
         try_in_chat = page.get_by_role("link", name="Try in chat")
         if not await _click_first_visible(try_in_chat):
-            return (
-                "The configured ChatGPT connector page did not expose 'Try in chat'. "
-                "Refresh chatgpt-connector-launch-url.txt from the Synapse plugin detail page."
+            # ChatGPT's own Try-in-chat navigation encodes the plugin id in a
+            # hints query. The dedicated worker profile history confirms this
+            # route even on builds where the detail page omits the CTA.
+            plugin_id = next(
+                (part for part in launch_url.replace("?", "/").split("/") if part.startswith("plugin_asdk_app_")),
+                "",
             )
+            if plugin_id:
+                plugin_id = plugin_id.removeprefix("plugin_")
+                hint_url = f"https://chatgpt.com/?surface=work&hints=plugin%3A{plugin_id}"
+                try:
+                    await page.goto(hint_url, wait_until="domcontentloaded")
+                except Exception as exc:
+                    return f"could not open ChatGPT attached-plugin hint surface: {type(exc).__name__}: {exc}"
+                blocker = await _human_verification_blocker(page)
+                if blocker:
+                    return blocker
+            else:
+                return (
+                    "The configured ChatGPT connector page did not expose 'Try in chat' "
+                    "and its URL did not contain a reusable Synapse plugin id."
+                )
 
     try:
         await page.wait_for_load_state("domcontentloaded")
     except Exception:
         pass
+
+    blocker = await _human_verification_blocker(page)
+    if blocker:
+        return blocker
 
     chat_tab = page.get_by_role("tab", name="Chat")
     switched = await _click_first_visible(chat_tab)
@@ -357,7 +415,48 @@ async def _connector_chip_visible(page: Any) -> bool:
     return False
 
 
-async def attach_synapse_connector(page: Any) -> str | None:
+async def _select_synapse_from_open_app_menu(page: Any) -> bool:
+    """Select an already-connected Synapse app from the currently open ChatGPT menu.
+
+    Current ChatGPT surfaces do not guarantee a separate app-search input. The ``+``
+    menu may list connected apps directly, or expose them after an Apps/Plugins/More
+    submenu. Prefer that semantic path before falling back to search.
+    """
+
+    for role in ("menuitem", "option", "button", "link"):
+        try:
+            if await _click_first_visible(page.get_by_role(role, name="Synapse")):
+                return True
+        except Exception:
+            continue
+    try:
+        return await _click_first_visible(page.get_by_text("Synapse", exact=True))
+    except Exception:
+        return False
+
+
+async def _visible_app_search(page: Any) -> Any | None:
+    """Return a visible app/plugin search field when this ChatGPT build exposes one."""
+
+    selectors = (
+        'input[placeholder*="Search" i]',
+        'input[aria-label*="Search" i]',
+        'input[type="search"]',
+        '[role="searchbox"]',
+        'input[placeholder*="app" i]',
+        'input[placeholder*="plugin" i]',
+    )
+    for selector in selectors:
+        try:
+            candidate = page.locator(selector).first
+            if await candidate.count() and await candidate.is_visible():
+                return candidate
+        except Exception:
+            continue
+    return None
+
+
+async def attach_synapse_connector(page: Any, *, launch_url: str = "") -> str | None:
     """Attach Synapse to the current ChatGPT conversation before sending work.
 
     ChatGPT app/connector attachment is conversation-scoped: merely mentioning a
@@ -393,27 +492,30 @@ async def attach_synapse_connector(page: Any) -> str | None:
             except Exception:
                 continue
     if not menu_opened:
+        if launch_url:
+            return await open_connector_chat(page, launch_url)
         return "ChatGPT composer exposed no app/connector menu; Synapse could not be attached."
 
-    # Some ChatGPT builds put app search directly in the + menu; others require
-    # one Apps/Connectors step first. Try that semantic step only when needed.
-    search = None
-    search_selectors = (
-        'input[placeholder*="Search" i]',
-        'input[aria-label*="Search" i]',
-    )
-    for selector in search_selectors:
-        try:
-            candidate = page.locator(selector).first
-            if await candidate.count() and await candidate.is_visible():
-                search = candidate
-                break
-        except Exception:
-            continue
+    # Newer ChatGPT builds can list connected apps directly in the + menu, with no
+    # dedicated search field at all. Prefer that path first.
+    if await _select_synapse_from_open_app_menu(page):
+        await asyncio.sleep(0.15)
+        return None
+
+    # Some builds require an Apps/Plugins/Connectors/More step. Open it, then try
+    # direct selection again before assuming there must be a search input.
+    search = await _visible_app_search(page)
     if search is None:
         category_opened = False
         for role in ("menuitem", "button", "link"):
-            for name in ("Apps", "Connectors", "More apps", "More"):
+            for name in (
+                "Apps",
+                "Plugins",
+                "Connectors",
+                "More apps",
+                "More plugins",
+                "More",
+            ):
                 try:
                     if await _click_first_visible(page.get_by_role(role, name=name)):
                         category_opened = True
@@ -422,37 +524,26 @@ async def attach_synapse_connector(page: Any) -> str | None:
                     continue
             if category_opened:
                 break
-        for selector in search_selectors:
-            try:
-                candidate = page.locator(selector).first
-                if await candidate.count() and await candidate.is_visible():
-                    search = candidate
-                    break
-            except Exception:
-                continue
+        if category_opened and await _select_synapse_from_open_app_menu(page):
+            await asyncio.sleep(0.15)
+            return None
+        search = await _visible_app_search(page)
+
     if search is None:
-        return "ChatGPT app/connector menu opened but no plugin search field was found."
+        if launch_url:
+            return await open_connector_chat(page, launch_url)
+        return (
+            "ChatGPT app/plugin menu opened, but Synapse was not listed directly and "
+            "no app/plugin search field was exposed."
+        )
 
     try:
         await search.fill("Synapse")
     except Exception as exc:
-        return f"could not search ChatGPT apps for Synapse: {type(exc).__name__}: {exc}"
+        return f"could not search ChatGPT apps/plugins for Synapse: {type(exc).__name__}: {exc}"
 
-    attached = False
-    for role in ("menuitem", "option", "button", "link"):
-        try:
-            if await _click_first_visible(page.get_by_role(role, name="Synapse")):
-                attached = True
-                break
-        except Exception:
-            continue
-    if not attached:
-        try:
-            attached = await _click_first_visible(page.get_by_text("Synapse", exact=True))
-        except Exception:
-            attached = False
-    if not attached:
-        return "Synapse was not present in ChatGPT's app/connector search results."
+    if not await _select_synapse_from_open_app_menu(page):
+        return "Synapse was not present in ChatGPT's app/plugin search results."
 
     # Give the composer a brief render turn, then verify when the current UI
     # exposes the attachment chip. A successful semantic click is still accepted
@@ -693,7 +784,9 @@ class ChatGPTBrowserPool:
                 result.error = project_error
                 return result
 
-            connector_error = await attach_synapse_connector(page)
+            connector_error = await attach_synapse_connector(
+                page, launch_url=read_connector_launch_url(self.data_dir)
+            )
             if connector_error:
                 result.error = connector_error
                 return result

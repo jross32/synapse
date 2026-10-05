@@ -17,6 +17,11 @@ class WorkerArchiveRequest(BaseModel):
     reason: str = Field(default="", max_length=1000)
 
 
+class ProjectHomeReconcileRequest(BaseModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    reason: str = Field(default="Foreman project-home reconciliation", max_length=1000)
+
+
 def build_chatgpt_workers_router(storage: Storage) -> APIRouter:
     router = APIRouter(prefix="/chatgpt-workers", tags=["chatgpt-workers"])
 
@@ -44,6 +49,32 @@ def build_chatgpt_workers_router(storage: Storage) -> APIRouter:
                 )
             ],
         }
+
+    @router.get("/project-home/status", response_model=None)
+    async def project_home_status(project_id: str = Query(min_length=1)) -> dict[str, Any]:
+        return workers.project_home_report(storage.conn, project_id.strip())
+
+    @router.post("/project-home/reconcile", response_model=None)
+    async def project_home_reconcile(payload: ProjectHomeReconcileRequest) -> dict[str, Any]:
+        with storage.transaction() as conn:
+            result = workers.reconcile_project_home(
+                conn,
+                payload.project_id.strip(),
+                reason=payload.reason,
+            )
+            audit(
+                conn,
+                AuditRecord(
+                    entity_type="chatgpt_worker_project_home",
+                    entity_id=payload.project_id.strip(),
+                    action="reconcile",
+                    details={
+                        "archived_worker_count": result["archived_worker_count"],
+                        "provider_cleanup_count": len(result["provider_cleanup_urls"]),
+                    },
+                ),
+            )
+        return result
 
     @router.get("/{worker_chat_id}", response_model=workers.ChatGPTWorkerChat)
     async def get_worker_chat(worker_chat_id: str) -> workers.ChatGPTWorkerChat:

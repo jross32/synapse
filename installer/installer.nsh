@@ -6,11 +6,14 @@ Var BundleResearchHandle
 Var BundleFactoryHandle
 Var BundleRescueHandle
 Var BundleHarvestHandle
+Var BundleImageStudioHandle
 Var BundleResearchState
 Var BundleFactoryState
 Var BundleRescueState
 Var BundleHarvestState
+Var BundleImageStudioState
 Var BundleBootstrapFile
+Var OptionalToolsBootstrapFile
 Var BundleFirstItem
 
 Page custom SynapseBundlesPageCreate SynapseBundlesPageLeave
@@ -49,7 +52,13 @@ Function SynapseBundlesPageCreate
     ${NSD_Check} $BundleHarvestHandle
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 102u 100% 20u "Cloudtap is still included with Synapse. These checkboxes only control the AI-first bundle bootstrap file used on first launch."
+  ${NSD_CreateCheckbox} 0 98u 100% 10u "Synapse Image Studio — by The WhatIf Company (AI image generation + editing)"
+  Pop $BundleImageStudioHandle
+  ${If} $BundleImageStudioState == 1
+    ${NSD_Check} $BundleImageStudioHandle
+  ${EndIf}
+
+  ${NSD_CreateLabel} 0 118u 100% 22u "Image Studio is a first-party Synapse component and is selected by default. You can uninstall/reinstall it later from Discover."
   Pop $0
 
   nsDialogs::Show
@@ -60,6 +69,7 @@ Function SynapseBundlesPageLeave
   ${NSD_GetState} $BundleFactoryHandle $BundleFactoryState
   ${NSD_GetState} $BundleRescueHandle $BundleRescueState
   ${NSD_GetState} $BundleHarvestHandle $BundleHarvestState
+  ${NSD_GetState} $BundleImageStudioHandle $BundleImageStudioState
 FunctionEnd
 
 !macro customInit
@@ -67,6 +77,7 @@ FunctionEnd
   StrCpy $BundleFactoryState 1
   StrCpy $BundleRescueState 1
   StrCpy $BundleHarvestState 0
+  StrCpy $BundleImageStudioState 1
 !macroend
 
 !macro customInstall
@@ -114,4 +125,13 @@ FunctionEnd
 
   FileWrite $0 "]$\r$\n}$\r$\n"
   FileClose $0
+
+  StrCpy $OptionalToolsBootstrapFile "$APPDATA\Synapse\bootstrap-optional-tools.json"
+  FileOpen $1 $OptionalToolsBootstrapFile w
+  ${If} $BundleImageStudioState == 1
+    FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [$\"synapse-image-studio$\"],$\r$\n  $\"uninstall_tool_ids$\": []$\r$\n}$\r$\n"
+  ${Else}
+    FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [],$\r$\n  $\"uninstall_tool_ids$\": [$\"synapse-image-studio$\"]$\r$\n}$\r$\n"
+  ${EndIf}
+  FileClose $1
 !macroend

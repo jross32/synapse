@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from .errors import invalid
+from .subprocess_utils import headless_creationflags
 
 
 def resolve_repo_root(path: str) -> Path:
@@ -18,7 +19,8 @@ def resolve_repo_root(path: str) -> Path:
         capture_output=True,
         text=True,
         check=False,
-    )
+                     creationflags=headless_creationflags(),
+)
     if result.returncode != 0:
         message = (result.stderr or result.stdout or "not a git repository").strip()
         raise invalid("ai_case", f"Primary project is not in a git repository: {message}")
@@ -55,7 +57,8 @@ def ensure_worktree(
         capture_output=True,
         text=True,
         check=False,
-    )
+                  creationflags=headless_creationflags(),
+)
     if add.returncode != 0:
         # Retry the common "branch already exists" path by attaching to it.
         retry = subprocess.run(
@@ -71,7 +74,8 @@ def ensure_worktree(
             capture_output=True,
             text=True,
             check=False,
-        )
+                            creationflags=headless_creationflags(),
+)
         if retry.returncode != 0:
             message = (retry.stderr or add.stderr or retry.stdout or add.stdout).strip()
             raise invalid("ai_case", f"Could not create isolated worktree: {message}")

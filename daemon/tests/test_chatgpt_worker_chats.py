@@ -110,10 +110,13 @@ def test_same_work_item_resumes_same_worker_chat(tmp_path: Path) -> None:
     assert second.status == workers.ChatGPTWorkerStatus.IDLE
 
 
-def test_related_work_item_reuses_only_when_explicitly_requested(tmp_path: Path) -> None:
+def test_new_work_item_reuses_project_home_by_default_and_fresh_chat_opts_out(
+    tmp_path: Path,
+) -> None:
     storage = _storage(tmp_path)
     owner_id, squad_id, first_work_id = _seed(storage, tmp_path)
-    unrelated_id = _add_work(storage, squad_id, "Audit settings")
+    continued_id = _add_work(storage, squad_id, "Audit settings")
+    isolated_id = _add_work(storage, squad_id, "Isolated experiment")
     related_id = _add_work(storage, squad_id, "Retest login after the fix")
 
     with storage.transaction() as conn:
@@ -123,15 +126,32 @@ def test_related_work_item_reuses_only_when_explicitly_requested(tmp_path: Path)
             project_id="p1",
             owner_session_id=owner_id,
             role_id=None,
-            title="QA · Project One · Test the login flow",
+            title="QA - Project One - Test the login flow",
         )
-        independent, reused_independent = workers.resolve_for_launch(
+        workers.mark_active(
             conn,
-            work_item_id=unrelated_id,
+            original.id,
+            session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/project-home",
+        )
+        workers.mark_idle(conn, original.id)
+
+        continued, reused_continued = workers.resolve_for_launch(
+            conn,
+            work_item_id=continued_id,
             project_id="p1",
             owner_session_id=owner_id,
             role_id=None,
-            title="QA · Project One · Audit settings",
+            title="QA - Project One - Audit settings",
+        )
+        isolated, reused_isolated = workers.resolve_for_launch(
+            conn,
+            work_item_id=isolated_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="QA - Project One - Isolated experiment",
+            reuse_project_home=False,
         )
         related, reused_related = workers.resolve_for_launch(
             conn,
@@ -139,15 +159,105 @@ def test_related_work_item_reuses_only_when_explicitly_requested(tmp_path: Path)
             project_id="p1",
             owner_session_id=owner_id,
             role_id=None,
-            title="QA · Project One · Retest login after the fix",
+            title="QA - Project One - Retest login after the fix",
             reuse_from_work_item_id=first_work_id,
         )
 
-    assert reused_independent is False
-    assert independent.id != original.id
+    assert reused_continued is True
+    assert continued.id == original.id
+    assert continued.conversation_url == "https://chatgpt.com/c/project-home"
+    assert reused_isolated is False
+    assert isolated.id != original.id
     assert reused_related is True
     assert related.id == original.id
-    assert set(related.work_item_ids) == {first_work_id, related_id}
+    assert set(related.work_item_ids) == {first_work_id, continued_id, related_id}
+
+
+def test_live_project_home_blocks_another_default_project_turn(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, squad_id, first_work_id = _seed(storage, tmp_path)
+    next_work_id = _add_work(storage, squad_id, "Follow-up while live")
+
+    with storage.transaction() as conn:
+        original, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=first_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="QA - Project One - Test the login flow",
+        )
+        workers.mark_active(
+            conn,
+            original.id,
+            session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/project-home",
+        )
+        with pytest.raises(SynapseError) as exc:
+            workers.resolve_for_launch(
+                conn,
+                work_item_id=next_work_id,
+                project_id="p1",
+                owner_session_id=owner_id,
+                role_id=None,
+                title="QA - Project One - Follow-up while live",
+            )
+
+    assert exc.value.envelope.code == "chatgpt_worker_chat.conflict"
+
+
+def test_project_home_ignores_web_placeholder_when_real_chat_exists(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, squad_id, first_work_id = _seed(storage, tmp_path)
+    second_work_id = _add_work(storage, squad_id, "Second worker")
+    third_work_id = _add_work(storage, squad_id, "Continue project")
+
+    with storage.transaction() as conn:
+        placeholder, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=first_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Placeholder",
+            reuse_project_home=False,
+        )
+        workers.mark_failed(
+            conn,
+            placeholder.id,
+            conversation_url="https://chatgpt.com/c/WEB:placeholder",
+        )
+        real, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=second_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Real home",
+            reuse_project_home=False,
+        )
+        workers.mark_active(
+            conn,
+            real.id,
+            session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/real-home",
+        )
+        workers.mark_idle(conn, real.id)
+
+        home = workers.find_project_home_chat(conn, "p1")
+        continued, reused = workers.resolve_for_launch(
+            conn,
+            work_item_id=third_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Continue project",
+        )
+
+    assert home is not None
+    assert home.id == real.id
+    assert reused is True
+    assert continued.id == real.id
 
 
 def test_archived_worker_is_never_automatically_resumed(tmp_path: Path) -> None:
@@ -304,7 +414,7 @@ def test_two_worker_rows_cannot_claim_the_same_chatgpt_conversation_url(tmp_path
         )
         second, _ = workers.resolve_for_launch(
             conn, work_item_id=second_work_id, project_id="p1", owner_session_id=owner_id,
-            role_id=None, title="Second worker",
+            role_id=None, title="Second worker", reuse_project_home=False,
         )
         workers.mark_active(
             conn, first.id, session_id=owner_id, conversation_url="https://chatgpt.com/c/one-real-chat"
@@ -409,3 +519,175 @@ def test_mark_active_clears_restart_recovery_pending(tmp_path: Path) -> None:
     restart = resumed.metadata["restart_recovery"]
     assert restart["pending"] is False
     assert restart["resumed_at"]
+
+
+def test_project_home_report_and_reconcile_archive_only_redundant_synapse_rows(
+    tmp_path: Path,
+) -> None:
+    storage = _storage(tmp_path)
+    owner_id, squad_id, first_work_id = _seed(storage, tmp_path)
+    extra_real_work_id = _add_work(storage, squad_id, "Extra real worker")
+    placeholder_work_id = _add_work(storage, squad_id, "Placeholder worker")
+
+    with storage.transaction() as conn:
+        home, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=first_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Home",
+            reuse_project_home=False,
+        )
+        workers.mark_active(
+            conn,
+            home.id,
+            session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/home-real",
+        )
+        workers.mark_idle(conn, home.id)
+
+        extra_real, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=extra_real_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Extra",
+            reuse_project_home=False,
+        )
+        workers.mark_failed(
+            conn,
+            extra_real.id,
+            conversation_url="https://chatgpt.com/c/extra-real",
+        )
+
+        placeholder, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=placeholder_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Placeholder",
+            reuse_project_home=False,
+        )
+        workers.mark_failed(
+            conn,
+            placeholder.id,
+            conversation_url="https://chatgpt.com/c/WEB:placeholder",
+        )
+
+        before = workers.project_home_report(conn, "p1")
+        result = workers.reconcile_project_home(conn, "p1", reason="test cleanup")
+
+    assert before["home"]["id"] == home.id
+    assert before["non_archived_count"] == 3
+    assert before["redundant_inactive_count"] == 2
+    assert before["redundant_real_conversation_urls"] == [
+        "https://chatgpt.com/c/extra-real"
+    ]
+    assert before["redundant_web_placeholders"] == [
+        "https://chatgpt.com/c/WEB:placeholder"
+    ]
+    assert result["home"]["id"] == home.id
+    assert set(result["archived_worker_chat_ids"]) == {
+        extra_real.id,
+        placeholder.id,
+    }
+    assert result["provider_cleanup_urls"] == ["https://chatgpt.com/c/extra-real"]
+    assert workers.get_chat(storage.conn, home.id).status == workers.ChatGPTWorkerStatus.IDLE
+    assert workers.get_chat(storage.conn, extra_real.id).status == workers.ChatGPTWorkerStatus.ARCHIVED
+    assert workers.get_chat(storage.conn, placeholder.id).status == workers.ChatGPTWorkerStatus.ARCHIVED
+
+
+def test_project_home_reconcile_refuses_multiple_live_workers(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, squad_id, first_work_id = _seed(storage, tmp_path)
+    second_work_id = _add_work(storage, squad_id, "Second live worker")
+
+    with storage.transaction() as conn:
+        first, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=first_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="First",
+            reuse_project_home=False,
+        )
+        second, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=second_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Second",
+            reuse_project_home=False,
+        )
+        workers.mark_active(conn, first.id, session_id=owner_id)
+        workers.mark_active(conn, second.id, session_id=owner_id)
+        report = workers.project_home_report(conn, "p1")
+        with pytest.raises(SynapseError) as exc:
+            workers.reconcile_project_home(conn, "p1")
+
+    assert report["live_count"] == 2
+    assert report["safe_to_reconcile"] is False
+    assert exc.value.envelope.code == "chatgpt_worker_chat.conflict"
+
+
+def test_project_home_routes_report_and_reconcile(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    owner_id, squad_id, first_work_id = _seed(storage, tmp_path)
+    extra_work_id = _add_work(storage, squad_id, "Extra")
+    with storage.transaction() as conn:
+        home, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=first_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Home",
+            reuse_project_home=False,
+        )
+        workers.mark_active(
+            conn,
+            home.id,
+            session_id=owner_id,
+            conversation_url="https://chatgpt.com/c/home-route",
+        )
+        workers.mark_idle(conn, home.id)
+        extra, _ = workers.resolve_for_launch(
+            conn,
+            work_item_id=extra_work_id,
+            project_id="p1",
+            owner_session_id=owner_id,
+            role_id=None,
+            title="Extra",
+            reuse_project_home=False,
+        )
+        workers.mark_failed(
+            conn,
+            extra.id,
+            conversation_url="https://chatgpt.com/c/extra-route",
+        )
+
+    client = _client(storage)
+    with client as c:
+        status = c.get("/api/v1/chatgpt-workers/project-home/status", params={"project_id": "p1"})
+        assert status.status_code == 200, status.text
+        body = status.json()
+        assert body["home"]["id"] == home.id
+        assert body["redundant_inactive_count"] == 1
+
+        reconcile = c.post(
+            "/api/v1/chatgpt-workers/project-home/reconcile",
+            json={"project_id": "p1", "reason": "route test"},
+        )
+        assert reconcile.status_code == 200, reconcile.text
+        result = reconcile.json()
+        assert result["archived_worker_chat_ids"] == [extra.id]
+        assert result["provider_cleanup_urls"] == ["https://chatgpt.com/c/extra-route"]
+
+        after = c.get("/api/v1/chatgpt-workers/project-home/status", params={"project_id": "p1"})
+        assert after.status_code == 200
+        assert after.json()["non_archived_count"] == 1

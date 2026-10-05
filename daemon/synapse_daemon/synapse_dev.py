@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .runtime_paths import repo_root
+from .subprocess_utils import headless_creationflags
 from .time_utils import to_iso, utc_now
 
 _ENABLE_ENV = "SYNAPSE_DEV_ENABLED"
@@ -35,7 +36,8 @@ def _command_result(command: list[str], *, cwd: Path, log_path: Path) -> dict[st
             encoding="utf-8",
             errors="replace",
             check=False,
-        )
+                                creationflags=headless_creationflags(),
+)
     except FileNotFoundError as exc:
         duration = time.perf_counter() - started
         payload = {
@@ -242,7 +244,8 @@ class SynapseDevManager:
                 encoding="utf-8",
                 errors="replace",
                 check=False,
-            ).stdout.strip()
+                                     creationflags=headless_creationflags(),
+).stdout.strip()
             head = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 cwd=str(self._repo_root),
@@ -251,7 +254,8 @@ class SynapseDevManager:
                 encoding="utf-8",
                 errors="replace",
                 check=False,
-            ).stdout.strip()
+                                   creationflags=headless_creationflags(),
+).stdout.strip()
             upstream = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "@{upstream}"],
                 cwd=str(self._repo_root),
@@ -260,7 +264,8 @@ class SynapseDevManager:
                 encoding="utf-8",
                 errors="replace",
                 check=False,
-            )
+                                       creationflags=headless_creationflags(),
+)
             if upstream.returncode == 0 and upstream.stdout.strip():
                 counts = subprocess.run(
                     ["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
@@ -270,7 +275,8 @@ class SynapseDevManager:
                     encoding="utf-8",
                     errors="replace",
                     check=False,
-                ).stdout.strip()
+                                             creationflags=headless_creationflags(),
+).stdout.strip()
                 parts = counts.split()
                 if len(parts) == 2:
                     ahead = int(parts[0])

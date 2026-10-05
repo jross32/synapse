@@ -984,6 +984,11 @@ def build_agent_squads_router(
                 worker_chat_title = (
                     f"{role.name} ? {project.name} ? {work_item.title}"
                 )[:160]
+                if body.fresh_chat and body.reuse_chat_from_work_item_id:
+                    raise invalid(
+                        "agent_work_item_launch",
+                        "fresh_chat cannot be combined with reuse_chat_from_work_item_id.",
+                    )
                 worker_chat, worker_chat_reused = chatgpt_worker_chats.resolve_for_launch(
                     conn,
                     work_item_id=work_item.id,
@@ -992,6 +997,7 @@ def build_agent_squads_router(
                     role_id=role.id,
                     title=worker_chat_title,
                     reuse_from_work_item_id=body.reuse_chat_from_work_item_id,
+                    reuse_project_home=not body.fresh_chat,
                 )
             session_id = squads._new_id()
             prompt_file = write_role_prompt(

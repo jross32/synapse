@@ -1,0 +1,36 @@
+{
+  "schema": "ui-forge-runtime-owner-benchmark-v1",
+  "generated_at": "2026-09-09T05:29:39.301952+00:00",
+  "scope": "distinguish static DOM declaration from JavaScript runtime writer",
+  "cases": 30,
+  "baseline": {
+    "treatment": "static JSX/HTML source locator only",
+    "runtime_writer_top1_accuracy": 0.0,
+    "timing": {
+      "median_ms": 45.4481,
+      "p90_ms": 93.7242,
+      "min_ms": 23.6303,
+      "max_ms": 3192.5163
+    }
+  },
+  "challenger": {
+    "treatment": "UI Forge runtime owner locator",
+    "runtime_writer_top1_accuracy": 1.0,
+    "likely_writer_flag_rate": 1.0,
+    "timing": {
+      "median_ms": 89.1608,
+      "p90_ms": 159.9166,
+      "min_ms": 54.8665,
+      "max_ms": 319.8926
+    }
+  },
+  "delta": {
+    "accuracy_points": 100.0
+  },
+  "overall_pass": true,
+  "claims": {
+    "runtime_owner_precision_pass": true,
+    "beats_static_locator_for_runtime_writer_task": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

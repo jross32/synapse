@@ -1,0 +1,8 @@
+interface:
+  display_name: UI Forge
+  short_description: Build, compare, preview, and repair polished app UI with isolated drafts and browser proof.
+  default_prompt: Use UI Forge as the AI-native UI control plane. Inspect the real app first. For exploratory redesigns, create isolated draft workspaces and keep live unchanged until proof passes. Use the conductor to enforce required evidence, preview precise browser changes before source commits, apply direct static JSX edits only when the safety gate accepts them, verify desktop/mobile in the running app, score the result, repair the highest-leverage blocker, and persist recurring workflow friction into Synapse.
+
+# UI Forge also supports provenance-backed Theme Capsules for safe cross-project semantic token reuse.
+
+# UI Forge requires real browser interaction-state proof after pseudo-state source edits. State-heavy/data-driven screens must execute scripts/state_matrix_runner.mjs for relevant loading/empty/error/success/recovery states across desktop/mobile before completion. For generated/imported images, keep provider generation separate: stage with scripts/asset_slot.mjs, preview with asset_preview_bridge.js, and only commit exact static img slots after decode/layout proof.

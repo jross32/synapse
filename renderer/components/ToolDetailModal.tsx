@@ -114,6 +114,22 @@ export function ToolDetailModal({
             <li>
               Fields: <span className='font-mono'>{manifest.fields.length}</span>
             </li>
+            {manifest.publisher && (
+              <li>
+                Publisher: <span className='font-medium text-foreground'>{manifest.publisher}</span>
+              </li>
+            )}
+            <li>
+              Trust:{' '}
+              <span className='font-medium text-foreground'>
+                {manifest.verified ? 'Verified first-party manifest' : 'Unverified/community manifest'}
+              </span>
+            </li>
+            {manifest.install_default && (
+              <li>
+                Install policy: <span className='font-medium text-foreground'>Selected by default in Synapse setup</span>
+              </li>
+            )}
           </ul>
         </DetailCard>
       </div>

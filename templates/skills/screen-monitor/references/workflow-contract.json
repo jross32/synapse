@@ -1,0 +1,73 @@
+{
+  "id": "screen-monitor-v1",
+  "version": "0.1.0",
+  "goal": "Observe the real visible desktop or app window through Reflex, detect meaningful visual changes, and turn them into evidence-backed verification or project findings.",
+  "entrypoints": {
+    "human": "quick-action:screen-monitor",
+    "ai": "skill:screen-monitor"
+  },
+  "required_synapse_tools": [
+    "synapse_get_context",
+    "synapse_list_mcp_tools",
+    "synapse_call_mcp_tool"
+  ],
+  "downstream_server": "reflex",
+  "allowed_reflex_tool_classes": [
+    "screen_capture",
+    "window_metadata",
+    "display_metadata"
+  ],
+  "preferred_reflex_tools": [
+    "take_screenshot",
+    "screenshot_window",
+    "get_active_window",
+    "get_focused_app_state",
+    "list_windows_detailed",
+    "get_window_rect",
+    "get_screen_size",
+    "window_screenshot_grid"
+  ],
+  "phases": [
+    "orient",
+    "scope",
+    "baseline",
+    "observe",
+    "classify",
+    "verify",
+    "record",
+    "stop_or_continue"
+  ],
+  "default_mode": "observe_only",
+  "change_classes": [
+    "healthy",
+    "changed",
+    "needs_attention",
+    "blocked",
+    "error",
+    "ambiguous"
+  ],
+  "cadence_guidance": {
+    "short_ui_transition_seconds": [1, 3],
+    "slow_task_seconds": [5, 15],
+    "preference": "event_driven_over_fixed_polling"
+  },
+  "evidence_frames": [
+    "baseline",
+    "material_transition",
+    "bug",
+    "post_fix",
+    "terminal_or_error_state"
+  ],
+  "forbidden_within_this_skill": [
+    "mouse_input",
+    "keyboard_input",
+    "window_mutation",
+    "process_termination",
+    "file_mutation"
+  ],
+  "fail_closed_on": [
+    "target_identity_is_ambiguous",
+    "visual_evidence_is_insufficient_for_requested_claim",
+    "observation_would_capture_unrelated_sensitive_content"
+  ]
+}

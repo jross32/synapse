@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .subprocess_utils import headless_creationflags
 from .time_utils import utc_now
 
 
@@ -117,7 +118,8 @@ def probe_once(probe: HealthProbe) -> tuple[HealthState, str]:
     if probe.kind == "command":
         try:
             done = subprocess.run(target, shell=True, capture_output=True, text=True,
-                                  timeout=probe.timeout_seconds)
+                                  timeout=probe.timeout_seconds,
+                       creationflags=headless_creationflags(),)
         except subprocess.TimeoutExpired:
             return HealthState.UNHEALTHY, f"command did not finish in {probe.timeout_seconds}s"
         except Exception as exc:  # noqa: BLE001

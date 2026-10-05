@@ -1,0 +1,6 @@
+interface:
+  display_name: "Screen Monitor"
+  short_description: "Watch the real screen, detect visual changes, and audit what a user sees"
+  default_prompt: "Use $screen-monitor to observe the real screen through Synapse + Reflex in read-only mode. Start with a baseline screenshot and active-window state, then watch only meaningful visual changes and record evidence-backed findings. Do not use mouse, keyboard, window-mutation, process-kill, or file-mutation tools as part of this workflow."
+policy:
+  allow_implicit_invocation: true

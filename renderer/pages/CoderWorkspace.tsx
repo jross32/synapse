@@ -965,7 +965,7 @@ export function CoderWorkspacePage({
                   </div>
                 </div>
                 <p className='mt-2 text-[11px] text-muted-foreground'>
-                  Enter to send · Shift+Enter for a new line
+                  Enter to send Â· Shift+Enter for a new line
                 </p>
               </div>
             </div>
@@ -1279,7 +1279,7 @@ function ProjectThreadRail({
                 </div>
                 {!threadsLoaded ? (
                   <p className='flex items-center gap-2 px-3 pb-3 text-xs text-muted-foreground'>
-                    <Loader2 className='h-3.5 w-3.5 animate-spin' /> Loading threads…
+                    <Loader2 className='h-3.5 w-3.5 animate-spin' /> Loading threadsâ€¦
                   </p>
                 ) : threads.length === 0 ? (
                   <p className='px-3 pb-3 text-xs text-muted-foreground'>
@@ -1534,7 +1534,7 @@ function RunOutputCard({
         const status = (err as { status?: number }).status;
         setLoadError(
           status === 404
-            ? 'Live output is no longer available — terminal history is cleared when the daemon restarts.'
+            ? 'Live output is no longer available â€” terminal history is cleared when the daemon restarts.'
             : (err as Error).message || 'Could not read session output.',
         );
         setLoading(false);
@@ -1705,7 +1705,7 @@ function WorkspaceContextPane({
                   : 'border-border text-muted-foreground hover:text-foreground'
               )}
             >
-              {tab}
+              {tab === 'reviews' ? 'Smart Review' : tab}
             </button>
           ))}
         </div>
@@ -1790,7 +1790,7 @@ function WorkspaceContextPane({
                         {runtimeOptionFor(item.to_runtime_id).label}
                       </p>
                       <p className='mt-1 text-muted-foreground'>
-                        {item.reason || 'Manual switch'} · {formatLocal(item.created_at, 'relative')}
+                        {item.reason || 'Manual switch'} Â· {formatLocal(item.created_at, 'relative')}
                       </p>
                     </div>
                   ))}
@@ -1841,8 +1841,8 @@ function WorkspaceContextPane({
                           {server.transport === 'stdio'
                             ? 'Starts as an isolated child for each AI'
                             : server.autorun
-                              ? 'Standalone server · starts with Synapse'
-                              : 'Standalone server · manual start'}
+                              ? 'Standalone server Â· starts with Synapse'
+                              : 'Standalone server Â· manual start'}
                         </p>
                       </div>
                       <Badge variant='outline'>
@@ -1891,7 +1891,7 @@ function WorkspaceContextPane({
         {contextTab === 'reviews' && (
           <div className='flex flex-col gap-4 text-sm'>
             <Card className='border-dashed p-4'>
-              <p className='font-medium'>Sidecar reviewers</p>
+              <p className='font-medium'>Smart Review - Sidecar reviewers</p>
               <p className='mt-1 text-xs text-muted-foreground'>
                 Launch a separate AI runtime to critique the current thread without replacing the main runtime.
               </p>
@@ -1920,7 +1920,7 @@ function WorkspaceContextPane({
             </Card>
 
             <Card className='border-dashed p-4'>
-              <p className='font-medium'>Synapse UX Lab presets</p>
+              <p className='font-medium'>Smart Review presets</p>
               <p className='mt-1 text-xs text-muted-foreground'>
                 Start cheap with targeted review, then escalate only when the thread or benchmark evidence says it is worth it.
               </p>
@@ -1948,7 +1948,7 @@ function WorkspaceContextPane({
             </Card>
 
             <Card className='border-dashed p-4'>
-              <p className='font-medium'>Review passes</p>
+              <p className='font-medium'>Smart Review history</p>
               {detail?.review_passes.length ? (
                 <div className='mt-3 flex flex-col gap-2'>
                   {detail.review_passes.map((reviewPass) => {
@@ -1962,7 +1962,7 @@ function WorkspaceContextPane({
                           <Badge variant='outline'>{reviewPass.status}</Badge>
                         </div>
                         <p className='mt-1 text-muted-foreground'>
-                          {runtimeOptionFor(reviewPass.requested_runtime_id).label} · {formatLocal(reviewPass.created_at, 'relative')}
+                          {runtimeOptionFor(reviewPass.requested_runtime_id).label} Â· {formatLocal(reviewPass.created_at, 'relative')}
                         </p>
                         <div className='mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground'>
                           {metadataString(reviewPass.metadata as Record<string, unknown>, 'preset_label') && (

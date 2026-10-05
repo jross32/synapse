@@ -444,6 +444,40 @@ def _apply_cloudtap_warmup_grace(
     )
 
 
+def create_restart_operation(storage: Storage, payload: RestartRequest) -> dict[str, Any]:
+    """Persist one restart request for Electron's recovery poller.
+
+    This helper is deliberately transport-neutral so the REST route and the MCP
+    control-lane recovery tool use exactly the same conflict/audit semantics.
+    """
+
+    latest = _restart_operation(storage)
+    if latest is not None and latest["status"] in {"requested", "restarting"}:
+        raise conflict(
+            "system_restart",
+            "A Synapse restart is already in progress.",
+            operation_id=latest["operation_id"],
+            diagnostic_code="SYN-RST-001",
+        )
+    operation_id = payload.operation_id or f"restart-{secrets.token_hex(6)}"
+    with storage.transaction() as conn:
+        audit(
+            conn,
+            AuditRecord(
+                entity_type="system_restart",
+                entity_id=operation_id,
+                action="restart.requested",
+                source=payload.source,
+                result="success",
+                details={"source": payload.source.value},
+            ),
+        )
+    operation = _restart_operation(storage, operation_id)
+    if operation is None:
+        raise RuntimeError("Restart request was persisted but could not be read back.")
+    return operation
+
+
 def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
     router = APIRouter(tags=["system"])
 
@@ -464,36 +498,16 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
 
     @router.post("/system/restart", response_model=None, status_code=202)
     async def request_restart(payload: RestartRequest, request: Request) -> dict[str, Any]:
-        latest = _restart_operation(storage)
-        if latest is not None and latest["status"] in {"requested", "restarting"}:
-            raise conflict(
-                "system_restart",
-                "A Synapse restart is already in progress.",
-                operation_id=latest["operation_id"],
-                diagnostic_code="SYN-RST-001",
-            )
-        operation_id = payload.operation_id or f"restart-{secrets.token_hex(6)}"
-        with storage.transaction() as conn:
-            audit(
-                conn,
-                AuditRecord(
-                    entity_type="system_restart",
-                    entity_id=operation_id,
-                    action="restart.requested",
-                    source=payload.source,
-                    result="success",
-                    details={"source": payload.source.value},
-                ),
-            )
+        operation = create_restart_operation(storage, payload)
         await request.app.state.bus.publish(
             event_name("system", "restart_requested"),
             {
-                "operation_id": operation_id,
+                "operation_id": operation["operation_id"],
                 "source": payload.source.value,
             },
         )
         return {
-            "operation": _restart_operation(storage, operation_id),
+            "operation": operation,
             "error_catalog": RESTART_ERROR_CODES,
         }
 

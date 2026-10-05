@@ -41,6 +41,7 @@ from pydantic import BaseModel, Field
 
 from . import connection_codes
 from .errors import invalid, not_found
+from .subprocess_utils import headless_creationflags
 from .time_utils import from_iso, to_iso, utc_now
 
 # A session with no heartbeat within this window is considered stale/gone.
@@ -811,7 +812,8 @@ def git_dirty_paths(repo_root: Path) -> list[str]:
             encoding="utf-8",
             errors="replace",
             check=False,
-        )
+                                creationflags=headless_creationflags(),
+)
     except OSError:
         return []
     if completed.returncode != 0:

@@ -1,0 +1,28 @@
+{
+  "schema": "ui-forge-theme-capsule-benchmark-v1",
+  "generated_at": "2026-09-09T05:45:55.000796+00:00",
+  "checks": {
+    "extract_succeeds": true,
+    "schema_is_machine_readable": true,
+    "semantic_tokens_extracted": true,
+    "categories_are_present": true,
+    "dry_run_plans_all_tokens": true,
+    "dry_run_is_non_mutating": true,
+    "apply_succeeds_atomically": true,
+    "target_tokens_match_capsule": true,
+    "non_token_css_is_preserved": true,
+    "missing_tokens_fail_closed": true,
+    "missing_token_failure_writes_nothing": true,
+    "explicit_partial_apply_works": true,
+    "conflicting_source_tokens_refuse_extraction": true
+  },
+  "passed": 13,
+  "total": 13,
+  "overall_pass": true,
+  "token_count": 7,
+  "claims": {
+    "semantic_theme_extract_apply_gate_proven": true,
+    "blind_global_replacement_avoided": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

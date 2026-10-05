@@ -4,12 +4,66 @@
   "generated_at": "2026-06-08T00:00:00Z",
   "tools": [
     {
+      "id": "synapse-image-studio",
+      "name": "Synapse Image Studio",
+      "publisher": "The WhatIf Company",
+      "tier": "handler",
+      "category": "dev-tools",
+      "tags": [
+        "ai",
+        "images",
+        "generation",
+        "editing",
+        "assets",
+        "openai",
+        "import",
+        "upload",
+        "provenance"
+      ],
+      "featured": true,
+      "sort_rank": 8,
+      "version": "1.0.0",
+      "description": "First-party image generation, editing, native-image import, and chunked AI transfer for every AI connected to Synapse, with project-scoped provenance and integrity auditing.",
+      "homepage": null,
+      "verified": true,
+      "bundled": true,
+      "install_default": true,
+      "manifest_url": null,
+      "manifest_inline": {
+        "id": "synapse-image-studio",
+        "name": "Synapse Image Studio",
+        "category": "dev-tools",
+        "icon": "image",
+        "description": "First-party image generation, editing, native-image import, and chunked AI transfer for every AI connected to Synapse. Saves project-scoped assets with provenance and integrity auditing.",
+        "version": "1.0.0",
+        "publisher": "The WhatIf Company",
+        "verified": true,
+        "bundled": true,
+        "install_default": true,
+        "fields": [],
+        "actions": [
+          {
+            "id": "check",
+            "label": "Check readiness",
+            "handler": "synapse-image-studio:check",
+            "primary": true,
+            "scope": "tool"
+          }
+        ]
+      }
+    },
+    {
       "id": "cloudtap",
       "name": "Cloudtap",
       "publisher": "The WhatIf Company",
       "tier": "handler",
       "category": "remote",
-      "tags": ["cloudflare", "tunnel", "wan", "mobile"],
+      "tags": [
+        "cloudflare",
+        "tunnel",
+        "wan",
+        "mobile"
+      ],
       "featured": true,
       "sort_rank": 10,
       "version": "1.0.0",
@@ -24,11 +78,15 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "system",
-      "tags": ["docs", "learn", "readme"],
+      "tags": [
+        "docs",
+        "learn",
+        "readme"
+      ],
       "featured": false,
       "sort_rank": 70,
       "version": "1.0.0",
-      "description": "Opens the Synapse documentation in your default browser. A 12-line manifest — nothing else.",
+      "description": "Opens the Synapse documentation in your default browser. A 12-line manifest \u2014 nothing else.",
       "homepage": "https://github.com/jross32/synapse",
       "verified": true,
       "manifest_url": null,
@@ -44,7 +102,9 @@
             "label": "Open docs",
             "primary": true,
             "primitive": "url.open",
-            "params": {"url": "https://github.com/jross32/synapse#readme"}
+            "params": {
+              "url": "https://github.com/jross32/synapse#readme"
+            }
           }
         ]
       }
@@ -55,7 +115,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "ai-assistants",
-      "tags": ["claude", "anthropic", "terminal", "agent"],
+      "tags": [
+        "claude",
+        "anthropic",
+        "terminal",
+        "agent"
+      ],
       "featured": true,
       "sort_rank": 20,
       "version": "1.0.0",
@@ -75,7 +140,11 @@
             "label": "Open Claude session",
             "primary": true,
             "primitive": "pty.spawn",
-            "params": {"argv": ["claude"]}
+            "params": {
+              "argv": [
+                "claude"
+              ]
+            }
           }
         ]
       }
@@ -86,7 +155,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "ai-assistants",
-      "tags": ["google", "gemini", "terminal", "agent"],
+      "tags": [
+        "google",
+        "gemini",
+        "terminal",
+        "agent"
+      ],
       "featured": true,
       "sort_rank": 17,
       "version": "1.0.0",
@@ -106,7 +180,11 @@
             "label": "Open Gemini session",
             "primary": true,
             "primitive": "pty.spawn",
-            "params": {"argv": ["gemini"]}
+            "params": {
+              "argv": [
+                "gemini"
+              ]
+            }
           }
         ]
       }
@@ -117,7 +195,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "ai-assistants",
-      "tags": ["openai", "codex", "terminal", "agent"],
+      "tags": [
+        "openai",
+        "codex",
+        "terminal",
+        "agent"
+      ],
       "featured": true,
       "sort_rank": 15,
       "version": "1.0.0",
@@ -137,7 +220,11 @@
             "label": "Open Codex session",
             "primary": true,
             "primitive": "pty.spawn",
-            "params": {"argv": ["codex"]}
+            "params": {
+              "argv": [
+                "codex"
+              ]
+            }
           }
         ]
       }
@@ -148,7 +235,13 @@
       "publisher": "The WhatIf Company",
       "tier": "handler",
       "category": "workflows",
-      "tags": ["ai", "saas", "launcher", "client-ops", "revenue"],
+      "tags": [
+        "ai",
+        "saas",
+        "launcher",
+        "client-ops",
+        "revenue"
+      ],
       "featured": true,
       "sort_rank": 18,
       "version": "1.0.0",
@@ -250,7 +343,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "ai-assistants",
-      "tags": ["github", "copilot", "terminal", "agent"],
+      "tags": [
+        "github",
+        "copilot",
+        "terminal",
+        "agent"
+      ],
       "featured": true,
       "sort_rank": 25,
       "version": "1.0.0",
@@ -270,7 +368,11 @@
             "label": "Open Copilot session",
             "primary": true,
             "primitive": "pty.spawn",
-            "params": {"argv": ["copilot"]}
+            "params": {
+              "argv": [
+                "copilot"
+              ]
+            }
           }
         ]
       }
@@ -281,7 +383,11 @@
       "publisher": "Community",
       "tier": "declarative",
       "category": "dev-tools",
-      "tags": ["git", "repo", "status"],
+      "tags": [
+        "git",
+        "repo",
+        "status"
+      ],
       "featured": false,
       "sort_rank": 60,
       "version": "0.1.0",
@@ -296,7 +402,13 @@
         "description": "Run `git status --short` in any folder.",
         "version": "0.1.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\repo"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\repo"
+          }
         ],
         "actions": [
           {
@@ -305,7 +417,13 @@
             "primary": true,
             "primitive": "process.spawn",
             "params": {
-              "argv": ["git", "-C", "{path}", "status", "--short"],
+              "argv": [
+                "git",
+                "-C",
+                "{path}",
+                "status",
+                "--short"
+              ],
               "timeout": 10
             }
           }
@@ -318,7 +436,11 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "editors",
-      "tags": ["editor", "vscode", "ide"],
+      "tags": [
+        "editor",
+        "vscode",
+        "ide"
+      ],
       "featured": false,
       "sort_rank": 45,
       "version": "1.0.0",
@@ -333,7 +455,13 @@
         "description": "Run `code-insiders .` against any folder.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\folder"
+          }
         ],
         "actions": [
           {
@@ -342,7 +470,10 @@
             "primary": true,
             "primitive": "process.spawn",
             "params": {
-              "argv": ["code-insiders", "{path}"],
+              "argv": [
+                "code-insiders",
+                "{path}"
+              ],
               "timeout": 5
             }
           }
@@ -355,7 +486,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "editors",
-      "tags": ["editor", "cursor", "ide", "ai"],
+      "tags": [
+        "editor",
+        "cursor",
+        "ide",
+        "ai"
+      ],
       "featured": true,
       "sort_rank": 30,
       "version": "1.0.0",
@@ -370,7 +506,13 @@
         "description": "Run `cursor .` against any folder.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\folder"
+          }
         ],
         "actions": [
           {
@@ -379,7 +521,10 @@
             "primary": true,
             "primitive": "process.spawn",
             "params": {
-              "argv": ["cursor", "{path}"],
+              "argv": [
+                "cursor",
+                "{path}"
+              ],
               "timeout": 5
             }
           }
@@ -392,7 +537,11 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "editors",
-      "tags": ["editor", "zed", "ide"],
+      "tags": [
+        "editor",
+        "zed",
+        "ide"
+      ],
       "featured": false,
       "sort_rank": 50,
       "version": "1.0.0",
@@ -407,7 +556,13 @@
         "description": "Run `zed .` against any folder.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\folder"
+          }
         ],
         "actions": [
           {
@@ -416,7 +571,10 @@
             "primary": true,
             "primitive": "process.spawn",
             "params": {
-              "argv": ["zed", "{path}"],
+              "argv": [
+                "zed",
+                "{path}"
+              ],
               "timeout": 5
             }
           }
@@ -429,7 +587,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "workflows",
-      "tags": ["python", "pip", "install", "dev"],
+      "tags": [
+        "python",
+        "pip",
+        "install",
+        "dev"
+      ],
       "featured": false,
       "sort_rank": 55,
       "version": "1.0.0",
@@ -444,7 +607,13 @@
         "description": "Spawns `pip install -e .[dev]` in the given folder under a PTY so output streams live.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Project folder", "required": true, "placeholder": "C:\\path\\to\\project"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Project folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\project"
+          }
         ],
         "actions": [
           {
@@ -453,7 +622,12 @@
             "primary": true,
             "primitive": "pty.spawn",
             "params": {
-              "argv": ["powershell.exe", "-NoLogo", "-Command", "Set-Location -LiteralPath '{path}'; pip install -e \".[dev]\""]
+              "argv": [
+                "powershell.exe",
+                "-NoLogo",
+                "-Command",
+                "Set-Location -LiteralPath '{path}'; pip install -e \".[dev]\""
+              ]
             }
           }
         ]
@@ -465,7 +639,11 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "system",
-      "tags": ["explorer", "folder", "os"],
+      "tags": [
+        "explorer",
+        "folder",
+        "os"
+      ],
       "featured": false,
       "sort_rank": 65,
       "version": "1.0.0",
@@ -480,7 +658,13 @@
         "description": "Open the given folder in your OS file browser.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Folder", "required": true, "placeholder": "C:\\path\\to\\folder"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\folder"
+          }
         ],
         "actions": [
           {
@@ -489,7 +673,10 @@
             "primary": true,
             "primitive": "process.spawn",
             "params": {
-              "argv": ["explorer.exe", "{path}"],
+              "argv": [
+                "explorer.exe",
+                "{path}"
+              ],
               "timeout": 5
             }
           }
@@ -502,7 +689,11 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "data",
-      "tags": ["logs", "tail", "monitoring"],
+      "tags": [
+        "logs",
+        "tail",
+        "monitoring"
+      ],
       "featured": false,
       "sort_rank": 58,
       "version": "1.0.0",
@@ -517,7 +708,13 @@
         "description": "powershell.exe Get-Content -Wait -Tail 30, attached to a real PTY so colours and scrolling work.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Log file", "required": true, "placeholder": "C:\\path\\to\\app.log"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Log file",
+            "required": true,
+            "placeholder": "C:\\path\\to\\app.log"
+          }
         ],
         "actions": [
           {
@@ -526,7 +723,12 @@
             "primary": true,
             "primitive": "pty.spawn",
             "params": {
-              "argv": ["powershell.exe", "-NoLogo", "-Command", "Get-Content -Path '{path}' -Wait -Tail 30"]
+              "argv": [
+                "powershell.exe",
+                "-NoLogo",
+                "-Command",
+                "Get-Content -Path '{path}' -Wait -Tail 30"
+              ]
             }
           }
         ]
@@ -538,7 +740,12 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "workflows",
-      "tags": ["node", "npm", "install", "packages"],
+      "tags": [
+        "node",
+        "npm",
+        "install",
+        "packages"
+      ],
       "featured": false,
       "sort_rank": 52,
       "version": "1.0.0",
@@ -553,7 +760,13 @@
         "description": "Spawns `npm install` in the given folder under a PTY so output streams live.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Project folder", "required": true, "placeholder": "C:\\path\\to\\project"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Project folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\project"
+          }
         ],
         "actions": [
           {
@@ -562,7 +775,12 @@
             "primary": true,
             "primitive": "pty.spawn",
             "params": {
-              "argv": ["powershell.exe", "-NoLogo", "-Command", "Set-Location -LiteralPath '{path}'; npm install"]
+              "argv": [
+                "powershell.exe",
+                "-NoLogo",
+                "-Command",
+                "Set-Location -LiteralPath '{path}'; npm install"
+              ]
             }
           }
         ]
@@ -574,7 +792,11 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "workflows",
-      "tags": ["docker", "compose", "containers"],
+      "tags": [
+        "docker",
+        "compose",
+        "containers"
+      ],
       "featured": true,
       "sort_rank": 35,
       "version": "1.0.0",
@@ -589,7 +811,13 @@
         "description": "Runs `docker compose up` in the given folder under a PTY so logs stream live.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Compose folder", "required": true, "placeholder": "C:\\path\\to\\compose"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Compose folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\compose"
+          }
         ],
         "actions": [
           {
@@ -598,7 +826,12 @@
             "primary": true,
             "primitive": "pty.spawn",
             "params": {
-              "argv": ["powershell.exe", "-NoLogo", "-Command", "Set-Location -LiteralPath '{path}'; docker compose up"]
+              "argv": [
+                "powershell.exe",
+                "-NoLogo",
+                "-Command",
+                "Set-Location -LiteralPath '{path}'; docker compose up"
+              ]
             }
           }
         ]
@@ -610,7 +843,11 @@
       "publisher": "The WhatIf Company",
       "tier": "declarative",
       "category": "dev-tools",
-      "tags": ["git", "history", "repo"],
+      "tags": [
+        "git",
+        "history",
+        "repo"
+      ],
       "featured": false,
       "sort_rank": 62,
       "version": "1.0.0",
@@ -625,7 +862,13 @@
         "description": "Run `git log --oneline -15` against any folder.",
         "version": "1.0.0",
         "fields": [
-          {"key": "path", "type": "path", "label": "Repo folder", "required": true, "placeholder": "C:\\path\\to\\repo"}
+          {
+            "key": "path",
+            "type": "path",
+            "label": "Repo folder",
+            "required": true,
+            "placeholder": "C:\\path\\to\\repo"
+          }
         ],
         "actions": [
           {
@@ -634,7 +877,14 @@
             "primary": true,
             "primitive": "process.spawn",
             "params": {
-              "argv": ["git", "-C", "{path}", "log", "--oneline", "-15"],
+              "argv": [
+                "git",
+                "-C",
+                "{path}",
+                "log",
+                "--oneline",
+                "-15"
+              ],
               "timeout": 10
             }
           }

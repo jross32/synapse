@@ -1,0 +1,235 @@
+{
+  "schema": "ui-forge-state-style-benchmark-v1",
+  "generated_at": "2026-09-09T12:25:11.961311+00:00",
+  "checks": {
+    "base_resolves_exact_owner": true,
+    "base_dry_run_non_mutating": true,
+    "hover_resolves_exact_owner": true,
+    "hover_dry_run_non_mutating": true,
+    "focus_visible_resolves_exact_owner": true,
+    "focus_visible_dry_run_non_mutating": true,
+    "disabled_resolves_exact_owner": true,
+    "disabled_dry_run_non_mutating": true,
+    "missing_requested_state_fails_closed": true,
+    "unsupported_state_is_refused": true,
+    "hover_apply_succeeds": true,
+    "base_rule_is_unchanged_by_hover_edit": true,
+    "combined_state_rule_is_unchanged": true,
+    "hover_rule_received_requested_values": true
+  },
+  "passed": 14,
+  "total": 14,
+  "overall_pass": true,
+  "results": {
+    "base": {
+      "ok": true,
+      "schema": "ui-forge-css-style-edit-v1",
+      "dry_run": true,
+      "file": "styles.css",
+      "selector": ".cta",
+      "state": null,
+      "media_chain": [],
+      "line": 1,
+      "ownership_score": 41,
+      "candidate_count": 1,
+      "before_rule": {
+        "selector": ".cta",
+        "declarations": {
+          "background-color": "rgb(10, 20, 30)",
+          "color": "white"
+        }
+      },
+      "after_rule": {
+        "selector": ".cta",
+        "declarations": {
+          "background-color": "rgb(11, 22, 33)",
+          "color": "white"
+        }
+      },
+      "changes": [
+        {
+          "property": "background-color",
+          "before": "rgb(10, 20, 30)",
+          "after": "rgb(11, 22, 33)"
+        }
+      ],
+      "syntax_reparse_passed": true,
+      "verification_required": [
+        "rerender application",
+        "re-probe selected element computed style and geometry",
+        "check desktop/mobile layout",
+        "check console/runtime errors"
+      ]
+    },
+    "hover": {
+      "ok": true,
+      "schema": "ui-forge-css-style-edit-v1",
+      "dry_run": true,
+      "file": "styles.css",
+      "selector": ".cta:hover",
+      "state": "hover",
+      "media_chain": [],
+      "line": 2,
+      "ownership_score": 42,
+      "candidate_count": 1,
+      "before_rule": {
+        "selector": ".cta:hover",
+        "declarations": {
+          "background-color": "rgb(20, 30, 40)",
+          "transform": "translateY(-1px)"
+        }
+      },
+      "after_rule": {
+        "selector": ".cta:hover",
+        "declarations": {
+          "background-color": "rgb(200, 50, 20)",
+          "transform": "translateY(-1px)"
+        }
+      },
+      "changes": [
+        {
+          "property": "background-color",
+          "before": "rgb(20, 30, 40)",
+          "after": "rgb(200, 50, 20)"
+        }
+      ],
+      "syntax_reparse_passed": true,
+      "verification_required": [
+        "exercise real browser state :hover",
+        "re-probe selected element computed style and geometry",
+        "check desktop/mobile layout",
+        "check console/runtime errors"
+      ]
+    },
+    "focus_visible": {
+      "ok": true,
+      "schema": "ui-forge-css-style-edit-v1",
+      "dry_run": true,
+      "file": "styles.css",
+      "selector": ".cta:focus-visible",
+      "state": "focus-visible",
+      "media_chain": [],
+      "line": 3,
+      "ownership_score": 42,
+      "candidate_count": 1,
+      "before_rule": {
+        "selector": ".cta:focus-visible",
+        "declarations": {
+          "outline": "2px solid white",
+          "outline-offset": "2px"
+        }
+      },
+      "after_rule": {
+        "selector": ".cta:focus-visible",
+        "declarations": {
+          "outline": "3px solid lime",
+          "outline-offset": "2px"
+        }
+      },
+      "changes": [
+        {
+          "property": "outline",
+          "before": "2px solid white",
+          "after": "3px solid lime"
+        }
+      ],
+      "syntax_reparse_passed": true,
+      "verification_required": [
+        "exercise real browser state :focus-visible",
+        "re-probe selected element computed style and geometry",
+        "check desktop/mobile layout",
+        "check console/runtime errors"
+      ]
+    },
+    "disabled": {
+      "ok": true,
+      "schema": "ui-forge-css-style-edit-v1",
+      "dry_run": true,
+      "file": "styles.css",
+      "selector": ".cta:disabled",
+      "state": "disabled",
+      "media_chain": [],
+      "line": 4,
+      "ownership_score": 42,
+      "candidate_count": 1,
+      "before_rule": {
+        "selector": ".cta:disabled",
+        "declarations": {
+          "opacity": ".5",
+          "cursor": "not-allowed"
+        }
+      },
+      "after_rule": {
+        "selector": ".cta:disabled",
+        "declarations": {
+          "opacity": ".35",
+          "cursor": "not-allowed"
+        }
+      },
+      "changes": [
+        {
+          "property": "opacity",
+          "before": ".5",
+          "after": ".35"
+        }
+      ],
+      "syntax_reparse_passed": true,
+      "verification_required": [
+        "exercise real browser state :disabled",
+        "re-probe selected element computed style and geometry",
+        "check desktop/mobile layout",
+        "check console/runtime errors"
+      ]
+    }
+  },
+  "applied": {
+    "ok": true,
+    "schema": "ui-forge-css-style-edit-v1",
+    "dry_run": false,
+    "file": "styles.css",
+    "selector": ".cta:hover",
+    "state": "hover",
+    "media_chain": [],
+    "line": 2,
+    "ownership_score": 42,
+    "candidate_count": 1,
+    "before_rule": {
+      "selector": ".cta:hover",
+      "declarations": {
+        "background-color": "rgb(20, 30, 40)",
+        "transform": "translateY(-1px)"
+      }
+    },
+    "after_rule": {
+      "selector": ".cta:hover",
+      "declarations": {
+        "background-color": "rgb(250, 80, 10)",
+        "transform": "translateY(-2px)"
+      }
+    },
+    "changes": [
+      {
+        "property": "background-color",
+        "before": "rgb(20, 30, 40)",
+        "after": "rgb(250, 80, 10)"
+      },
+      {
+        "property": "transform",
+        "before": "translateY(-1px)",
+        "after": "translateY(-2px)"
+      }
+    ],
+    "syntax_reparse_passed": true,
+    "verification_required": [
+      "exercise real browser state :hover",
+      "re-probe selected element computed style and geometry",
+      "check desktop/mobile layout",
+      "check console/runtime errors"
+    ]
+  },
+  "claims": {
+    "exact_pseudo_state_ownership_gate_proven": true,
+    "base_and_complex_states_preserved": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

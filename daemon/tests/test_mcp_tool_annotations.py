@@ -19,7 +19,12 @@ EXPECTED_READ_ONLY = {
     "synapse_list_projects",
     "synapse_get_project_records",
     "synapse_project_doctor",
+    "synapse_repair_candidate_evaluate",
     "synapse_get_project_ai_context",
+    "synapse_image_generation_status",
+    "synapse_list_project_images",
+    "synapse_get_image_asset",
+    "synapse_audit_image_assets",
     "synapse_list_tools",
     "synapse_list_quick_actions",
     "synapse_list_skill_packs",
@@ -33,6 +38,7 @@ EXPECTED_READ_ONLY = {
     "synapse_trace_analyze",
     "synapse_quality_summary",
     "synapse_runtime_status",
+    "synapse_ui_forge_status",
     "synapse_list_blueprints",
     "synapse_list_mcp_tools",
     "synapse_read_file",
@@ -45,6 +51,7 @@ EXPECTED_READ_ONLY = {
 # must NEVER be readOnlyHint: true, however convenient that would be for getting past a
 # client's confirmation step.
 EXPECTED_NOT_READ_ONLY = {
+    "synapse_repair_arena",
     "synapse_add_project_idea",
     "synapse_capture_note",
     "synapse_trace_record",
@@ -57,6 +64,12 @@ EXPECTED_NOT_READ_ONLY = {
     "synapse_leave_collaboration_room",
     "synapse_delegate_module",
     "synapse_write_file",
+    "synapse_generate_image",
+    "synapse_edit_image",
+    "synapse_import_image_file",
+    "synapse_begin_image_upload",
+    "synapse_append_image_upload",
+    "synapse_finish_image_upload",
     "synapse_run_command",
     "synapse_http",
     "synapse_call_mcp_tool",
@@ -64,7 +77,9 @@ EXPECTED_NOT_READ_ONLY = {
 
 # The tools most worth getting right: run arbitrary shell, or proxy to something that can.
 EXPECTED_DESTRUCTIVE = {"synapse_run_command", "synapse_http", "synapse_call_mcp_tool",
-                        "synapse_delegate_module", "synapse_write_file"}
+                        "synapse_delegate_module", "synapse_write_file", "synapse_generate_image",
+                        "synapse_edit_image", "synapse_import_image_file",
+                        "synapse_finish_image_upload"}
 
 
 def test_every_advertised_tool_has_annotations():

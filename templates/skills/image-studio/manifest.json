@@ -1,0 +1,28 @@
+{
+  "id": "image-studio",
+  "name": "Synapse Image Studio",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "AI-native image generation and editing workflow for photorealistic production assets, reference-image transformations, project-scoped saving, provenance, and integrity auditing through Synapse Image Studio.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "image-generation",
+    "image-editing",
+    "photorealistic",
+    "visual-assets",
+    "product-photography",
+    "creative",
+    "provenance"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "synapse-image-studio"
+  ],
+  "optional_capabilities": [
+    "playwright",
+    "reflex"
+  ],
+  "benchmark_spec": null,
+  "baseline": null
+}

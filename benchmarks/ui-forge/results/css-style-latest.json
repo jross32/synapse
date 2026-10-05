@@ -1,0 +1,28 @@
+{
+  "schema": "ui-forge-css-style-benchmark-v1",
+  "generated_at": "2026-09-09T12:25:05.614972+00:00",
+  "checks": {
+    "dry_run_resolves_unique_owner": true,
+    "dry_run_does_not_write": true,
+    "apply_succeeds": true,
+    "owning_rule_updated": true,
+    "unrelated_rule_preserved": true,
+    "syntax_reparse_passes": true,
+    "automatic_owner_ignores_pseudo_state_rules": true,
+    "ambiguous_owner_fails_closed": true,
+    "explicit_owner_resolves_ambiguity": true,
+    "url_values_require_main_coding_path": true
+  },
+  "passed": 10,
+  "total": 10,
+  "overall_pass": true,
+  "owner": {
+    "file": "src/styles.css",
+    "selector": ".cta",
+    "score": 41
+  },
+  "claims": {
+    "css_owner_edit_gate_proven": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

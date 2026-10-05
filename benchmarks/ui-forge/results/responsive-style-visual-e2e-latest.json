@@ -1,0 +1,116 @@
+{
+  "schema": "ui-forge-responsive-style-visual-e2e-v1",
+  "generated_at": "2026-09-21T00:51:10.259Z",
+  "overall_pass": true,
+  "duration_ms": 12817.621,
+  "before": {
+    "source": "src/App.jsx:2:92",
+    "id": "uif-188xlx8",
+    "width": 77.46875,
+    "paddingLeft": "12px",
+    "borderRadius": "8px",
+    "inlineStyle": null
+  },
+  "preview": {
+    "during": {
+      "width": 109.46875,
+      "paddingLeft": "28px",
+      "borderRadius": "16px",
+      "inlineStyle": "padding: 0px 28px; border-radius: 16px;"
+    },
+    "after_revert": {
+      "width": 77.46875,
+      "paddingLeft": "12px",
+      "borderRadius": "8px",
+      "inlineStyle": null
+    },
+    "normal_commit_refused": true
+  },
+  "css_commit": {
+    "ok": true,
+    "schema": "ui-forge-css-style-edit-v1",
+    "dry_run": false,
+    "file": "src/styles.css",
+    "selector": ".cta",
+    "state": null,
+    "media_chain": [
+      "(max-width: 640px)"
+    ],
+    "line": 6,
+    "ownership_score": 41,
+    "candidate_count": 1,
+    "before_rule": {
+      "selector": ".cta",
+      "declarations": {
+        "padding": "0 12px",
+        "border-radius": "8px"
+      }
+    },
+    "after_rule": {
+      "selector": ".cta",
+      "declarations": {
+        "padding": "0 28px",
+        "border-radius": "16px"
+      }
+    },
+    "changes": [
+      {
+        "property": "padding",
+        "before": "0 12px",
+        "after": "0 28px"
+      },
+      {
+        "property": "border-radius",
+        "before": "8px",
+        "after": "16px"
+      }
+    ],
+    "syntax_reparse_passed": true,
+    "verification_required": [
+      "rerender application",
+      "exercise a viewport matching media chain: (max-width: 640px)",
+      "exercise a contrasting viewport outside that media chain",
+      "re-probe selected element computed style and geometry",
+      "check desktop/mobile layout",
+      "check console/runtime errors"
+    ]
+  },
+  "committed": {
+    "source": "src/App.jsx:2:92",
+    "id": "uif-188xlx8",
+    "width": 109.46875,
+    "paddingLeft": "28px",
+    "borderRadius": "16px",
+    "inlineStyle": null
+  },
+  "identity_stable": true,
+  "inline_style_clean": true,
+  "browser": {
+    "console_errors": [],
+    "page_errors": [],
+    "desktop_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    },
+    "mobile_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    }
+  },
+  "claims": {
+    "reversible_css_preview_pass": true,
+    "css_owner_commit_pass": true,
+    "no_inline_style_debt": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

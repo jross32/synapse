@@ -1,0 +1,146 @@
+{
+  "id": "repair-arena",
+  "name": "Repair Arena",
+  "category": "dev-tools",
+  "icon": "wrench",
+  "description": "AI-native App Doctor + Agent Arcade workflow. Compete evidence-grounded repair strategies, optionally stage finalists into isolated Git worktrees, and read-only evaluate actual candidate diffs/App Doctor deltas before any promotion.",
+  "version": "1.2.0",
+  "publisher": "The WhatIf Company",
+  "verified": true,
+  "bundled": true,
+  "install_default": true,
+  "fields": [
+    {
+      "key": "project",
+      "type": "text",
+      "label": "Synapse project id",
+      "required": true,
+      "placeholder": "stock-hunter",
+      "help": "Registered Synapse project id or exact project name. Repair Arena resolves the repository path itself."
+    },
+    {
+      "key": "rounds",
+      "type": "number",
+      "label": "Competition rounds",
+      "required": false,
+      "min": 1,
+      "max": 3,
+      "default": 2,
+      "help": "More rounds let strategies refine after critique."
+    },
+    {
+      "key": "mode",
+      "type": "text",
+      "label": "Arena mode",
+      "required": false,
+      "default": "demo",
+      "placeholder": "demo",
+      "help": "demo is deterministic/local. gemini uses Agent Arcade's live Gemini mode when available."
+    },
+    {
+      "key": "candidate_count",
+      "type": "number",
+      "label": "Candidate worktrees",
+      "required": false,
+      "min": 1,
+      "max": 3,
+      "default": 3,
+      "help": "Used by Prepare candidate worktrees. Creates up to three isolated worktrees from the tournament finalists."
+    },
+    {
+      "key": "tournament",
+      "type": "text",
+      "label": "Tournament id",
+      "required": false,
+      "placeholder": "770a23223120",
+      "help": "Used by Evaluate staged candidate."
+    },
+    {
+      "key": "candidate",
+      "type": "text",
+      "label": "Candidate",
+      "required": false,
+      "placeholder": "1 or test-first-builder",
+      "help": "Optional candidate rank, agent id, or name. Defaults to rank 1."
+    }
+  ],
+  "actions": [
+    {
+      "id": "run",
+      "label": "Run Repair Arena",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/repair-arena/controller.py",
+          "run",
+          "--project",
+          "{project}",
+          "--rounds",
+          "{rounds}",
+          "--mode",
+          "{mode}"
+        ],
+        "timeout": 90
+      },
+      "primary": true,
+      "scope": "tool"
+    },
+    {
+      "id": "stage",
+      "label": "Prepare candidate worktrees",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/repair-arena/controller.py",
+          "stage",
+          "--project",
+          "{project}",
+          "--rounds",
+          "{rounds}",
+          "--mode",
+          "{mode}",
+          "--candidate-count",
+          "{candidate_count}"
+        ],
+        "timeout": 90
+      },
+      "scope": "tool"
+    },
+    {
+      "id": "check",
+      "label": "Check readiness",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/repair-arena/controller.py",
+          "check"
+        ],
+        "timeout": 5
+      },
+      "scope": "tool"
+    },
+    {
+      "id": "evaluate",
+      "label": "Evaluate staged candidate",
+      "primitive": "process.spawn",
+      "params": {
+        "argv": [
+          "python",
+          "tools/repair-arena/controller.py",
+          "evaluate",
+          "--project",
+          "{project}",
+          "--tournament",
+          "{tournament}",
+          "--candidate",
+          "{candidate}"
+        ],
+        "timeout": 60
+      },
+      "scope": "tool"
+    }
+  ]
+}

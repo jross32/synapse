@@ -188,6 +188,95 @@ def test_direct_ingest_rescore_and_export(tmp_path: Path) -> None:
         assert Path(paths["lessons_path"]).exists()
 
 
+def test_benchmark_run_can_compare_same_model_with_distinct_workflow_candidate_keys(tmp_path: Path) -> None:
+    _app, client, _storage = _harness(tmp_path)
+    with client as c:
+        created = c.post(
+            "/api/v1/benchmarks/runs",
+            json={
+                "spec_id": "coder-workspace-v1",
+                "project_id": "demo-project",
+                "title": "Same model workflow comparison",
+                "repeat_count": 1,
+                "matrix": [
+                    {
+                        "scenario_id": "static-app-mini",
+                        "runtime_id": "claude",
+                        "provider": "anthropic",
+                        "model": "same-model",
+                        "surface_kind": "synapse_coder_thread",
+                        "metadata": {"candidate_group_key": "workflow:baseline"},
+                    },
+                    {
+                        "scenario_id": "static-app-mini",
+                        "runtime_id": "claude",
+                        "provider": "anthropic",
+                        "model": "same-model",
+                        "surface_kind": "synapse_coder_thread",
+                        "metadata": {"candidate_group_key": "workflow:ui-forge"},
+                    },
+                ],
+            },
+        )
+        assert created.status_code == 201, created.text
+        report = c.get(f"/api/v1/benchmarks/runs/{created.json()['id']}").json()["report"]
+    keys = {attempt["candidate_group_key"] for attempt in report["all_attempts"]}
+    assert keys == {"workflow:baseline", "workflow:ui-forge"}
+
+
+
+def test_benchmark_candidate_instruction_is_separate_from_base_task_artifact(tmp_path: Path) -> None:
+    app, client, _storage = _harness(tmp_path)
+
+    async def fake_spawn(argv, cwd=None, env=None, rows=24, cols=80, project_id=None, session_id=None):
+        return _FakeSession("sess-treatment", argv, cwd, project_id)
+
+    app.state.pty_manager.spawn = fake_spawn
+    treatment = "Use the installed UI Forge skill and follow its evidence-gated workflow."
+    with client as c:
+        created = c.post(
+            "/api/v1/benchmarks/runs",
+            json={
+                "spec_id": "coder-workspace-v1",
+                "project_id": "demo-project",
+                "title": "Treatment prompt benchmark",
+                "repeat_count": 1,
+                "matrix": [
+                    {
+                        "scenario_id": "static-app-mini",
+                        "runtime_id": "claude",
+                        "provider": "anthropic",
+                        "model": "same-model",
+                        "surface_kind": "synapse_coder_thread",
+                        "metadata": {
+                            "candidate_group_key": "workflow:ui-forge",
+                            "candidate_instruction_md": treatment,
+                        },
+                    }
+                ],
+            },
+        )
+        assert created.status_code == 201, created.text
+        run_id = created.json()["id"]
+        report = c.get(f"/api/v1/benchmarks/runs/{run_id}").json()["report"]
+        attempt_id = report["all_attempts"][0]["id"]
+        launched = c.post(
+            f"/api/v1/benchmarks/runs/{run_id}/launch",
+            json={"attempt_id": attempt_id},
+        )
+        assert launched.status_code == 200, launched.text
+        prompt_path = Path(launched.json()["prompt_path"])
+        task_path = prompt_path.with_name("TASK.md")
+        prompt_text = prompt_path.read_text(encoding="utf-8")
+        task_text = task_path.read_text(encoding="utf-8")
+
+    assert treatment in prompt_text
+    assert "# Benchmark task" in prompt_text
+    assert treatment not in task_text
+    assert task_text.strip() in prompt_text
+
+
+
 def _candidate(key: str, quality: float, tokens: float, elapsed: float):
     from synapse_daemon.benchmarks import BenchmarkCandidateSummary, BenchmarkSurfaceKind
 

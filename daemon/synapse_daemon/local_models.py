@@ -29,6 +29,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .subprocess_utils import headless_creationflags
+
 # ---------------------------------------------------------------- hardware
 
 
@@ -60,7 +62,8 @@ def _nvidia_smi() -> list[GpuInfo]:
             [exe, "--query-gpu=name,memory.total,memory.free,driver_version",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=15,
-        )
+                          creationflags=headless_creationflags(),
+)
     except Exception:  # noqa: BLE001 -- no NVIDIA GPU is a normal state, not an error
         return []
     if out.returncode != 0:
@@ -96,7 +99,8 @@ def _cpu_ram() -> tuple[str, int | None, int | None, float | None]:
                  "\"$($c.Name)|$($c.NumberOfCores)|$($c.NumberOfLogicalProcessors)"
                  "|$([math]::Round($s.TotalPhysicalMemory/1GB,1))\""],
                 capture_output=True, text=True, timeout=25,
-            )
+                                  creationflags=headless_creationflags(),
+)
             parts = out.stdout.strip().split("|")
             if len(parts) == 4:
                 cpu = parts[0].strip() or cpu

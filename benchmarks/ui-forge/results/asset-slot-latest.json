@@ -1,0 +1,90 @@
+{
+  "schema": "ui-forge-asset-slot-benchmark-v1",
+  "generated_at": "2026-09-09T12:18:12.058724+00:00",
+  "checks": {
+    "valid_raster_stages": true,
+    "dimensions_and_hash_recorded": true,
+    "staged_asset_is_project_local": true,
+    "dry_run_validates_commit": true,
+    "dry_run_does_not_mutate_source": true,
+    "dry_run_preserves_stage_receipt": true,
+    "commit_succeeds": true,
+    "jsx_src_and_alt_are_updated": true,
+    "stage_receipt_promoted": true,
+    "dedup_stage_reuses_existing_asset": true,
+    "discard_refuses_referenced_asset_and_keeps_file": true,
+    "disguised_non_image_is_refused": true,
+    "svg_is_refused_in_direct_asset_lane": true,
+    "dynamic_src_fails_closed": true,
+    "dynamic_src_failure_writes_nothing": true,
+    "rejected_staged_asset_can_be_discarded": true,
+    "non_img_source_is_refused": true,
+    "non_img_refusal_writes_nothing": true
+  },
+  "passed": 18,
+  "total": 18,
+  "overall_pass": true,
+  "observations": {
+    "stage": {
+      "ok": true,
+      "command": "stage",
+      "schema": "ui-forge-asset-stage-v1",
+      "staged_at": "2026-09-09T12:17:22.955Z",
+      "project_root": "C:\\Users\\justi\\AppData\\Local\\Temp\\ui-forge-asset-slot-se5pjahk",
+      "source_asset": "C:\\Users\\justi\\AppData\\Local\\Temp\\ui-forge-asset-slot-se5pjahk\\generated.png",
+      "sha256": "0958a629d629a0e13ef89f15d2a17383b5e5af4f9afc6b3642c566d56fccccc2",
+      "bytes": 83,
+      "media_type": "png",
+      "width": 24,
+      "height": 16,
+      "project_asset": "public/ui-forge-assets/0958a629d629a0e1-generated.png",
+      "public_url": "/ui-forge-assets/0958a629d629a0e1-generated.png",
+      "created_new": true,
+      "receipt": ".synapse/ui-forge/assets/staged/0958a629d629a0e13ef89f15d2a17383b5e5af4f9afc6b3642c566d56fccccc2.json"
+    },
+    "commit": {
+      "ok": true,
+      "schema": "ui-forge-asset-slot-v1",
+      "dry_run": false,
+      "atomic": true,
+      "file": "src/App.jsx",
+      "source": "src/App.jsx:1:44",
+      "asset": {
+        "sha256": "0958a629d629a0e13ef89f15d2a17383b5e5af4f9afc6b3642c566d56fccccc2",
+        "bytes": 83,
+        "width": 24,
+        "height": 16,
+        "public_url": "/ui-forge-assets/0958a629d629a0e1-generated.png",
+        "project_asset": "public/ui-forge-assets/0958a629d629a0e1-generated.png"
+      },
+      "changes": [
+        {
+          "before": "/old.png",
+          "after": "/ui-forge-assets/0958a629d629a0e1-generated.png"
+        },
+        {
+          "before": "Old hero",
+          "after": "Generated hero"
+        }
+      ],
+      "syntax_reparse_passed": true,
+      "verification_required": [
+        "rerender application",
+        "verify image decodes and natural dimensions are non-zero",
+        "verify alt text and surrounding layout",
+        "run desktop/mobile browser proof",
+        "check console/runtime errors"
+      ]
+    },
+    "dynamic_failure": {
+      "ok": false,
+      "error": "refusing asset commit: img src is missing or dynamic"
+    }
+  },
+  "claims": {
+    "project_local_provenance_asset_gate_proven": true,
+    "dynamic_or_non_image_edits_fail_closed": true,
+    "not_a_provider_generation_quality_claim": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

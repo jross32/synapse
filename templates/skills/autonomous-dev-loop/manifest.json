@@ -1,0 +1,39 @@
+{
+  "id": "autonomous-dev-loop",
+  "name": "Autonomous Dev Loop",
+  "publisher": "The WhatIf Company",
+  "version": "0.2.1",
+  "description": "Model-independent autonomous software-development control loop for bounded verified iterations with durable checkpoints, resumable execution across tool/model windows, one-home-chat project continuity, fail-closed verification, and recoverable Foreman handoffs.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "autonomous-development",
+    "software-engineering",
+    "agentic-loop",
+    "foreman",
+    "verification",
+    "handoff",
+    "project-memory",
+    "continuous-improvement",
+    "execution-continuity",
+    "checkpoint-resume",
+    "durable-chat",
+    "tool-window-recovery",
+    "squads",
+    "fail-closed"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "reflex",
+    "playwright",
+    "browser",
+    "web",
+    "github"
+  ],
+  "optional_capabilities": [
+    "web-scraper",
+    "warden"
+  ],
+  "benchmark_spec": null,
+  "baseline": null
+}

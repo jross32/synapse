@@ -1,0 +1,52 @@
+{
+  "cases": [
+    {
+      "name": "guided-single-step-failure-cannot-grade-a",
+      "mode": "guided",
+      "journey": ["Save changes"],
+      "findings": [{"code": "journey.step_failed", "occurrences": 1}],
+      "expected_gate": "ux.guided_task_failure",
+      "max_overall": 59
+    },
+    {
+      "name": "automatic-tour-is-not-guided-task-success",
+      "mode": "automatic-safe-tour",
+      "journey": [],
+      "scene_urls": ["http://fixture/", "http://fixture/settings", "http://fixture/help"],
+      "expect_task_status": "not_applicable",
+      "expect_tour_status": "measured"
+    },
+    {
+      "name": "missing-performance-is-not-free-points-or-penalty",
+      "mode": "automatic-safe-tour",
+      "journey": [],
+      "scene_urls": ["http://fixture/", "http://fixture/help"],
+      "strip_performance": true,
+      "expect_performance": null
+    },
+    {
+      "name": "unmeasured-contrast-is-explicit",
+      "mode": "automatic-safe-tour",
+      "journey": [],
+      "scene_urls": ["http://fixture/", "http://fixture/help"],
+      "strip_contrast": true,
+      "expect_contrast_status": "not_measured"
+    },
+    {
+      "name": "missing-runtime-capture-is-not-perfect-reliability",
+      "mode": "automatic-safe-tour",
+      "journey": [],
+      "scene_urls": ["http://fixture/", "http://fixture/help"],
+      "omit_runtime_capture": true,
+      "expect_reliability": null
+    },
+    {
+      "name": "failed-target-probe-forces-zero",
+      "mode": "automatic-safe-tour",
+      "journey": [],
+      "probe_failure": true,
+      "expected_gate": "target.probe_failed",
+      "max_overall": 0
+    }
+  ]
+}

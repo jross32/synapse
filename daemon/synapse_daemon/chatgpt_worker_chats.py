@@ -2,7 +2,7 @@
 
 A coordination session describes one live AI run. A worker chat describes the
 longer-lived chatgpt.com conversation that may be resumed for the same work item
-or deliberately reused for a related one. Keeping the two identities separate
+or reused as the project's durable home conversation across bounded work items. Keeping the two identities separate
 lets Synapse retire live presence cleanly without losing the worker URL.
 
 Nothing in this module deletes ChatGPT conversations. "archive" only records
@@ -291,6 +291,158 @@ def link_work_item(
     return get_chat(conn, chat.id)
 
 
+def _is_real_conversation_url(value: str) -> bool:
+    url = str(value or "").strip()
+    return url.startswith("https://chatgpt.com/c/") and "/c/WEB:" not in url
+
+
+def _project_chat_rows(
+    conn: sqlite3.Connection,
+    project_id: str,
+) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM chatgpt_worker_chats "
+        "WHERE project_id = ? AND status != 'archived' "
+        "ORDER BY last_used_at DESC, created_at DESC",
+        (project_id,),
+    ).fetchall()
+
+
+def find_project_home_chat(
+    conn: sqlite3.Connection,
+    project_id: str,
+) -> ChatGPTWorkerChat | None:
+    """Pick one reusable durable home chat for a canonical Synapse project.
+
+    Prefer a real idle conversation, then a real failed conversation that can be
+    resumed, then an idle/failed worker that never obtained a conversation URL.
+    Synthetic ``WEB:`` placeholders are deliberately ignored: they are registry
+    artifacts, not navigable ChatGPT conversations.
+    """
+
+    rows = _project_chat_rows(conn, project_id)
+    reusable = [
+        row
+        for row in rows
+        if row["status"] in {ChatGPTWorkerStatus.IDLE.value, ChatGPTWorkerStatus.FAILED.value}
+        and (not str(row["conversation_url"] or "").strip() or _is_real_conversation_url(row["conversation_url"]))
+    ]
+    if not reusable:
+        return None
+
+    def rank(row: sqlite3.Row) -> tuple[int, int, str]:
+        url_rank = 0 if _is_real_conversation_url(row["conversation_url"] or "") else 1
+        status_rank = 0 if row["status"] == ChatGPTWorkerStatus.IDLE.value else 1
+        # Rows already arrive newest-first; the textual timestamp is retained only
+        # as a deterministic tie-breaker after URL/status quality.
+        return (url_rank, status_rank, str(row["last_used_at"] or ""))
+
+    best_rank = min((rank(row)[:2] for row in reusable))
+    best = [row for row in reusable if rank(row)[:2] == best_rank]
+    row = max(best, key=lambda item: str(item["last_used_at"] or ""))
+    return _row_to_chat(conn, row)
+
+
+def project_home_report(
+    conn: sqlite3.Connection,
+    project_id: str,
+) -> dict[str, object]:
+    """Describe the project's durable-chat state without mutating anything."""
+    rows = _project_chat_rows(conn, project_id)
+    chats = [_row_to_chat(conn, row) for row in rows]
+    live = [
+        chat
+        for chat in chats
+        if chat.status in {ChatGPTWorkerStatus.STARTING, ChatGPTWorkerStatus.ACTIVE}
+    ]
+    home = live[0] if len(live) == 1 else (find_project_home_chat(conn, project_id) if not live else None)
+    extras = [chat for chat in chats if home is None or chat.id != home.id]
+    real_extra_urls = sorted(
+        {
+            chat.conversation_url
+            for chat in extras
+            if _is_real_conversation_url(chat.conversation_url)
+        }
+    )
+    placeholder_extra_urls = sorted(
+        {
+            chat.conversation_url
+            for chat in extras
+            if str(chat.conversation_url or "").startswith("https://chatgpt.com/c/WEB:")
+        }
+    )
+    return {
+        "project_id": project_id,
+        "home": home.model_dump(mode="json") if home is not None else None,
+        "home_ready": home is not None and len(live) <= 1,
+        "live_count": len(live),
+        "live_worker_chat_ids": [chat.id for chat in live],
+        "non_archived_count": len(chats),
+        "redundant_inactive_count": sum(
+            1
+            for chat in extras
+            if chat.status not in {ChatGPTWorkerStatus.STARTING, ChatGPTWorkerStatus.ACTIVE}
+        ),
+        "redundant_real_conversation_urls": real_extra_urls,
+        "redundant_web_placeholders": placeholder_extra_urls,
+        "safe_to_reconcile": len(live) <= 1,
+        "would_create_new_chat": home is None and not live,
+    }
+
+
+def reconcile_project_home(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    reason: str = "Project-home reconciliation",
+) -> dict[str, object]:
+    """Keep one home worker row and archive redundant inactive Synapse records.
+
+    This deliberately does not archive/delete real ChatGPT provider conversations.
+    Their exact URLs are returned for a separate browser cleanup pass.
+    """
+    before = project_home_report(conn, project_id)
+    if int(before["live_count"]) > 1:
+        raise conflict(
+            "chatgpt_worker_chat",
+            "Refusing project-home reconciliation while multiple live ChatGPT workers exist.",
+            project_id=project_id,
+            live_worker_chat_ids=before["live_worker_chat_ids"],
+        )
+
+    home_payload = before.get("home")
+    home_id = str(home_payload.get("id")) if isinstance(home_payload, dict) else ""
+    archived_ids: list[str] = []
+    skipped_live_ids: list[str] = []
+    rows = _project_chat_rows(conn, project_id)
+    for row in rows:
+        chat = _row_to_chat(conn, row)
+        if home_id and chat.id == home_id:
+            continue
+        if chat.status in {ChatGPTWorkerStatus.STARTING, ChatGPTWorkerStatus.ACTIVE}:
+            skipped_live_ids.append(chat.id)
+            continue
+        archive_chat(
+            conn,
+            chat.id,
+            reason=f"{reason}: redundant project worker record",
+        )
+        archived_ids.append(chat.id)
+
+    after = project_home_report(conn, project_id)
+    return {
+        "project_id": project_id,
+        "home": after.get("home"),
+        "archived_worker_chat_ids": archived_ids,
+        "archived_worker_count": len(archived_ids),
+        "skipped_live_worker_chat_ids": skipped_live_ids,
+        "provider_cleanup_urls": before.get("redundant_real_conversation_urls", []),
+        "provider_placeholder_urls": before.get("redundant_web_placeholders", []),
+        "before": before,
+        "after": after,
+    }
+
+
 def resolve_for_launch(
     conn: sqlite3.Connection,
     *,
@@ -300,13 +452,14 @@ def resolve_for_launch(
     role_id: str | None,
     title: str,
     reuse_from_work_item_id: str | None = None,
+    reuse_project_home: bool = True,
 ) -> tuple[ChatGPTWorkerChat, bool]:
     """Return the durable worker chat and whether this launch reuses one.
 
-    Same-work-item retries always resume the same non-archived chat. A related
-    work item only reuses a chat when the caller explicitly points at another
-    work item; Synapse never guesses semantic relatedness and contaminates a
-    clean worker context by accident.
+    Same-work-item retries always resume the same non-archived chat. Distinct
+    work items reuse the project's durable home conversation by default so
+    bounded iterations do not flood the ChatGPT sidebar. Callers may explicitly
+    opt out with ``reuse_project_home=False`` when isolation is intentional.
     """
 
     existing = find_for_work_item(conn, work_item_id)
@@ -318,10 +471,34 @@ def resolve_for_launch(
         )
         return get_chat(conn, existing.id), True
 
+    reusable: ChatGPTWorkerChat | None = None
+    relation = "continued"
     if reuse_from_work_item_id:
         reusable = find_for_work_item(conn, reuse_from_work_item_id)
         if reusable is None:
             raise not_found("chatgpt_worker_for_work_item", reuse_from_work_item_id)
+        relation = "related"
+    elif reuse_project_home:
+        active = [
+            _row_to_chat(conn, row)
+            for row in _project_chat_rows(conn, project_id)
+            if row["status"] in {
+                ChatGPTWorkerStatus.STARTING.value,
+                ChatGPTWorkerStatus.ACTIVE.value,
+            }
+        ]
+        if active:
+            current = active[0]
+            raise conflict(
+                "chatgpt_worker_chat",
+                "This project already has a live ChatGPT home conversation. Wait for it to finish before launching another bounded project iteration, or explicitly request a fresh isolated chat.",
+                project_id=project_id,
+                worker_chat_id=current.id,
+                conversation_url=current.conversation_url,
+            )
+        reusable = find_project_home_chat(conn, project_id)
+
+    if reusable is not None:
         if reusable.project_id != project_id:
             raise conflict(
                 "chatgpt_worker_chat",
@@ -335,13 +512,18 @@ def resolve_for_launch(
                 "Archived ChatGPT worker chats are not resumed automatically. Unarchive it first.",
                 worker_chat_id=reusable.id,
             )
-        linked = link_work_item(
-            conn, reusable.id, work_item_id, relation="related"
-        )
+        if reusable.status in {ChatGPTWorkerStatus.STARTING, ChatGPTWorkerStatus.ACTIVE}:
+            raise conflict(
+                "chatgpt_worker_chat",
+                "The requested ChatGPT conversation is already active. Wait for its current turn to finish before reusing it.",
+                worker_chat_id=reusable.id,
+                project_id=project_id,
+            )
+        linked = link_work_item(conn, reusable.id, work_item_id, relation=relation)
         conn.execute(
             "UPDATE chatgpt_worker_chats SET owner_session_id = COALESCE(?, owner_session_id), "
-            "last_used_at = ? WHERE id = ?",
-            (owner_session_id, to_iso(utc_now()), linked.id),
+            "role_id = COALESCE(?, role_id), last_used_at = ? WHERE id = ?",
+            (owner_session_id, role_id, to_iso(utc_now()), linked.id),
         )
         return get_chat(conn, linked.id), True
 

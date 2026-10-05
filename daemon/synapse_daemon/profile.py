@@ -13,8 +13,8 @@ from __future__ import annotations
 import json
 import logging
 import platform as platform_mod
-import sqlite3
 import socket
+import sqlite3
 import subprocess
 import time
 import uuid
@@ -30,6 +30,7 @@ from .errors import invalid
 from .runtime_resolution import resolve_command
 from .secrets import decrypt, encrypt
 from .storage import Storage
+from .subprocess_utils import headless_creationflags
 from .synapse_accounts_client import (
     AccountPayload,
     SessionPayload,
@@ -1309,7 +1310,8 @@ class ProfileManager:
                         text=True,
                         timeout=6,
                         check=False,
-                    )
+                                                     creationflags=headless_creationflags(),
+)
                     details["gh_auth_status"] = result.returncode == 0
                     if result.returncode == 0 and binary_path:
                         status = ServiceConnectionStatus.READY

@@ -34,7 +34,7 @@ try:
 except Exception:  # pragma: no cover - readiness reports this clearly
     http_mcp = None
 
-ENGINE_VERSION = "0.2.0"
+ENGINE_VERSION = "0.3.0"
 DEFAULT_MCP_URL = os.getenv("SYNAPSE_WEB_SCRAPER_MCP_URL", "http://127.0.0.1:12000/mcp")
 CACHE_DIR = Path(os.getenv("SYNAPSE_RESEARCH_FABRIC_CACHE_DIR", str(REPO_ROOT / "data" / "research-fabric-cache")))
 RUNS_DIR = Path(os.getenv("SYNAPSE_RESEARCH_FABRIC_RUNS_DIR", str(REPO_ROOT / "data" / "research-fabric" / "runs")))
@@ -77,6 +77,12 @@ COMMUNITY_DOMAINS = {
 LOW_SIGNAL_DOMAINS = {
     "pinterest.com", "www.pinterest.com", "facebook.com", "www.facebook.com",
     "instagram.com", "www.instagram.com", "tiktok.com", "www.tiktok.com",
+}
+
+
+COMMON_MULTI_LABEL_SUFFIXES = {
+    "co.uk", "org.uk", "gov.uk", "ac.uk", "com.au", "net.au", "org.au",
+    "co.jp", "co.nz", "com.br", "com.mx", "com.sg", "com.tr", "co.in",
 }
 
 
@@ -172,6 +178,25 @@ def _domain(url: str) -> str:
         return urllib.parse.urlsplit(url).netloc.lower().split("@")[ -1 ].split(":")[0]
     except Exception:
         return ""
+
+
+def _source_group_domain(url: str) -> str:
+    domain = _domain(url) if "://" in url else url.lower().strip(".")
+    labels = [label for label in domain.split(".") if label]
+    if len(labels) <= 2:
+        return domain
+    suffix2 = ".".join(labels[-2:])
+    if suffix2 in COMMON_MULTI_LABEL_SUFFIXES and len(labels) >= 3:
+        return ".".join(labels[-3:])
+    return suffix2
+
+
+def _query_needs_fresh(query: str) -> bool:
+    lowered = query.lower()
+    return bool(re.search(
+        r"\b(latest|today|tonight|currently|current|right now|breaking|this week|this month|newest|just announced|live)\b",
+        lowered,
+    ))
 
 
 def _unwrap_ddg_url(url: str) -> str:
@@ -467,9 +492,9 @@ def choose_provider(requested: str) -> str:
     raise ValueError("provider must be auto, duckduckgo, google, brave, yahoo, or exa")
 
 
-def _search_one(provider: str, query: str, limit: int, mode: str) -> list[dict[str, Any]]:
+def _search_one(provider: str, query: str, limit: int, mode: str, fresh: bool = False) -> list[dict[str, Any]]:
     cache_key = json.dumps([provider, query, int(limit), mode], ensure_ascii=False, separators=(",", ":"))
-    cached = _cache_read("search", cache_key, SEARCH_CACHE_TTL_SECONDS)
+    cached = None if fresh else _cache_read("search", cache_key, SEARCH_CACHE_TTL_SECONDS)
     if isinstance(cached, list) and cached:
         rows = [dict(row) for row in cached if isinstance(row, dict)]
         for row in rows:
@@ -503,7 +528,8 @@ def _search_one(provider: str, query: str, limit: int, mode: str) -> list[dict[s
             row["cache_hit"] = False
             if errors:
                 row["provider_failover"] = list(errors)
-        _cache_write("search", cache_key, rows)
+        if not fresh:
+            _cache_write("search", cache_key, rows)
         return rows
     raise RuntimeError("all search routes failed or returned no results (" + "; ".join(errors) + ")")
 
@@ -548,7 +574,7 @@ def _quality_bonus(url: str, title: str, query_terms: set[str]) -> float:
     return score
 
 
-def discover(query: str, mode: str, provider: str) -> tuple[list[str], list[dict[str, Any]], list[str]]:
+def discover(query: str, mode: str, provider: str, fresh: bool = False) -> tuple[list[str], list[dict[str, Any]], list[str]]:
     budgets = MODE_BUDGETS[mode]
     search_queries = build_queries(query, mode)
     warnings: list[str] = []
@@ -556,7 +582,7 @@ def discover(query: str, mode: str, provider: str) -> tuple[list[str], list[dict
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(search_queries))) as pool:
         futures = {
-            pool.submit(_search_one, provider, q, budgets["per_query"], mode): q
+            pool.submit(_search_one, provider, q, budgets["per_query"], mode, fresh): q
             for q in search_queries
         }
         for future in concurrent.futures.as_completed(futures):
@@ -596,6 +622,7 @@ def discover(query: str, mode: str, provider: str) -> tuple[list[str], list[dict
 
     for item in merged.values():
         item["domain"] = _domain(item["url"])
+        item["source_group"] = _source_group_domain(item["url"])
         item["source_type"] = _source_type(item["url"], item["title"])
         item["score"] = round(
             (item["rrf"] * 1000.0)
@@ -616,7 +643,7 @@ def select_diverse_sources(ranked: list[dict[str, Any]], max_sources: int) -> li
     per_domain: Counter[str] = Counter()
     # First pass strongly favors domain diversity.
     for row in ranked:
-        dom = row["domain"]
+        dom = row.get("source_group") or row["domain"]
         if per_domain[dom] >= 1:
             continue
         selected.append(dict(row))
@@ -627,7 +654,7 @@ def select_diverse_sources(ranked: list[dict[str, Any]], max_sources: int) -> li
     for row in ranked:
         if any(existing["url"] == row["url"] for existing in selected):
             continue
-        dom = row["domain"]
+        dom = row.get("source_group") or row["domain"]
         if per_domain[dom] >= 2:
             continue
         selected.append(dict(row))
@@ -676,9 +703,10 @@ def _mcp_call(tool: str, arguments: dict[str, Any], timeout: int = 120) -> Any:
     return _unwrap_mcp_payload(raw)
 
 
-def _plain_fetch(url: str, timeout: int = 10) -> dict[str, Any]:
+def _plain_fetch(url: str, timeout: int = 10, cache_ttl: int | None = None) -> dict[str, Any]:
     cache_key = _normalize_url(url)
-    cached = _cache_read("pages", cache_key, PAGE_CACHE_TTL_SECONDS)
+    ttl = PAGE_CACHE_TTL_SECONDS if cache_ttl is None else max(0, int(cache_ttl))
+    cached = _cache_read("pages", cache_key, ttl) if ttl > 0 else None
     if isinstance(cached, dict) and cached.get("ok") and cached.get("text"):
         out = dict(cached)
         out["cache_hit"] = True
@@ -719,6 +747,7 @@ def _plain_fetch(url: str, timeout: int = 10) -> dict[str, Any]:
             "session_id": None,
             "needs_browser": False,
             "cache_hit": False,
+            "cached_from": "http",
         }
         _cache_write("pages", cache_key, out)
         return out
@@ -764,12 +793,13 @@ def _apply_scrape_result(target: dict[str, Any], result: dict[str, Any]) -> None
             "session_id": target.get("session_id"),
             "needs_browser": False,
             "cache_hit": False,
+            "cached_from": "scraper",
         })
     else:
         target["error"] = str(result.get("error") or "scrape returned no readable text")
 
 
-def retrieve_sources(selected: list[dict[str, Any]], mode: str) -> tuple[list[dict[str, Any]], list[str]]:
+def retrieve_sources(selected: list[dict[str, Any]], mode: str, fresh: bool = False) -> tuple[list[dict[str, Any]], list[str]]:
     """Latency-first retrieval: parallel HTTP breadth, targeted browser escalation."""
     warnings: list[str] = []
     by_url = {row["url"]: dict(row) for row in selected}
@@ -780,14 +810,16 @@ def retrieve_sources(selected: list[dict[str, Any]], mode: str) -> tuple[list[di
     # Fast path: most articles/docs are static and do not need a browser.
     plain_timeout = 7 if mode == "instant" else 10
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(urls))) as pool:
-        futures = {pool.submit(_plain_fetch, url, plain_timeout): url for url in urls}
+        futures = {pool.submit(_plain_fetch, url, plain_timeout, 0 if fresh else PAGE_CACHE_TTL_SECONDS): url for url in urls}
         for future in concurrent.futures.as_completed(futures):
             url = futures[future]
             fetched = future.result()
             target = by_url[url]
             if fetched.get("ok"):
                 target.update(fetched)
-                target["retrieval_status"] = "http"
+                target["retrieval_status"] = (
+                    f"cache:{fetched.get('cached_from') or 'http'}" if fetched.get("cache_hit") else "http"
+                )
             else:
                 target["ok"] = False
                 target["text"] = fetched.get("text") or ""
@@ -924,13 +956,14 @@ def build_coverage(query: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
     covered = [term for term in terms if re.search(rf"\b{re.escape(term)}\b", combined)]
     missing = [term for term in terms if term not in set(covered)]
     domains = sorted({_domain(str(row.get("url") or "")) for row in successful if row.get("url")})
+    source_groups = sorted({_source_group_domain(str(row.get("url") or "")) for row in successful if row.get("url")})
     source_types = Counter(str(row.get("source_type") or "web") for row in successful)
     authority_count = sum(1 for row in successful if row.get("source_type") in {"primary", "academic", "documentation"})
     evidence_count = sum(len(row.get("evidence") or []) for row in successful)
 
     term_domains: dict[str, set[str]] = {term: set() for term in terms}
     for row in successful:
-        dom = _domain(str(row.get("url") or ""))
+        dom = _source_group_domain(str(row.get("url") or ""))
         for evidence in row.get("evidence") or []:
             matched = set(evidence.get("matched_terms") or [])
             for term in terms:
@@ -941,7 +974,7 @@ def build_coverage(query: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
     single_source = [term for term, count in support_by_term.items() if count == 1]
 
     ratio = len(covered) / max(1, len(terms)) if terms else 1.0
-    diversity = min(1.0, len(domains) / max(4.0, min(10.0, len(successful) or 1)))
+    diversity = min(1.0, len(source_groups) / max(4.0, min(10.0, len(successful) or 1)))
     authority = min(1.0, authority_count / max(2.0, min(5.0, len(successful) or 1)))
     evidence = min(1.0, evidence_count / max(4.0, (len(successful) or 1) * 2.0))
     corroboration = len(corroborated) / max(1, len(terms)) if terms else 1.0
@@ -955,6 +988,8 @@ def build_coverage(query: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
         "successful_sources": len(successful),
         "unique_domains": len(domains),
         "domains": domains,
+        "independent_source_groups": len(source_groups),
+        "source_groups": source_groups,
         "source_types": dict(source_types),
         "authority_sources": authority_count,
         "evidence_snippets": evidence_count,
@@ -1006,13 +1041,13 @@ def research_packet_markdown(query: str, sources: list[dict[str, Any]], coverage
     return "\n".join(lines)
 
 def _gap_round(query: str, mode: str, provider: str, selected: list[dict[str, Any]], coverage: dict[str, Any],
-               max_sources: int) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+               max_sources: int, fresh: bool = False) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     if mode != "deep" or not coverage.get("missing_terms") or len(selected) >= max_sources:
         return selected, [], []
     missing = coverage["missing_terms"][:6]
     gap_query = f"{query} {' '.join(missing)} primary source evidence"
     try:
-        rows = _search_one(provider, gap_query, min(10, max_sources), mode)
+        rows = _search_one(provider, gap_query, min(10, max_sources), mode, fresh)
     except Exception as exc:  # noqa: BLE001
         return selected, [f"gap search failed: {type(exc).__name__}: {exc}"], [gap_query]
     existing = {row["url"] for row in selected}
@@ -1031,6 +1066,7 @@ def _gap_round(query: str, mode: str, provider: str, selected: list[dict[str, An
             "query_hits": [gap_query],
             "best_rank": rank,
             "domain": _domain(url),
+            "source_group": _source_group_domain(url),
             "source_type": _source_type(url, str(row.get("title") or "")),
             "score": round(1000.0 / (60.0 + rank) + _quality_bonus(url, str(row.get("title") or ""), query_terms), 4),
         })
@@ -1040,7 +1076,7 @@ def _gap_round(query: str, mode: str, provider: str, selected: list[dict[str, An
     return selected + additions, [], [gap_query]
 
 
-def run_research(query: str, mode: str, provider_requested: str, max_sources: int) -> dict[str, Any]:
+def run_research(query: str, mode: str, provider_requested: str, max_sources: int, fresh_requested: bool = False) -> dict[str, Any]:
     started = time.monotonic()
     run_id = uuid.uuid4().hex[:16]
     mode = mode.strip().lower()
@@ -1050,10 +1086,12 @@ def run_research(query: str, mode: str, provider_requested: str, max_sources: in
     mode_default = int(MODE_BUDGETS[mode]["sources"])
     max_sources = min(max_sources, mode_default if mode != "deep" else max_sources)
     provider = choose_provider(provider_requested)
+    auto_fresh = _query_needs_fresh(query)
+    fresh = bool(fresh_requested or auto_fresh)
 
-    search_queries, ranked, warnings = discover(query, mode, provider)
+    search_queries, ranked, warnings = discover(query, mode, provider, fresh)
     selected = select_diverse_sources(ranked, max_sources)
-    retrieved, retrieval_warnings = retrieve_sources(selected, mode)
+    retrieved, retrieval_warnings = retrieve_sources(selected, mode, fresh)
     warnings.extend(retrieval_warnings)
 
     for row in retrieved:
@@ -1067,12 +1105,12 @@ def run_research(query: str, mode: str, provider_requested: str, max_sources: in
     gap_queries: list[str] = []
     if MODE_BUDGETS[mode]["gap_round"] and coverage["retrieval_confidence"] < 0.82:
         expanded, gap_warnings, gap_queries = _gap_round(
-            query, mode, provider, retrieved, coverage, max_sources
+            query, mode, provider, retrieved, coverage, max_sources, fresh
         )
         warnings.extend(gap_warnings)
         if len(expanded) > len(retrieved):
             new_rows = expanded[len(retrieved):]
-            retrieved_new, extra_warnings = retrieve_sources(new_rows, mode)
+            retrieved_new, extra_warnings = retrieve_sources(new_rows, mode, fresh)
             warnings.extend(extra_warnings)
             for row in retrieved_new:
                 text = str(row.get("text") or "")
@@ -1102,6 +1140,7 @@ def run_research(query: str, mode: str, provider_requested: str, max_sources: in
             "discovered_url": row.get("url"),
             "title": row.get("title"),
             "domain": row.get("domain"),
+            "source_group": row.get("source_group"),
             "source_type": row.get("source_type"),
             "score": row.get("score"),
             "provider": row.get("provider"),
@@ -1126,6 +1165,11 @@ def run_research(query: str, mode: str, provider_requested: str, max_sources: in
         "query": query,
         "mode": mode,
         "provider": provider,
+        "freshness": {
+            "requested": bool(fresh_requested),
+            "auto_triggered": bool(auto_fresh),
+            "cache_bypassed": bool(fresh),
+        },
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "plan": {
             "search_queries": search_queries,
@@ -1144,6 +1188,7 @@ def run_research(query: str, mode: str, provider_requested: str, max_sources: in
                     "url": row.get("url"),
                     "title": row.get("title"),
                     "domain": row.get("domain"),
+                    "source_group": row.get("source_group"),
                     "source_type": row.get("source_type"),
                     "score": row.get("score"),
                     "query_hits": len(row.get("query_hits") or []),
@@ -1213,6 +1258,7 @@ def main() -> int:
     research.add_argument("--mode", choices=sorted(MODE_BUDGETS), default="balanced")
     research.add_argument("--provider", choices=["auto", "duckduckgo", "google", "brave", "yahoo", "exa"], default="auto")
     research.add_argument("--max-sources", type=int, default=10)
+    research.add_argument("--fresh", action="store_true", help="Bypass search/page caches for this run")
 
     args = parser.parse_args()
     try:
@@ -1241,7 +1287,7 @@ def main() -> int:
                 ],
             }
         else:
-            payload = run_research(args.query, args.mode, args.provider, args.max_sources)
+            payload = run_research(args.query, args.mode, args.provider, args.max_sources, args.fresh)
         _json_print(payload)
         return 0 if payload.get("ok", True) else 1
     except Exception as exc:  # noqa: BLE001

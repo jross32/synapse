@@ -1,0 +1,161 @@
+{
+  "schema": "ui-forge-batch-visual-edit-e2e-v1",
+  "generated_at": "2026-09-09T05:40:38.951Z",
+  "overall_pass": true,
+  "duration_ms": 8033.572,
+  "selection_count": 3,
+  "preview": {
+    "commit_ready": true,
+    "reverted_cleanly": true
+  },
+  "source_commit": {
+    "ok": true,
+    "schema": "ui-forge-batch-ast-edit-v1",
+    "dry_run": false,
+    "atomic": true,
+    "rolled_back": false,
+    "edit_count": 3,
+    "file_count": 1,
+    "files": [
+      "src/App.jsx"
+    ],
+    "apply_order": [
+      "src/App.jsx:10:9",
+      "src/App.jsx:9:9",
+      "src/App.jsx:8:9"
+    ],
+    "applied": [
+      {
+        "index": 0,
+        "source": "src/App.jsx:8:9",
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": false,
+          "file": "src/App.jsx",
+          "source": "src/App.jsx:8:9",
+          "tag": "button",
+          "operation": {
+            "type": "class_tokens",
+            "before": "cta",
+            "after": "cta emphasis"
+          },
+          "patch": {
+            "start": 200,
+            "end": 205,
+            "replacement_bytes": 14,
+            "changed_span_bytes": 5
+          },
+          "bytes_before": 381,
+          "bytes_after": 390,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        }
+      },
+      {
+        "index": 1,
+        "source": "src/App.jsx:9:9",
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": false,
+          "file": "src/App.jsx",
+          "source": "src/App.jsx:9:9",
+          "tag": "button",
+          "operation": {
+            "type": "class_tokens",
+            "before": "cta",
+            "after": "cta emphasis"
+          },
+          "patch": {
+            "start": 254,
+            "end": 259,
+            "replacement_bytes": 14,
+            "changed_span_bytes": 5
+          },
+          "bytes_before": 372,
+          "bytes_after": 381,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        }
+      },
+      {
+        "index": 2,
+        "source": "src/App.jsx:10:9",
+        "result": {
+          "ok": true,
+          "schema": "ui-forge-direct-ast-edit-v2",
+          "dry_run": false,
+          "file": "src/App.jsx",
+          "source": "src/App.jsx:10:9",
+          "tag": "button",
+          "operation": {
+            "type": "class_tokens",
+            "before": "cta",
+            "after": "cta emphasis"
+          },
+          "patch": {
+            "start": 310,
+            "end": 315,
+            "replacement_bytes": 14,
+            "changed_span_bytes": 5
+          },
+          "bytes_before": 363,
+          "bytes_after": 372,
+          "syntax_reparse_passed": true,
+          "verification_required": [
+            "rerender application",
+            "reselect or re-probe the same UI Forge element",
+            "check surrounding layout and critical behavior",
+            "check console/runtime errors"
+          ]
+        }
+      }
+    ],
+    "verification_required": [
+      "rerender application",
+      "re-probe every selected UI Forge source id",
+      "run affected desktop/mobile browser proof",
+      "check console/runtime errors"
+    ]
+  },
+  "identity_stable": true,
+  "browser": {
+    "console_errors": [],
+    "page_errors": [],
+    "desktop_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    },
+    "mobile_violations": {
+      "horizontal_overflow": false,
+      "small_target_count": 0,
+      "missing_interactive_name_count": 0,
+      "unlabeled_form_control_count": 0,
+      "missing_image_alt_count": 0,
+      "heading_level_jump_count": 0,
+      "h1_count": 1
+    }
+  },
+  "claims": {
+    "multi_select_preview_pass": true,
+    "atomic_batch_commit_pass": true,
+    "batch_hmr_identity_pass": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

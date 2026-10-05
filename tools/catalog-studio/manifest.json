@@ -1,0 +1,145 @@
+{
+    "id":  "catalog-studio",
+    "name":  "Catalog Studio",
+    "category":  "dev-tools",
+    "icon":  "image",
+    "description":  "Deterministic resale product-photo standardization with preserved garment pixels, lazy NumPy/ONNX startup, locked storefront profiles, async single/batch processing, fail-closed QA reasons, review previews/masks, tolerant marketplace JPEG decoding, and provenance receipts.",
+    "version":  "0.9.0",
+    "publisher":  "The WhatIf Company",
+    "verified":  true,
+    "bundled":  true,
+    "install_default":  true,
+    "fields":  [
+                   {
+                       "key":  "input",
+                       "type":  "text",
+                       "label":  "Input image",
+                       "required":  true,
+                       "help":  "Local source image path."
+                   },
+                   {
+                       "key":  "output",
+                       "type":  "text",
+                       "label":  "Output image",
+                       "required":  true,
+                       "help":  "Output path; originals are never overwritten by default."
+                   },
+                   {
+                       "key":  "preset",
+                       "type":  "text",
+                       "label":  "Studio preset",
+                       "required":  false,
+                       "default":  "warm-gallery",
+                       "placeholder":  "warm-gallery | clean-white | cool-concrete | charcoal"
+                   },
+                   {
+                       "key":  "profile",
+                       "type":  "text",
+                       "label":  "Storefront profile",
+                       "required":  false,
+                       "default":  "tools/catalog-studio/profiles/resell-main.json",
+                       "help":  "Version-locked studio profile. Resell Main keeps your catalog visually consistent."
+                   },
+                   {
+                       "key":  "input_dir",
+                       "type":  "text",
+                       "label":  "Batch input folder",
+                       "required":  false,
+                       "help":  "Folder of source images for batch processing."
+                   },
+                   {
+                       "key":  "output_dir",
+                       "type":  "text",
+                       "label":  "Batch output folder",
+                       "required":  false,
+                       "help":  "Destination folder for processed batch images."
+                   }
+               ],
+    "actions":  [
+                    {
+                        "id":  "process",
+                        "label":  "Standardize product photo",
+                        "primitive":  "process.spawn",
+                        "params":  {
+                                       "argv":  [
+                                                    "cmd.exe",
+                                                    "/d",
+                                                    "/c",
+                                                    "tools\\catalog-studio\\run-python.cmd",
+                                                    "tools/catalog-studio/async_controller.py",
+                                                    "submit",
+                                                    "{input}",
+                                                    "{output}",
+                                                    "--preset",
+                                                    "{preset}",
+                                                    "--model",
+                                                    "u2netp",
+                                                    "--profile",
+                                                    "{profile}"
+                                                ],
+                                       "timeout":  5
+                                   },
+                        "primary":  true,
+                        "scope":  "tool"
+                    },
+                    {
+                        "id":  "batch",
+                        "label":  "Standardize photo batch",
+                        "primitive":  "process.spawn",
+                        "params":  {
+                                       "argv":  [
+                                                    "cmd.exe",
+                                                    "/d",
+                                                    "/c",
+                                                    "tools\\catalog-studio\\run-python.cmd",
+                                                    "tools/catalog-studio/async_controller.py",
+                                                    "submit-batch",
+                                                    "{input_dir}",
+                                                    "{output_dir}",
+                                                    "--preset",
+                                                    "{preset}",
+                                                    "--model",
+                                                    "u2netp",
+                                                    "--profile",
+                                                    "{profile}"
+                                                ],
+                                       "timeout":  5
+                                   },
+                        "scope":  "tool"
+                    },
+                    {
+                        "id":  "status",
+                        "label":  "Check latest",
+                        "primitive":  "process.spawn",
+                        "params":  {
+                                       "argv":  [
+                                                    "cmd.exe",
+                                                    "/d",
+                                                    "/c",
+                                                    "tools\\catalog-studio\\run-python.cmd",
+                                                    "tools/catalog-studio/async_controller.py",
+                                                    "status"
+                                                ],
+                                       "timeout":  3
+                                   },
+                        "scope":  "tool"
+                    },
+                    {
+                        "id":  "presets",
+                        "label":  "List studio presets",
+                        "primitive":  "process.spawn",
+                        "params":  {
+                                       "argv":  [
+                                                    "cmd.exe",
+                                                    "/d",
+                                                    "/c",
+                                                    "tools\\catalog-studio\\run-python.cmd",
+                                                    "tools/catalog-studio/controller.py",
+                                                    "presets"
+                                                ],
+                                       "timeout":  10
+                                   },
+                        "scope":  "tool"
+                    }
+                ]
+}

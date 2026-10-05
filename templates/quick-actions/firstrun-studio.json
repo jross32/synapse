@@ -1,0 +1,10 @@
+{
+  "id": "firstrun-studio",
+  "name": "FirstRun Studio",
+  "description": "Architect a polished landing-to-signup-to-first-value experience, then verify auth, accessibility, mobile, recovery, originality, and activation quality.",
+  "prompt": "Use the installed Synapse skill pack `firstrun-studio`. Inspect the real product before proposing UI. Define the measurable activation event first. Research public references only when useful, treating Userflow/Lovable/Dribbble as pattern inspiration and checking licenses before using public GitHub code. Preserve the app's existing brand and auth architecture. Produce the shortest original path from public promise through authentication to first value, including failure/recovery/resume/mobile/keyboard states, and do not claim professional quality until the FirstRun rubric and browser proof pass.",
+  "icon": "sparkles",
+  "category": "workflows",
+  "tags": ["ux", "onboarding", "signup", "signin", "authentication", "activation", "design-systems"],
+  "default_argv": ["claude"]
+}

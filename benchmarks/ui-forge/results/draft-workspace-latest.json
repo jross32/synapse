@@ -1,0 +1,44 @@
+{
+  "schema": "ui-forge-draft-workspace-benchmark-v1",
+  "generated_at": "2026-09-21T02:36:08.537868+00:00",
+  "checks": {
+    "runtime_artifacts_are_excluded": true,
+    "parallel_drafts_leave_live_untouched": true,
+    "changes_are_isolated_and_detected": true,
+    "accept_applies_only_changed_path": true,
+    "nonoverlapping_parallel_accept_succeeds": true,
+    "stale_same_path_accept_fails_closed": true,
+    "risky_changes_are_classified": true,
+    "risky_accept_requires_override": true,
+    "discard_never_touches_live": true
+  },
+  "passed": 9,
+  "total": 9,
+  "overall_pass": true,
+  "observations": {
+    "first_accept_backup": "C:\\Users\\justi\\AppData\\Local\\Temp\\ui-forge-drafts-efkutjza\\project\\.synapse\\ui-forge\\drafts\\direction-a-dfa9ea71\\accept-backup\\20260921T023607Z",
+    "second_accept_backup": "C:\\Users\\justi\\AppData\\Local\\Temp\\ui-forge-drafts-efkutjza\\project\\.synapse\\ui-forge\\drafts\\direction-b-d63ef4f5\\accept-backup\\20260921T023607Z",
+    "conflict": [
+      {
+        "path": "src/App.jsx",
+        "reason": "live file changed since draft creation"
+      }
+    ],
+    "risky_changes": [
+      {
+        "path": ".env",
+        "reason": "environment/secrets file"
+      },
+      {
+        "path": "server/api.py",
+        "reason": "backend/database/auth-adjacent path"
+      }
+    ]
+  },
+  "claims": {
+    "live_isolation_proven": true,
+    "conflict_aware_accept_proven": true,
+    "risk_gate_proven": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  }
+}

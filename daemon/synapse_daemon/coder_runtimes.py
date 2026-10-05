@@ -18,6 +18,7 @@ calls this one, so a flag learned the hard way is not learned twice.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import time
@@ -33,6 +34,7 @@ from . import runtime_ledger, runtime_usage
 from .agent_squads import AgentExecutionAuthority
 from .runtime_paths import repo_root
 from .runtime_resolution import resolve_command
+from .subprocess_utils import headless_creationflags
 
 
 class CoderRuntime(str, Enum):
@@ -418,7 +420,8 @@ def write_module(
                 f"Do not ask any questions and do not wait for further input."))
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
-                              cwd=str(workspace))
+                              cwd=str(workspace),
+                   creationflags=headless_creationflags(),)
     except subprocess.TimeoutExpired:
         result.error = f"{runtime.value} did not finish within {timeout:g}s"
         result.seconds = round(time.time() - started, 1)
@@ -519,6 +522,25 @@ class RungStatus(BaseModel):
     note: str = ""
 
 
+def _claude_oauth_expiry() -> datetime | None:
+    """Return only Claude's cached OAuth expiry, never credential material.
+
+    `claude` can be installed and outside cooldown while its cached OAuth access token is
+    already stale. In that state a routing preflight used to say `usable_now=True`, and the
+    first worker call paid the failure cost. Reading the timestamp is a local, zero-token
+    readiness check; token/refresh-token values are never returned or logged.
+    """
+    credentials = Path.home() / ".claude" / ".credentials.json"
+    try:
+        payload = json.loads(credentials.read_text(encoding="utf-8"))
+        raw = payload.get("claudeAiOauth", {}).get("expiresAt")
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            return None
+        return datetime.fromtimestamp(float(raw) / 1000.0, tz=timezone.utc)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
 def preflight(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER,
               *, path: Path | None = None) -> list[RungStatus]:
     """What each rung can do right now, and what it has already spent today.
@@ -558,6 +580,14 @@ def preflight(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER,
             status.note = "not installed on this host"
         elif cooldown > 0:
             status.note = f"reported out of room; retrying in {cooldown / 60:.0f} min"
+        elif runtime is CoderRuntime.CLAUDE:
+            expiry = _claude_oauth_expiry()
+            if expiry is not None and expiry <= datetime.now(timezone.utc):
+                status.usable_now = False
+                status.note = (
+                    f"cached Claude OAuth access expired {expiry.isoformat()}; "
+                    "refresh or re-authentication is required before routing work here"
+                )
         elif runtime is CoderRuntime.GEMINI:
             # Stated because the number is small and the failure is silent: the free tier is
             # per-model and Flash is the generous one.

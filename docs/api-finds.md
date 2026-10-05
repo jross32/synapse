@@ -57,6 +57,7 @@
    - [5AF. Profile](#5af-profile)
    - [5AG. Imports (ChatGPT)](#5ag-imports-chatgpt)
    - [5AH. Search](#5ah-search)
+   - [5AI. Image Generation](#5ai-image-generation)
 6. [Gaps Analysis — What AIs Miss and Why](#6-gaps-analysis--what-ais-miss-and-why)
 7. [Recommended AI Session Start Protocol](#7-recommended-ai-session-start-protocol)
 
@@ -85,6 +86,7 @@ These two endpoints exist specifically to help an AI understand what it is looki
 - `audit_tail` — last 25 audit entries (what just happened)
 - `quality.summary` — quality OS summary with blocking gate count
 - `quality.ui_surfaces` — declared UI surfaces
+- `image_generation` — provider-neutral readiness (`configured`, provider/model, formats/quality/background support); provider credentials are never included
 - `endpoints_for_ai` — curated list of what REST endpoints to use for what
 
 ### `GET /api/v1/ai/health-report`
@@ -270,6 +272,16 @@ finalization, timeout, Stop All, and daemon shutdown cancel the loop.
 | Variable | Value |
 |----------|-------|
 | `SYNAPSE_TOKEN` | If set, the CLI uses this for auth (highest precedence) |
+
+### Daemon Image Provider Configuration (not injected into AI sessions)
+These variables belong to the Synapse daemon process. **Do not inject provider credentials into child AI sessions.**
+
+| Variable | Default | Use |
+|----------|---------|-----|
+| `OPENAI_API_KEY` | unset | Server-side OpenAI credential used by the initial image provider. The status API reports only whether it is configured. |
+| `SYNAPSE_IMAGE_PROVIDER` | `openai` | Provider-neutral backend selector. V1 supports `openai`. |
+| `SYNAPSE_OPENAI_IMAGE_MODEL` | `gpt-image-2.5-sunburst` | Server-side model override without changing the AI-facing REST/MCP contract. |
+| `SYNAPSE_IMAGE_TIMEOUT_SECONDS` | `240` | Bounded provider request timeout. |
 
 ---
 
@@ -1070,6 +1082,66 @@ Creates `imported-chatgpt` project (kind=other) with deterministic Markdown file
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/search?q={query}&limit={n}` | Global scored search across live projects, Synapse tools, MCP servers, actions, and settings; returns typed hits, links, badges, and `took_ms` |
+
+---
+
+### 5AI. Image Generation
+
+Synapse Image Studio is a provider-neutral image capability for **every AI connected to Synapse**. A caller can use Synapse's configured provider for generation/editing, import an image that already exists on the PC, or transfer native-generated image bytes in bounded chunks when the AI runtime cannot write directly to the user's filesystem.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/image-generation/status` | Report provider/model readiness plus generation, editing, import, chunked-upload, format, and provenance capabilities without revealing credentials |
+| PUT | `/image-generation/credentials/openai` | Store the OpenAI image credential encrypted at rest inside Synapse |
+| DELETE | `/image-generation/credentials/openai` | Remove the Synapse-stored OpenAI image credential; an environment override remains independent |
+| POST | `/image-generation/generate` | Generate one project-scoped PNG/JPEG/WebP asset through the configured provider |
+| POST | `/image-generation/edit` | Edit/composite one or more project images, with optional mask support |
+| POST | `/image-generation/import-file` | Validate and import an already-existing local PNG/JPEG/WebP into a registered project |
+| POST | `/image-generation/uploads/begin` | Begin a short-lived chunked image transfer for an AI runtime that has image bytes but no direct PC filesystem access |
+| POST | `/image-generation/uploads/{upload_id}/append` | Append one bounded base64 image chunk |
+| POST | `/image-generation/uploads/{upload_id}/finish` | Verify the optional SHA-256, validate image headers/dimensions, save into the project, record provenance, and remove staging data |
+| GET | `/image-generation/assets/{project_id}` | List generated/edited/imported project image records, optionally verifying current hashes |
+| GET | `/image-generation/asset/{project_id}` | Inspect the newest provenance record for one project-relative image path |
+| GET | `/image-generation/assets/{project_id}/audit` | Integrity-audit the complete project image catalog for malformed records, missing files, modifications, and duplicate paths |
+
+Provider-generation example:
+
+```json
+{
+  "project_id": "whatapc",
+  "prompt": "Professional dark-studio hero image of a custom gaming PC",
+  "relative_path": "public/images/hero.webp",
+  "size": "1536x1024",
+  "quality": "high",
+  "output_format": "webp",
+  "background": "auto",
+  "overwrite": false
+}
+```
+
+Native-AI transfer flow:
+
+```text
+AI generates/downloads image bytes
+  -> synapse_begin_image_upload
+  -> one or more synapse_append_image_upload calls
+  -> synapse_finish_image_upload
+  -> image is validated + saved inside the registered project
+  -> <project>/.synapse/image-assets.jsonl records provenance
+```
+
+Safety and operational contract:
+- Final image destinations are always **project-relative** and confined to a registered project root; traversal and arbitrary output destinations are rejected.
+- Existing assets are protected unless `overwrite: true` is explicit.
+- Local imports accept real PNG/JPEG/WebP images only, validate headers/dimensions, and cap input below 50 MB.
+- Chunked uploads expire after two hours, cap the final image below 50 MB, bound individual decoded chunks, optionally verify an expected SHA-256, and remove staging files after successful finalization.
+- Upload prompts are encrypted while staged. Generation/edit/import prompts may live in the project-local provenance manifest, but the global Synapse audit log intentionally omits them.
+- Original absolute import/staging paths are not written into global audit receipts. Native uploads preserve the caller-provided source filename instead of the temporary staging filename.
+- OpenAI image credentials can come from `OPENAI_API_KEY` or Synapse's encrypted local credential store. Environment configuration takes precedence. Status/read APIs expose only configuration state/source, never the plaintext secret.
+- Provider calls, large local imports, and chunked finalization run off the FastAPI event loop.
+- Every successful generate/edit/import produces SHA-256 provenance in `<project>/.synapse/image-assets.jsonl`; catalog reads can independently verify the current on-disk hash.
+- MCP mirrors include `synapse_image_generation_status`, `synapse_generate_image`, `synapse_edit_image`, `synapse_import_image_file`, `synapse_begin_image_upload`, `synapse_append_image_upload`, `synapse_finish_image_upload`, `synapse_list_project_images`, `synapse_get_image_asset`, and `synapse_audit_image_assets`.
+- Provider-backed generation/editing currently uses OpenAI GPT-Image-2 by default; callers use the provider-neutral Synapse contract rather than binding themselves to that model.
 
 ---
 

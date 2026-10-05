@@ -58,11 +58,30 @@ def _context_snapshot(project_id: str, files_count: int, records: project_record
     return hashlib.sha256(encoded).hexdigest()[:16], len(payload)
 
 
-def _write_prompt_artifact(storage: Storage, run_id: str, attempt_id: str, scenario: benchmarks.BenchmarkScenario) -> Path:
-    target = benchmarks.benchmark_dir(storage.data_dir, run_id) / attempt_id
+def _candidate_instruction(attempt: benchmarks.BenchmarkAttempt) -> str:
+    value = attempt.metadata.get("candidate_instruction_md")
+    return str(value).strip() if isinstance(value, str) else ""
+
+
+def _effective_prompt(attempt: benchmarks.BenchmarkAttempt, scenario: benchmarks.BenchmarkScenario) -> str:
+    treatment = _candidate_instruction(attempt)
+    if not treatment:
+        return scenario.prompt_md
+    return f"{treatment}\n\n---\n\n# Benchmark task\n\n{scenario.prompt_md}"
+
+
+def _write_prompt_artifact(
+    storage: Storage,
+    run_id: str,
+    attempt: benchmarks.BenchmarkAttempt,
+    scenario: benchmarks.BenchmarkScenario,
+) -> Path:
+    target = benchmarks.benchmark_dir(storage.data_dir, run_id) / attempt.id
     target.mkdir(parents=True, exist_ok=True)
+    task_path = target / "TASK.md"
+    task_path.write_text(scenario.prompt_md + "\n", encoding="utf-8")
     prompt_path = target / "PROMPT.md"
-    prompt_path.write_text(scenario.prompt_md + "\n", encoding="utf-8")
+    prompt_path.write_text(_effective_prompt(attempt, scenario) + "\n", encoding="utf-8")
     return prompt_path
 
 
@@ -117,7 +136,8 @@ async def _launch_attempt(
 ) -> dict[str, Any]:
     run, scenario = _scenario_bundle(storage.conn, attempt)
     argv = payload.argv or _default_argv(attempt)
-    prompt_path = _write_prompt_artifact(storage, run.id, attempt.id, scenario)
+    prompt_path = _write_prompt_artifact(storage, run.id, attempt, scenario)
+    effective_prompt = _effective_prompt(attempt, scenario)
     with storage.transaction() as conn:
         benchmarks.add_artifact(
             conn,
@@ -199,7 +219,7 @@ async def _launch_attempt(
                 thread.id,
                 coder_workspace.CoderMessageCreate(
                     role=coder_workspace.CoderMessageRole.USER,
-                    content_md=scenario.prompt_md,
+                    content_md=effective_prompt,
                     runtime_id=attempt.intended_runtime_id,
                     provider=attempt.provider,
                     model=attempt.model,
@@ -222,7 +242,7 @@ async def _launch_attempt(
                     workspace_context_mode="project",
                     attachments_count=files_count,
                     hidden_context_hash=context_hash,
-                    workspace_overhead_bytes=len(scenario.prompt_md.encode("utf-8")),
+                    workspace_overhead_bytes=len(effective_prompt.encode("utf-8")),
                     context_items_injected=context_items_injected,
                     metadata={"prompt_path": str(prompt_path), "argv": argv},
                 ),
@@ -241,7 +261,7 @@ async def _launch_attempt(
                 attachments_count=files_count,
                 workspace_context_hash=context_hash,
                 hidden_context_hash=context_hash,
-                workspace_overhead_bytes=len(scenario.prompt_md.encode("utf-8")),
+                workspace_overhead_bytes=len(effective_prompt.encode("utf-8")),
                 context_items_injected=context_items_injected,
             )
             _update_run_completion(conn, updated.run_id)
@@ -268,7 +288,7 @@ async def _launch_attempt(
                 workspace_context_mode="project",
                 attachments_count=files_count,
                 hidden_context_hash=context_hash,
-                workspace_overhead_bytes=len(scenario.prompt_md.encode("utf-8")),
+                workspace_overhead_bytes=len(effective_prompt.encode("utf-8")),
                 context_items_injected=context_items_injected,
                 metadata={"prompt_path": str(prompt_path), "argv": argv},
             ),
@@ -289,7 +309,7 @@ async def _launch_attempt(
             attachments_count=files_count,
             workspace_context_hash=context_hash,
             hidden_context_hash=context_hash,
-            workspace_overhead_bytes=len(scenario.prompt_md.encode("utf-8")),
+            workspace_overhead_bytes=len(effective_prompt.encode("utf-8")),
             context_items_injected=context_items_injected,
         )
         _update_run_completion(conn, updated.run_id)

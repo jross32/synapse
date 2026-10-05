@@ -839,7 +839,7 @@ def create_run(conn: sqlite3.Connection, payload: BenchmarkRunCreate) -> Benchma
             raise invalid("benchmark_run", f"Unknown scenario '{entry.scenario_id}'.")
         for repeat_index in range(1, payload.repeat_count + 1):
             attempt_id = _new_id()
-            candidate_group_key = f"{entry.surface_kind.value}:{entry.runtime_id}:{entry.model or entry.provider or 'runtime'}"
+            candidate_group_key = str(entry.metadata.get("candidate_group_key") or "").strip() or f"{entry.surface_kind.value}:{entry.runtime_id}:{entry.model or entry.provider or 'runtime'}"
             conn.execute(
                 """
                 INSERT INTO benchmark_attempts (

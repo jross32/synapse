@@ -86,6 +86,7 @@ def test_marketplace_bundled_handlers_load_with_valid_shape(
     # this set when you bundle a new tool.
     must_include = {
         "cloudtap",
+        "synapse-image-studio",
         "claude",
         "codex",
         "copilot",

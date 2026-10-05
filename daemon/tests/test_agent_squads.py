@@ -1587,3 +1587,122 @@ def test_chatgpt_parent_forces_online_chat_child_and_never_spawns_cli(
         ]
         assert len(web_children) == 1
         assert web_children[0]["seq"] is None
+
+
+def test_chatgpt_distinct_work_items_reuse_project_home_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = _harness(tmp_path)
+    with app.state.storage.transaction() as conn:
+        parent = coordination.register_session(
+            conn,
+            coordination.AgentSessionRegister(
+                project_id="demo-project",
+                runtime_id="chatgpt",
+                agent_label="GPT-5.6 Sol parent",
+                task="Own durable project chat",
+            ),
+        )
+
+    monkeypatch.setattr(
+        routes_agent_squads.activity_module,
+        "_owner_session_id_for_squad",
+        lambda _conn, _squad_id: parent.id,
+    )
+
+    seen_urls: list[str | None] = []
+
+    async def fake_run_child(
+        worker_id: str,
+        prompt: str,
+        *,
+        timeout: float,
+        conversation_url: str | None = None,
+        desired_title: str = "",
+    ):
+        seen_urls.append(conversation_url)
+        url = conversation_url or "https://chatgpt.com/c/project-home"
+        return chatgpt_child_agents.ChatGPTChildResult(
+            worker_id=worker_id,
+            ok=True,
+            reply="Bounded project iteration finished.",
+            conversation_url=url,
+            wall_clock_seconds=2.0,
+            ui_duration_seconds=1.5,
+        )
+
+    monkeypatch.setattr(app.state.chatgpt_child_pool, "run_child", fake_run_child)
+
+    async def forbidden_pty_spawn(**_kwargs):
+        raise AssertionError("ChatGPT child must never spawn a CLI/PTy runtime")
+
+    monkeypatch.setattr(app.state.pty_manager, "spawn", forbidden_pty_spawn)
+
+    def wait_for_handoff(c: TestClient, squad_id: str, work_item_id: str) -> dict:
+        deadline = time.time() + 3
+        current = None
+        while time.time() < deadline:
+            detail = c.get(f"/api/v1/agent-squads/{squad_id}").json()
+            current = next(
+                item for item in detail["work_items"] if item["id"] == work_item_id
+            )
+            if current["status"] != "running":
+                return current
+            time.sleep(0.02)
+        assert current is not None
+        return current
+
+    with client as c:
+        squad = _create_squad(c)
+        first = _create_work_item(
+            c,
+            squad["id"],
+            title="Project iteration one",
+            assigned_role_id="reviewer",
+        )
+        first_launch = c.post(
+            f"/api/v1/agent-work-items/{first['id']}/launch",
+            json={
+                "execution_mode": "automatic",
+                "timeout_seconds": 180,
+                "open_in_tab": False,
+            },
+        )
+        assert first_launch.status_code == 200, first_launch.text
+        first_payload = first_launch.json()
+        assert first_payload["worker_chat_reused"] is False
+        first_done = wait_for_handoff(c, squad["id"], first["id"])
+        assert first_done["status"] == "handoff"
+
+        second = _create_work_item(
+            c,
+            squad["id"],
+            title="Project iteration two",
+            assigned_role_id="reviewer",
+        )
+        second_launch = c.post(
+            f"/api/v1/agent-work-items/{second['id']}/launch",
+            json={
+                "execution_mode": "automatic",
+                "timeout_seconds": 180,
+                "open_in_tab": False,
+            },
+        )
+        assert second_launch.status_code == 200, second_launch.text
+        second_payload = second_launch.json()
+        assert second_payload["worker_chat_reused"] is True
+        assert second_payload["worker_chat_id"] == first_payload["worker_chat_id"]
+        second_done = wait_for_handoff(c, squad["id"], second["id"])
+        assert second_done["status"] == "handoff"
+
+        listed = c.get(
+            "/api/v1/chatgpt-workers",
+            params={"project_id": "demo-project"},
+        )
+        assert listed.status_code == 200, listed.text
+        worker_rows = listed.json()["workers"]
+        assert len(worker_rows) == 1
+        assert set(worker_rows[0]["work_item_ids"]) == {first["id"], second["id"]}
+
+    assert seen_urls == [None, "https://chatgpt.com/c/project-home"]

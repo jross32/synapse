@@ -1,0 +1,7 @@
+{
+  "source": "src/App.jsx:8:7",
+  "operation": {
+    "type": "set_text",
+    "value": "Launch"
+  }
+}

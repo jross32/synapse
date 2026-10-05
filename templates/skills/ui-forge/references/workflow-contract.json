@@ -1,0 +1,346 @@
+{
+  "id": "ui-forge-workflow-v10",
+  "skill_id": "ui-forge",
+  "purpose": "Machine-readable contract for AI workers executing UI Forge inside Synapse.",
+  "unit_of_success": "running_application",
+  "recommended_entry": "Synapse quick action ui-forge",
+  "preferred_capabilities": [
+    "playwright",
+    "reflex",
+    "web-scraper",
+    "browser",
+    "quality-os"
+  ],
+  "phases": [
+    {
+      "id": "inspect",
+      "goal": "Understand the real product before editing.",
+      "required_outputs": [
+        "brief",
+        "baseline_runtime_state"
+      ],
+      "proof": [
+        "project_context_read",
+        "current_ui_seen_or_reason_recorded"
+      ],
+      "next": "design_grammar"
+    },
+    {
+      "id": "design_grammar",
+      "goal": "Recover or define the product-native design system and experience direction.",
+      "required_outputs": [
+        "design_direction",
+        "token_component_contract"
+      ],
+      "proof": [
+        "existing_system_preserved_or_gap_recorded"
+      ],
+      "next": "plan"
+    },
+    {
+      "id": "plan",
+      "goal": "Choose bounded implementation slices and verification surfaces.",
+      "required_outputs": [
+        "implementation_plan",
+        "verification_plan"
+      ],
+      "proof": [
+        "must_preserve_behaviors_listed",
+        "responsive_and_state_scope_listed"
+      ],
+      "next": "implement"
+    },
+    {
+      "id": "implement",
+      "goal": "Implement the smallest coherent slice and preserve behavior/data truth.",
+      "required_outputs": [
+        "changed_files",
+        "slice_summary"
+      ],
+      "proof": [
+        "app_runs_or_blocker_recorded"
+      ],
+      "next": "browser_proof"
+    },
+    {
+      "id": "browser_proof",
+      "goal": "Exercise the running app as a real desktop/mobile user.",
+      "required_outputs": [
+        "browser_evidence"
+      ],
+      "proof": [
+        "desktop_checked",
+        "mobile_checked",
+        "critical_path_checked",
+        "console_checked",
+        "objective_browser_audit_captured",
+        "interaction_states_exercised_when_relevant",
+        "state_matrix_passed_when_relevant"
+      ],
+      "next": "score",
+      "recommended_tools": [
+        "playwright",
+        "scripts/browser_audit.js",
+        "scripts/visual_edit_bridge.js"
+      ],
+      "tools": [
+        "scripts/state_matrix_runner.mjs"
+      ]
+    },
+    {
+      "id": "score",
+      "goal": "Score the running result and detect structural drift.",
+      "required_outputs": [
+        "ui_forge_score"
+      ],
+      "proof": [
+        "evidence_scored"
+      ],
+      "next": "repair_or_finish"
+    },
+    {
+      "id": "repair_or_finish",
+      "goal": "Repair the highest-leverage root cause or stop when the evidence gate passes.",
+      "required_outputs": [
+        "repair_plan_or_finish_decision"
+      ],
+      "proof": [
+        "stop_rule_evaluated"
+      ],
+      "next": "browser_proof_or_finish"
+    },
+    {
+      "id": "learn",
+      "goal": "Persist reusable design knowledge and recurring workflow friction.",
+      "required_outputs": [
+        "handoff",
+        "friction_events_if_any"
+      ],
+      "proof": [
+        "synapse_memory_updated"
+      ],
+      "next": "done"
+    }
+  ],
+  "critical_failures": [
+    "runtime_error_on_critical_path",
+    "broken_primary_interaction",
+    "fabricated_product_data",
+    "unusable_mobile_critical_path",
+    "inaccessible_critical_path",
+    "unresolved_regression"
+  ],
+  "quality_gate": {
+    "weighted_total_min": 85,
+    "runtime_correctness_min": 85,
+    "browser_proof_min": 80,
+    "critical_failures_max": 0,
+    "structural_drift_action_required": false
+  },
+  "precision_edit": {
+    "preferred": "data-ui-forge-source",
+    "fallback": [
+      "data-ui-forge-id",
+      "data-testid",
+      "id",
+      "aria-label",
+      "text",
+      "class",
+      "tag"
+    ],
+    "rule": "Edit the smallest owning source/token/prop that explains the rendered issue, then rerender immediately.",
+    "direct_edit": {
+      "script": "scripts/direct_ast_edit.mjs",
+      "safe_operations": [
+        "set_text on one static JSX text child",
+        "class_tokens on a static class/className string",
+        "replace_class on a static class/className string",
+        "set_attribute for allowlisted static string attributes"
+      ],
+      "fail_closed_on": [
+        "dynamic JSX expressions",
+        "nested/mixed JSX text",
+        "custom components",
+        "stale or ambiguous source pointer",
+        "syntax-invalid result"
+      ],
+      "rule": "Dry-run first. Apply only when exact data-ui-forge-source ownership is available and the editor reports syntax_reparse_passed. Rerender and browser-verify after every direct edit."
+    },
+    "preview": {
+      "script": "scripts/visual_edit_bridge.js",
+      "flow": [
+        "select exact rendered element",
+        "preview reversible text/class/allowlisted-attribute operation in browser",
+        "inspect changed geometry/computed style",
+        "commitSpec only when data-ui-forge-source is present",
+        "dry-run direct_ast_edit.mjs",
+        "apply source edit",
+        "rerender and re-probe",
+        "revert/cancel preview when not accepted"
+      ],
+      "rule": "Browser preview is never source truth. It is a reversible decision surface; source mutation occurs only through a validated source edit followed by browser proof."
+    },
+    "runtime_owner_fallback": "scripts/runtime_owner_locator.py",
+    "runtime_owner_rule": "If a static source edit does not explain the rendered state, or the value is overwritten after load, trace the JavaScript/TypeScript runtime writer before editing again.",
+    "batch_edit": {
+      "when": "the same mechanically safe operation applies to multiple exact source-tagged intrinsic elements",
+      "browser": "scripts/visual_edit_bridge.js selectMany -> previewMany -> commitBatchSpec",
+      "source": "scripts/batch_ast_edit.mjs",
+      "atomic": true,
+      "rules": [
+        "every selected element must have a unique exact data-ui-forge-source before commit",
+        "validate every source operation against the untouched tree before writing",
+        "apply later source positions first so earlier line/column pointers remain stable",
+        "restore every touched file if any apply step fails",
+        "rerender and re-probe every selected source identity after commit"
+      ]
+    },
+    "css_style_edit": {
+      "when": "a visual spacing/color/type/border/shadow/layout property is owned by a static stylesheet rule",
+      "browser_preview": "scripts/visual_edit_bridge.js preview({type: style_props, properties: ...}) -> styleCommitSpec()",
+      "source_commit": "scripts/css_style_editor.mjs",
+      "rules": [
+        "browser preview uses temporary inline style only and must revert before source commit",
+        "normal JSX commitSpec remains not-ready for style_props",
+        "resolve the owning CSS rule from selected element id/class/tag evidence",
+        "refuse tied CSS ownership unless file + selector are explicit",
+        "patch only allowlisted visual declarations and reparse CSS before writing",
+        "committed DOM must not retain preview inline style",
+        "rerender and verify computed style, geometry, source identity, mobile layout, and console health"
+      ]
+    }
+  },
+  "model_routing": {
+    "roles": [
+      "visual_direction",
+      "implementation",
+      "repair",
+      "correctness_review",
+      "ux_review",
+      "accessibility_review"
+    ],
+    "minimum_comparable_runs": 5,
+    "on_insufficient_evidence": "keep_current_competent_worker",
+    "never_route_by": "brand_reputation_only"
+  },
+  "benchmark": {
+    "spec": "references/benchmark-spec.json",
+    "comparison_policy": "same-model-same-tools-same-machine-same-fixture-same-prompt-same-time-budget",
+    "minimum_repeats_for_stable_claim": 5
+  },
+  "friction_learning": {
+    "ledger_script": "scripts/friction_ledger.py",
+    "record_when": [
+      "repeated_failed_repair",
+      "tool_route_failure",
+      "source_mapping_failure",
+      "benchmark_regression",
+      "missing_state_or_proof",
+      "unnecessary_model_switch"
+    ],
+    "rule": "Deduplicate recurring friction and promote repeated high-impact patterns into workflow/tool improvements."
+  },
+  "conductor": {
+    "script": "scripts/conductor.py",
+    "role": "Fail-closed AI run controller. It reads the workflow contract/state, reports the smallest next action, refuses phase completion when declared artifacts/proof are missing, and computes score/repair guidance from recorded evidence.",
+    "default_state": ".synapse/ui-forge/run-state.json"
+  },
+  "draft_workspaces": {
+    "script": "scripts/draft_workspace.py",
+    "use_when": [
+      "exploratory_redesign",
+      "multiple_visual_directions",
+      "high_change_surface",
+      "collaborative_frontend_experiment"
+    ],
+    "default_policy": "live project remains untouched until draft evidence gate passes and accept succeeds",
+    "flow": [
+      "create draft",
+      "run conductor against returned workspace",
+      "browser/quality proof",
+      "inspect status/diff/risk",
+      "accept conflict-aware or discard"
+    ],
+    "accept_conflict_policy": "fail closed when a changed live path no longer matches the draft base snapshot",
+    "risky_change_policy": "frontend-first; env/backend/api/database/schema/migration changes require explicit allow-risky escalation",
+    "runtime_artifact_filter": "ignore .log/.pid/generated bytecode in base snapshots and change status so preview servers do not create fake draft diffs"
+  },
+  "theme_capsules": {
+    "script": "scripts/theme_capsule.mjs",
+    "reference": "references/theme-capsules.md",
+    "schema": "ui-forge-theme-capsule-v1",
+    "when": [
+      "reuse a proven semantic brand/theme across projects",
+      "persist a project-native token system as machine-readable AI context",
+      "compare or seed draft directions using an existing design language"
+    ],
+    "extract_rules": [
+      "extract only root-level CSS custom properties with provenance",
+      "refuse conflicting token definitions rather than choosing arbitrarily",
+      "do not infer missing brand tokens from raw scattered values"
+    ],
+    "apply_rules": [
+      "dry-run before application",
+      "update only matching existing semantic custom properties",
+      "never use blind global color/value replacement",
+      "fail closed on missing or ambiguous target tokens by default",
+      "allow partial application only when explicitly reviewed and requested",
+      "write multiple stylesheets atomically with rollback on failure",
+      "rerender and run desktop/mobile proof plus design drift review after application"
+    ]
+  },
+  "interaction_state_lab": {
+    "reference": "references/interaction-states.md",
+    "source_editor": "scripts/css_style_editor.mjs",
+    "browser_preview": "scripts/visual_edit_bridge.js style_props with state",
+    "supported_states": [
+      "hover",
+      "focus",
+      "focus-visible",
+      "active",
+      "disabled",
+      "checked"
+    ],
+    "rules": [
+      "base-state CSS ownership ignores pseudo selectors automatically",
+      "state requests require exactly the requested pseudo-state unless file + selector are explicit",
+      "combined or structural pseudo selectors require explicit ownership or the main coding path",
+      "state browser preview is simulated inline design preview and is not proof",
+      "after source commit exercise the real browser pseudo-state and verify computed style",
+      "recheck base and neighboring states for regressions",
+      "do not leave inline preview styles in committed DOM"
+    ]
+  },
+  "state_matrix": {
+    "reference": "references/state-matrix.md",
+    "runner": "scripts/state_matrix_runner.mjs",
+    "schema": "ui-forge-state-matrix-v1",
+    "required_for": "substantial data-driven/stateful UI when loading/empty/error/success/recovery or equivalent states are relevant",
+    "rules": [
+      "run each state in an isolated browser context on every declared representative viewport",
+      "missing required states fail validation before browser execution",
+      "use deterministic state-local network routes and response sequences for error/recovery proof when appropriate",
+      "declared mocked >=400 responses may be recorded as expected_failure_console_errors; unexpected console/page errors remain blockers",
+      "assert user-visible behavior and recovery rather than internal implementation flags",
+      "do not remove required states or weaken assertions to make a failing product pass"
+    ]
+  },
+  "asset_slots": {
+    "reference": "references/asset-slots.md",
+    "stage": "scripts/asset_slot.mjs stage",
+    "browser_preview": "scripts/asset_preview_bridge.js",
+    "commit": "scripts/asset_slot.mjs commit",
+    "discard": "scripts/asset_slot.mjs discard",
+    "provider_rule": "Use Synapse Image Studio or another authorized generator/import source when requested; UI Forge owns placement/provenance/source proof, not provider generation quality.",
+    "rules": [
+      "direct deterministic lane accepts project-staged PNG/JPEG/WebP only",
+      "stage validates bytes/hash and does not mutate application source",
+      "preview only project-local /ui-forge-assets/ URLs and require successful image decode",
+      "revert preview before source commit",
+      "commit requires exact data-ui-forge-source targeting intrinsic img with static src",
+      "dynamic src, non-img targets, SVG, integrity mismatch, and path escapes fail closed",
+      "referenced assets cannot be deleted through staging cleanup",
+      "after commit verify natural dimensions, alt text, layout, stable source identity, desktop/mobile and console health"
+    ]
+  }
+}

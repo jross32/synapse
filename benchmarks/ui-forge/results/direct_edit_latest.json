@@ -1,0 +1,414 @@
+{
+  "generated_at": "2026-09-21T01:38:07.864104+00:00",
+  "scope": "deterministic static-JSX direct-edit precision and refusal safety only",
+  "cases": {
+    "positive": 36,
+    "negative": 12,
+    "total": 48
+  },
+  "positive": {
+    "passed": 36,
+    "pass_rate": 1.0,
+    "exact_source_preservation_rate": 1.0
+  },
+  "negative": {
+    "passed": 12,
+    "pass_rate": 1.0,
+    "unchanged_on_refusal_rate": 1.0
+  },
+  "timing": {
+    "median_ms": 784.748,
+    "max_ms": 1118.954
+  },
+  "overall_pass": true,
+  "claims": {
+    "safe_static_direct_edit_gate": true,
+    "not_a_full_ui_forge_or_lovable_claim": true
+  },
+  "results": [
+    {
+      "id": "text-00",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-00",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-00",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-01",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-01",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-01",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-02",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-02",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-02",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-03",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-03",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-03",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-04",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-04",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-04",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-05",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-05",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-05",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-06",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-06",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-06",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-07",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-07",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-07",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-08",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-08",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-08",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-09",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-09",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-09",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-10",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-10",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-10",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "text-11",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "class-11",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "attr-11",
+      "kind": "positive",
+      "passed": true,
+      "exact_source_match": true,
+      "exit_code": 0,
+      "schema": "ui-forge-direct-ast-edit-v2"
+    },
+    {
+      "id": "dynamic-class-00",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "nested-text-00",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "dynamic-class-01",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "nested-text-01",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "dynamic-class-02",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "nested-text-02",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "dynamic-class-03",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "nested-text-03",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "dynamic-class-04",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "nested-text-04",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "dynamic-class-05",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    },
+    {
+      "id": "nested-text-05",
+      "kind": "negative",
+      "passed": true,
+      "source_unchanged": true,
+      "expected_refusal": true,
+      "exit_code": 2
+    }
+  ]
+}

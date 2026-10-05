@@ -1,4 +1,4 @@
-"""Deterministic tests for ChatGPT UI child-agent orchestration."""
+﻿"""Deterministic tests for ChatGPT UI child-agent orchestration."""
 
 from __future__ import annotations
 
@@ -117,6 +117,44 @@ def test_open_connector_chat_uses_try_in_chat_then_normal_chat() -> None:
     assert error is None
     assert page.try_button.clicked == 1
     assert page.chat_tab.clicked == 1
+
+
+def test_open_connector_chat_falls_back_to_plugin_hint_when_try_button_missing() -> None:
+    page = _FakePage()
+    page.try_button = _FakeLocator(count=0)
+    page.try_link = _FakeLocator(count=0)
+
+    error = asyncio.run(
+        chatgpt_child_agents.open_connector_chat(
+            page,
+            "https://chatgpt.com/plugins/plugin_asdk_app_6a88238b13e08191b8c4ea4dd51f550a",
+        )
+    )
+
+    assert error is None
+    assert page.url == (
+        "https://chatgpt.com/?surface=work&hints="
+        "plugin%3Aasdk_app_6a88238b13e08191b8c4ea4dd51f550a"
+    )
+    assert page.chat_tab.clicked == 1
+
+
+def test_open_connector_chat_reports_human_verification_instead_of_missing_composer() -> None:
+    class ChallengePage(_FakePage):
+        async def title(self):
+            return "Just a moment..."
+
+    page = ChallengePage()
+    error = asyncio.run(
+        chatgpt_child_agents.open_connector_chat(
+            page, "https://chatgpt.com/plugins/synapse"
+        )
+    )
+
+    assert error is not None
+    assert "human verification" in error.lower()
+    assert "will not automate or bypass" in error.lower()
+    assert page.try_button.clicked == 0
 
 
 def test_open_connector_chat_rejects_logged_out_profile() -> None:
@@ -283,11 +321,18 @@ def test_worker_pool_can_still_request_true_headless(tmp_path: Path) -> None:
 
 
 class _FakeConnectorMenuPage:
-    def __init__(self, *, has_menu: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        has_menu: bool = True,
+        has_search: bool = True,
+        direct_synapse: bool = False,
+    ) -> None:
         self.plus = _FakeLocator(count=1 if has_menu else 0)
-        self.search = _FakeLocator()
+        self.search = _FakeLocator(count=1 if has_search else 0)
         self.synapse = _FakeLocator()
         self.none = _FakeLocator(count=0)
+        self.direct_synapse = direct_synapse
 
     def locator(self, selector: str):
         if "composer" in selector.lower() and "add" in selector.lower():
@@ -302,12 +347,24 @@ class _FakeConnectorMenuPage:
 
     def get_by_role(self, role: str, name: str):
         if role == "menuitem" and name == "Synapse":
-            return self.synapse
+            if self.direct_synapse or self.search.filled == "Synapse":
+                return self.synapse
         return self.none
 
     def get_by_text(self, _text: str, *, exact: bool):
         assert exact is True
         return self.none
+
+
+def test_attach_synapse_connector_selects_direct_app_without_search() -> None:
+    page = _FakeConnectorMenuPage(has_search=False, direct_synapse=True)
+
+    error = asyncio.run(chatgpt_child_agents.attach_synapse_connector(page))
+
+    assert error is None
+    assert page.plus.clicked == 1
+    assert page.search.filled == ""
+    assert page.synapse.clicked == 1
 
 
 def test_attach_synapse_connector_uses_composer_menu_search() -> None:
@@ -328,6 +385,24 @@ def test_attach_synapse_connector_fails_closed_without_composer_menu() -> None:
 
     assert error is not None
     assert "could not be attached" in error
+    assert page.synapse.clicked == 0
+
+
+def test_attach_synapse_connector_falls_back_to_plugin_detail_without_composer_menu(monkeypatch) -> None:
+    page = _FakeConnectorMenuPage(has_menu=False)
+    seen = {}
+
+    async def fake_open_connector_chat(page_arg, launch_url: str):
+        seen["page"] = page_arg
+        seen["launch_url"] = launch_url
+        return None
+
+    monkeypatch.setattr(chatgpt_child_agents, "open_connector_chat", fake_open_connector_chat)
+    launch_url = "https://chatgpt.com/plugins/plugin_asdk_app_synapse"
+    error = asyncio.run(chatgpt_child_agents.attach_synapse_connector(page, launch_url=launch_url))
+
+    assert error is None
+    assert seen == {"page": page, "launch_url": launch_url}
     assert page.synapse.clicked == 0
 
 

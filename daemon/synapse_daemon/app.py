@@ -1,4 +1,4 @@
-"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
+﻿"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
 
 For Milestone B this app exposes:
 
@@ -30,7 +30,7 @@ from .auth import AuthManager, ensure_local_token, require_token
 from .active_tasks import ActiveTaskScheduler, ForemanDispatcher
 from .chatgpt_child_agents import ChatGPTBrowserPool
 from .errors import ErrorEnvelope, SynapseError
-from .mcp_connector import build_mcp_info_router, build_mcp_router
+from .mcp_connector import build_mcp_info_router, build_mcp_router, mcp_executor_status
 from .mcp_servers import McpServerManager
 from .model_market import ModelPullManager
 from .models import AuditSource, HealthResponse
@@ -63,6 +63,8 @@ from .routes_collaboration_rooms import build_collaboration_rooms_router
 from .routes_coordination import build_coordination_router
 from .routes_discovery import build_discovery_router
 from .routes_files import build_files_router
+from .routes_image_assets import build_image_generation_router
+from .routes_video_assets import build_video_generation_router
 from .routes_imports import build_imports_router
 from .routes_installed_pages import build_installed_pages_router
 from .routes_local_ai import build_local_ai_router
@@ -348,6 +350,17 @@ def build_app(
     async def health() -> HealthResponse:
         return HealthResponse(ok=True, version=__version__, started_at=started_at)
 
+    @app.get(f"{API_PREFIX}/health/mcp")
+    async def mcp_health() -> dict:
+        """Connector-specific health: event-loop liveness plus executor stall state."""
+        status = mcp_executor_status()
+        return {
+            "ok": status["ok"],
+            "version": __version__,
+            "started_at": to_iso(started_at),
+            **status,
+        }
+
     hub = WsHub(bus, auth)
 
     @app.websocket(f"{API_PREFIX}/ws")
@@ -449,6 +462,18 @@ def build_app(
     # ADR-0003 Phase A files (v0.1.30): per-project + shared uploads.
     app.include_router(
         build_files_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Provider-neutral, project-scoped generated image assets for AI + UI clients.
+    app.include_router(
+        build_image_generation_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Provider-neutral long-form AI video orchestration for UI + connected AIs.
+    app.include_router(
+        build_video_generation_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )

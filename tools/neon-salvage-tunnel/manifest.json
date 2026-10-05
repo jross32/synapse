@@ -1,0 +1,30 @@
+{
+  "id": "neon-salvage-tunnel",
+  "name": "Neon Salvage Tunnel",
+  "category": "tools",
+  "icon": "cloud",
+  "description": "Tracked temporary Cloudflare tunnel for the local Neon Salvage Tycoon server on port 8792.",
+  "version": "0.1.0",
+  "actions": [
+    {
+      "id": "open",
+      "label": "Open Neon tunnel",
+      "primary": true,
+      "primitive": "pty.spawn",
+      "params": {
+        "argv": [
+          "C:\\Program Files (x86)\\cloudflared\\cloudflared.exe",
+          "--config",
+          "C:\\Users\\justi\\NeonSalvageTycoon\\cloudflared-empty.yml",
+          "tunnel",
+          "--url",
+          "http://127.0.0.1:8792",
+          "--no-autoupdate"
+        ],
+        "cwd": "C:\\Users\\justi\\NeonSalvageTycoon",
+        "rows": 30,
+        "cols": 180
+      }
+    }
+  ]
+}

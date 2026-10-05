@@ -26,14 +26,16 @@ import asyncio
 import json
 import re
 import time
-from enum import Enum
 import urllib.error
 import urllib.parse
 import urllib.request
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field
+
+from .subprocess_utils import headless_creationflags
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 
@@ -233,7 +235,8 @@ class Workspace:
 
         try:
             proc = subprocess.run(command, shell=True, cwd=self.root, capture_output=True,
-                                  text=True, timeout=60)
+                                  text=True, timeout=60,
+                       creationflags=headless_creationflags(),)
         except subprocess.TimeoutExpired:
             return "ERROR: command timed out after 60s"
         out = (proc.stdout or "") + (("\n[stderr]\n" + proc.stderr) if proc.stderr else "")

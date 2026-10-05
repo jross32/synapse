@@ -13,9 +13,8 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
-from . import project_records
+from . import project_records, review
 from . import proposals as proposals_module
-from . import review
 from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .errors import invalid
@@ -32,6 +31,7 @@ from .proposals import (
 )
 from .review import ReviewActionRequest, ReviewInbox
 from .storage import Storage
+from .subprocess_utils import headless_creationflags
 from .ws import EventBus
 
 
@@ -314,7 +314,8 @@ def build_review_router(storage: Storage, bus: EventBus) -> APIRouter:
                     text=True,
                     timeout=15,
                     check=False,
-                )
+                                             creationflags=headless_creationflags(),
+)
             except Exception:  # noqa: BLE001 - reconciliation is best-effort
                 return []
             if not result.stdout:

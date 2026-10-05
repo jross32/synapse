@@ -1,0 +1,22 @@
+{
+  "id": "synapse-video-studio",
+  "name": "Synapse Video Studio",
+  "category": "dev-tools",
+  "icon": "video",
+  "description": "AI-native long-form video creation for every AI connected to Synapse. Plans coherent stories up to five minutes, preserves characters/style through continuity groups, supports native dialogue/audio, renders retryable short shots, assembles final MP4s locally, and records project-scoped provenance.",
+  "version": "0.1.0",
+  "publisher": "The WhatIf Company",
+  "verified": true,
+  "bundled": true,
+  "install_default": true,
+  "fields": [],
+  "actions": [
+    {
+      "id": "check",
+      "label": "Check readiness",
+      "handler": "synapse-video-studio:check",
+      "primary": true,
+      "scope": "tool"
+    }
+  ]
+}
