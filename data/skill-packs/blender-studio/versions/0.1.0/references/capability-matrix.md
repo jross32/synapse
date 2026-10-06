@@ -13,7 +13,7 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | UV unwrap | verified | create mesh, unwrap, reopen and assert UV layer |
 | Image textures/packing | unverified | generated image texture, node hookup, missing-file/pack policy gate |
 | Modifiers | verified | deterministic modifier fixture + applied/non-applied validation |
-| Geometry Nodes | unverified | procedural node group fixture + evaluated geometry assertion |
+| Geometry Nodes | partial | procedural node group fixture + evaluated geometry assertion |
 | Rigging/skinning | unverified | armature + weights + pose deformation fixture |
 | Animation/actions/NLA | partial | keyed action fixture + frame-state assertions/export check |
 | Compositing | unverified | node pipeline + deterministic render evidence |
@@ -31,4 +31,6 @@ The matrix is intentionally conservative. A green lane must mean something an AI
 The initial synthetic probe creates a mesh, Principled PBR material, Bevel modifier, camera and area light, saves a `.blend`, exports GLB, then supports independent background reopen assertions and clean GLB re-import. This is deliberately generic and not dependent on RoomSpace3D. On Blender 5.2 the accepted fixture produced an 89,652-byte `.blend` and 2,004-byte GLB; clean GLB re-import yielded one mesh, the `ProbePBR` material, and 24 vertices. This promotes mesh creation, PBR materials, modifiers, and GLB export from partial/unverified to verified baseline lanes. It does not prove UVs, textures, geometry nodes, rigs, animation, compositing, FBX/OBJ/USD, optimization, or downstream-engine import.
 
 Additional 2026-10-06 fixture evidence: background Blender created and persisted a UVMap with 24 UV loops on the generic probe mesh; independent reopen retained all 24. The same fixture persisted a Blender 5.2 Action from frames 1-24 and independent reopen evaluated Z rotation from 0 to ~1.5708 radians. Basic action/keyframe animation is therefore proven, but the broader animation lane remains partial until NLA and exported animation are gated.
+
+Geometry Nodes baseline evidence: generic probe now persists a ProbeGeometry GeometryNodeTree with group input/output and a NODES modifier; independent background reopen evaluates the mesh successfully. Marked partial because this proves node-tree construction/persistence/evaluation, not yet nontrivial procedural generation.
 

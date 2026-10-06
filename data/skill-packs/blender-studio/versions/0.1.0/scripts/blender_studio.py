@@ -5,7 +5,7 @@ from pathlib import Path
 LANES = {
  "discovery_headless":"verified", "live_mcp_bpy":"verified", "mesh_modeling":"verified",
  "materials_pbr":"verified", "camera_light_render":"verified", "save_reopen_validation":"verified",
- "uv":"verified", "image_textures":"unverified", "modifiers":"verified", "geometry_nodes":"unverified",
+ "uv":"verified", "image_textures":"unverified", "modifiers":"verified", "geometry_nodes":"partial",
  "rigging_skinning":"unverified", "animation":"partial", "compositing":"unverified", "gltf_glb":"verified",
  "fbx":"unverified", "obj":"unverified", "usd":"unverified", "game_optimization":"unverified", "downstream_engine":"unverified"
 }
