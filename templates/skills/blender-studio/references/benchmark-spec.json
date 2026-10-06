@@ -1,0 +1,260 @@
+{
+  "id": "blender-studio-v1",
+  "name": "Blender Studio first-class AI capability",
+  "description": "Evidence-first benchmark for AI-native Blender creation, verification, export, and game-engine handoff through Synapse.",
+  "primary_surface": "synapse_coder_thread",
+  "default_repeat_count": 3,
+  "official_weight_quality": 70,
+  "official_weight_efficiency": 20,
+  "official_weight_speed": 10,
+  "strict_comparable_policy": "matching-provenance",
+  "metadata": {
+    "kind": "skill-pack",
+    "skill_id": "blender-studio",
+    "critical_gate": "no-false-capability-or-game-ready-claim",
+    "required_repeats": 3
+  },
+  "scenarios": [
+    {
+      "id": "bst-model-material",
+      "spec_id": "blender-studio-v1",
+      "name": "Model and material from brief",
+      "description": "Create an original modeled asset with topology, UVs, PBR material, texture evidence, and render.",
+      "version": "v1",
+      "prompt_md": "Create the assigned original 3D asset in Blender. Save a .blend and structural evidence for topology, transforms, UVs, material nodes, texture provenance, and a verification render.",
+      "artifact_contract": {
+        "required": [
+          "asset.blend",
+          "receipt.json",
+          "render.png"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "mesh-exists",
+          "transform-policy",
+          "uv-valid",
+          "pbr-material",
+          "texture-provenance",
+          "render-exists"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/capability-matrix.md"
+      },
+      "reset_procedure_md": "Use a fresh Blender file and output directory.",
+      "time_budget_seconds": 600,
+      "objective_weight": 70,
+      "rubric_weight": 30,
+      "metadata": {
+        "category": "modeling-materials"
+      }
+    },
+    {
+      "id": "bst-procedural",
+      "spec_id": "blender-studio-v1",
+      "name": "Procedural Geometry Nodes asset",
+      "description": "Build a nontrivial Geometry Nodes graph and prove evaluated geometry differs from source.",
+      "version": "v1",
+      "prompt_md": "Create a reusable Geometry Nodes asset. Save the graph and independently evaluate the generated result after reopen.",
+      "artifact_contract": {
+        "required": [
+          "procedural.blend",
+          "receipt.json"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "node-tree",
+          "nontrivial-evaluation",
+          "reopen-persistence"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/capability-matrix.md"
+      },
+      "reset_procedure_md": "Use a fresh Blender file.",
+      "time_budget_seconds": 600,
+      "objective_weight": 75,
+      "rubric_weight": 25,
+      "metadata": {
+        "category": "procedural"
+      }
+    },
+    {
+      "id": "bst-rig-animation",
+      "spec_id": "blender-studio-v1",
+      "name": "Rig and animation",
+      "description": "Rig a mesh, prove deformation, action/NLA, and animated GLB round trip.",
+      "version": "v1",
+      "prompt_md": "Rig and animate the assigned asset. Prove deformation at distinct frames, save action/NLA evidence, export animated GLB, and re-import cleanly.",
+      "artifact_contract": {
+        "required": [
+          "rigged.blend",
+          "animated.glb",
+          "receipt.json"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "armature",
+          "weights",
+          "frame-deformation",
+          "action",
+          "nla",
+          "animated-gltf-roundtrip"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/capability-matrix.md"
+      },
+      "reset_procedure_md": "Use fresh Blender and re-import states.",
+      "time_budget_seconds": 720,
+      "objective_weight": 80,
+      "rubric_weight": 20,
+      "metadata": {
+        "category": "animation"
+      }
+    },
+    {
+      "id": "bst-multiformat",
+      "spec_id": "blender-studio-v1",
+      "name": "Multi-format export integrity",
+      "description": "Export GLB, FBX, OBJ, USD and verify each by clean re-import.",
+      "version": "v1",
+      "prompt_md": "Export the assigned source asset to GLB, FBX, OBJ, and USD. Re-import each cleanly and report preservation by format.",
+      "artifact_contract": {
+        "required": [
+          "source.blend",
+          "asset.glb",
+          "asset.fbx",
+          "asset.obj",
+          "asset.usdc",
+          "receipt.json"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "gltf-roundtrip",
+          "fbx-roundtrip",
+          "obj-roundtrip",
+          "usd-roundtrip",
+          "loss-report"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/engine-handoffs.md"
+      },
+      "reset_procedure_md": "Use a clean import state per format.",
+      "time_budget_seconds": 720,
+      "objective_weight": 85,
+      "rubric_weight": 15,
+      "metadata": {
+        "category": "interchange"
+      }
+    },
+    {
+      "id": "bst-game-ready",
+      "spec_id": "blender-studio-v1",
+      "name": "Game-ready asset gate",
+      "description": "Validate scale, transforms, naming, topology/material budgets, collision, and target constraints.",
+      "version": "v1",
+      "prompt_md": "Prepare the assigned asset for the stated game engine. Produce an explicit game-readiness receipt and only claim readiness when declared constraints are evidenced.",
+      "artifact_contract": {
+        "required": [
+          "game-asset.blend",
+          "receipt.json"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "scale",
+          "transforms",
+          "naming",
+          "triangle-budget",
+          "material-budget",
+          "collision-policy",
+          "target-declared"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/engine-handoffs.md"
+      },
+      "reset_procedure_md": "Use a fresh target-specific output.",
+      "time_budget_seconds": 600,
+      "objective_weight": 85,
+      "rubric_weight": 15,
+      "metadata": {
+        "category": "game-readiness"
+      }
+    },
+    {
+      "id": "bst-engine-handoff",
+      "spec_id": "blender-studio-v1",
+      "name": "Downstream engine handoff",
+      "description": "Import into an available target engine with structural, visual, and playtest/build evidence.",
+      "version": "v1",
+      "prompt_md": "Hand the assigned Blender asset to the available target engine. Capture import receipt, structural assertions, visual evidence, and playtest/build status. Treat environment blockers separately from asset failures.",
+      "artifact_contract": {
+        "required": [
+          "receipt.json",
+          "handoff.md"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "target-engine",
+          "import-status",
+          "structural-assertions",
+          "visual-evidence",
+          "playtest-or-build-status",
+          "blocker-semantics"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/engine-handoffs.md"
+      },
+      "reset_procedure_md": "Use an isolated target-engine proof project.",
+      "time_budget_seconds": 900,
+      "objective_weight": 90,
+      "rubric_weight": 10,
+      "metadata": {
+        "category": "engine-handoff"
+      }
+    },
+    {
+      "id": "bst-truthful-recovery",
+      "spec_id": "blender-studio-v1",
+      "name": "Failure and uncertainty recovery",
+      "description": "Recover from unavailable routes without fabricating completion or destroying user work.",
+      "version": "v1",
+      "prompt_md": "Complete the assigned Blender task while one route is unavailable. Use an allowed fallback, preserve original work, record failure, and report only verified capabilities.",
+      "artifact_contract": {
+        "required": [
+          "failures.json",
+          "receipt.json",
+          "handoff.md"
+        ]
+      },
+      "verifier_contract": {
+        "checks": [
+          "failure-recorded",
+          "fallback-used",
+          "original-preserved",
+          "no-false-success",
+          "evidence-complete"
+        ]
+      },
+      "rubric_contract": {
+        "reference": "references/capability-matrix.md"
+      },
+      "reset_procedure_md": "Use a disposable fixture.",
+      "time_budget_seconds": 600,
+      "objective_weight": 80,
+      "rubric_weight": 20,
+      "metadata": {
+        "category": "resilience"
+      }
+    }
+  ]
+}

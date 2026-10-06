@@ -1,37 +1,36 @@
 {
-    "id":  "blender-studio",
-    "name":  "Synapse Blender Studio",
-    "publisher":  "The WhatIf Company",
-    "version":  "0.2.0",
-    "description":  "AI-native first-class Blender creation platform for Synapse with verified modeling, PBR materials, packed textures, UVs, modifiers, Geometry Nodes, rigging, animation/NLA, rendering, multi-format round-trip export, game-asset gates, and downstream-engine handoff receipts.",
-    "entrypoint":  "SKILL.md",
-    "tags":  [
-                 "blender",
-                 "3d",
-                 "modeling",
-                 "materials",
-                 "textures",
-                 "geometry-nodes",
-                 "animation",
-                 "rendering",
-                 "assets",
-                 "games",
-                 "mcp",
-                 "verification"
-             ],
-    "implicit_invocation":  true,
-    "required_capabilities":  [
-
-                              ],
-    "preferred_capabilities":  [
-                                   "blender",
-                                   "reflex"
-                               ],
-    "optional_capabilities":  [
-                                  "synapse-image-studio",
-                                  "screen-monitor",
-                                  "playwright",
-                                  "github",
-                                  "warden"
-                              ]
+  "id": "blender-studio",
+  "name": "Synapse Blender Studio",
+  "publisher": "The WhatIf Company",
+  "version": "0.3.0",
+  "description": "AI-native first-class Blender creation platform for Synapse with verified modeling, PBR materials, packed textures, UVs, modifiers, Geometry Nodes, rigging, animation/NLA, rendering, multi-format round-trip export, game-asset gates, and downstream-engine handoff receipts.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "blender",
+    "3d",
+    "modeling",
+    "materials",
+    "textures",
+    "geometry-nodes",
+    "animation",
+    "rendering",
+    "assets",
+    "games",
+    "mcp",
+    "verification"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "blender",
+    "reflex"
+  ],
+  "optional_capabilities": [
+    "synapse-image-studio",
+    "screen-monitor",
+    "playwright",
+    "github",
+    "warden"
+  ],
+  "benchmark_spec": "references/benchmark-spec.json"
 }
