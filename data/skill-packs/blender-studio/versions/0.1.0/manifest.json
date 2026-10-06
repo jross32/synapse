@@ -1,13 +1,37 @@
 ﻿{
-  "id": "blender-studio",
-  "name": "Synapse Blender Studio",
-  "publisher": "The WhatIf Company",
-  "version": "0.1.0",
-  "description": "AI-native Blender creation workflow for verified modeling, materials, procedural geometry, animation, rendering, conversion, export, and downstream game/app assets through Synapse.",
-  "entrypoint": "SKILL.md",
-  "tags": ["blender","3d","modeling","materials","textures","geometry-nodes","animation","rendering","assets","games","mcp","verification"],
-  "implicit_invocation": true,
-  "required_capabilities": [],
-  "preferred_capabilities": ["blender","reflex"],
-  "optional_capabilities": ["synapse-image-studio","screen-monitor","playwright","github","warden"]
+    "id":  "blender-studio",
+    "name":  "Synapse Blender Studio",
+    "publisher":  "The WhatIf Company",
+    "version":  "0.1.1",
+    "description":  "AI-native Blender creation workflow for verified modeling, materials, procedural geometry, animation, rendering, conversion, export, and downstream game/app assets through Synapse.",
+    "entrypoint":  "SKILL.md",
+    "tags":  [
+                 "blender",
+                 "3d",
+                 "modeling",
+                 "materials",
+                 "textures",
+                 "geometry-nodes",
+                 "animation",
+                 "rendering",
+                 "assets",
+                 "games",
+                 "mcp",
+                 "verification"
+             ],
+    "implicit_invocation":  true,
+    "required_capabilities":  [
+
+                              ],
+    "preferred_capabilities":  [
+                                   "blender",
+                                   "reflex"
+                               ],
+    "optional_capabilities":  [
+                                  "synapse-image-studio",
+                                  "screen-monitor",
+                                  "playwright",
+                                  "github",
+                                  "warden"
+                              ]
 }
