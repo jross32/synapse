@@ -20,7 +20,7 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | glTF/GLB export | verified | export + clean re-import + material/geometry assertions |
 | FBX export | verified | export + clean re-import or target-engine validation |
 | OBJ export | verified | export + clean re-import geometry assertion |
-| USD export | unverified | export + clean re-import/validator where supported |
+| USD export | verified | export + clean re-import/validator where supported |
 | Game-ready optimization | partial | transforms/origin/naming/triangle/material/scale gate |
 | Downstream engine import | unverified | engine-specific import/build/playtest evidence |
 
@@ -43,4 +43,6 @@ Blender 5.2 compositor compatibility finding: Scene.node_tree is no longer prese
 FBX/OBJ evidence: the generic probe exported a 34,732-byte FBX and 12,244-byte OBJ. Each was then imported into a clean background Blender state; both produced one mesh with 96 evaluated/exported vertices (FBX also restored the broader scene objects).
 
 Game-readiness structural gate: independent background inspection confirms the probe mesh has identity transforms, origin at world zero, positive determinant, metric 1.0 units, one material, an active UV layer, and 12 loop triangles. This is a useful deterministic pre-export gate but remains partial until budget/LOD/collider/target-engine constraints are exercised.
+
+USD evidence: Blender 5.2 wm.usd_export produced a 4,828-byte USDC from the generic fixture. Clean background wm.usd_import restored one mesh with 8 base vertices and the ProbePBR material, proving a basic USD round trip.
 
