@@ -14,7 +14,7 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | Image textures/packing | verified | generated image texture, node hookup, missing-file/pack policy gate |
 | Modifiers | verified | deterministic modifier fixture + applied/non-applied validation |
 | Geometry Nodes | partial | procedural node group fixture + evaluated geometry assertion |
-| Rigging/skinning | unverified | armature + weights + pose deformation fixture |
+| Rigging/skinning | partial | armature + weights + pose deformation fixture |
 | Animation/actions/NLA | partial | keyed action fixture + frame-state assertions/export check |
 | Compositing | unverified | node pipeline + deterministic render evidence |
 | glTF/GLB export | verified | export + clean re-import + material/geometry assertions |
@@ -35,4 +35,6 @@ Additional 2026-10-06 fixture evidence: background Blender created and persisted
 Geometry Nodes baseline evidence: generic probe now persists a ProbeGeometry GeometryNodeTree with group input/output and a NODES modifier; independent background reopen evaluates the mesh successfully. Marked partial because this proves node-tree construction/persistence/evaluation, not yet nontrivial procedural generation.
 
 Image-texture evidence: generic fixture generated an original 4x4 PNG, assigned it through a ShaderNodeTexImage to Principled Base Color, packed it into the .blend, saved, and independently reopened it with packed data and node-to-image linkage intact.
+
+Rigging baseline evidence: generic fixture persists ProbeRig, a Root bone, ARMATURE modifier targeting that rig, and full Root vertex-group weights on all 8 base vertices; independent background reopen confirms the relationship and weights. Marked partial until actual posed deformation plus animated/exported skinning is verified.
 
