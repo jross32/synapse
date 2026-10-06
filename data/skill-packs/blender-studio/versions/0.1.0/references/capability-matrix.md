@@ -13,9 +13,9 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | UV unwrap | verified | create mesh, unwrap, reopen and assert UV layer |
 | Image textures/packing | verified | generated image texture, node hookup, missing-file/pack policy gate |
 | Modifiers | verified | deterministic modifier fixture + applied/non-applied validation |
-| Geometry Nodes | partial | procedural node group fixture + evaluated geometry assertion |
-| Rigging/skinning | partial | armature + weights + pose deformation fixture |
-| Animation/actions/NLA | partial | keyed action fixture + frame-state assertions/export check |
+| Geometry Nodes | verified | procedural node group fixture + evaluated geometry assertion |
+| Rigging/skinning | verified | armature + weights + pose deformation fixture |
+| Animation/actions/NLA | verified | keyed action fixture + frame-state assertions/export check |
 | Compositing | partial | node pipeline + deterministic render evidence |
 | glTF/GLB export | verified | export + clean re-import + material/geometry assertions |
 | FBX export | verified | export + clean re-import or target-engine validation |
@@ -45,4 +45,6 @@ FBX/OBJ evidence: the generic probe exported a 34,732-byte FBX and 12,244-byte O
 Game-readiness structural gate: independent background inspection confirms the probe mesh has identity transforms, origin at world zero, positive determinant, metric 1.0 units, one material, an active UV layer, and 12 loop triangles. This is a useful deterministic pre-export gate but remains partial until budget/LOD/collider/target-engine constraints are exercised.
 
 USD evidence: Blender 5.2 wm.usd_export produced a 4,828-byte USDC from the generic fixture. Clean background wm.usd_import restored one mesh with 8 base vertices and the ProbePBR material, proving a basic USD round trip.
+
+Deformation/animation evidence: isolated RigProbeMesh is fully weighted to ProbeRig/Root through an ARMATURE modifier. Frame 1 vs 12 independent background evaluation moves a sampled vertex by ~0.5646 local units; reopen confirms the same deformation and all 8 vertices retain full Root weight. ProbeRigAction is also placed in ProbeTrack/ProbeStrip NLA, exported to a 7,820-byte animated GLB, then cleanly re-imported with ProbeRig, ProbeRigAction frame range 1-12, and an NLA track restored. Geometry Nodes is promoted to verified because the generic ProbeGeometry tree now performs a nontrivial +0.5 Z GeometryNodeTransform; independent reopen evaluates bounds from Z 0.0 to 1.0 rather than the source cube's -0.5 to 0.5.
 
