@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import argparse, json, os, shutil, subprocess, tempfile
 from pathlib import Path
 

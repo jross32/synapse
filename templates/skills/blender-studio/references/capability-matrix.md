@@ -1,4 +1,4 @@
-﻿# Blender Studio capability matrix
+# Blender Studio capability matrix
 
 Status vocabulary: **verified** = exercised by a real reproducible fixture/gate; **partial** = some operations proven but not a broad lane; **unverified** = available in Blender/API but not yet accepted as a Synapse Blender Studio capability.
 

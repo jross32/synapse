@@ -1,4 +1,4 @@
-﻿---
+---
 name: blender-studio
 description: Create, inspect, modify, validate, render, and export Blender assets/scenes through Synapse. Use for Blender, 3D assets, meshes, materials, textures, procedural geometry, rigs, animation, lighting, cameras, renders, conversion, and game/app-ready exports.
 ---

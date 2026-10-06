@@ -1,4 +1,4 @@
-﻿# Downstream engine handoff gates
+# Downstream engine handoff gates
 
 A Blender asset is not "game ready" merely because export succeeded. Downstream validation must be target-specific and evidence-backed.
 

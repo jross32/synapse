@@ -1,4 +1,4 @@
-﻿# AI routing and reliability
+# AI routing and reliability
 
 ## Preferred tool ladder
 1. Blender MCP semantic inspection (`get_*summary*`, object detail, missing files, docs search).
