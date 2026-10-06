@@ -21,7 +21,7 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | FBX export | verified | export + clean re-import or target-engine validation |
 | OBJ export | verified | export + clean re-import geometry assertion |
 | USD export | unverified | export + clean re-import/validator where supported |
-| Game-ready optimization | unverified | transforms/origin/naming/triangle/material/scale gate |
+| Game-ready optimization | partial | transforms/origin/naming/triangle/material/scale gate |
 | Downstream engine import | unverified | engine-specific import/build/playtest evidence |
 
 The matrix is intentionally conservative. A green lane must mean something an AI can rely on, not merely something Blender theoretically supports.
@@ -41,4 +41,6 @@ Rigging baseline evidence: generic fixture persists ProbeRig, a Root bone, ARMAT
 Blender 5.2 compositor compatibility finding: Scene.node_tree is no longer present in this environment; Scene.compositing_node_group is the active API surface. A CompositorNodeTree named ProbeCompositor was successfully assigned and saved. The independent follow-up CLI call timed out, so this lane remains partial rather than verified. Do not use pre-5.x scene.node_tree assumptions without version checking.
 
 FBX/OBJ evidence: the generic probe exported a 34,732-byte FBX and 12,244-byte OBJ. Each was then imported into a clean background Blender state; both produced one mesh with 96 evaluated/exported vertices (FBX also restored the broader scene objects).
+
+Game-readiness structural gate: independent background inspection confirms the probe mesh has identity transforms, origin at world zero, positive determinant, metric 1.0 units, one material, an active UV layer, and 12 loop triangles. This is a useful deterministic pre-export gate but remains partial until budget/LOD/collider/target-engine constraints are exercised.
 
