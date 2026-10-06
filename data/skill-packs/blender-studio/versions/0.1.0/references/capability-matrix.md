@@ -18,8 +18,8 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | Animation/actions/NLA | partial | keyed action fixture + frame-state assertions/export check |
 | Compositing | partial | node pipeline + deterministic render evidence |
 | glTF/GLB export | verified | export + clean re-import + material/geometry assertions |
-| FBX export | unverified | export + clean re-import or target-engine validation |
-| OBJ export | unverified | export + clean re-import geometry assertion |
+| FBX export | verified | export + clean re-import or target-engine validation |
+| OBJ export | verified | export + clean re-import geometry assertion |
 | USD export | unverified | export + clean re-import/validator where supported |
 | Game-ready optimization | unverified | transforms/origin/naming/triangle/material/scale gate |
 | Downstream engine import | unverified | engine-specific import/build/playtest evidence |
@@ -39,4 +39,6 @@ Image-texture evidence: generic fixture generated an original 4x4 PNG, assigned 
 Rigging baseline evidence: generic fixture persists ProbeRig, a Root bone, ARMATURE modifier targeting that rig, and full Root vertex-group weights on all 8 base vertices; independent background reopen confirms the relationship and weights. Marked partial until actual posed deformation plus animated/exported skinning is verified.
 
 Blender 5.2 compositor compatibility finding: Scene.node_tree is no longer present in this environment; Scene.compositing_node_group is the active API surface. A CompositorNodeTree named ProbeCompositor was successfully assigned and saved. The independent follow-up CLI call timed out, so this lane remains partial rather than verified. Do not use pre-5.x scene.node_tree assumptions without version checking.
+
+FBX/OBJ evidence: the generic probe exported a 34,732-byte FBX and 12,244-byte OBJ. Each was then imported into a clean background Blender state; both produced one mesh with 96 evaluated/exported vertices (FBX also restored the broader scene objects).
 

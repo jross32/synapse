@@ -7,7 +7,7 @@ LANES = {
  "materials_pbr":"verified", "camera_light_render":"verified", "save_reopen_validation":"verified",
  "uv":"verified", "image_textures":"verified", "modifiers":"verified", "geometry_nodes":"partial",
  "rigging_skinning":"partial", "animation":"partial", "compositing":"partial", "gltf_glb":"verified",
- "fbx":"unverified", "obj":"unverified", "usd":"unverified", "game_optimization":"unverified", "downstream_engine":"unverified"
+ "fbx":"verified", "obj":"verified", "usd":"unverified", "game_optimization":"unverified", "downstream_engine":"unverified"
 }
 
 def find_blender():
