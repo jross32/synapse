@@ -30,7 +30,7 @@ For substantial work: understand target and constraints -> inspect current scene
 
 Track evidence separately for: mesh/modeling; modifiers; curves/text; UVs; PBR materials; image textures; Geometry Nodes; armatures/skinning; keyframe/action/NLA animation; cameras; lights/worlds; Eevee/Cycles rendering; compositing; import/conversion; glTF/GLB export; FBX/OBJ/USD export where supported; game-ready optimization; downstream engine/app import.
 
-Read `references/capability-matrix.md` before making broad capability claims. Read `references/tool-routing.md` for the semantic MCP -> bpy -> background validation -> GUI fallback ladder and timeout/retry rules. Use `scripts/blender_studio.py matrix` for the machine-readable baseline and `probe` for a real local Blender smoke fixture.
+Read `references/capability-matrix.md` before making broad capability claims. Read `references/engine-handoffs.md` before claiming an asset is game-ready or imported into a target engine. Read `references/tool-routing.md` for the semantic MCP -> bpy -> background validation -> GUI fallback ladder and timeout/retry rules. Use `scripts/blender_studio.py matrix` for the machine-readable baseline and `probe` for a real local Blender smoke fixture.
 
 ## Downstream games/apps
 
