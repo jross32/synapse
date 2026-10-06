@@ -16,7 +16,7 @@ Status vocabulary: **verified** = exercised by a real reproducible fixture/gate;
 | Geometry Nodes | partial | procedural node group fixture + evaluated geometry assertion |
 | Rigging/skinning | partial | armature + weights + pose deformation fixture |
 | Animation/actions/NLA | partial | keyed action fixture + frame-state assertions/export check |
-| Compositing | unverified | node pipeline + deterministic render evidence |
+| Compositing | partial | node pipeline + deterministic render evidence |
 | glTF/GLB export | verified | export + clean re-import + material/geometry assertions |
 | FBX export | unverified | export + clean re-import or target-engine validation |
 | OBJ export | unverified | export + clean re-import geometry assertion |
@@ -37,4 +37,6 @@ Geometry Nodes baseline evidence: generic probe now persists a ProbeGeometry Geo
 Image-texture evidence: generic fixture generated an original 4x4 PNG, assigned it through a ShaderNodeTexImage to Principled Base Color, packed it into the .blend, saved, and independently reopened it with packed data and node-to-image linkage intact.
 
 Rigging baseline evidence: generic fixture persists ProbeRig, a Root bone, ARMATURE modifier targeting that rig, and full Root vertex-group weights on all 8 base vertices; independent background reopen confirms the relationship and weights. Marked partial until actual posed deformation plus animated/exported skinning is verified.
+
+Blender 5.2 compositor compatibility finding: Scene.node_tree is no longer present in this environment; Scene.compositing_node_group is the active API surface. A CompositorNodeTree named ProbeCompositor was successfully assigned and saved. The independent follow-up CLI call timed out, so this lane remains partial rather than verified. Do not use pre-5.x scene.node_tree assumptions without version checking.
 

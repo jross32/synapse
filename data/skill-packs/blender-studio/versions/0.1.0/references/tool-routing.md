@@ -18,3 +18,5 @@
 
 ## Game asset handoff receipt
 Record at minimum: source blend, export path/format, Blender version, asset names, unit/scale convention, applied/unapplied transforms/modifiers, material/texture policy, animations/actions, provenance, structural validation, visual evidence, export re-import result, downstream target, and known limitations.
+
+- Blender 5.2 compositor note: use Scene.compositing_node_group; the old Scene.node_tree path is absent in the verified 5.2.2 LTS environment. Version-check compositor automation.
