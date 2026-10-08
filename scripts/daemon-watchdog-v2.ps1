@@ -6,7 +6,10 @@ param(
   [int]$IntervalSeconds = 30,
   [int]$FailureThreshold = 3,
   [int]$HealthTimeoutSeconds = 5,
-  [int]$GraceSeconds = 60
+  [int]$McpFailureThreshold = 6,
+  [int]$McpHealthTimeoutSeconds = 5,
+  [int]$LowDiskFreeMB = 512,
+  [int]$GraceSeconds = 120
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,7 +40,12 @@ if (-not $createdNew) { exit 0 }
 function Write-WatchdogLog {
   param([string]$Message)
   $line = "{0} [watchdog-v2] {1}" -f (Get-Date -Format 'HH:mm:ss'), $Message
-  Add-Content -Path $watchdogLogPath -Value $line
+  try {
+    Add-Content -Path $watchdogLogPath -Value $line
+  } catch {
+    # Disk pressure must never kill the process that is supposed to recover Synapse.
+    # If logging cannot persist, keep supervising and let later healthy ticks resume logging.
+  }
 }
 
 function Get-DaemonProcessId {
@@ -57,17 +65,65 @@ function Get-DaemonProcessId {
   return $null
 }
 
-function Test-DaemonHealthy {
-  param([int]$Port, [int]$TimeoutSeconds)
+function Get-DaemonHealth {
+  param(
+    [int]$Port,
+    [int]$BasicTimeoutSeconds,
+    [int]$McpTimeoutSeconds
+  )
+
+  $basicOk = $false
+  $basicReason = ''
   try {
-    $basic = Invoke-RestMethod -TimeoutSec $TimeoutSeconds -Uri "http://127.0.0.1:$Port/api/v1/health"
-    if (-not $basic.ok) { return $false }
-    # The connector-specific endpoint detects executor deadlock/saturation that
-    # the basic event-loop liveness endpoint cannot see.
-    $mcp = Invoke-RestMethod -TimeoutSec $TimeoutSeconds -Uri "http://127.0.0.1:$Port/api/v1/health/mcp"
-    return [bool]$mcp.ok
+    $basic = Invoke-RestMethod -TimeoutSec $BasicTimeoutSeconds -Uri "http://127.0.0.1:$Port/api/v1/health"
+    $basicOk = [bool]$basic.ok
+    if (-not $basicOk) { $basicReason = 'basic health returned ok=false' }
   } catch {
-    return $false
+    $basicReason = $_.Exception.Message
+  }
+
+  if (-not $basicOk) {
+    return [pscustomobject]@{
+      BasicOk = $false
+      McpOk = $false
+      BasicReason = $basicReason
+      McpReason = 'not checked because basic health failed'
+    }
+  }
+
+  $mcpOk = $false
+  $mcpReason = ''
+  try {
+    # This endpoint is a lock-only snapshot, but MCP lane degradation is not the
+    # same failure class as a dead daemon. Keep the result separate so a slow or
+    # saturated executor cannot immediately gain process-kill authority.
+    $mcp = Invoke-RestMethod -TimeoutSec $McpTimeoutSeconds -Uri "http://127.0.0.1:$Port/api/v1/health/mcp"
+    $mcpOk = [bool]$mcp.ok
+    if (-not $mcpOk) {
+      $stalled = @($mcp.stalled_lanes) -join ','
+      $mcpReason = if ($stalled) { "stalled lanes: $stalled" } else { 'MCP health returned ok=false' }
+    }
+  } catch {
+    $mcpReason = $_.Exception.Message
+  }
+
+  return [pscustomobject]@{
+    BasicOk = $true
+    McpOk = $mcpOk
+    BasicReason = ''
+    McpReason = $mcpReason
+  }
+}
+
+function Get-FreeDiskMB {
+  try {
+    $driveRoot = [System.IO.Path]::GetPathRoot($root)
+    $driveName = $driveRoot.TrimEnd('\').TrimEnd(':')
+    $drive = Get-PSDrive -Name $driveName -ErrorAction Stop
+    return [math]::Floor($drive.Free / 1MB)
+  } catch {
+    # Unknown disk state must not itself block recovery.
+    return [double]::PositiveInfinity
   }
 }
 
@@ -112,8 +168,9 @@ function Recover-Daemon {
   }
 }
 
-Write-WatchdogLog "started -- checking basic + MCP health every ${IntervalSeconds}s"
+Write-WatchdogLog "started -- basic threshold=$FailureThreshold, MCP threshold=$McpFailureThreshold, interval=${IntervalSeconds}s, startup grace=${GraceSeconds}s, low-disk floor=${LowDiskFreeMB}MB"
 $consecutiveFailures = 0
+$consecutiveMcpFailures = 0
 $consecutiveAbsent = 0
 $graceDeadline = [DateTime]::MinValue
 $graceOwnerPid = $null
@@ -135,26 +192,84 @@ try {
       continue
     }
 
-    $graceOwnerPid = $null
     $consecutiveAbsent = 0
-    if (Test-DaemonHealthy -Port $Port -TimeoutSeconds $HealthTimeoutSeconds) {
-      if ($consecutiveFailures -gt 0) {
-        Write-WatchdogLog "daemon + MCP connector healthy again (PID $ownerPid)"
+    $withinGrace = $graceOwnerPid -and (Get-Date) -lt $graceDeadline
+    $health = Get-DaemonHealth -Port $Port -BasicTimeoutSeconds $HealthTimeoutSeconds -McpTimeoutSeconds $McpHealthTimeoutSeconds
+
+    if (-not $health.BasicOk) {
+      $consecutiveMcpFailures = 0
+      if ($withinGrace) {
+        Write-WatchdogLog "basic health not ready during startup grace for PID $ownerPid -- no recovery ($($health.BasicReason))"
+        continue
+      }
+
+      $consecutiveFailures += 1
+      Write-WatchdogLog "basic daemon health failed ($consecutiveFailures/$FailureThreshold) for PID $ownerPid -- $($health.BasicReason)"
+      if ($consecutiveFailures -lt $FailureThreshold) { continue }
+
+      $freeMB = Get-FreeDiskMB
+      if ($freeMB -lt $LowDiskFreeMB) {
+        Write-WatchdogLog "basic health is failing but free disk is only ${freeMB}MB (<${LowDiskFreeMB}MB); suppressing restart because restart cannot repair disk exhaustion"
+        $consecutiveFailures = [Math]::Max(0, $FailureThreshold - 1)
+        continue
+      }
+
+      Write-WatchdogLog "recovering unresponsive daemon PID $ownerPid with managed-project preservation"
+      if (Recover-Daemon -Port $Port) {
+        $graceOwnerPid = Start-Daemon
+        $graceDeadline = (Get-Date).AddSeconds($GraceSeconds)
       }
       $consecutiveFailures = 0
       continue
     }
 
-    $consecutiveFailures += 1
-    Write-WatchdogLog "daemon/MCP health failed ($consecutiveFailures/$FailureThreshold) for PID $ownerPid"
-    if ($consecutiveFailures -lt $FailureThreshold) { continue }
+    # Basic health is authoritative for process liveness.
+    $consecutiveFailures = 0
 
-    Write-WatchdogLog "recovering wedged daemon PID $ownerPid with managed-project preservation"
+    if ($health.McpOk) {
+      if ($consecutiveMcpFailures -gt 0) {
+        Write-WatchdogLog "MCP connector healthy again while daemon stayed live (PID $ownerPid)"
+      }
+      $consecutiveMcpFailures = 0
+      if ($withinGrace) {
+        # Both layers are healthy, so startup completed successfully.
+        $graceOwnerPid = $null
+        $graceDeadline = [DateTime]::MinValue
+      }
+      continue
+    }
+
+    if ($withinGrace) {
+      Write-WatchdogLog "daemon is live but MCP is not ready during startup grace for PID $ownerPid -- no recovery ($($health.McpReason))"
+      continue
+    }
+
+    $graceOwnerPid = $null
+    $consecutiveMcpFailures += 1
+    Write-WatchdogLog "daemon is live; MCP degraded ($consecutiveMcpFailures/$McpFailureThreshold) for PID $ownerPid -- $($health.McpReason)"
+    if ($consecutiveMcpFailures -lt $McpFailureThreshold) { continue }
+
+    # Require one final independent confirmation before killing a live daemon.
+    $verify = Get-DaemonHealth -Port $Port -BasicTimeoutSeconds $HealthTimeoutSeconds -McpTimeoutSeconds $McpHealthTimeoutSeconds
+    if ($verify.BasicOk -and $verify.McpOk) {
+      Write-WatchdogLog "MCP recovered on final confirmation; cancelling daemon recovery for PID $ownerPid"
+      $consecutiveMcpFailures = 0
+      continue
+    }
+
+    $freeMB = Get-FreeDiskMB
+    if ($freeMB -lt $LowDiskFreeMB) {
+      Write-WatchdogLog "MCP remains degraded but free disk is only ${freeMB}MB (<${LowDiskFreeMB}MB); suppressing daemon restart until disk pressure is relieved"
+      $consecutiveMcpFailures = [Math]::Max(0, $McpFailureThreshold - 1)
+      continue
+    }
+
+    Write-WatchdogLog "MCP degradation persisted for $McpFailureThreshold checks while daemon stayed live; recovering PID $ownerPid"
     if (Recover-Daemon -Port $Port) {
       $graceOwnerPid = Start-Daemon
       $graceDeadline = (Get-Date).AddSeconds($GraceSeconds)
     }
-    $consecutiveFailures = 0
+    $consecutiveMcpFailures = 0
   }
 } finally {
   try { $mutex.ReleaseMutex() } catch {}

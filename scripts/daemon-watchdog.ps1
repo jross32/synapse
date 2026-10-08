@@ -6,7 +6,10 @@ param(
   [int]$IntervalSeconds = 30,
   [int]$FailureThreshold = 3,
   [int]$HealthTimeoutSeconds = 5,
-  [int]$GraceSeconds = 60
+  [int]$McpFailureThreshold = 6,
+  [int]$McpHealthTimeoutSeconds = 5,
+  [int]$LowDiskFreeMB = 512,
+  [int]$GraceSeconds = 120
 )
 $impl = Join-Path $PSScriptRoot 'daemon-watchdog-v2.ps1'
 $argsList = @(
@@ -15,6 +18,9 @@ $argsList = @(
   '-IntervalSeconds', "$IntervalSeconds",
   '-FailureThreshold', "$FailureThreshold",
   '-HealthTimeoutSeconds', "$HealthTimeoutSeconds",
+  '-McpFailureThreshold', "$McpFailureThreshold",
+  '-McpHealthTimeoutSeconds', "$McpHealthTimeoutSeconds",
+  '-LowDiskFreeMB', "$LowDiskFreeMB",
   '-GraceSeconds', "$GraceSeconds"
 )
 if ($BindLan) { $argsList += '-BindLan' }
