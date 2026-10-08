@@ -1,4 +1,4 @@
-﻿# Desktop OAuth case study
+# Desktop OAuth case study
 
 - Browser Google Auth Platform setup showed app name and support email completed.
 - Mouse clicks on the External audience radio did not visibly select it, even when input returned success.

@@ -1,4 +1,4 @@
-﻿---
+---
 name: desktop-automation-studio
 description: Reliable desktop interaction, setup and onboarding automation, including Reflex mouse and keyboard diagnostics, screenshot-backed proof, provider authorization boundaries, and safe reusable UI workflows.
 ---

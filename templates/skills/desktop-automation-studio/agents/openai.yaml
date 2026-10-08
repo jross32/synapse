@@ -1,4 +1,4 @@
-﻿interface:
+interface:
   display_name: "Desktop Automation Studio"
   short_description: "Verified desktop setup, GUI recovery, and automation"
   default_prompt: "Use $desktop-automation-studio to inspect the desktop, perform reversible setup steps with screenshot verification, diagnose input failures, and report only independently verified outcomes."
