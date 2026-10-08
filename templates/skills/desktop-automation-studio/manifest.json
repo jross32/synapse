@@ -1,0 +1,13 @@
+﻿{
+  "id": "desktop-automation-studio",
+  "name": "Desktop Automation Studio",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Reusable screenshot-verified desktop automation and setup workflows with safe OAuth boundaries, Reflex recovery, and durable evidence.",
+  "entrypoint": "SKILL.md",
+  "tags": ["desktop", "automation", "setup", "onboarding", "reflex", "oauth", "verification", "accessibility"],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": ["reflex", "playwright", "browser"],
+  "optional_capabilities": ["synapse"]
+}
