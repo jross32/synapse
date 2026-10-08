@@ -46,10 +46,15 @@ def _pipeline_module():
 def test_skill_catalog_validates_packages_and_benchmark() -> None:
     catalog = skill_packs.load_catalog()
     by_id = {item.manifest.id: item for item in catalog}
-    assert {"stock-hunter", "super-internet-digger"} <= set(by_id)
+    assert {"stock-hunter", "super-internet-digger", "desktop-automation-studio"} <= set(by_id)
     for item in by_id.values():
         assert item.package_sha256
         assert any(resource.path == "SKILL.md" for resource in item.resources)
+
+    desktop = by_id["desktop-automation-studio"]
+    assert desktop.manifest.implicit_invocation is True
+    assert desktop.manifest.version == "0.1.0"
+    assert {"SKILL.md", "agents/openai.yaml", "references/desktop-oauth.md"} <= {r.path for r in desktop.resources}
 
     item = by_id["super-internet-digger"]
     assert any(resource.path == "references/benchmark-spec.json" for resource in item.resources)
