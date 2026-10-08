@@ -1,0 +1,13 @@
+{
+  "id":"asset-led-product-workflow",
+  "name":"Asset-Led Product Workflow",
+  "publisher":"The WhatIf Company",
+  "version":"0.1.0",
+  "description":"Optional, project-neutral UI development workflow learned from TechSwap: reusable visual assets, deliberate design decisions, verification of real media rendering, and safe evidence-based release gates without imposing a visual style.",
+  "entrypoint":"SKILL.md",
+  "tags":["ui","ux","asset-pack","visual-quality","browser-verification","reusable-workflow","techswap-lessons"],
+  "implicit_invocation":false,
+  "required_capabilities":[],
+  "preferred_capabilities":["browser","playwright","reflex","image-studio","ui-forge"],
+  "optional_capabilities":["web","canva","adobe"]
+}
