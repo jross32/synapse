@@ -131,12 +131,49 @@
     return { headings, h1_count: h1s.length, level_jumps: levelJumps };
   }
 
+
+  function incompletenessAudit() {
+    const prototypePattern = /\b(coming\s+soon|next\s+(?:ui\s+)?slice|local\s+fallback|not\s+connected|placeholder|todo)\b/i;
+    const disabledControls = [];
+    const prototypeSignals = [];
+    const noOpLinks = [];
+    for (const el of document.querySelectorAll(INTERACTIVE)) {
+      if (!visible(el)) continue;
+      const info = {
+        selector: selectorHint(el),
+        tag: el.tagName.toLowerCase(),
+        name: accessibleName(el),
+        text: text(el),
+        rect: rectData(el),
+      };
+      if (el.disabled || el.getAttribute("aria-disabled") === "true") disabledControls.push(info);
+      const href = el.getAttribute("href");
+      if (el.tagName.toLowerCase() === "a" && (href === "#" || /^javascript:/i.test(href || ""))) noOpLinks.push({ ...info, href: href || "" });
+    }
+    for (const el of document.querySelectorAll("body *")) {
+      if (!visible(el)) continue;
+      const value = text(el);
+      if (!value || value.length > 240) continue;
+      const match = value.match(prototypePattern);
+      if (match) {
+        prototypeSignals.push({ selector: selectorHint(el), signal: match[0], text: value, rect: rectData(el) });
+        if (prototypeSignals.length >= 50) break;
+      }
+    }
+    return {
+      disabled_controls: disabledControls.slice(0, 50),
+      prototype_signals: prototypeSignals,
+      no_op_links: noOpLinks.slice(0, 50),
+    };
+  }
+
   function run() {
     const overflow = overflowAudit();
     const interactive = interactiveAudit();
     const forms = formAudit();
     const images = imageAudit();
     const headings = headingAudit();
+    const incompleteness = incompletenessAudit();
     const violations = {
       horizontal_overflow: overflow.page_overflow_px > 1,
       small_target_count: interactive.small_targets.length,
@@ -145,9 +182,12 @@
       missing_image_alt_count: images.missing_alt.length,
       heading_level_jump_count: headings.level_jumps.length,
       h1_count: headings.h1_count,
+      disabled_control_count: incompleteness.disabled_controls.length,
+      prototype_signal_count: incompleteness.prototype_signals.length,
+      no_op_link_count: incompleteness.no_op_links.length,
     };
     return {
-      schema: "ui-forge-browser-audit-v1",
+      schema: "ui-forge-browser-audit-v2",
       url: location.href,
       title: document.title,
       viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
@@ -158,6 +198,7 @@
       forms,
       images,
       headings,
+      incompleteness,
       captured_at: new Date().toISOString(),
     };
   }

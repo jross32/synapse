@@ -182,6 +182,15 @@ The signature moment must communicate product value. It is not a random animatio
 
 Read `references/auth-and-accessibility.md`.
 
+A polished auth surface must not use decorative controls to imply unavailable capability. In particular:
+- do not render disabled Apple/Google/SSO buttons with "Soon" merely to make the screen look complete
+- do not ship a Forgot Password action that only opens placeholder copy or an alert
+- do not show verification/recovery/passkey/social-login affordances unless the route/action exists or the UI explicitly treats them as non-interactive roadmap content outside the primary form
+- preserve destination/deep-link state through login/signup
+- keep account creation, login, recovery, and returning-user paths visually coherent with the landing promise
+- on mobile, prioritize the auth task; collapse or shorten decorative story panels rather than forcing the form below multiple viewport heights
+- run the UI Forge prototype scan and Visual Target Contract gate when the first-run experience is reference-driven
+
 At minimum:
 - preserve password-manager/autofill compatibility
 - allow paste
@@ -259,6 +268,19 @@ For a small fix, use only the subset needed.
 A result fails FirstRun Studio if a reviewer could reasonably describe it as "the Userflow/Lovable/Dribbble screen with our logo swapped in."
 
 Synthesize multiple references, preserve the target product's identity, and create at least one product-specific interaction or activation moment.
+
+## Completeness gate
+
+Before calling a first-run experience complete, inventory the public-to-activated route graph:
+- landing/header/footer destinations promised by the design
+- signup and login
+- account recovery
+- verification when required
+- first authenticated destination
+- create/import/connect/setup action needed for first value
+- mobile access to the same required actions
+
+A route promised by the target/reference but represented only by placeholder copy is unresolved. A disabled decorative button does not count as a supported auth method.
 
 ## Definition of done
 

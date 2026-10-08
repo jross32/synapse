@@ -2,8 +2,8 @@
   "id": "blender-studio",
   "name": "Synapse Blender Studio",
   "publisher": "The WhatIf Company",
-  "version": "0.3.0",
-  "description": "AI-native first-class Blender creation platform for Synapse with verified modeling, PBR materials, packed textures, UVs, modifiers, Geometry Nodes, rigging, animation/NLA, rendering, multi-format round-trip export, game-asset gates, and downstream-engine handoff receipts.",
+  "version": "0.4.0",
+  "description": "AI-native Blender creation platform for verified 3D/game assets plus reusable UI/marketing renders, device mockups, transparent hero assets, camera/lighting systems, export validation, and downstream integration.",
   "entrypoint": "SKILL.md",
   "tags": [
     "blender",
@@ -17,7 +17,12 @@
     "assets",
     "games",
     "mcp",
-    "verification"
+    "verification",
+    "ui-marketing-renders",
+    "device-mockups",
+    "transparent-renders",
+    "hero-assets",
+    "camera-systems"
   ],
   "implicit_invocation": true,
   "required_capabilities": [],

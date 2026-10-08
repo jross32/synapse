@@ -1,62 +1,96 @@
 # Synapse Image Studio
 
-Use this skill whenever the user or the current project needs an image to be generated, edited, composited, restyled, cleaned up, or turned into a production-ready visual asset.
+Use this skill whenever a project needs an image to be generated, edited, composited, restyled, cleaned up, or turned into a production-ready visual asset.
 
 ## Goal
 
-Make image creation feel native to any AI connected to Synapse. The AI should not make the user translate a creative request into provider parameters. Infer the technical settings from the task, call the Synapse image tools, save the result inside the relevant registered project, and report the asset path and provenance.
+Make image creation a native production step for any AI connected to Synapse. The AI should infer provider settings, save the output inside the relevant project, preserve provenance, and integrate the asset through the project's UI/asset workflow.
 
-## Core tool routing
+For reference-driven UI work, coordinate with UI Forge's Visual Target Contract and Asset-Led Product Workflow.
+
+## Core routing
 
 1. Call `synapse_image_generation_status` when provider readiness is unknown.
-2. For a new image from text, call `synapse_generate_image`.
-3. For edits or reference-guided work, make the reference image project-local first using `synapse_import_image_file` or the chunked upload tools, then call `synapse_edit_image`.
-4. Use `synapse_list_project_images` / `synapse_get_image_asset` to discover or inspect existing assets before creating duplicates.
-5. Use `synapse_audit_image_assets` when verifying provenance or integrity matters.
+2. Discover existing project images before generating duplicates.
+3. New image from text -> `synapse_generate_image`.
+4. Reference-guided edit -> import/make the reference project-local, then `synapse_edit_image`.
+5. Audit provenance/integrity for production use.
+6. Register the final output in the project's asset manifest / UI Forge Asset Slot.
+
+## UI production lane
+
+Prefer Image Studio for:
+- detailed hero illustrations
+- human/persona portraits
+- emotionally expressive scenes
+- environments/background scenes
+- photoreal products
+- rich 2D card art
+- reference-guided image transformations
+- character/style-consistent image families
+
+Do **not** use CSS primitives as a final substitute when one of these classes is explicitly required by the visual target.
+
+If provider generation is unavailable:
+- keep the planned asset slot unresolved
+- consider Blender Studio only when the target can honestly be satisfied as a deterministic 3D/stylized/device/environment render
+- otherwise mark the visual target blocked
+- never report a generated asset that does not exist
 
 ## Quality defaults
 
-Choose quality from the user's actual need:
+- `max`: people/products/environments, hero art, marketing imagery, precision edits, identity/object consistency, or explicit highest-quality requests
+- `xhigh`: strong production assets
+- `high`: polished everyday assets
+- `medium`: drafts/layout exploration
+- `low`: speed/cost deliberately prioritized
+- `auto`: no useful quality signal
 
-- `max`: photorealistic people/products/environments, hero art, marketing images, precision edits, identity/garment/object consistency, or whenever the user emphasizes "realistic", "perfect", "highest quality", or equivalent.
-- `xhigh`: normal production assets where excellent quality matters but absolute maximum fidelity is unnecessary.
-- `high`: polished everyday production images.
-- `medium`: drafts, layout exploration, thumbnails, or fast iterations.
-- `low`: only when speed/cost clearly matters more than visual fidelity.
-- `auto`: only when the task gives no useful quality signal.
+Use a concrete production brief: subject, environment, framing/camera, lighting, materials/skin/fabric, pose/action, depth, color/brand constraints, negative constraints, intended crop, and what must remain consistent.
 
-Synapse's server-side default model is the best configured image model. Do not hard-code a provider model in normal AI workflows. The current recommended server profiles are best-quality `gpt-image-2.5-sunburst` and fast `gpt-image-2.5-flare`.
+## Reference lock
 
-## Photorealistic prompting
+For a reference image, explicitly classify:
+- what must be preserved
+- what may change
+- target crop/aspect
+- identity/style continuity requirements
+- forbidden changes
 
-For realistic photography, write a concrete production brief rather than a pile of vague quality adjectives. Include the subject, environment, camera/framing, lighting, materials/skin/fabric behavior, pose or action, depth of field when relevant, and what must remain consistent. Prefer natural physical details over phrases like "8K masterpiece".
+After generation, inspect the actual output in context. A provider success response alone is not a visual-quality pass.
 
-When a reference image is present, explicitly state what must be preserved and what may change. For example: preserve the shirt artwork, garment color, pose family, and subject identity; replace only the background and lighting.
+## Output and provenance
 
-If the request is about a product or clothing listing, prioritize truthful representation of the product over dramatic stylization.
-
-## Output paths
-
-Save generated work inside the selected Synapse project. Prefer a predictable asset folder such as:
-
+Save inside the selected Synapse project, normally under:
 - `public/images/ai/...`
 - `assets/generated/...`
 - `art/generated/...`
 
-Use a descriptive filename. Do not overwrite an existing image unless replacement is explicitly intended. If a name collision occurs, create a new versioned filename rather than forcing overwrite.
+Use descriptive, versioned filenames. Do not overwrite an approved asset unless replacement is intentional.
 
-## Iteration behavior
+Retain:
+- provider/model/quality metadata when available
+- prompt/edit provenance
+- source/reference ids
+- file hash/integrity record
+- intended asset-slot id
+- approval/supersession state
 
-Generate a strong first result, then refine from evidence. If the result needs a change, edit the existing image when preserving composition/identity/product details is important; regenerate from scratch when the direction itself is changing.
+## Iteration
 
-Do not create several near-identical expensive variants unless the user asked for options or comparison. Prefer one high-quality result plus targeted revisions.
+Generate one strong candidate first. Prefer targeted edits when preserving composition/identity matters. Regenerate when the entire direction is wrong.
 
-## Safety and provenance
+For UI work:
+`asset -> browser integration -> screenshot -> target comparison -> asset edit/regenerate -> recapture`
 
-Follow the image provider's safety rules and normal Synapse permission boundaries. Keep provider credentials secret. Every provider-backed output should remain project-scoped and retain Synapse provenance/integrity metadata.
+Do not generate many expensive near-duplicates without an explicit comparison need.
 
-If provider generation is not configured, report that exact blocker. Native image import, transfer, listing, and auditing can still be available even when provider-backed generation is blocked.
+## Completion
 
-## Completion standard
-
-Do not claim an image was generated unless the tool returned a created asset. Report the project-relative path, selected quality, and whether the result was generated or edited. If the provider is blocked, say so directly and preserve any preparatory work without pretending a render occurred.
+Do not claim image completion until:
+- a real asset was returned
+- it is project-scoped
+- provenance is recorded
+- it decodes/renders in the real product when integration is part of the task
+- its crop/composition is verified at intended breakpoints
+- it satisfies the Visual Target Contract asset class when one exists

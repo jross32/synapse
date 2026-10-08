@@ -56,7 +56,46 @@ Preferred sources:
 
 Use Synapse Web Scraper / browser tools to capture useful structure: headings, page sections, screenshots, forms, interactions, responsive behavior, and reusable patterns. Record **what principle was learned**, not a recipe to clone the pixels.
 
+
 If the user gives screenshots, treat them as intent evidence. Extract hierarchy, density, rhythm, component families, motion, navigation, and state treatment, then rebuild in the target product's own identity.
+
+### Phase 1.5 — Lock a Visual Target Contract
+
+When the user provides or approves a visual target, do not proceed from an informal mental impression.
+
+Read `references/visual-target-contract.md` and create a project-scoped Visual Target Contract before broad implementation.
+
+The contract must:
+- register the approved reference(s) or project design-reference ids
+- enumerate target routes/surfaces and desktop/mobile viewports
+- enumerate required sections and information architecture
+- classify every material asset slot (CSS primitive, vector, production illustration, photoreal image, 3D render, device mockup, motion)
+- state which elements are match/adapt/omit-with-reason/blocked
+- forbid prototype signals on required polished surfaces
+- define the minimum reference-fidelity score and proof set
+
+**Fail closed on asset downgrades.** If the target visibly requires a detailed person, environment, device render, illustration, or other production asset, a simple CSS oval, generic icon, or empty gradient panel is not an acceptable substitute merely because an image provider is unavailable.
+
+Route assets deliberately:
+1. reuse an approved project asset when suitable
+2. use project-native CSS/components only for genuinely primitive visual needs
+3. use Synapse Image Studio for people, environments, reference-guided imagery, photoreal work, and rich 2D illustration
+4. use Synapse Blender Studio for deterministic 3D/device/environment/stylized-render families or reusable source scenes
+5. import a licensed/provenanced asset when appropriate
+6. otherwise record a blocker and keep the visual target unresolved
+
+Before implementation, run an asset-readiness check. When a required producer is unavailable, do not lower the bar silently; mark the contract blocked.
+
+After each substantial implementation pass:
+- capture the real running surfaces
+- compare them visually against the locked target
+- populate the evidence contract
+- run `scripts/prototype_surface_scan.py`
+- run `scripts/visual_target_gate.py`
+- repair the largest remaining visual/completeness gap first
+- recapture and rescore
+
+Functional/browser correctness and visual-target fidelity are separate gates. Both must pass.
 
 ### Phase 2 — Build the project-native design grammar
 

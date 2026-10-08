@@ -2,8 +2,8 @@
   "id": "image-studio",
   "name": "Synapse Image Studio",
   "publisher": "The WhatIf Company",
-  "version": "0.1.0",
-  "description": "AI-native image generation and editing workflow for photorealistic production assets, reference-image transformations, project-scoped saving, provenance, and integrity auditing through Synapse Image Studio.",
+  "version": "0.2.0",
+  "description": "AI-native production image workflow for UI/marketing assets, photorealistic imagery, reference-guided edits, project-scoped provenance, breakpoint-aware integration, and locked visual-target coordination.",
   "entrypoint": "SKILL.md",
   "tags": [
     "image-generation",
@@ -12,7 +12,12 @@
     "visual-assets",
     "product-photography",
     "creative",
-    "provenance"
+    "provenance",
+    "hero-art",
+    "ui-assets",
+    "reference-lock",
+    "breakpoint-proof",
+    "asset-manifest"
   ],
   "implicit_invocation": true,
   "required_capabilities": [],

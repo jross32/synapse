@@ -1,0 +1,54 @@
+{
+  "schema": "ui-forge-visual-target-v1",
+  "project_id": "example-project",
+  "references": [
+    {
+      "id": "approved-desktop",
+      "path": "design/approved-desktop.png",
+      "role": "proposed_ui"
+    }
+  ],
+  "global": {
+    "minimum_visual_score": 85,
+    "forbid_placeholder_surfaces": true
+  },
+  "surfaces": [
+    {
+      "id": "landing.desktop",
+      "route": "/",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "required_sections": [
+        "header",
+        "hero",
+        "mode-cards",
+        "feature-rail",
+        "device-showcase",
+        "footer"
+      ],
+      "required_assets": [
+        {
+          "id": "hero-scene",
+          "kind": "production-illustration",
+          "minimum_kind": "production-illustration",
+          "required": true
+        },
+        {
+          "id": "phone-mockup",
+          "kind": "device-mockup",
+          "minimum_kind": "device-mockup",
+          "required": true
+        }
+      ],
+      "forbidden_signals": [
+        "coming soon",
+        "next ui slice",
+        "local fallback",
+        "not connected",
+        "placeholder"
+      ]
+    }
+  ]
+}

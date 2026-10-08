@@ -2,8 +2,8 @@
   "id": "firstrun-studio",
   "name": "FirstRun Studio",
   "publisher": "The WhatIf Company",
-  "version": "0.1.0",
-  "description": "Design-system-aware SaaS first-run experience architect for landing-page continuity, signup/signin, authentication, activation, onboarding, first-value moments, product tours, recovery paths, and verification. Researches references safely, creates original implementation-ready flows, and quality-gates the result.",
+  "version": "0.2.0",
+  "description": "Design-system-aware first-run architect with landing/auth continuity, activation, recovery, mobile-task prioritization, route completeness, anti-placeholder gates, accessibility, and browser verification.",
   "entrypoint": "SKILL.md",
   "tags": [
     "ux",
@@ -15,7 +15,12 @@
     "landing-pages",
     "product-tours",
     "design-systems",
-    "accessibility"
+    "accessibility",
+    "route-completeness",
+    "recovery",
+    "anti-placeholder",
+    "mobile-auth",
+    "visual-target-contract"
   ],
   "implicit_invocation": true,
   "required_capabilities": [],
