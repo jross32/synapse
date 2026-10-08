@@ -89,3 +89,21 @@ def test_edge_quality_flags_moderate_border_contact():
     qa = _edge_quality(alpha)
     assert qa["border_visible_ratio"] > 0.10
     assert qa["review_required"] is True
+def test_batch_writes_review_queue_and_receipts(tmp_path):
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    safe = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    ImageDraw.Draw(safe).rectangle((25, 15, 75, 80), fill=(180, 40, 90, 255))
+    safe.save(input_dir / "safe.png")
+    bad = Image.new("RGBA", (100, 100), (100, 100, 100, 255))
+    bad.save(input_dir / "bad.png")
+    result = batch_process(input_dir, tmp_path / "out", width=160, height=200)
+    import json
+    queue = json.loads((tmp_path / "out" / "review-queue.catalog.json").read_text())
+    assert result["count"] == 2 and result["pass"] == 1 and result["review_required"] == 1
+    assert result["inference_sessions_reused_in_batch"] is True
+    assert result["elapsed_seconds"] >= 0
+    assert queue["count"] == 1 and len(queue["items"]) == 1
+    assert queue["items"][0]["status"] == "review_required"
+    assert queue["items"][0]["review_artifacts"]["preview"]
+    assert Path(queue["items"][0]["receipt"]).exists()

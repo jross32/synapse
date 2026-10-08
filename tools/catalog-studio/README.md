@@ -48,3 +48,7 @@ The shared Synapse Python environment has many unrelated pytest plugins. For det
 PowerShell: $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; $env:OPENBLAS_NUM_THREADS='1'; .\\.venv\\Scripts\\python.exe -m pytest -q tools\\catalog-studio\\test_catalog_studio.py tools\\catalog-studio\\test_async_catalog.py
 
 Final v0.8.0 acceptance on 2026-10-04: 16/16 focused tests passed; fresh three-garment async batch completed with 2 automatic passes, 1 intentional review_required, and 0 errors. The review-required case emitted subject, mask, and preview artifacts.
+
+## v0.10.0 acceptance (2026-10-08)
+The direct ONNX inference session is cached per Python batch worker, so a single batch reuses the same model session instead of creating one per image. Each batch now writes review-queue.catalog.json next to batch.catalog.json; its items include non-passing image status, receipt path, review reasons, and subject/mask/preview paths. Batch summary records elapsed_seconds. Full focused suite: 17/17 passed. Real async batch: 3 photos, 2 pass, 1 review_required (mask_too_soft), 0 errors, 42.628 seconds processing. All three input-subject RGB and alpha hashes matched the accepted v0.9 baseline exactly and every QA status matched. This does not prove a speedup over v0.9; the value is the review index and verified session reuse contract.
+

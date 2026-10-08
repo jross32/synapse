@@ -4,7 +4,7 @@
     "category":  "dev-tools",
     "icon":  "image",
     "description":  "Deterministic resale product-photo standardization with preserved garment pixels, lazy NumPy/ONNX startup, locked storefront profiles, async single/batch processing, fail-closed QA reasons, review previews/masks, tolerant marketplace JPEG decoding, and provenance receipts.",
-    "version":  "0.9.0",
+    "version":  "0.10.0",
     "publisher":  "The WhatIf Company",
     "verified":  true,
     "bundled":  true,

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import io
 import json
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from PIL import Image, ImageFile, ImageFilter, ImageOps, ImageStat
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 PRESET_SCHEMA = 1
 _ORT_SESSION_CACHE: dict[str, Any] = {}
 
@@ -70,7 +71,7 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 def _gradient(size: tuple[int, int], preset: StudioPreset) -> Image.Image:
-    # Pixel-compatible Pillow implementation of the v0.8 NumPy gradient.
+    # Pillow-native deterministic gradient, with no NumPy startup.
     # NumPy is intentionally kept out of the lightweight import path.
     w, h = size
     top = _hex_rgb(preset.background_top)
@@ -83,7 +84,7 @@ def _gradient(size: tuple[int, int], preset: StudioPreset) -> Image.Image:
     strip.putdata(rows)
     base = strip.resize((w, h))
 
-    # Apply the same radial darkening contract as v0.8, but generate the
+    # Apply a subtle radial vignette, generating the
     # factor field with Pillow so importing controller does not import NumPy.
     radial = Image.radial_gradient('L').resize(size)
     # Keep the vignette intentionally subtle; exact output is regression-tested
@@ -328,16 +329,19 @@ def batch_process(input_dir: Path, output_dir: Path, *, preset_id: str = "warm-g
     supported={".jpg",".jpeg",".png",".webp"}
     files=sorted(p for p in input_dir.iterdir() if p.is_file() and p.suffix.lower() in supported)
     results=[]
+    batch_started = time.perf_counter()
     for src in files:
         out=output_dir / f"{src.stem}.jpg"
         try:
             receipt=process(src,out,preset_id=preset_id,force=force,model=model,width=width,height=height)
-            results.append({"input":str(src),"output":str(out),"status":receipt["qa_status"],"preset":receipt["preset"]["id"]})
+            results.append({"input":str(src),"output":str(out),"status":receipt["qa_status"],"preset":receipt["preset"]["id"],"receipt":str(out.with_suffix(out.suffix + ".catalog.json")),"review_artifacts":receipt.get("review_artifacts"),"review_reasons":receipt["segmentation"].get("review_reasons",[])})
         except Exception as exc:
             results.append({"input":str(src),"status":"error","error":str(exc)})
-    summary={"catalog_studio_version":VERSION,"preset_locked":preset_id,"count":len(files),"pass":sum(r.get("status")=="pass" for r in results),"review_required":sum(r.get("status")=="review_required" for r in results),"errors":sum(r.get("status")=="error" for r in results),"results":results}
+    summary={"catalog_studio_version":VERSION,"preset_locked":preset_id,"count":len(files),"pass":sum(r.get("status")=="pass" for r in results),"review_required":sum(r.get("status")=="review_required" for r in results),"errors":sum(r.get("status")=="error" for r in results),"elapsed_seconds":round(time.perf_counter()-batch_started,3),"inference_sessions_reused_in_batch":True,"results":results}
     output_dir.mkdir(parents=True,exist_ok=True)
     (output_dir/"batch.catalog.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
+    review_queue={"schema":1,"catalog_studio_version":VERSION,"batch_summary":str(output_dir/"batch.catalog.json"),"count":summary["review_required"]+summary["errors"],"items":[r for r in results if r.get("status") != "pass"]}
+    (output_dir/"review-queue.catalog.json").write_text(json.dumps(review_queue,indent=2),encoding="utf-8")
     return summary
 
 def _parser() -> argparse.ArgumentParser:
