@@ -37,6 +37,7 @@ from .tools import ToolHandler
 from .tools.cloudtap import CloudtapTool
 from .tools.fast_money import FastMoneyTool
 from .tools.image_studio import ImageStudioTool
+from .tools.ui_lab import UiLabTool
 from .tools.video_studio import VideoStudioTool
 from .tools_primitives import is_known_primitive, run_primitive
 from .ws import EventBus
@@ -55,6 +56,7 @@ _BUILTIN_HANDLER_FACTORIES: dict[str, type[ToolHandler]] = {
     "fast-money": FastMoneyTool,
     "synapse-image-studio": ImageStudioTool,
     "synapse-video-studio": VideoStudioTool,
+    "ui-lab": UiLabTool,
 }
 
 

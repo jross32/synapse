@@ -3,8 +3,8 @@
   "name": "Synapse UI Lab",
   "category": "dev-tools",
   "icon": "wrench",
-  "description": "Run screenshot, layout, accessibility smoke, and optional browser flow tests. Save responsive HTML and JSON evidence. Native iOS Safari remains unverified without a real-device provider.",
-  "version": "0.2.1",
+  "description": "Durable cross-device browser QA with asynchronous jobs, progress polling, screenshot comparison, and HTML evidence.",
+  "version": "0.3.0",
   "publisher": "The WhatIf Company",
   "verified": false,
   "bundled": true,
@@ -33,29 +33,26 @@
       "required": false,
       "default": "iphone-compact",
       "help": "iphone-compact, iphone-large, tablet-portrait, desktop"
+    },
+    {
+      "key": "job_id",
+      "type": "text",
+      "label": "Job ID (for status)",
+      "required": false
     }
   ],
   "actions": [
     {
       "id": "verify",
-      "label": "Verify UI viewport",
-      "primitive": "process.spawn",
-      "params": {
-        "argv": [
-          "C:\\Users\\justi\\synapse\\.venv\\Scripts\\python.exe",
-          "C:\\Users\\justi\\synapse\\tools\\ui_lab_matrix.py",
-          "{target}",
-          "--engine",
-          "{engine}",
-          "--profile",
-          "{profile}",
-          "--output",
-          "C:\\Users\\justi\\synapse\\artifacts\\ui-lab-tool"
-        ],
-        "timeout": 30,
-        "cwd": "C:\\Users\\justi\\synapse"
-      },
+      "label": "Verify UI",
+      "handler": "ui-lab:verify",
       "primary": true,
+      "scope": "tool"
+    },
+    {
+      "id": "status",
+      "label": "Check job status",
+      "handler": "ui-lab:status",
       "scope": "tool"
     }
   ]

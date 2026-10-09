@@ -125,9 +125,10 @@ export function ProjectDetailModal({
         profile: 'iphone-compact',
       });
       const status = result.state?.status ?? 'unknown';
-      setUiLabResult(status === 'launched'
-        ? 'UI Lab process exited successfully. Inspect the report before approving the UI.'
-        : `UI Lab status: ${status}. Check My Tools for the run details.`);
+      const jobId = result.state.result?.job_id;
+      setUiLabResult(status === 'launched' && typeof jobId === 'string'
+        ? `UI Lab job ${jobId} started. Check job status in My Tools for its final report.`
+        : `UI Lab status: ${status}. ${result.state.last_error?.message ?? 'Check My Tools for details.'}`);
     } catch (error) {
       setUiLabResult(error instanceof Error ? error.message : 'UI Lab verification failed.');
     } finally {
