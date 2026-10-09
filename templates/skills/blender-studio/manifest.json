@@ -2,8 +2,8 @@
   "id": "blender-studio",
   "name": "Synapse Blender Studio",
   "publisher": "The WhatIf Company",
-  "version": "0.4.1",
-  "description": "AI-native Blender creation platform with verified 3D/game assets plus reusable UI/marketing render kits, aspect-aware device mockups from real browser captures, transparent hero assets, camera/lighting systems, export validation, and downstream integration.",
+  "version": "0.4.2",
+  "description": "AI-native Blender creation platform with verified 3D/game assets plus reusable UI/marketing render kits, aspect-aware device mockups from real browser captures, immutable-pack-safe render helpers, transparent hero assets, camera/lighting systems, export validation, and downstream integration.",
   "entrypoint": "SKILL.md",
   "tags": [
     "blender",
@@ -25,7 +25,8 @@
     "camera-systems",
     "device-screen-prep",
     "aspect-aware-mockups",
-    "real-ui-compositing"
+    "real-ui-compositing",
+    "immutable-pack-safe"
   ],
   "implicit_invocation": true,
   "required_capabilities": [],

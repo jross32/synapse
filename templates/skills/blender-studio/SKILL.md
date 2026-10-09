@@ -9,6 +9,9 @@ Treat Blender as a first-class AI creation environment, not a GUI that must be b
 
 ## Operating contract
 
+**Installed pack immutability:** when executing Python helpers directly from an installed skill-pack path, prevent bytecode/cache writes inside the package. Prefer helpers that set `sys.dont_write_bytecode = True`, or run Python with `-B` / `PYTHONDONTWRITEBYTECODE=1`. Generated `__pycache__` inside an installed package is a packaging defect and must be cleaned before validation.
+
+
 1. Inspect before mutation: file/save state, datablocks, objects, linked libraries, missing files, engine, camera/light state.
 2. Prefer semantic Blender MCP tools. Use reproducible `bpy` code as the universal escape hatch.
 3. Prefer background/scripted jobs over desktop clicking; use Reflex for GUI-only work or human-view proof.
