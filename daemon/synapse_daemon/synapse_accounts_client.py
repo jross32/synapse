@@ -167,6 +167,46 @@ class SynapseAccountsClient:
             )
         )
 
+    def list_device_access(self, *, access_token: str) -> dict[str, Any]:
+        return self._request(path="/v1/devices/access", method="GET", access_token=access_token)
+
+    def update_device_access(self, *, access_token: str, device_id: str, enabled: bool) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request(path=f"/v1/devices/{quote(device_id, safe='')}/access", method="PUT",
+                             payload={"remote_write_enabled": enabled}, access_token=access_token)
+    def create_mcp_connector(self, *, access_token: str) -> dict[str, Any]:
+        return self._request(path="/v1/relay/connector", method="GET", access_token=access_token)
+    def rotate_mcp_connector(self, *, access_token: str) -> dict[str, Any]:
+        return self._request(path="/v1/relay/connector/rotate", method="POST", access_token=access_token)
+
+    def enroll_relay_device(self, *, access_token: str, device_id: str) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request(path=f"/v1/relay/devices/{quote(device_id, safe='')}/enroll",
+                             method="POST", access_token=access_token)
+
+    def revoke_relay_device(self, *, access_token: str, device_id: str) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request(path=f"/v1/relay/devices/{quote(device_id, safe='')}/revoke",
+                             method="POST", access_token=access_token)
+
+    def relay_agent_access(self, *, device_id: str, device_token: str) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request(path=f"/v1/relay/devices/{quote(device_id, safe='')}/access",
+                             method="GET", access_token=device_token)
+
+    def select_mcp_device(self, *, access_token: str, device_id: str) -> dict[str, Any]:
+        return self._request(path="/v1/relay/connector/selection", method="PUT",
+                             access_token=access_token, payload={"device_id": device_id})
+    def relay_agent_poll(self, *, device_id: str, device_token: str) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request(path=f"/v1/relay/devices/{quote(device_id, safe='')}/jobs/next",
+                             method="GET", access_token=device_token, timeout_seconds=24)
+
+    def relay_agent_finish(self, *, device_id: str, device_token: str, job_id: str, response: Any) -> dict[str, Any]:
+        from urllib.parse import quote
+        return self._request(path=f"/v1/relay/devices/{quote(device_id, safe='')}/jobs/result",
+                             method="POST", access_token=device_token,
+                             payload={"job_id": job_id, "response": response})
     def _request(
         self,
         *,
@@ -174,6 +214,7 @@ class SynapseAccountsClient:
         method: str,
         payload: Any | None = None,
         access_token: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> Any:
         url = f"{self._base_url}{path}"
         headers = {"Accept": "application/json"}
@@ -185,7 +226,7 @@ class SynapseAccountsClient:
             body = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(url, data=body, method=method.upper(), headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT_SECONDS) as response:
+            with urllib.request.urlopen(request, timeout=timeout_seconds or _REQUEST_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8")
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:

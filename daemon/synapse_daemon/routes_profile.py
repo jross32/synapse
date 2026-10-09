@@ -27,6 +27,11 @@ class ProfileSignUpRequest(BaseModel):
     display_name: str | None = None
 
 
+class AccountMcpDeviceSelection(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+class DeviceAccessUpdate(BaseModel):
+    remote_write_enabled: bool
+
 class FavoriteRequest(BaseModel):
     favorite: bool | None = None
 
@@ -290,4 +295,21 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
     async def list_hosts() -> dict:
         return {"hosts": [host.model_dump(mode="json") for host in manager.list_hosts()]}
 
+    @router.put("/mcp-link/device", dependencies=[guard])
+    async def select_account_mcp_device(payload: AccountMcpDeviceSelection) -> dict:
+        return await asyncio.to_thread(manager.select_account_mcp_device, payload.device_id)
+    @router.get("/mcp-link", dependencies=[guard])
+    async def get_account_mcp_link() -> dict:
+        return await asyncio.to_thread(manager.get_account_mcp_link)
+
+    @router.post("/mcp-link/rotate", dependencies=[guard])
+    async def rotate_account_mcp_link() -> dict:
+        return await asyncio.to_thread(manager.rotate_account_mcp_link)
+    @router.get("/devices/access", dependencies=[guard])
+    async def list_device_access() -> dict:
+        return await asyncio.to_thread(manager.list_device_access)
+
+    @router.put("/devices/{device_id}/access", dependencies=[guard])
+    async def update_device_access(device_id: str, payload: DeviceAccessUpdate) -> dict:
+        return await asyncio.to_thread(manager.update_device_access, device_id, payload.remote_write_enabled)
     return router

@@ -10,6 +10,23 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.212] -- 2026-10-09
+
+### Added
+- **Unified account-wide MCP connector:** a stable HTTPS URL for ChatGPT and Claude, recoverable on every signed-in computer, with rotation to revoke an exposed link.
+- **Outbound multi-device relay:** enrolled Windows Synapse daemons long-poll the shared cloud service for MCP JSON-RPC requests and execute via their own existing localhost MCP dispatcher; no new inbound firewall rules or device-specific tunnel links are required.
+- **Device selector:** choose the active computer using the signed-in Profile hub, without reconfiguring the ChatGPT/Claude connector URL.
+- **Per-device Remote write access switch:** automatically enabled when a machine joins the Synapse account; switching Off pins new jobs to read-only, with a second live policy check immediately before dispatch. Switching On allows full MCP tools including permitted file changes and shell commands.
+- Separate revocable credentials for user login, cloud MCP links, and each locally enrolled device; device credentials encrypted at rest with OS-scoped secret storage. Cloud queue deletes delivered requests and replies.
+
+### Security and limitations
+- The MCP link **is a powerful secret**. Anyone holding it can send MCP requests to the selected computer subject to the device's write switch. Store it only in trusted clients and rotate it if exposed.
+- Switching Off stops **new** writes, but a command already running may finish. Signing out attempts to revoke the local host's cloud credential and stops the outbound agent.
+- The cloud service stores transient routed request/response payloads during delivery. Local project files and daemon authentication secrets are not synced to cloud profile storage.
+- Google OAuth still requires separately configured Google credentials. Actual operation with external ChatGPT/Claude accounts and two separately installed Windows computers requires user-device acceptance testing.
+
+### Verification
+- Automated identity, relay routing, account isolation, switching/rotation, credential revocation, host worker, and Windows NSIS installer gates. See GitHub Actions for the exact release run.
 ## [0.1.211] -- 2026-10-09
 
 ### Added

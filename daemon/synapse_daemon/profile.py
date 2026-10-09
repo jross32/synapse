@@ -393,6 +393,18 @@ class ProfileManager:
 
     def sign_out(self) -> ProfileSummary:
         row = self._state_row()
+        if row["user_id"] and row["current_host_id"]:
+            try:
+                self._accounts.revoke_relay_device(
+                    access_token=self._ensure_access_token(),
+                    device_id=str(row["current_host_id"]),
+                )
+            except Exception:
+                log.warning("Could not confirm cloud relay device revocation on sign-out.")
+        try:
+            (self._storage.data_dir / "relay-device-credential.json").unlink(missing_ok=True)
+        except OSError:
+            log.warning("Unable to delete local relay credential on sign-out.")
         access_token = _token_plaintext(row["access_token_cipher"], storage=self._storage)
         refresh_token = _token_plaintext(row["refresh_token_cipher"], storage=self._storage)
         if access_token or refresh_token:
@@ -593,6 +605,24 @@ class ProfileManager:
 
     # ── services / hosts ───────────────────────────────────────────────
 
+    def select_account_mcp_device(self, device_id: str) -> dict[str, Any]:
+        if not device_id or len(device_id) > 128:
+            raise invalid("profile", "Invalid device identifier.")
+        return self._accounts.select_mcp_device(access_token=self._ensure_access_token(), device_id=device_id)
+    def get_account_mcp_link(self) -> dict[str, Any]:
+        return self._accounts.create_mcp_connector(access_token=self._ensure_access_token())
+
+    def rotate_account_mcp_link(self) -> dict[str, Any]:
+        return self._accounts.rotate_mcp_connector(access_token=self._ensure_access_token())
+    def list_device_access(self) -> dict[str, Any]:
+        self._refresh_from_remote(best_effort=True)
+        return self._accounts.list_device_access(access_token=self._ensure_access_token())
+
+    def update_device_access(self, device_id: str, enabled: bool) -> dict[str, Any]:
+        if not device_id or len(device_id) > 128:
+            raise invalid("profile", "Invalid device identifier.")
+        return self._accounts.update_device_access(access_token=self._ensure_access_token(),
+                                                    device_id=device_id, enabled=enabled)
     def list_hosts(self) -> list[HostPresence]:
         self._refresh_from_remote(best_effort=True)
         self.ensure_current_host()

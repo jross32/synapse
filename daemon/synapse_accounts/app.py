@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 
 import json
 import os
@@ -22,6 +23,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .config import AccountsSettings, load_settings
 from .rate_limits import AuthRateLimiter
+from .device_access import list_device_access, change_device_access, check_device_write
+from .relay import issue_connector, require_connector_account, enroll_device, verify_device, choose_device, create_job, claim_job, submit_result, await_result, select_connector_device
 from .sync_merge import merge_documents
 from .db import (
     Account,
@@ -33,6 +36,7 @@ from .db import (
     PasswordResetToken,
     RefreshSession,
     SyncDocument,
+    RelayConnector,
     build_session_factory,
     session_scope,
     utc_now,
@@ -110,6 +114,14 @@ class OAuthExchangeRequest(BaseModel):
 class PutSyncDocumentRequest(BaseModel):
     document: dict[str, Any]
 
+
+class RelayDeviceSelect(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+class RelayDeviceResult(BaseModel):
+    job_id: str
+    response: Any
+class DevicePolicyUpdate(BaseModel):
+    remote_write_enabled: bool
 
 class TokenIssue(BaseModel):
     access_token: str
@@ -881,6 +893,114 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
     ) -> SyncDocumentPayload:
         return service.put_sync_document(db, account, payload.document)
 
+    @app.get("/v1/devices/access")
+    def device_access_list(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        return {"devices": list_device_access(db, account.id)}
+
+    @app.put("/v1/devices/{device_id}/access")
+    def device_access_update(device_id: str, payload: DevicePolicyUpdate,
+                             account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = change_device_access(db, account.id, device_id, payload.remote_write_enabled)
+        service._log_event(db, account_id=account.id, event_kind="device.remote_write.toggle", provider=None,
+                           details={"device_id": device_id, "enabled": payload.remote_write_enabled})
+        return result
+    @app.get("/v1/relay/connector")
+    @app.post("/v1/relay/connector")
+    def relay_connector_create(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = issue_connector(db, account, active_settings.public_base_url)
+        service._log_event(db, account_id=account.id, event_kind="relay.connector.created_or_read", provider=None)
+        return result
+
+    @app.post("/v1/relay/connector/rotate")
+    def relay_connector_rotate(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = issue_connector(db, account, active_settings.public_base_url, rotate=True)
+        service._log_event(db, account_id=account.id, event_kind="relay.connector.rotate", provider=None)
+        return result
+    @app.put("/v1/relay/connector/selection")
+    def relay_connector_select(payload: RelayDeviceSelect,
+                               account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = select_connector_device(db, account.id, payload.device_id)
+        service._log_event(db, account_id=account.id, event_kind="relay.connector.select", provider=None,
+                           details={"device_id": payload.device_id})
+        return result
+    @app.post("/v1/relay/devices/{device_id}/enroll")
+    def relay_enroll_device(device_id: str, account: Account = Depends(current_account),
+                            db: Session = Depends(get_db)) -> dict:
+        result = enroll_device(db, account, device_id)
+        service._log_event(db, account_id=account.id, event_kind="relay.device.enroll", provider=None,
+                           details={"device_id": device_id})
+        return result
+
+    @app.post("/v1/relay/devices/{device_id}/revoke")
+    def relay_revoke_device(device_id: str, account: Account = Depends(current_account),
+                            db: Session = Depends(get_db)) -> dict:
+        from sqlalchemy import select
+        from .db import RelayDevice
+        device = db.scalar(select(RelayDevice).where(
+            RelayDevice.account_id == account.id, RelayDevice.device_id == device_id))
+        if device is None:
+            raise HTTPException(status_code=404, detail="Device not enrolled in this account.")
+        device.revoked_at = datetime.now(UTC)
+        service._log_event(db, account_id=account.id, event_kind="relay.device.revoke", provider=None,
+                           details={"device_id": device_id})
+        return {"revoked": True, "device_id": device_id}
+    @app.get("/v1/relay/devices/{device_id}/access")
+    def relay_device_access_status(device_id: str, authorization: str | None = Header(default=None),
+                                   db: Session = Depends(get_db)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Device credential required.")
+        device = verify_device(db, device_id, authorization.split(" ", 1)[1].strip())
+        return {"device_id": device_id,
+                "remote_write_enabled": check_device_write(db, device.account_id, device_id)}
+    @app.get("/v1/relay/devices/{device_id}/jobs/next")
+    async def relay_poll(device_id: str, authorization: str | None = Header(default=None)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Device credential required.")
+        credential = authorization.split(" ", 1)[1].strip()
+        for _ in range(32):
+            with session_scope(service.session_factory) as db:
+                device = verify_device(db, device_id, credential)
+                job = claim_job(db, device)
+                if job is not None:
+                    return job
+            await asyncio.sleep(0.5)
+        return {"job_id": None}
+
+    @app.post("/v1/relay/devices/{device_id}/jobs/result")
+    def relay_finish(device_id: str, payload: RelayDeviceResult,
+                     authorization: str | None = Header(default=None),
+                     db: Session = Depends(get_db)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Device credential required.")
+        device = verify_device(db, device_id, authorization.split(" ", 1)[1].strip())
+        submit_result(db, device, payload.job_id, payload.response)
+        return {"accepted": True}
+
+    @app.post("/mcp/{connector_token}")
+    async def unified_mcp(connector_token: str, request: Request) -> Any:
+        # Cloud holds no daemon auth tokens and performs no local code execution.
+        body = await request.body()
+        if len(body) > 131072:
+            raise HTTPException(status_code=413, detail="MCP request too large.")
+        try:
+            payload = json.loads(body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON-RPC request.") from exc
+        with session_scope(service.session_factory) as db:
+            account = require_connector_account(db, connector_token)
+            connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
+            # External MCP clients cannot select arbitrary machines using query parameters.
+            preferred_device = connector.selected_device_id if connector else None
+            device_id = choose_device(db, account.id, preferred_device)
+            mode = "read" if request.query_params.get("mode") == "read" else "full"
+            job_id = create_job(db, account.id, device_id, payload, mode=mode)
+            account_id = account.id
+        response = await await_result(service.session_factory, account_id, job_id)
+        return JSONResponse(response, status_code=202 if response is None else 200)
+
+    @app.get("/mcp/{connector_token}")
+    def unified_mcp_get(connector_token: str) -> Any:
+        return JSONResponse({"error": "SSE is not supported; use MCP Streamable HTTP POST."}, status_code=405)
     @app.post("/v1/oauth/start", response_model=OAuthStartResponse)
     def start_oauth(
         payload: OAuthStartRequest,

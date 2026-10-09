@@ -153,7 +153,19 @@ def _build_lifespan(
             schema,
             app.state.bound_port,
         )
-        yield
+        from .outbound_mcp_relay import OutboundMcpRelay
+        relay_agent = OutboundMcpRelay(app.state.profile_manager, app.state.auth.local_token,
+                                      local_port=app.state.bound_port)
+        relay_task = asyncio.create_task(relay_agent.run(), name="synapse-outbound-mcp-relay")
+        try:
+            yield
+        finally:
+            relay_agent.stop()
+            relay_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.gather(relay_task, return_exceptions=True), timeout=2)
+            except asyncio.TimeoutError:
+                pass
         log.info("Synapse daemon shutting down.")
         await app.router._shutdown()  # type: ignore[attr-defined]
         await registry.shutdown_all()
