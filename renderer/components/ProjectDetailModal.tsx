@@ -32,6 +32,7 @@ import {
   getProjectDiskUsage,
 } from '@shared/projects-client';
 import { projectBrowserUrl } from '@shared/browser-runtime';
+import { runToolAction } from '@shared/tools-client';
 import type { Project, ResourceSnapshot } from '@shared/generated-types';
 import { formatLocal, formatUptime } from '@shared/format-time';
 import { openExternal } from '@shared/electron-bridge';
@@ -42,6 +43,7 @@ import { Button } from './ui/button';
 import { Modal } from './ui/modal';
 import { StatusBadge } from './StatusBadge';
 import { ProjectRecordsSection } from './ProjectRecordsSection';
+import { ProjectDesignReferences } from './ProjectDesignReferences';
 
 export interface ProjectDetailModalProps {
   open: boolean;
@@ -89,6 +91,8 @@ export function ProjectDetailModal({
   isTransitioning,
 }: ProjectDetailModalProps): JSX.Element | null {
   const [disk, setDisk] = useState<ProjectDiskUsage | null>(null);
+  const [uiLabBusy, setUiLabBusy] = useState(false);
+  const [uiLabResult, setUiLabResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !project) {
@@ -109,6 +113,27 @@ export function ProjectDetailModal({
   const km = kindMeta(project.kind);
   const KindIcon = km.icon;
   const browserUrl = projectBrowserUrl(project.expected_port);
+
+  async function verifyProjectUi(): Promise<void> {
+    if (!browserUrl || uiLabBusy) return;
+    setUiLabBusy(true);
+    setUiLabResult(null);
+    try {
+      const result = await runToolAction('ui-lab', 'verify', {
+        target: browserUrl,
+        engine: 'chromium',
+        profile: 'iphone-compact',
+      });
+      const status = result.state?.status ?? 'unknown';
+      setUiLabResult(status === 'launched'
+        ? 'UI Lab run completed. Review the generated evidence before approving the UI.'
+        : `UI Lab status: ${status}. Check My Tools for the run details.`);
+    } catch (error) {
+      setUiLabResult(error instanceof Error ? error.message : 'UI Lab verification failed.');
+    } finally {
+      setUiLabBusy(false);
+    }
+  }
 
   return (
     <Modal
@@ -146,6 +171,22 @@ export function ProjectDetailModal({
           {project.path}
         </p>
       </div>
+
+      {browserUrl && (
+        <div className='rounded-lg border border-border bg-secondary/30 p-3'>
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div>
+              <p className='text-sm font-medium'>Synapse UI Lab</p>
+              <p className='text-xs text-muted-foreground'>Inspect a mobile viewport with screenshot and quality evidence.</p>
+            </div>
+            <Button type='button' size='sm' disabled={uiLabBusy || project.status !== 'launched'} onClick={() => void verifyProjectUi()}>
+              {uiLabBusy ? 'Verifying?' : 'Verify UI'}
+            </Button>
+          </div>
+          {uiLabResult && <p role='status' className='mt-2 text-xs text-muted-foreground'>{uiLabResult}</p>}
+          <p className='mt-1 text-[11px] text-muted-foreground'>Chromium emulation only; this is not native iPhone Safari certification.</p>
+        </div>
+      )}
 
       {/* Three column meta */}
       <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
@@ -245,6 +286,8 @@ export function ProjectDetailModal({
           <p className='text-sm'>{project.description}</p>
         </div>
       )}
+
+      <ProjectDesignReferences projectId={project.id} />
 
       {/* Decision records, backlog + version history (ADR-0011) */}
       <ProjectRecordsSection projectId={project.id} />
