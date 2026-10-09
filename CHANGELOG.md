@@ -10,6 +10,15 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.210] -- 2026-10-09
+
+### Fixed
+- Windows installer packaging repairs: omit unnecessary NSIS global variables to fix warnings treated as errors, and use the project virtual environment for the frozen daemon build.
+- Restore bundled Synapse installer artwork and wizard configuration for portable Windows setup.
+
+### Verification
+- Release automation gates publication on docs/version consistency, renderer/Electron compilation, frozen-daemon startup and health on a new data directory, installer integrity, and a fresh silent Windows installation.
+
 ## [0.1.209] -- 2026-08-30
 
 ### Fixed

@@ -1,0 +1,133 @@
+name: Windows Installer
+
+on:
+  push:
+    branches:
+      - "release/installer-*"
+    tags:
+      - "v0.1.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install daemon build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Verify source version consistency
+        run: python scripts/docs_sync_check.py
+
+      - name: Compile renderer and Electron
+        run: npm run build
+
+      - name: Freeze self-contained daemon
+        run: npm run build:daemon
+
+      - name: Smoke test frozen daemon on fresh data
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = (Resolve-Path installer/daemon-dist/synapse-daemon.exe).Path
+          $dir = Join-Path $env:RUNNER_TEMP "synapse-first-run"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $stdout = Join-Path $env:RUNNER_TEMP "daemon-smoke.out.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "daemon-smoke.err.log"
+          $p = Start-Process -FilePath $exe -ArgumentList @("--port","17979","--data-dir",$dir,"--tools-dir",(Join-Path $PWD "tools")) -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $healthy = $false
+            for ($i=0; $i -lt 60; $i++) {
+              if ($p.HasExited) { throw "Fresh-start daemon exited $($p.ExitCode)" }
+              try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:17979/api/v1/health" -UseBasicParsing -TimeoutSec 3
+                if ($response.StatusCode -eq 200) { $healthy = $true; break }
+              } catch {}
+              Start-Sleep -Seconds 2
+            }
+            if (-not $healthy) { throw "Packaged daemon failed to serve HTTP 200 on fresh data" }
+            Write-Host "PASS: frozen daemon started and served health from a fresh Windows data directory"
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            Get-Content $stdout -Tail 25 -ErrorAction SilentlyContinue
+            Get-Content $stderr -Tail 25 -ErrorAction SilentlyContinue
+          }
+
+      - name: Build unsigned Windows NSIS installer
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          & .\node_modules\.bin\electron-builder.cmd --win nsis --publish never --config.asar=false --config.win.signAndEditExecutable=false
+          if ($LASTEXITCODE -ne 0) { throw "Windows NSIS packaging failed: $LASTEXITCODE" }
+
+      - name: Verify bundle and installer integrity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = Get-ChildItem release -Filter "*Setup*.exe" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe -or $exe.Length -lt 50MB) { throw "NSIS installer missing or unexpectedly small" }
+          if (-not (Test-Path "release/win-unpacked/Synapse.exe")) { throw "Electron executable missing" }
+          if (-not (Test-Path "release/win-unpacked/resources/daemon/synapse-daemon.exe")) { throw "Bundled frozen daemon missing" }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash
+          "$hash  $($exe.Name)" | Out-File -FilePath "release/SHA256SUMS.txt" -Encoding ascii
+          Write-Host "PASS: $($exe.Name), bytes=$($exe.Length), sha256=$hash"
+
+      - name: Smoke test silent NSIS installation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = Get-ChildItem release -Filter "*Setup*.exe" -File | Select-Object -First 1
+          $dest = Join-Path $env:RUNNER_TEMP "SynapseInstallSmoke"
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList @("/S","/D=$dest") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Silent installation exited $($p.ExitCode)" }
+          if (-not (Test-Path (Join-Path $dest "Synapse.exe"))) { throw "Installed Synapse.exe missing" }
+          if (-not (Test-Path (Join-Path $dest "resources/daemon/synapse-daemon.exe"))) { throw "Installed daemon missing" }
+          Write-Host "PASS: NSIS installed Electron and frozen daemon to a fresh Windows folder"
+
+      - name: Upload tested Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-windows-setup
+          path: |
+            release/*Setup*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release after all checks
+        if: startsWith(github.ref, 'refs/tags/v0.1.')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Synapse ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release/*Setup*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/SHA256SUMS.txt

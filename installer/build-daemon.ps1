@@ -15,6 +15,8 @@ $specDir = Join-Path $root 'installer'
 $specFile = Join-Path $specDir 'synapse-daemon.spec'
 $entrypoint = Join-Path $root 'daemon\packaged_daemon_main.py'
 $pythonPath = Join-Path $root 'daemon'
+$venvPython = Join-Path $root '.venv\\Scripts\\python.exe'
+$pythonExe = if (Test-Path $venvPython) { $venvPython } else { 'python' }
 
 Remove-Item -LiteralPath $distDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -25,7 +27,7 @@ Write-Host "-> Building bundled daemon executable"
 # importlib.resources) -- without it the frozen daemon can't migrate a fresh DB.
 # uvicorn loads its protocol/loop impls dynamically, so PyInstaller can't see
 # them statically; collect + hidden-import them or the server won't start.
-& python -m PyInstaller `
+& $pythonExe -m PyInstaller `
   --noconfirm `
   --clean `
   --onefile `

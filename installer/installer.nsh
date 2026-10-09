@@ -12,9 +12,6 @@ Var BundleFactoryState
 Var BundleRescueState
 Var BundleHarvestState
 Var BundleImageStudioState
-Var BundleBootstrapFile
-Var OptionalToolsBootstrapFile
-Var BundleFirstItem
 
 Page custom SynapseBundlesPageCreate SynapseBundlesPageLeave
 
@@ -81,15 +78,14 @@ FunctionEnd
 !macroend
 
 !macro customInstall
-  StrCpy $BundleBootstrapFile "$APPDATA\Synapse\bootstrap-ai-bundles.json"
   CreateDirectory "$APPDATA\Synapse"
-  FileOpen $0 $BundleBootstrapFile w
+  FileOpen $0 "$APPDATA\Synapse\bootstrap-ai-bundles.json" w
   FileWrite $0 "{$\r$\n  $\"bundle_ids$\": ["
-  StrCpy $BundleFirstItem 1
+  StrCpy $R9 1
 
   ${If} $BundleResearchState == 1
-    ${If} $BundleFirstItem == 1
-      StrCpy $BundleFirstItem 0
+    ${If} $R9 == 1
+      StrCpy $R9 0
     ${Else}
       FileWrite $0 ", "
     ${EndIf}
@@ -97,8 +93,8 @@ FunctionEnd
   ${EndIf}
 
   ${If} $BundleFactoryState == 1
-    ${If} $BundleFirstItem == 1
-      StrCpy $BundleFirstItem 0
+    ${If} $R9 == 1
+      StrCpy $R9 0
     ${Else}
       FileWrite $0 ", "
     ${EndIf}
@@ -106,8 +102,8 @@ FunctionEnd
   ${EndIf}
 
   ${If} $BundleRescueState == 1
-    ${If} $BundleFirstItem == 1
-      StrCpy $BundleFirstItem 0
+    ${If} $R9 == 1
+      StrCpy $R9 0
     ${Else}
       FileWrite $0 ", "
     ${EndIf}
@@ -115,8 +111,8 @@ FunctionEnd
   ${EndIf}
 
   ${If} $BundleHarvestState == 1
-    ${If} $BundleFirstItem == 1
-      StrCpy $BundleFirstItem 0
+    ${If} $R9 == 1
+      StrCpy $R9 0
     ${Else}
       FileWrite $0 ", "
     ${EndIf}
@@ -126,8 +122,7 @@ FunctionEnd
   FileWrite $0 "]$\r$\n}$\r$\n"
   FileClose $0
 
-  StrCpy $OptionalToolsBootstrapFile "$APPDATA\Synapse\bootstrap-optional-tools.json"
-  FileOpen $1 $OptionalToolsBootstrapFile w
+  FileOpen $1 "$APPDATA\Synapse\bootstrap-optional-tools.json" w
   ${If} $BundleImageStudioState == 1
     FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [$\"synapse-image-studio$\"],$\r$\n  $\"uninstall_tool_ids$\": []$\r$\n}$\r$\n"
   ${Else}
