@@ -765,3 +765,7 @@ write the design as an ADR in `docs/adr/` and then implement.
 2. Read the relevant milestone's "Critical files" section in the plan at `C:\Users\justi\.claude\plans\how-is-it-that-staged-meteor.md`.
 3. Run `npm run typecheck` and `pytest` to see what's actually broken.
 4. If the work won't fit in your remaining tokens, commit what compiles and update `PROGRESS.md` with a clear "next session: do X" line.
+
+## ChatGPT original image attachments (cross-agent)
+For ResellTogether/ChatGPT photo imports, read [docs/CHATGPT_ATTACHMENT_TRANSPORT_AI_GUIDANCE.md](docs/CHATGPT_ATTACHMENT_TRANSPORT_AI_GUIDANCE.md) before designing or claiming an attachment transfer. The existing direct ResellTogether MCP image ingestion works on base64; the unresolved prerequisite is securely obtaining original ChatGPT attachment bytes through the ChatGPT-facing connector. Never treat manifests or Windows paths as proof of upload.
+
