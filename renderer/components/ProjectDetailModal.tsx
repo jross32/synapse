@@ -126,7 +126,7 @@ export function ProjectDetailModal({
       });
       const status = result.state?.status ?? 'unknown';
       setUiLabResult(status === 'launched'
-        ? 'UI Lab run completed. Review the generated evidence before approving the UI.'
+        ? 'UI Lab process exited successfully. Inspect the report before approving the UI.'
         : `UI Lab status: ${status}. Check My Tools for the run details.`);
     } catch (error) {
       setUiLabResult(error instanceof Error ? error.message : 'UI Lab verification failed.');
@@ -180,7 +180,7 @@ export function ProjectDetailModal({
               <p className='text-xs text-muted-foreground'>Inspect a mobile viewport with screenshot and quality evidence.</p>
             </div>
             <Button type='button' size='sm' disabled={uiLabBusy || project.status !== 'launched'} onClick={() => void verifyProjectUi()}>
-              {uiLabBusy ? 'Verifying?' : 'Verify UI'}
+              {uiLabBusy ? 'Verifying...' : 'Verify UI'}
             </Button>
           </div>
           {uiLabResult && <p role='status' className='mt-2 text-xs text-muted-foreground'>{uiLabResult}</p>}
