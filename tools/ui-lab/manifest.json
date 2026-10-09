@@ -3,8 +3,8 @@
   "name": "Synapse UI Lab",
   "category": "dev-tools",
   "icon": "wrench",
-  "description": "Run cross-device visual QA and save screenshot/report evidence for any app. Includes Chromium, Firefox and WebKit emulation; native iOS Safari requires a connected device provider.",
-  "version": "0.1.0",
+  "description": "Run screenshot, layout, accessibility smoke, and optional browser flow tests. Save responsive HTML and JSON evidence. Native iOS Safari remains unverified without a real-device provider.",
+  "version": "0.2.0",
   "publisher": "The WhatIf Company",
   "verified": false,
   "bundled": true,
@@ -42,7 +42,7 @@
       "primitive": "process.spawn",
       "params": {
         "argv": [
-          "python",
+          ".venv/Scripts/python.exe",
           "tools/ui_lab_matrix.py",
           "{target}",
           "--engine",
@@ -52,7 +52,7 @@
           "--output",
           "artifacts/ui-lab-tool"
         ],
-        "timeout": 5
+        "timeout": 30
       },
       "primary": true,
       "scope": "tool"
