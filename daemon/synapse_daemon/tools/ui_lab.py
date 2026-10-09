@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import subprocess
 import sys
 import uuid
@@ -43,7 +44,7 @@ class UiLabTool(ToolHandler):
         job_dir.mkdir(parents=True, exist_ok=False)
         metadata = {'job_id': job_id, 'status': 'queued', 'target': target, 'engine': engine,
                     'profile': profile, 'started_utc': datetime.now(timezone.utc).isoformat(),
-                    'native_safari_verified': False}
+                    'native_safari_verified': False, 'expected_profiles': 1}
         (job_dir / 'job.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
         python = self.root / '.venv' / 'Scripts' / 'python.exe'
         if not python.exists():
@@ -88,11 +89,18 @@ class UiLabTool(ToolHandler):
             except (json.JSONDecodeError, OSError):
                 pass
         status = metadata.get('status', 'unknown')
-        if report is not None and len(report.get('results', [])) >= 1:
-            if report.get('failed', 0) > 0 or report.get('blocked', 0) > 0:
-                status = 'failed'
-            elif len(report.get('results', [])) >= 1 and report.get('passed', 0) == len(report.get('results', [])):
+        if report is not None and report.get('run_complete') is True and report.get('finished_utc'):
+            expected = metadata.get('expected_profiles', 1)
+            valid_count = len(report.get('results', [])) == expected
+            if valid_count and report.get('failed', 0) == 0 and report.get('blocked', 0) == 0 and report.get('passed', 0) == expected:
                 status = 'completed'
+            else:
+                status = 'failed'
+        elif status == 'running':
+            started = datetime.fromisoformat(metadata['started_utc'])
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            if elapsed > 600:
+                status = 'stalled'
         result = {'job_id': job_id, 'status': status, 'report': report,
                   'report_path': str(report_file), 'dashboard_path': str(folder / 'index.html'),
                   'native_safari_verified': False}

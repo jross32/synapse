@@ -167,6 +167,7 @@ def run_matrix(url: str, output: str, engine: str = "chromium", profiles=None,
     report = {"schema_version": 2, "target": url, "engine": engine,
               "native_safari_verified": False, "results": [],
               "passed": 0, "failed": 0, "blocked": 0}
+    report["expected_profiles"] = len(selected)
     write_report(out, report)
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
@@ -241,6 +242,9 @@ def run_matrix(url: str, output: str, engine: str = "chromium", profiles=None,
                 write_report(out, report)
         finally:
             browser.close()
+    report["finished_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    report["run_complete"] = True
+    write_report(out, report)
     return report
 
 

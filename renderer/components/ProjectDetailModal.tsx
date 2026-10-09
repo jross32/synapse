@@ -93,10 +93,14 @@ export function ProjectDetailModal({
   const [disk, setDisk] = useState<ProjectDiskUsage | null>(null);
   const [uiLabBusy, setUiLabBusy] = useState(false);
   const [uiLabResult, setUiLabResult] = useState<string | null>(null);
+  const [uiLabJobId, setUiLabJobId] = useState<string | null>(null);
+  const [uiLabPolling, setUiLabPolling] = useState(false);
 
   useEffect(() => {
     if (!open || !project) {
       setDisk(null);
+      setUiLabJobId(null);
+      setUiLabResult(null);
       return;
     }
     let cancelled = false;
@@ -118,6 +122,7 @@ export function ProjectDetailModal({
     if (!browserUrl || uiLabBusy) return;
     setUiLabBusy(true);
     setUiLabResult(null);
+    setUiLabJobId(null);
     try {
       const result = await runToolAction('ui-lab', 'verify', {
         target: browserUrl,
@@ -126,13 +131,29 @@ export function ProjectDetailModal({
       });
       const status = result.state?.status ?? 'unknown';
       const jobId = result.state.result?.job_id;
+      if (status === 'launched' && typeof jobId === 'string') setUiLabJobId(jobId);
       setUiLabResult(status === 'launched' && typeof jobId === 'string'
-        ? `UI Lab job ${jobId} started. Check job status in My Tools for its final report.`
+        ? `UI Lab job ${jobId} started. Use Check results here to view its status.`
         : `UI Lab status: ${status}. ${result.state.last_error?.message ?? 'Check My Tools for details.'}`);
     } catch (error) {
       setUiLabResult(error instanceof Error ? error.message : 'UI Lab verification failed.');
     } finally {
       setUiLabBusy(false);
+    }
+  }
+
+  async function checkUiLabJob(): Promise<void> {
+    if (!uiLabJobId || uiLabPolling) return;
+    setUiLabPolling(true);
+    try {
+      const result = await runToolAction('ui-lab', 'status', { job_id: uiLabJobId });
+      const jobStatus = String(result.state.result?.status ?? result.state.status);
+      const report = result.state.result?.report as { passed?: number; failed?: number; blocked?: number } | undefined;
+      setUiLabResult(`UI Lab job ${uiLabJobId}: ${jobStatus}. ${report ? `${report.passed ?? 0} passed, ${report.failed ?? 0} failed, ${report.blocked ?? 0} blocked.` : 'Evidence is still being collected.'}`);
+    } catch (error) {
+      setUiLabResult(error instanceof Error ? error.message : 'UI Lab status lookup failed.');
+    } finally {
+      setUiLabPolling(false);
     }
   }
 
@@ -185,6 +206,7 @@ export function ProjectDetailModal({
             </Button>
           </div>
           {uiLabResult && <p role='status' className='mt-2 text-xs text-muted-foreground'>{uiLabResult}</p>}
+          {uiLabJobId && <Button type='button' variant='outline' size='sm' disabled={uiLabPolling} onClick={() => void checkUiLabJob()}>{uiLabPolling ? 'Checking...' : 'Check results'}</Button>}
           <p className='mt-1 text-[11px] text-muted-foreground'>Chromium emulation only; this is not native iPhone Safari certification.</p>
         </div>
       )}
