@@ -46,7 +46,7 @@ jobs:
         run: npm run typecheck
 
       - name: Validate shared account authentication and synchronization
-        run: python -m pytest -q daemon/tests/test_synapse_accounts_service.py daemon/tests/test_synapse_account_cross_device_merge.py daemon/tests/test_synapse_accounts_rate_limits.py daemon/tests/test_synapse_accounts_oauth_callback_security.py daemon/tests/test_synapse_device_access.py daemon/tests/test_unified_mcp_relay.py daemon/tests/test_outbound_mcp_relay.py
+        run: python -m pytest -q daemon/tests/test_synapse_accounts_service.py daemon/tests/test_synapse_account_cross_device_merge.py daemon/tests/test_synapse_accounts_rate_limits.py daemon/tests/test_synapse_accounts_oauth_callback_security.py daemon/tests/test_synapse_device_access.py daemon/tests/test_unified_mcp_relay.py daemon/tests/test_outbound_mcp_relay.py daemon/tests/test_mcp_full_access_end_to_end.py
       - name: Compile renderer and Electron
         run: npm run build
 
