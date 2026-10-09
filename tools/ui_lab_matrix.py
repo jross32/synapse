@@ -14,7 +14,7 @@ PROFILES = {
 }
 
 
-def run_matrix(url: str, output: str, engine: str = "chromium") -> dict:
+def run_matrix(url: str, output: str, engine: str = "chromium", profiles=None, timeout_ms: int = 12000) -> dict:
     """Visit each profile, save screenshot and evidence JSON, report real failures."""
     if engine not in {"chromium", "firefox", "webkit"}:
         raise ValueError("unsupported engine")
@@ -25,10 +25,11 @@ def run_matrix(url: str, output: str, engine: str = "chromium") -> dict:
     folder = Path(output)
     folder.mkdir(parents=True, exist_ok=True)
     results = []
+    selected = PROFILES if profiles is None else {name: PROFILES[name] for name in profiles}
     with sync_playwright() as playwright:
         browser = getattr(playwright, engine).launch(headless=True)
         try:
-            for name, (width, height, touch) in PROFILES.items():
+            for name, (width, height, touch) in selected.items():
                 record = {"profile": name, "viewport": {"width": width, "height": height}, "engine": engine,
                           "platform": "desktop browser emulation", "native_safari_verified": False,
                           "url": url, "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "status": "blocked"}
@@ -38,8 +39,8 @@ def run_matrix(url: str, output: str, engine: str = "chromium") -> dict:
                                             is_mobile=touch if engine != "firefox" else False)
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
-                    response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                    page.screenshot(path=str(folder / f"{engine}-{name}.png"), full_page=True)
+                    response = page.goto(url, wait_until="commit", timeout=timeout_ms)
+                    page.screenshot(path=str(folder / f"{engine}-{name}.png"), full_page=False, timeout=timeout_ms, animations="disabled")
                     measurements = page.evaluate("""() => ({scrollWidth:document.documentElement.scrollWidth,
                       clientWidth:document.documentElement.clientWidth,
                       horizontalOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+2,
@@ -55,6 +56,7 @@ def run_matrix(url: str, output: str, engine: str = "chromium") -> dict:
                     if page is not None:
                         page.close()
                 results.append(record)
+                (folder / "report.json").write_text(json.dumps({"schema_version": 1, "engine": engine, "native_safari_verified": False, "results": results}, indent=2), encoding="utf-8")
         finally:
             browser.close()
     report = {"schema_version": 1, "engine": engine, "native_safari_verified": False,
@@ -69,11 +71,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url")
     parser.add_argument("--output", default="artifacts/ui-lab")
+    parser.add_argument("--profile", action="append", choices=tuple(PROFILES))
+    parser.add_argument("--timeout-ms", type=int, default=12000)
     parser.add_argument("--engine", choices=("chromium", "firefox", "webkit"), default="chromium")
     args = parser.parse_args()
-    report = run_matrix(args.url, args.output, args.engine)
+    report = run_matrix(args.url, args.output, args.engine, profiles=args.profile, timeout_ms=args.timeout_ms)
     print(json.dumps(report, indent=2))
-    return 0 if report["passed"] == len(PROFILES) else 1
+    return 0 if report["passed"] == len(args.profile or PROFILES) else 1
 
 
 if __name__ == "__main__":
