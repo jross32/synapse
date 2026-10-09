@@ -594,7 +594,9 @@ class ProfileManager:
     # ── services / hosts ───────────────────────────────────────────────
 
     def list_hosts(self) -> list[HostPresence]:
+        self._refresh_from_remote(best_effort=True)
         self.ensure_current_host()
+        self._sync_to_remote(best_effort=True)
         rows = self._storage.conn.execute(
             """
             SELECT id, name, platform, current_host, last_seen_at, created_at, updated_at

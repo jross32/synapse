@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from .errors import SynapseError
 
-_DEFAULT_BASE_URL = "http://127.0.0.1:8788"
+_DEFAULT_BASE_URL = "https://accounts-api-production-f84a.up.railway.app"
 _REQUEST_TIMEOUT_SECONDS = 12
 
 

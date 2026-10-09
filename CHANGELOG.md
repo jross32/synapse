@@ -10,6 +10,21 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.211] -- 2026-10-09
+
+### Added
+- Shared Synapse Accounts HTTPS service, persistent cloud identity storage, and a desktop startup sign-in/signup screen. No local account daemon command is required.
+- Account-wide portable profile and device-host synchronization with merge-safe host inventory across multiple computers.
+- Public authentication request throttling and strict OAuth handoff callback host validation.
+
+### Known limitations
+- Google OAuth sign-in requires a Google OAuth web client ID and secret configured on the hosted account service. The button stays disabled rather than pretending to work before credentials are available.
+- Account creation must be completed through the app sign-up form; no user's password is included in a release.
+- Shared cloud account identity is not yet a unified routed MCP connection to every device; app/project data remains local to each host.
+
+### Verification
+- Backend identity, sync, callback and authentication tests plus Windows installer pipeline must pass before publication.
+
 ## [0.1.210] -- 2026-10-09
 
 ### Fixed

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 import urllib.error
@@ -14,12 +15,13 @@ from typing import Any, Literal
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import AccountsSettings, load_settings
+from .rate_limits import AuthRateLimiter
 from .sync_merge import merge_documents
 from .db import (
     Account,
@@ -452,6 +454,14 @@ class AccountsService:
         mode: Literal["signin", "link"],
         current_account: Account | None,
     ) -> OAuthStartResponse:
+        # Only hand off OAuth codes to a local Synapse daemon or an explicitly
+        # allowlisted HTTPS Synapse host, never arbitrary caller-controlled URLs.
+        callback = urllib.parse.urlsplit(callback_url)
+        trusted_https_hosts = {host.strip().lower() for host in os.getenv("SYNAPSE_ACCOUNTS_CALLBACK_HOSTS", "").split(",") if host.strip()}
+        loopback = callback.scheme == "http" and callback.hostname in {"localhost", "127.0.0.1"} and callback.port == 7878
+        trusted = callback.scheme == "https" and callback.hostname in trusted_https_hosts and callback.port in {None, 443}
+        if not (loopback or trusted) or callback.path != "/api/v1/profile/auth/callback" or callback.query or callback.fragment or callback.username or callback.password:
+            raise HTTPException(status_code=400, detail="Unrecognized Synapse OAuth callback URL.")
         if provider != "google":
             raise HTTPException(status_code=400, detail=f"Unsupported provider '{provider}'.")
         if not (self.settings.google_client_id and self.settings.google_client_secret):
@@ -791,6 +801,21 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
     active_settings = settings or load_settings()
     service = AccountsService(active_settings)
     app = FastAPI(title="Synapse Accounts", version="0.1.36-dev", docs_url=None, redoc_url=None)
+    auth_limiter = AuthRateLimiter()
+
+    @app.middleware("http")
+    async def throttle_public_auth(request: Request, call_next):
+        limits = {
+            "/v1/auth/signup": (5, 600),
+            "/v1/auth/signin": (20, 300),
+            "/v1/auth/refresh": (60, 300),
+            "/v1/oauth/start": (20, 300),
+        }
+        rule = limits.get(request.url.path) if request.method == "POST" else None
+        if rule and not auth_limiter.allow(request.client.host if request.client else "unknown", request.url.path,
+                                            limit=rule[0], window_seconds=rule[1]):
+            return JSONResponse(status_code=429, content={"detail": "Too many sign-in attempts. Try again later."})
+        return await call_next(request)
 
     def get_db() -> Any:
         with session_scope(service.session_factory) as session:

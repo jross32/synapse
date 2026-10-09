@@ -45,6 +45,7 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
+import { AccountWelcome } from './components/AccountWelcome';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
@@ -155,17 +156,21 @@ export default function App(): JSX.Element {
   return (
     <DaemonProvider>
       <PortablePreferencesBridge />
-      <Shell
-        mobileRoute={mobileRoute}
-        onForgetDevice={() => {
-          forgetDeviceToken();
-          setAuthMode('pair-required');
-        }}
-      />
+      {mobileRoute ? (
+        <Shell mobileRoute={mobileRoute} onForgetDevice={() => { forgetDeviceToken(); setAuthMode('pair-required'); }} />
+      ) : (
+        <DesktopAccountGate />
+      )}
     </DaemonProvider>
   );
 }
 
+function DesktopAccountGate(): JSX.Element {
+  const { profile, profileError } = useDaemon();
+  if (!profile && !profileError) return <BootSplash />;
+  if (!profile?.signed_in || profile.sync_status === 'error') return <AccountWelcome />;
+  return <Shell mobileRoute={false} onForgetDevice={() => undefined} />;
+}
 function PortablePreferencesBridge(): null {
   const { profile, refreshProfile } = useDaemon();
   const seededSignatureRef = useRef<string | null>(null);

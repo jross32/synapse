@@ -42,6 +42,11 @@ jobs:
       - name: Verify source version consistency
         run: python scripts/docs_sync_check.py
 
+      - name: Validate TypeScript
+        run: npm run typecheck
+
+      - name: Validate shared account authentication and synchronization
+        run: python -m pytest -q daemon/tests/test_synapse_accounts_service.py daemon/tests/test_synapse_account_cross_device_merge.py daemon/tests/test_synapse_accounts_rate_limits.py daemon/tests/test_synapse_accounts_oauth_callback_security.py
       - name: Compile renderer and Electron
         run: npm run build
 

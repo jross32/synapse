@@ -839,7 +839,7 @@ export function ProfileHub({
                   </Button>
                 ) : (
                   <div className='rounded-2xl border border-dashed border-border/70 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground'>
-                    Google sign-in is supported in this pass, but this local Synapse Accounts service is not configured for it yet.
+                    Google sign-in is awaiting Google OAuth configuration on the shared Synapse Accounts service. Email/password sign-in remains available.
                   </div>
                 )}
               </div>
@@ -909,43 +909,13 @@ export function ProfileHub({
 
 function AccountSyncUnavailable(): JSX.Element {
   return (
-    <div className='space-y-4'>
-      <div className='inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground'>
-        <Cloud className='h-3.5 w-3.5' />
-        Sync is optional
-      </div>
-      <div>
-        <h4 className='text-2xl font-semibold tracking-tight'>You do not need an account</h4>
-        <p className='mt-2 text-sm leading-6 text-muted-foreground'>
-          Synapse works fully on this machine without signing in. A Synapse account only
-          adds <span className='text-foreground'>cross-device sync</span> for favorites,
-          recent tools, theme, and layout.
-        </p>
-      </div>
-      <div className='rounded-3xl border border-dashed border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground'>
-        <p className='font-medium text-foreground'>Account sync is not set up yet</p>
-        <p className='mt-2 leading-6'>
-          No Synapse Accounts service is reachable, so sign-in is turned off. To enable it,
-          start the bundled service and press Refresh:
-        </p>
-        <p className='mt-3 rounded-2xl border border-border/70 bg-background/60 px-3 py-2 font-mono text-xs text-foreground'>
-          python -m synapse_accounts
-        </p>
-        <p className='mt-2 leading-6'>
-          It listens on <span className='font-mono text-foreground'>127.0.0.1:8788</span> by
-          default. Point Synapse at another one with the{' '}
-          <span className='font-mono text-foreground'>SYNAPSE_ACCOUNTS_BASE_URL</span>{' '}
-          environment variable.
-        </p>
-      </div>
-      <div className='inline-flex items-center gap-2 text-xs text-primary'>
-        <ArrowRight className='h-3.5 w-3.5' />
-        Everything else in Synapse already works without this.
-      </div>
+    <div className='space-y-4 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5'>
+      <div className='inline-flex items-center gap-2 text-sm font-semibold'><Cloud className='h-4 w-4' /> Account service temporarily unavailable</div>
+      <p className='text-sm leading-6 text-muted-foreground'>Synapse Accounts connects over HTTPS automatically. Check your internet connection, then use Refresh; you never need to run a server or enter a command to sign in.</p>
+      <p className='text-xs text-muted-foreground'>Existing project files stay on this computer. Device management and sign-in resume when the account service is reachable.</p>
     </div>
   );
 }
-
 function SyncBadge({
   syncStatus,
   backendReachable = true,
