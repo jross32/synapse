@@ -1,0 +1,28 @@
+{
+  "id": "ui-lab",
+  "name": "Synapse UI Lab",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Cross-device screenshot and interaction QA with evidence provenance, visual comparison, accessibility checks, and fail-closed native Safari verification; reusable across connected AI runtimes.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "browser-qa",
+    "mobile",
+    "visual-testing",
+    "playwright",
+    "quality-os",
+    "accessibility",
+    "safari",
+    "responsive"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "playwright",
+    "browser",
+    "reflex"
+  ],
+  "optional_capabilities": [
+    "github"
+  ]
+}
