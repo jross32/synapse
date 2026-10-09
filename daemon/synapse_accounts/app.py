@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import AccountsSettings, load_settings
+from .sync_merge import merge_documents
 from .db import (
     Account,
     AuthAuditEvent,
@@ -426,6 +427,7 @@ class AccountsService:
     def put_sync_document(self, db: Session, account: Account, document: dict[str, Any]) -> SyncDocumentPayload:
         row = db.scalar(select(SyncDocument).where(SyncDocument.account_id == account.id))
         now = _now()
+        document = merge_documents({}, document)
         if row is None:
             row = SyncDocument(
                 account_id=account.id,
@@ -435,6 +437,7 @@ class AccountsService:
             )
             db.add(row)
         else:
+            document = merge_documents(json.loads(row.document_json or "{}"), document)
             row.document_json = json.dumps(document)
             row.updated_at = now
         self._log_event(db, account_id=account.id, event_kind="sync.updated", provider=None)
