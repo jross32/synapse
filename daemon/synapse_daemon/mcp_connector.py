@@ -2259,6 +2259,8 @@ def build_mcp_router(
     bus: EventBus | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
+    # Fail closed for all non-advertised write tools, including legacy hidden names.
+    read_only_tool_names = frozenset(spec["name"] for spec in _tool_specs(False))
     event_loop: asyncio.AbstractEventLoop | None = None
 
     def _emit_collaboration_event(verb: str, payload: dict[str, Any]) -> None:
@@ -2274,6 +2276,8 @@ def build_mcp_router(
         return _writes_allowed(storage.data_dir)
 
     def _call_tool(name: str, args: dict[str, Any], *, allow_writes: bool = True) -> Any:
+        if not allow_writes and name not in read_only_tool_names:
+            raise ValueError("This is the read-only connector URL. Remote write access is disabled for this device.")
         def _require_writes() -> None:
             """Refuse a write on the read-only URL, whatever the server-wide setting says.
 

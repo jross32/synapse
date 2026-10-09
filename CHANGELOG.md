@@ -18,7 +18,7 @@ Every commit must append an entry under the in-progress version header.
 - **Device selector:** choose the active computer using the signed-in Profile hub, without reconfiguring the ChatGPT/Claude connector URL.
 - **Per-device Remote write access switch:** automatically enabled when a machine joins the Synapse account; switching Off pins new jobs to read-only, with a second live policy check immediately before dispatch. Switching On allows full MCP tools including permitted file changes and shell commands.
 - Separate revocable credentials for user login, cloud MCP links, and each locally enrolled device; device credentials encrypted at rest with OS-scoped secret storage. Cloud queue deletes delivered requests and replies.
-- Fixed seven legacy local MCP write-tool dispatch branches that checked only global write settings instead of respecting the explicitly read-only connection. Added read-only regression coverage across all seven.
+- Enforced a central allowlist of read-only MCP tools whenever a device or connector is read-only, fixing seven legacy write-tool branches that previously ignored URL/device read-only mode. Added regression coverage across all seven.
 
 ### Security and limitations
 - The MCP link **is a powerful secret**. Anyone holding it can send MCP requests to the selected computer subject to the device's write switch. Store it only in trusted clients and rotate it if exposed.
