@@ -1,29 +1,31 @@
 {
-  "id": "completion-contract",
-  "name": "Synapse Completion Contract",
-  "publisher": "The WhatIf Company",
-  "version": "0.1.0",
-  "description": "Default fail-closed autonomous completion workflow combining existing Synapse Autonomous Dev Loop, Quality OS, Repair Arena, Browser UI Audit and durable checkpoints, with verified criteria and safe escalation.",
-  "entrypoint": "SKILL.md",
-  "tags": [
-    "completion",
-    "autonomous-development",
-    "quality",
-    "browser-qa",
-    "end-to-end",
-    "checkpoint",
-    "handoff",
-    "fail-closed"
-  ],
-  "implicit_invocation": true,
-  "required_capabilities": [],
-  "preferred_capabilities": [
-    "playwright",
-    "reflex",
-    "browser"
-  ],
-  "optional_capabilities": [
-    "web-scraper",
-    "github"
-  ]
+    "id":  "completion-contract",
+    "name":  "Synapse Completion Contract",
+    "publisher":  "The WhatIf Company",
+    "version":  "0.1.2",
+    "description":  "Default Synapse completion contract with automatic Visual QA gate for web and UI development.",
+    "entrypoint":  "SKILL.md",
+    "tags":  [
+                 "completion",
+                 "autonomous-development",
+                 "quality",
+                 "browser-qa",
+                 "end-to-end",
+                 "checkpoint",
+                 "handoff",
+                 "fail-closed"
+             ],
+    "implicit_invocation":  true,
+    "required_capabilities":  [
+
+                              ],
+    "preferred_capabilities":  [
+                                   "playwright",
+                                   "reflex",
+                                   "browser"
+                               ],
+    "optional_capabilities":  [
+                                  "web-scraper",
+                                  "github"
+                              ]
 }

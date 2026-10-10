@@ -21,6 +21,10 @@ description: Default Synapse completion discipline for any nontrivial developmen
 - Never bypass login challenges, authorization requirements, security policy or access boundaries. If real sign-in, payments, destructive migration or privileged access needs the owner, flag a narrowly described intervention and preserve runnable state.
 - Never overwrite another worker's dirty work, discard user data, modify unrelated applications or expose secrets in logs.
 
+## Default Synapse Visual QA gate for web/UI tasks
+
+For each website, UI redesign, app shell, or frontend release, automatically load the installed `browser-ui-audit` skill and run `node scripts/visual-qa.mjs ACTUAL_APP_URL RUN_OUTPUT` from the Synapse repository. Inspect desktop/mobile screenshots, computed colors, contrast, overflow, controls and JavaScript errors. Follow with separately authorized logged-in click/form/upload tests and approved screenshot comparisons. A timeout is blocked, never passed. Skip this browser gate for non-UI tasks.
+
 ## Independent proof gate — fail closed
 
 - Run static checks and focused tests, then integration/regression tests. Changes affecting user journeys require real Chromium/Playwright or Reflex click-through, not just screenshots or DOM inspection.

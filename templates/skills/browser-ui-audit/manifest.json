@@ -1,0 +1,33 @@
+{
+    "id":  "browser-ui-audit",
+    "name":  "Synapse Visual QA (Default)",
+    "publisher":  "The WhatIf Company",
+    "version":  "0.2.1",
+    "description":  "Default browser visual QA discipline for every Synapse-connected AI working on web apps or UI. Isolated viewport audits, contrast/overflow evidence, screenshot comparison and separate authorized E2E interaction gates.",
+    "entrypoint":  "SKILL.md",
+    "tags":  [
+                 "visual-qa",
+                 "default",
+                 "browser",
+                 "ui",
+                 "ux",
+                 "end-to-end",
+                 "responsive",
+                 "contrast",
+                 "screenshots",
+                 "quality-os"
+             ],
+    "implicit_invocation":  true,
+    "required_capabilities":  [
+
+                              ],
+    "preferred_capabilities":  [
+                                   "browser",
+                                   "playwright",
+                                   "web-scraper",
+                                   "reflex"
+                               ],
+    "optional_capabilities":  [
+
+                              ]
+}

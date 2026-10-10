@@ -1,0 +1,22 @@
+{
+    "id":  "visual-qa",
+    "name":  "Visual QA (desktop + mobile)",
+    "description":  "Audit an authorized app\u0027s rendered colors, responsive overflow, controls and screenshots via isolated browser sessions. Require separate authenticated E2E and visual-reference evidence for release.",
+    "icon":  "scan-eye",
+    "category":  "workflows",
+    "tags":  [
+                 "visual-qa",
+                 "ui",
+                 "ux",
+                 "mobile",
+                 "screenshots",
+                 "browser"
+             ],
+    "launch_mode":  "coder-thread",
+    "thread_title":  "Visual QA",
+    "prompt_filename":  "VISUAL-QA.md",
+    "default_argv":  [
+                         "chatgpt"
+                     ],
+    "prompt":  "Use the installed Synapse browser-ui-audit skill v0.2.1 and Completion Contract by default. Resolve the currently selected project\u0027s actual authorized app URL. Run node scripts/visual-qa.mjs \u003cACTUAL_URL\u003e \u003cNEW_REPORT_DIR\u003e in Synapse source. Inspect JSON and screenshots at desktop, mobile and small-mobile sizes. Report measured colors, contrast candidates, overflow, errors and unnamed controls. If a disposable test account and explicit interaction scenarios are available, create a manifest and run node scripts/visual-qa-suite.mjs MANIFEST REPORT_DIR for isolated authenticated navigation, button, form, upload and visual baseline checks; never mutate real account data without authorization. Compare screenshots to approved baseline image bytes where available via ui_lab_reference_compare.py and record actual differences. Fix root causes in scope and rerun evidence. Treat timeout/untested as blocked, not passing; follow Synapse Quality OS release gates and never claim complete without proof."
+}
