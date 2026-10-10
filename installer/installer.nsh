@@ -6,7 +6,7 @@
 ; checks the *exact executable path*, never the developer daemon or other apps.
 !macro customInit
   InitPluginsDir
-  File /oname=$PLUGINSDIR\synapse-close-desktop.ps1 "installer/synapse-close-desktop.ps1"
+  File /oname=$PLUGINSDIR\synapse-close-desktop.ps1 "${__FILEDIR__}\synapse-close-desktop.ps1"
   StrCpy $R8 "$INSTDIR"
   IfFileExists "$R8\Synapse.exe" synapse_desktop_check
     StrCpy $R8 "$LOCALAPPDATA\Programs\synapse"
