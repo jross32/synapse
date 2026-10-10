@@ -1,0 +1,36 @@
+{
+  "id": "humanflow-ai",
+  "name": "HumanFlow AI — Human Website Journey Auditor",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "AI-discoverable real-browser human website journey testing; establish site access first, then ask the user to select audit depth 1–5 before substantive testing.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "humanflow",
+    "user-flow",
+    "website-audit",
+    "human-journey",
+    "ux",
+    "ui",
+    "browser-qa",
+    "login-aware",
+    "accessibility",
+    "end-to-end",
+    "visual-quality"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "playwright",
+    "web-scraper",
+    "reflex",
+    "browser",
+    "ui-lab"
+  ],
+  "optional_capabilities": [
+    "ui-forge",
+    "firstrun-studio",
+    "visual-fidelity-loop",
+    "quality-os"
+  ]
+}

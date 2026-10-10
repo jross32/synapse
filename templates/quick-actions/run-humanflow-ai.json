@@ -1,0 +1,22 @@
+{
+  "id": "run-humanflow-ai",
+  "name": "Run HumanFlow AI",
+  "description": "Open a real website, establish access or request login approval, then ask the user to choose a 1–5 human audit depth before testing.",
+  "icon": "mouse-pointer-click",
+  "category": "workflows",
+  "tags": [
+    "humanflow",
+    "website",
+    "user-flow",
+    "ux",
+    "audit",
+    "browser"
+  ],
+  "launch_mode": "coder-thread",
+  "thread_title": "HumanFlow Website Audit",
+  "prompt_filename": "HUMANFLOW.md",
+  "prompt": "Use the installed humanflow-ai Synapse skill. Ask for target URL only if it cannot be inferred from the user's request. Open the real website and establish access, seeking permission for necessary signup/login. Only AFTER site access is established, stop and present the five audit levels 1–5, awaiting the user's choice; then execute with real browser evidence and honest blocked/not-tested states.",
+  "default_argv": [
+    "chatgpt"
+  ]
+}
