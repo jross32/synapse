@@ -72,6 +72,9 @@ Var BundleImageStudioState
 Page custom SynapseBundlesPageCreate SynapseBundlesPageLeave
 
 Function SynapseBundlesPageCreate
+  ${If} $RepairMode == 1
+    Abort ; previous selections are intentionally preserved on repair
+  ${EndIf}
   nsDialogs::Create 1018
   Pop $BundleDialog
   ${If} $BundleDialog == error
