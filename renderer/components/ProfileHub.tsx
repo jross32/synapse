@@ -33,6 +33,13 @@ import {
   getCatalogState,
   getProfile,
   getProfileHosts,
+  getDeviceAccessPolicies,
+  getAccountMcpLink,
+  rotateAccountMcpLink,
+  selectAccountMcpDevice,
+  type AccountMcpLink,
+  setDeviceRemoteWrite,
+  type DeviceAccessPolicy,
   getServiceConnections,
   linkProfileAuth,
   setFavorite,
@@ -85,6 +92,8 @@ export function ProfileHub({
   const [catalogState, setCatalogState] = useState<CatalogPreferenceState | null>(null);
   const [services, setServices] = useState<ServiceConnection[]>([]);
   const [hosts, setHosts] = useState<HostPresence[]>([]);
+  const [devicePolicies, setDevicePolicies] = useState<DeviceAccessPolicy[]>([]);
+  const [mcpLink, setMcpLink] = useState<AccountMcpLink | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [loadingHub, setLoadingHub] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,6 +166,8 @@ export function ProfileHub({
         setCatalogState(null);
         setServices([]);
         setHosts([]);
+        setDevicePolicies([]);
+        setMcpLink(null);
         return;
       }
 
@@ -172,7 +183,13 @@ export function ProfileHub({
       if (servicesRes.status === 'fulfilled') setServices(servicesRes.value);
       else issues.push((servicesRes.reason as Error).message);
 
-      if (hostsRes.status === 'fulfilled') setHosts(hostsRes.value);
+      try { setMcpLink(await getAccountMcpLink()); }
+      catch (cause) { issues.push((cause as Error).message); }
+      if (hostsRes.status === 'fulfilled') {
+        setHosts(hostsRes.value);
+        try { setDevicePolicies(await getDeviceAccessPolicies()); }
+        catch (cause) { issues.push((cause as Error).message); }
+      }
       else issues.push((hostsRes.reason as Error).message);
     } catch (err) {
       issues.push((err as Error).message);
@@ -559,9 +576,48 @@ export function ProfileHub({
 
             <Card className='space-y-4 p-5'>
               <div>
+                <div className='flex items-center gap-2'><Link2 className='h-5 w-5 text-primary' /><h3 className='text-lg font-semibold'>Unified ChatGPT / Claude MCP</h3></div>
+                <p className='mt-1 text-sm text-muted-foreground'>One account-wide connector link. Your chosen computer handles requests; remote write permission is controlled by the device toggle below.</p>
+              </div>
+              {mcpLink ? (
+                <>
+                  <div className='flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/25 p-3'>
+                    <span className='min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground'>{new URL(mcpLink.url).origin}/mcp/[hidden]</span>
+                    <Button type='button' variant='outline' size='sm' onClick={() => void runAction('copy-mcp', async () => {
+                      await navigator.clipboard.writeText(mcpLink.url);
+                      setNotice('Connector link copied. Treat it like a password: it grants MCP access to your selected computer.');
+                    })}>Copy MCP link</Button>
+                  </div>
+                  <label className='block text-sm'>Active Synapse computer
+                    <select className='mt-1 w-full rounded-lg border border-border bg-background p-2 text-sm'
+                      value={mcpLink.selected_device_id ?? ''}
+                      disabled={busyKey === 'select-mcp'}
+                      onChange={event => void runAction('select-mcp', async () => {
+                        await selectAccountMcpDevice(event.target.value);
+                        setMcpLink(previous => previous ? { ...previous, selected_device_id: event.target.value } : null);
+                      })}>
+                      <option value='' disabled>Automatic: most recently online</option>
+                      {hosts.map(host => <option key={host.id} value={host.id}>{host.name}{host.current_host ? ' (this computer)' : ''}</option>)}
+                    </select>
+                  </label>
+                  <div className='flex items-center justify-between gap-3 text-xs text-muted-foreground'>
+                    <span>All ChatGPT and Claude clients use this same URL.</span>
+                    <Button variant='outline' size='sm' onClick={() => {
+                      if (!window.confirm('Rotate this MCP link? Existing ChatGPT and Claude connector links will stop working.')) return;
+                      void runAction('rotate-mcp', async () => {
+                        setMcpLink(await rotateAccountMcpLink());
+                        setNotice('MCP connector link rotated. Copy the new URL to any existing AI connectors.');
+                      });
+                    }}>Rotate link</Button>
+                  </div>
+                </>
+              ) : <p className='text-sm text-muted-foreground'>Account MCP connection unavailable. Refresh when your account service is reachable.</p>}
+            </Card>
+            <Card className='space-y-4 p-5'>
+              <div>
                 <h3 className='text-lg font-semibold'>Hosts & installs</h3>
                 <p className='mt-1 text-sm text-muted-foreground'>
-                  Machines that have seen this Synapse profile recently.
+                  Computers signed into this account. Full remote writes are enabled by default for enrolled devices. Turning this off forces new cloud MCP requests to read-only. Requests already running may finish.
                 </p>
               </div>
               <div className='space-y-2'>
@@ -572,6 +628,27 @@ export function ProfileHub({
                       {host.current_host && <Pill label='Current host' />}
                       <Pill label={host.platform} />
                     </div>
+                    {(() => {
+                      const policy = devicePolicies.find(item => item.device_id === host.id);
+                      if (!policy) return <p className='mt-2 text-xs text-muted-foreground'>Device access sync pending</p>;
+                      return (
+                        <label className='relative mt-3 flex cursor-pointer items-center justify-between gap-3 border-t border-border/60 pt-3 text-xs'>
+                          <span><span className='font-semibold'>Remote write access</span><span className='block text-muted-foreground'>Allow MCP commands and file changes on this device</span></span>
+                          <input type='checkbox' role='switch' aria-label={`Remote write access for ${host.name}`}
+                            checked={policy.remote_write_enabled}
+                            disabled={busyKey === `device:${host.id}`}
+                            onChange={event => void runAction(`device:${host.id}`, async () => {
+                              const updated = await setDeviceRemoteWrite(host.id, event.target.checked);
+                              setDevicePolicies(previous => previous.map(item => item.device_id === host.id ? updated : item));
+                              setNotice(`${host.name}: remote write policy ${updated.remote_write_enabled ? 'enabled' : 'disabled'}.`);
+                            })}
+                            className='peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 focus-visible:outline-none' />
+                          <span aria-hidden='true' className={`pointer-events-none relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${policy.remote_write_enabled ? 'bg-primary' : 'bg-secondary border border-border'}`}>
+                            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${policy.remote_write_enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                          </span>
+                        </label>
+                      );
+                    })()}
                     <p className='mt-1 text-xs text-muted-foreground'>
                       Last seen {formatLocal(host.last_seen_at, 'long')}
                     </p>
@@ -839,7 +916,7 @@ export function ProfileHub({
                   </Button>
                 ) : (
                   <div className='rounded-2xl border border-dashed border-border/70 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground'>
-                    Google sign-in is supported in this pass, but this local Synapse Accounts service is not configured for it yet.
+                    Google sign-in is awaiting Google OAuth configuration on the shared Synapse Accounts service. Email/password sign-in remains available.
                   </div>
                 )}
               </div>
@@ -909,43 +986,13 @@ export function ProfileHub({
 
 function AccountSyncUnavailable(): JSX.Element {
   return (
-    <div className='space-y-4'>
-      <div className='inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground'>
-        <Cloud className='h-3.5 w-3.5' />
-        Sync is optional
-      </div>
-      <div>
-        <h4 className='text-2xl font-semibold tracking-tight'>You do not need an account</h4>
-        <p className='mt-2 text-sm leading-6 text-muted-foreground'>
-          Synapse works fully on this machine without signing in. A Synapse account only
-          adds <span className='text-foreground'>cross-device sync</span> for favorites,
-          recent tools, theme, and layout.
-        </p>
-      </div>
-      <div className='rounded-3xl border border-dashed border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground'>
-        <p className='font-medium text-foreground'>Account sync is not set up yet</p>
-        <p className='mt-2 leading-6'>
-          No Synapse Accounts service is reachable, so sign-in is turned off. To enable it,
-          start the bundled service and press Refresh:
-        </p>
-        <p className='mt-3 rounded-2xl border border-border/70 bg-background/60 px-3 py-2 font-mono text-xs text-foreground'>
-          python -m synapse_accounts
-        </p>
-        <p className='mt-2 leading-6'>
-          It listens on <span className='font-mono text-foreground'>127.0.0.1:8788</span> by
-          default. Point Synapse at another one with the{' '}
-          <span className='font-mono text-foreground'>SYNAPSE_ACCOUNTS_BASE_URL</span>{' '}
-          environment variable.
-        </p>
-      </div>
-      <div className='inline-flex items-center gap-2 text-xs text-primary'>
-        <ArrowRight className='h-3.5 w-3.5' />
-        Everything else in Synapse already works without this.
-      </div>
+    <div className='space-y-4 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5'>
+      <div className='inline-flex items-center gap-2 text-sm font-semibold'><Cloud className='h-4 w-4' /> Account service temporarily unavailable</div>
+      <p className='text-sm leading-6 text-muted-foreground'>Synapse Accounts connects over HTTPS automatically. Check your internet connection, then use Refresh; you never need to run a server or enter a command to sign in.</p>
+      <p className='text-xs text-muted-foreground'>Existing project files stay on this computer. Device management and sign-in resume when the account service is reachable.</p>
     </div>
   );
 }
-
 function SyncBadge({
   syncStatus,
   backendReachable = true,

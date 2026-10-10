@@ -99,6 +99,51 @@ class SyncDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class RelayConnector(Base):
+    __tablename__ = "relay_connectors"
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    nonce: Mapped[str] = mapped_column(String(48), nullable=False)
+    selected_device_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class RelayDevice(Base):
+    __tablename__ = "relay_devices"
+    __table_args__ = (UniqueConstraint("account_id", "device_id", name="uq_relay_account_device"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RelayJob(Base):
+    __tablename__ = "relay_jobs"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: __import__("uuid").uuid4().hex)
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_json: Mapped[str] = mapped_column(Text, nullable=False)
+    response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+class DeviceAccessPolicy(Base):
+    __tablename__ = "device_access_policies"
+    __table_args__ = (UniqueConstraint("account_id", "device_id", name="uq_account_device_policy"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    remote_write_enabled: Mapped[bool] = mapped_column(default=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
 class AuthAuditEvent(Base):
     __tablename__ = "auth_security_audit_events"
 

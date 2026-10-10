@@ -10,6 +10,82 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.217] -- 2026-10-10
+
+### Added
+- First installer visual journey milestone: branded System Readiness and Whats New NSIS screens inspired by the approved eight-screen Synapse Setup design, alongside existing branded installer art and repair page.
+- Native NSIS remains the reliable extraction and silent-install path. Full-window animations and integrated account handoff remain future work for a custom installer shell.
+## [0.1.216] -- 2026-10-10
+
+### Fixed
+- Packaged Windows clients now ignore stale loopback account endpoint overrides from old installs unless SYNAPSE_ALLOW_LOCAL_ACCOUNTS=1 is explicitly set. This prevents retired localhost:8788 configurations from blocking Railway-hosted Synapse sign-in with WinError 10061.
+- Repair diagnostic output explains the safe fallback and reports remaining custom account endpoints.
+
+## [0.1.215] -- 2026-10-10
+### Added
+- Branded Windows Setup with dark violet gradient, glowing Synapse neural artwork, matched installer header, and clearer repair/update screens.
+- Detects lingering installed Synapse desktop processes by exact executable path, waits for graceful exit and offers consent-based desktop shutdown before retrying setup. Development daemons and other applications remain untouched.
+
+## [0.1.214] -- 2026-10-10
+
+
+### Added
+- Expanded safe installer repair health report: 19 diagnostics covering executable/daemon/UI files, installed version consistency, Windows user-data and temporary-folder writability, configuration JSON validity, TLS certificate trust, account service reachability/DNS, disk capacity, old daemons on port 7878, account endpoint overrides and data preservation.
+- Rerunning Setup repairs missing or damaged packaged application files without removing projects, SQLite data, account files, or previous bundle selections. The report explains which conditions require user action and never deletes credentials, changes proxies/firewall, or forcibly terminates active agents.
+- The repair smoke test verifies diagnostic report generation in addition to restoring a missing packaged daemon and preserving existing user preferences.
+## [0.1.213] -- 2026-10-10
+
+### Added
+- Re-running the Windows installer detects an existing installation and offers an update/repair option; the default preserves the existing installation location, user data, credentials, and previously selected AI bundles.
+- Packaged Windows installer diagnostics assess executable, daemon, Electron UI and package integrity, installed version, available disk space, account cloud HTTPS reachability, DNS, localhost MCP daemon port conflicts and version mismatches, account endpoint overrides, and user application folders.
+- Automatic safe repair creates missing application data directories only; setup reinstalls missing or damaged bundled application files. It never deletes project databases, purges credentials, terminates user processes, changes firewall or DNS settings, or silently resets the account.
+- A timestamped JSON repair report is saved to the user's local Synapse repair-reports directory after setup.
+
+### Fixed
+- Account sign-in and sign-up now remain actionable when a stale account-service health probe says offline, and report the real remote request error rather than disabling the login form.
+- Daemon account credential requests run off the event loop, preventing stalled sign-ins from blocking other desktop requests.
+## [0.1.212] -- 2026-10-09
+
+### Added
+- **Unified account-wide MCP connector:** a stable HTTPS URL for ChatGPT and Claude, recoverable on every signed-in computer, with rotation to revoke an exposed link.
+- **Outbound multi-device relay:** enrolled Windows Synapse daemons long-poll the shared cloud service for MCP JSON-RPC requests and execute via their own existing localhost MCP dispatcher; no new inbound firewall rules or device-specific tunnel links are required.
+- **Device selector:** choose the active computer using the signed-in Profile hub, without reconfiguring the ChatGPT/Claude connector URL.
+- **Per-device Remote write access switch:** automatically enabled when a machine joins the Synapse account; switching Off pins new jobs to read-only, with a second live policy check immediately before dispatch. Switching On allows full MCP tools including permitted file changes and shell commands.
+- Separate revocable credentials for user login, cloud MCP links, and each locally enrolled device; device credentials encrypted at rest with OS-scoped secret storage. Cloud queue deletes delivered requests and replies.
+- Enforced a central allowlist of read-only MCP tools whenever a device or connector is read-only, fixing seven legacy write-tool branches that previously ignored URL/device read-only mode. Added regression coverage across all seven.
+
+### Security and limitations
+- The MCP link **is a powerful secret**. Anyone holding it can send MCP requests to the selected computer subject to the device's write switch. Store it only in trusted clients and rotate it if exposed.
+- Switching Off stops **new** writes, but a command already running may finish. Signing out attempts to revoke the local host's cloud credential and stops the outbound agent.
+- The cloud service stores transient routed request/response payloads during delivery. Local project files and daemon authentication secrets are not synced to cloud profile storage.
+- Google OAuth still requires separately configured Google credentials. Actual operation with external ChatGPT/Claude accounts and two separately installed Windows computers requires user-device acceptance testing.
+
+### Verification
+- Automated identity, relay routing, account isolation, switching/rotation, credential revocation, host worker, and Windows NSIS installer gates. See GitHub Actions for the exact release run.
+## [0.1.211] -- 2026-10-09
+
+### Added
+- Shared Synapse Accounts HTTPS service, persistent cloud identity storage, and a desktop startup sign-in/signup screen. No local account daemon command is required.
+- Account-wide portable profile and device-host synchronization with merge-safe host inventory across multiple computers.
+- Public authentication request throttling and strict OAuth handoff callback host validation.
+
+### Known limitations
+- Google OAuth sign-in requires a Google OAuth web client ID and secret configured on the hosted account service. The button stays disabled rather than pretending to work before credentials are available.
+- Account creation must be completed through the app sign-up form; no user's password is included in a release.
+- Shared cloud account identity is not yet a unified routed MCP connection to every device; app/project data remains local to each host.
+
+### Verification
+- Backend identity, sync, callback and authentication tests plus Windows installer pipeline must pass before publication.
+
+## [0.1.210] -- 2026-10-09
+
+### Fixed
+- Windows installer packaging repairs: omit unnecessary NSIS global variables to fix warnings treated as errors, and use the project virtual environment for the frozen daemon build.
+- Restore bundled Synapse installer artwork and wizard configuration for portable Windows setup.
+
+### Verification
+- Release automation gates publication on docs/version consistency, renderer/Electron compilation, frozen-daemon startup and health on a new data directory, installer integrity, and a fresh silent Windows installation.
+
 ## [0.1.209] -- 2026-08-30
 
 ### Fixed

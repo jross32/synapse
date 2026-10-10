@@ -1,7 +1,7 @@
 {
   "name": "synapse",
   "productName": "Synapse",
-  "version": "0.1.209",
+  "version": "0.1.217",
   "description": "Synapse \u2014 a modular developer command center. By The WhatIf Company.",
   "author": {
     "name": "The WhatIf Company",
@@ -64,6 +64,7 @@
       "electron/icons/**/*"
     ],
     "extraResources": [
+      { "from": "installer/synapse-repair-check.ps1", "to": "repair/synapse-repair-check.ps1" },
       {
         "from": "installer/daemon-dist",
         "to": "daemon"
@@ -117,9 +118,10 @@
       "icon": "electron/icons/synapse.ico"
     },
     "nsis": {
-      "installerHeader": "installer/assets/synapse-header.bmp",
-      "installerSidebar": "installer/assets/synapse-sidebar.bmp",
-      "uninstallerSidebar": "installer/assets/synapse-sidebar.bmp",
+        "installerSidebar": "installer/assets/installer-sidebar.bmp",
+        "uninstallerSidebar": "installer/assets/installer-sidebar.bmp",
+        "installerHeader": "installer/assets/installer-header.bmp",
+
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

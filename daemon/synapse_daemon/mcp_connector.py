@@ -2413,6 +2413,8 @@ def build_mcp_router(
     bus: EventBus | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
+    # Fail closed for all non-advertised write tools, including legacy hidden names.
+    read_only_tool_names = frozenset(spec["name"] for spec in _tool_specs(False))
     event_loop: asyncio.AbstractEventLoop | None = None
 
     def _emit_collaboration_event(verb: str, payload: dict[str, Any]) -> None:
@@ -2428,6 +2430,8 @@ def build_mcp_router(
         return _writes_allowed(storage.data_dir)
 
     def _call_tool(name: str, args: dict[str, Any], *, allow_writes: bool = True) -> Any:
+        if not allow_writes and name not in read_only_tool_names:
+            raise ValueError("This is the read-only connector URL. Remote write access is disabled for this device.")
         def _require_writes() -> None:
             """Refuse a write on the read-only URL, whatever the server-wide setting says.
 
@@ -2832,8 +2836,7 @@ def build_mcp_router(
             return dumped
 
         if name == "synapse_set_project_chat_url":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)
             raw_url = args.get("url")
@@ -2944,8 +2947,7 @@ def build_mcp_router(
                 "note": "Synapse Active Tasks do not consume ChatGPT built-in task slots.",
             }
         if name == "synapse_add_project_idea":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             project_id = str(args.get("project_id", "")).strip()
             title = str(args.get("title", "")).strip()
             if not title:
@@ -2957,8 +2959,7 @@ def build_mcp_router(
                 adr = records.create_adr(conn, project_id, ProjectAdrCreate(title=title))
             return adr.model_dump(mode="json")
         if name == "synapse_create_active_task":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             from . import active_tasks as _active_tasks
             from .ai_context_memory import append_capture_note
             project_id = str(args.get("project_id") or "").strip()
@@ -2989,8 +2990,7 @@ def build_mcp_router(
             )
             return row.model_dump(mode="json")
         if name == "synapse_update_active_task":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             from . import active_tasks as _active_tasks
             task_id = str(args.get("task_id") or "").strip()
             try:
@@ -3013,8 +3013,7 @@ def build_mcp_router(
                 )
             return row.model_dump(mode="json")
         if name == "synapse_capture_note":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             from .capture import CaptureDestination, CaptureRequest, capture
 
             project_id = str(args.get("project_id", "")).strip()
@@ -3032,8 +3031,7 @@ def build_mcp_router(
                 result = capture(conn, storage.data_dir, req)
             return result.model_dump(mode="json")
         if name == "synapse_create_squad":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             project_id = str(args.get("project_id", "")).strip()
             name_arg = str(args.get("name", "")).strip()
             if not name_arg:
@@ -3051,8 +3049,7 @@ def build_mcp_router(
                 )
             return squad.model_dump(mode="json")
         if name == "synapse_add_work_item":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             squad_id = str(args.get("squad_id", "")).strip()
             title = str(args.get("title", "")).strip()
             if not title:
