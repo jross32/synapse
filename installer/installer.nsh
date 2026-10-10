@@ -126,6 +126,13 @@ Function SynapseBundlesPageLeave
 FunctionEnd
 
 !macro customInit
+  StrCpy $RepairMode 0
+  ; Silent reinstallation preserves the user's existing optional bundle choices.
+  IfSilent 0 +4
+    IfFileExists "$INSTDIR\Synapse.exe" 0 +2
+      StrCpy $RepairMode 1
+    IfFileExists "$INSTDIR\resources\app\package.json" 0 +2
+      StrCpy $RepairMode 1
   StrCpy $BundleResearchState 1
   StrCpy $BundleFactoryState 1
   StrCpy $BundleRescueState 1

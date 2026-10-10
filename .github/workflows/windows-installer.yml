@@ -117,11 +117,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
           $userFile = Join-Path $dataRoot "installer-preserve-proof.txt"
           Set-Content -Path $userFile -Value "preserve-user-files"
+          $bundles = Join-Path $dataRoot "bootstrap-ai-bundles.json"
+          Set-Content -Path $bundles -Value '{"bundle_ids":["custom-user-selection"]}'
           Remove-Item -Path (Join-Path $dest "resources/daemon/synapse-daemon.exe") -Force
           $repair = Start-Process -FilePath $exe.FullName -ArgumentList @("/S","/D=$dest") -Wait -PassThru
           if ($repair.ExitCode -ne 0) { throw "Reinstall repair failed $($repair.ExitCode)" }
           if (-not (Test-Path (Join-Path $dest "resources/daemon/synapse-daemon.exe"))) { throw "Repair failed to restore deleted bundled daemon" }
           if ((Get-Content $userFile -Raw).Trim() -ne "preserve-user-files") { throw "Repair damaged preserved files" }
+          if ((Get-Content $bundles -Raw) -notmatch "custom-user-selection") { throw "Repair overwrote selected AI bundles" }
           $reportDir = Join-Path $env:LOCALAPPDATA "Synapse/repair-reports"
           if (-not (Get-ChildItem $reportDir -Filter "repair-*.json" -ErrorAction SilentlyContinue | Select-Object -First 1)) { throw "Installer did not write health report" }
           Write-Host "PASS: running setup again restored the bundled daemon and preserved existing data"
