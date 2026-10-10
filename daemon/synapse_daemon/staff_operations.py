@@ -630,6 +630,22 @@ _ROUTE_KEYWORDS: dict[str, tuple[str, ...]] = {
         "research", "competitor", "compare", "market", "trend", "investigate",
         "discover", "opportunity", "evidence", "source", "technology",
     ),
+    "lena": ("personal budget", "my bills", "my spending", "saving money", "personal finance",
+             "emergency fund", "paycheck", "debt payoff", "my savings"),
+    "eli": ("stream", "streaming", "webcam", "camera", "obs", "microphone",
+            "go live", "livestream", "live production", "capture screen"),
+    "nova": ("video edit", "video editor", "highlight", "shorts", "clip", "captions",
+             "cut video", "edit recording", "video production"),
+    "zoe": ("social media", "tiktok", "instagram", "schedule post", "social post",
+            "reel", "community management", "content calendar"),
+    "iris": ("thumbnail", "overlay", "banner", "stream background", "brand design",
+             "graphic design", "visual assets", "logo design"),
+    "felix": ("sponsor", "affiliate", "partnership", "brand deal", "collab",
+              "creator collaboration", "media kit"),
+    "tess": ("organize my day", "daily plan", "chief of staff", "coordinate team",
+             "priorities", "staff meeting", "handoff"),
+    "sam": ("support ticket", "customer support", "help desk", "onboarding issue",
+            "customer success", "user feedback"),
 }
 
 
@@ -737,6 +753,7 @@ def team_briefing(conn: sqlite3.Connection) -> dict[str, Any]:
         for event in action_events[:3]:
             attention.append({
                 "staff_id": member.id,
+                "event_id": event.id,
                 "severity": event.severity,
                 "title": event.title,
                 "detail": event.body_md,

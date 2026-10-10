@@ -17,6 +17,8 @@ enough for the Electron renderer's Vite dev server and the loopback origin
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import logging
 
 from fastapi import Depends, FastAPI, Request, WebSocket
@@ -78,6 +80,7 @@ from .routes_models import build_models_router
 from .routes_personalities import build_personalities_router
 from .routes_staff import build_staff_router
 from .routes_profile import build_profile_router
+from .routes_hybrid_storage import build_hybrid_storage_router
 from .routes_project_doctor import build_project_doctor_router
 from .routes_project_records import build_project_records_router
 from .routes_projects import build_projects_router
@@ -158,12 +161,14 @@ def build_app(
         from .personalities import seed_default_personalities
         from .staff import seed_staff_foundation
         from .staff_operations import seed_staff_operations
+        from .staff_hq_catalog import seed_creator_revenue_staff
         from .quality_os import seed_default_quality_os
 
         seed_default_role_templates(conn)
         seed_default_personalities(conn)
         seed_staff_foundation(conn)
         seed_staff_operations(conn)
+        seed_creator_revenue_staff(conn)
         seed_default_catalog(conn)
         seed_default_specs(conn)
         seed_default_quality_os(conn)
@@ -415,6 +420,7 @@ def build_app(
         dependencies=[token_guard],
     )
     app.include_router(build_profile_router(storage, auth, profile_manager), prefix=API_PREFIX)
+    app.include_router(build_hybrid_storage_router(auth, Path.home()), prefix=API_PREFIX)
 
     # â”€â”€ Local AI: hardware profile, measured model strengths, agent runs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     app.include_router(
@@ -583,6 +589,13 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    # Opt-in reminders only: low-memory polling, durable SQLite checkpoints,
+    # no model calls or external sends. Live capture remains explicit opt-in.
+    from .staff_hq_proactivity import StaffProactivityService
+    staff_proactivity = StaffProactivityService(storage)
+    app.router.on_startup.append(staff_proactivity.start)
+    app.router.on_shutdown.append(staff_proactivity.stop)
+
     # Persistent owner-facing AI staff built on existing role + personality workers.
     app.include_router(
         build_staff_router(storage),

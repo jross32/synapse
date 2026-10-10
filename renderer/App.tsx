@@ -257,7 +257,11 @@ interface ShellProps {
 
 function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const { recentEvents } = useDaemon();
-  const [route, setRoute] = useState<AppRoute>(DEFAULT_ROUTE);
+  const [route, setRoute] = useState<AppRoute>(() =>
+    new URLSearchParams(window.location.search).get('staff_hq') === '1'
+      ? { kind: 'core', page: 'staff' }
+      : DEFAULT_ROUTE
+  );
   const [appsSection, setAppsSection] = useState<AppsSection>('projects');
   const [toolsSection, setToolsSection] = useState<ToolsSection>('tools');
   const [toolsTab, setToolsTab] = useState<ToolsTab>('installed');

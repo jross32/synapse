@@ -1,4 +1,5 @@
 import { apiFetch } from './api-client';
+import { openClaudeLogin } from './electron-bridge';
 import type {
   CatalogPreferenceItem,
   CatalogPreferenceState,
@@ -117,6 +118,11 @@ export async function connectService(provider: string): Promise<ServiceConnectio
   );
 }
 
+export async function startClaudeLogin(): Promise<{started:boolean;message:string}> {
+  const result = await openClaudeLogin();
+  if (!result.ok) throw new Error(result.error || 'Could not open Claude sign-in.');
+  return {started:true,message:'Finish Claude sign-in in the terminal/browser, then click Verify connection.'};
+}
 export async function verifyService(provider: string): Promise<ServiceConnection> {
   return apiFetch<ServiceConnection>(
     `/profile/service-connections/${encodeURIComponent(provider)}/verify`,
@@ -169,4 +175,15 @@ export async function rotateAccountMcpLink(): Promise<AccountMcpLink> {
 
 export async function selectAccountMcpDevice(deviceId: string): Promise<void> {
   await apiFetch('/profile/mcp-link/device', { method: 'PUT', body: { device_id: deviceId } });
+}
+
+export interface McpConnections {
+  primary: {configured:boolean; local_url:string|null; remote_url:string|null};
+  device: {id:string; enabled:boolean; endpoint:string|null};
+}
+export async function getMcpConnections(): Promise<McpConnections> {
+  return apiFetch<McpConnections>('/profile/mcp-connections', {method:'GET'});
+}
+export async function setMcpPreference(enabled:boolean): Promise<McpConnections> {
+  return apiFetch<McpConnections>('/profile/mcp-connections', {method:'PATCH',body:{enabled}});
 }

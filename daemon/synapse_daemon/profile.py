@@ -1,4 +1,4 @@
-"""Daemon-owned profile/account/catalog state for the Synapse Profile hub.
+﻿"""Daemon-owned profile/account/catalog state for the Synapse Profile hub.
 
 Local-first rules:
 
@@ -46,7 +46,7 @@ _PUBLIC_CONFIG_CACHE_TTL_SECONDS = 300
 # trying it again. Without this, a down accounts server makes every /profile read
 # block the async event loop on a synchronous urllib call, wedging the whole app.
 _REMOTE_FAILURE_COOLDOWN_SECONDS = 60
-# Local CLI/service detection shells out (`where claude`, `gh auth status`, …) and
+# Local CLI/service detection shells out (`where claude`, `gh auth status`, â€¦) and
 # costs ~1-1.5s per profile read. Cache the per-provider result briefly; an explicit
 # connect/verify bypasses the cache for a fresh probe.
 _LOCAL_DETECT_CACHE_TTL_SECONDS = 45
@@ -242,7 +242,7 @@ class ProfileManager:
         # -> (monotonic_stamp, ServiceConnection). See _LOCAL_DETECT_CACHE_TTL_SECONDS.
         self._local_detect_cache: dict[str, tuple[float, ServiceConnection]] = {}
 
-    # ── public summary / preferences ───────────────────────────────────
+    # â”€â”€ public summary / preferences â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def summary(self, *, refresh_remote: bool = True) -> ProfileSummary:
         current_host = self.ensure_current_host()
@@ -343,7 +343,7 @@ class ProfileManager:
         self._sync_to_remote(best_effort=True)
         return self.preferences()
 
-    # ── auth lifecycle ─────────────────────────────────────────────────
+    # â”€â”€ auth lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def sign_up_password(
         self,
@@ -439,7 +439,7 @@ class ProfileManager:
             )
         return self.summary(refresh_remote=False)
 
-    # ── catalog state ──────────────────────────────────────────────────
+    # â”€â”€ catalog state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def catalog_state(self) -> CatalogPreferenceState:
         current_host = self.ensure_current_host()
@@ -604,7 +604,7 @@ class ProfileManager:
     def record_tool_uninstall(self, *, tool_id: str) -> None:
         self.record_catalog_uninstall(kind="tool", item_id=tool_id)
 
-    # ── services / hosts ───────────────────────────────────────────────
+    # â”€â”€ services / hosts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def select_account_mcp_device(self, device_id: str) -> dict[str, Any]:
         if not device_id or len(device_id) > 128:
@@ -831,7 +831,7 @@ class ProfileManager:
             updated_at=refreshed["updated_at"],
         )
 
-    # ── remote sync ─────────────────────────────────────────────────────
+    # â”€â”€ remote sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _refresh_from_remote(self, *, best_effort: bool) -> None:
         row = self._state_row()
@@ -1071,7 +1071,7 @@ class ProfileManager:
                     ),
                 )
 
-    # ── account transport helpers ──────────────────────────────────────
+    # â”€â”€ account transport helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _ensure_access_token(self) -> str:
         row = self._state_row()
@@ -1186,7 +1186,7 @@ class ProfileManager:
                 return self._cached_auth_providers
             raise
 
-    # ── internal helpers ───────────────────────────────────────────────
+    # â”€â”€ internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _state_row(self):
         row = self._storage.conn.execute("SELECT * FROM profile_state WHERE id = 1").fetchone()
@@ -1331,6 +1331,28 @@ class ProfileManager:
             details["message"] = "Local sign-in cache was found, but the CLI is not on PATH here."
         else:
             details["message"] = "No local sign-in cache or CLI was detected on this host."
+
+        if provider == "claude-code":
+            # The existence of ~/.claude is not proof of a valid OAuth session.
+            status = ServiceConnectionStatus.NEEDS_ATTENTION if binary_path else ServiceConnectionStatus.DISCONNECTED
+            details["auth_verified"] = False
+            if binary_path:
+                try:
+                    auth_result = subprocess.run(
+                        [binary_path, "auth", "status"], capture_output=True, text=True,
+                        timeout=12, check=False, creationflags=headless_creationflags(),
+                    )
+                    # Never persist raw CLI output, which may contain account metadata.
+                    details["auth_verified"] = auth_result.returncode == 0
+                    status = (ServiceConnectionStatus.READY if auth_result.returncode == 0
+                              else ServiceConnectionStatus.NEEDS_ATTENTION)
+                    details["message"] = ("Claude Code authentication verified on this desktop."
+                                          if auth_result.returncode == 0
+                                          else "Claude Code is installed but needs sign-in. Choose Connect Claude.")
+                except (subprocess.TimeoutExpired, OSError):
+                    details["message"] = "Could not verify Claude Code sign-in. Retry or reconnect."
+            else:
+                details["message"] = "Claude Code CLI is not installed on this desktop."
 
         if provider == "github-copilot":
             gh_path = resolve_command("gh")

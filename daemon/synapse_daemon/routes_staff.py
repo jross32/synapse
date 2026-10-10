@@ -19,6 +19,7 @@ from .errors import invalid
 from .models import AuditSource
 from .storage import Storage
 from .staff import StaffMemberCreate, StaffMemberUpdate
+from .staff_hq_proactivity import set_staff_trigger_enabled
 from .staff_operations import (
     StaffKpiCreate,
     StaffKpiUpdate,
@@ -41,6 +42,10 @@ class RouteStaffRequest(BaseModel):
     project_id: str | None = None
     create_assignment: bool = False
     instructions_md: str = ""
+
+
+class StaffTriggerEnabledRequest(BaseModel):
+    enabled: bool
 
 
 class StaffChatRequest(BaseModel):
@@ -467,6 +472,23 @@ def build_staff_router(storage: Storage) -> APIRouter:
                 metadata={"trigger_id": trigger.id},
             )
         return trigger.model_dump(mode="json")
+
+    @router.patch("/{staff_id}/triggers/{trigger_id}", response_model=None)
+    async def patch_staff_trigger(
+        staff_id: str, trigger_id: str, payload: StaffTriggerEnabledRequest
+    ) -> dict[str, Any]:
+        with storage.transaction() as conn:
+            result = set_staff_trigger_enabled(
+                conn, staff_id, trigger_id, payload.enabled
+            )
+            staff_ops.record_event(
+                conn, staff_id, event_type="trigger_toggled",
+                title=("Enabled" if payload.enabled else "Paused") + " review reminder: " + result["name"],
+                body_md="Reminder-only; no AI runtime or external action launched.",
+                source="staff-api",
+                metadata={"trigger_id": trigger_id, "enabled": payload.enabled},
+            )
+        return result
 
     @router.get("/{staff_id}", response_model=None)
     async def get_staff(staff_id: str) -> dict[str, Any]:

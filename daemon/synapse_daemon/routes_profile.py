@@ -32,6 +32,11 @@ class AccountMcpDeviceSelection(BaseModel):
 class DeviceAccessUpdate(BaseModel):
     remote_write_enabled: bool
 
+class McpPreferenceRequest(BaseModel):
+    enabled: bool = True
+
+
+
 class FavoriteRequest(BaseModel):
     favorite: bool | None = None
 
@@ -271,7 +276,7 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/service-connections/{provider}/connect", response_model=None, dependencies=[guard])
     async def connect_service(provider: str, request: Request) -> dict:
-        connection = manager.connect_service(provider=provider)
+        connection = await asyncio.to_thread(manager.connect_service, provider=provider)
         payload = connection.model_dump(mode="json")
         await _publish_service_updated(request, payload, "connected")
         await _publish_profile_updated(request, manager, "service-connected")
@@ -279,7 +284,7 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/service-connections/{provider}/verify", response_model=None, dependencies=[guard])
     async def verify_service(provider: str, request: Request) -> dict:
-        connection = manager.verify_service(provider=provider)
+        connection = await asyncio.to_thread(manager.verify_service, provider=provider)
         payload = connection.model_dump(mode="json")
         await _publish_service_updated(request, payload, "verified")
         await _publish_profile_updated(request, manager, "service-verified")
@@ -290,6 +295,46 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
         manager.delete_service_connection(connection_id)
         await _publish_service_updated(request, {"id": connection_id}, "deleted")
         await _publish_profile_updated(request, manager, "service-deleted")
+
+    def mcp_connections() -> dict:
+        from . import boot_config
+        from .machine_fleet import ensure_machine_id
+        from .mcp_device_registry import get_device_preference, device_token
+        machine_id = ensure_machine_id(storage.data_dir)
+        enabled = get_device_preference(storage.data_dir, manager.summary(refresh_remote=False).user_id, machine_id)
+        port = 7878
+        token = auth.local_token or ""
+        config = boot_config.load(storage.data_dir)
+        hostname = config.public_hostname
+        path = f"/mcp/{token}"
+        account = manager.summary(refresh_remote=False)
+        per_device_token = device_token(storage.data_dir, account.user_id, machine_id) if account.user_id and enabled else None
+        return {
+            "primary": {
+                "configured": bool(token) and account.signed_in,
+                "local_url": f"http://127.0.0.1:{port}{path}" if account.signed_in and token else None,
+                "remote_url": f"https://{hostname}{path}" if account.signed_in and hostname and token else None,
+            },
+            "device": {
+                "id": machine_id,
+                "enabled": enabled,
+                "endpoint": f"http://127.0.0.1:{port}/mcp/device/{machine_id}/{per_device_token}" if enabled and per_device_token else None,
+            },
+        }
+
+    @router.get("/mcp-connections", response_model=None, dependencies=[guard])
+    async def get_mcp_connections() -> dict:
+        return mcp_connections()
+
+    @router.patch("/mcp-connections", response_model=None, dependencies=[guard])
+    async def update_mcp_connections(payload: McpPreferenceRequest) -> dict:
+        from .machine_fleet import ensure_machine_id
+        from .mcp_device_registry import set_device_preference
+        account = manager.summary(refresh_remote=False)
+        if not account.signed_in or not account.user_id:
+            raise invalid("profile", "Sign in before changing MCP provisioning.")
+        set_device_preference(storage.data_dir, account.user_id, ensure_machine_id(storage.data_dir), payload.enabled)
+        return mcp_connections()
 
     @router.get("/hosts", response_model=None, dependencies=[guard])
     async def list_hosts() -> dict:

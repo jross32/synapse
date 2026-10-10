@@ -229,6 +229,7 @@ export interface StaffBriefing {
   }>;
   attention: Array<{
     staff_id: string;
+    event_id?: string;
     severity: string;
     title: string;
     detail: string;
@@ -261,6 +262,15 @@ export function listStaff(): Promise<StaffListResponse> {
 
 export function getStaff(id: string): Promise<StaffProfile> {
   return apiFetch<StaffProfile>(`/staff/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export function setStaffTriggerEnabled(
+  staffId: string, triggerId: string, enabled: boolean
+): Promise<StaffTrigger> {
+  return apiFetch<StaffTrigger>(
+    `/staff/${encodeURIComponent(staffId)}/triggers/${encodeURIComponent(triggerId)}`,
+    { method: 'PATCH', body: { enabled } }
+  );
 }
 
 export function getStaffDashboard(id: string): Promise<StaffDashboard> {

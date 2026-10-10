@@ -27,10 +27,14 @@ import type {
   HostPresence,
   ServiceConnection,
 } from '@shared/generated-types';
+import type { McpConnections } from '@shared/profile-client';
 import {
   connectService,
+  startClaudeLogin,
   deleteServiceConnection,
   getCatalogState,
+  getMcpConnections,
+  setMcpPreference,
   getProfile,
   getProfileHosts,
   getDeviceAccessPolicies,
@@ -100,6 +104,8 @@ export function ProfileHub({
   const [notice, setNotice] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [syncEnabled, setSyncEnabled] = useState(true);
+  const [createMcp, setCreateMcp] = useState(true);
+  const [mcpConnections, setMcpConnections] = useState<McpConnections | null>(null);
   const [signinForm, setSigninForm] = useState<SignInFormState>({
     login: '',
     password: '',
@@ -168,13 +174,16 @@ export function ProfileHub({
         setHosts([]);
         setDevicePolicies([]);
         setMcpLink(null);
+        setMcpConnections(null);
+
         return;
       }
 
-      const [catalogRes, servicesRes, hostsRes] = await Promise.allSettled([
+      const [catalogRes, servicesRes, hostsRes, mcpRes] = await Promise.allSettled([
         getCatalogState(),
         getServiceConnections(),
         getProfileHosts(),
+        getMcpConnections(),
       ]);
 
       if (catalogRes.status === 'fulfilled') setCatalogState(catalogRes.value);
@@ -183,6 +192,8 @@ export function ProfileHub({
       if (servicesRes.status === 'fulfilled') setServices(servicesRes.value);
       else issues.push((servicesRes.reason as Error).message);
 
+      if (mcpRes.status === 'fulfilled') setMcpConnections(mcpRes.value);
+      else issues.push((mcpRes.reason as Error).message);
       try { setMcpLink(await getAccountMcpLink()); }
       catch (cause) { issues.push((cause as Error).message); }
       if (hostsRes.status === 'fulfilled') {
@@ -245,8 +256,12 @@ export function ProfileHub({
         password: signupForm.password,
         display_name: signupForm.displayName.trim() || null,
       });
+      let mcpNote = '';
+      try { await setMcpPreference(createMcp); } catch (_error) {
+        mcpNote = ' MCP preference could not be saved; check MCP Connections.';
+      }
       await loadHubData();
-      setNotice(res.notice ?? 'Synapse account created and connected.');
+      setNotice((res.notice ?? 'Synapse account created and connected.') + mcpNote);
       setSignupForm((prev) => ({
         ...prev,
         password: '',
@@ -440,7 +455,7 @@ export function ProfileHub({
                   {profile.linked_identities.map((identity) => (
                     <Pill
                       key={`${identity.provider}:${identity.identity_id ?? identity.email ?? 'linked'}`}
-                      label={`${identity.provider}${identity.email ? ` · ${identity.email}` : ''}`}
+                      label={`${identity.provider}${identity.email ? ` Â· ${identity.email}` : ''}`}
                     />
                   ))}
                 </div>
@@ -613,6 +628,30 @@ export function ProfileHub({
                 </>
               ) : <p className='text-sm text-muted-foreground'>Account MCP connection unavailable. Refresh when your account service is reachable.</p>}
             </Card>
+
+            <Card className='space-y-4 p-5'>
+              <div>
+                <h3 className='text-lg font-semibold'>MCP connections</h3>
+                <p className='mt-1 text-sm text-muted-foreground'>
+                  The primary Synapse MCP connects AI assistants to your workspace. Each signed-in desktop has a separate device identity.
+                </p>
+                <p className='mt-2 text-xs text-muted-foreground'>
+                  Each machine has its own stable identity. Remote routing requires a configured and reachable endpoint.
+                </p>
+                {mcpConnections && (
+                  <div className='mt-3 space-y-2 text-xs'>
+                    <p>Primary MCP: {mcpConnections.primary?.configured ? 'Configured' : 'Not configured'}</p>
+                    <p>Current desktop: {mcpConnections.device?.enabled ? 'MCP enabled (full tools)' : 'MCP disabled'}</p>
+                    {profile?.signed_in && <label className='flex items-center gap-2'><input type='checkbox' checked={!!mcpConnections.device?.enabled} onChange={(e) => void runAction('mcp', async () => { await setMcpPreference(e.target.checked); await loadHubData(); })} /> Enable MCP for this desktop</label>}
+                    <p>Remote access: {mcpConnections.primary?.remote_url ? 'URL configured' : 'Not configured'}</p>
+                    {mcpConnections.primary?.local_url && <Button variant='outline' onClick={() => void navigator.clipboard.writeText(mcpConnections.primary.local_url!)}>Copy primary local MCP URL</Button>}
+                    {mcpConnections.device?.endpoint && <Button variant='outline' onClick={() => void navigator.clipboard.writeText(mcpConnections.device.endpoint!)}>Copy this desktop MCP URL</Button>}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+
             <Card className='space-y-4 p-5'>
               <div>
                 <h3 className='text-lg font-semibold'>Hosts & installs</h3>
@@ -667,7 +706,7 @@ export function ProfileHub({
               <div className='space-y-2 text-sm'>
                 <MetaRow
                   label='Status'
-                  value={accountBackendReachable ? profile.sync_status : 'Offline — local-first'}
+                  value={accountBackendReachable ? profile.sync_status : 'Offline â€” local-first'}
                 />
                 <MetaRow label='Backend' value={profile.sync_backend} />
                 <MetaRow label='Signed in' value='Yes' />
@@ -886,6 +925,7 @@ export function ProfileHub({
                       />
                     </label>
                   </div>
+                  <label className='flex items-start gap-2 text-sm'><input type='checkbox' checked={createMcp} onChange={(e) => setCreateMcp(e.target.checked)} /> Enable full Synapse MCP access for this desktop (recommended)</label>
                   <Button
                     className='w-full rounded-2xl'
                     onClick={() => void signUp()}
@@ -968,6 +1008,13 @@ export function ProfileHub({
                 await refreshProfile();
               });
             }
+          }}
+          onClaudeLogin={async () => {
+            await runAction('service:claude-code', async () => {
+              const result = await startClaudeLogin();
+              setNotice(result.message);
+              // Do not mark connected yet: only a successful auth status check can do that.
+            });
           }}
           onDisconnect={forgetService}
         />

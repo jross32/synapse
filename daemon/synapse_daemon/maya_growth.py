@@ -221,5 +221,7 @@ def maya_prompt_context(conn: sqlite3.Connection) -> str:
         "Customer count, revenue, acquisition cost, conversion rate and ROI: UNKNOWN.",
         "Do not spend, send outbound messages, publish, or delete without the required owner approval.",
         "If data is missing, suggest the shortest bounded collection step and a measurable pass/fail criterion.",
+        "For growth decisions, propose ONE reversible internal experiment: a falsifiable hypothesis, actual funnel steps, a primary metric with numerator/denominator, required dated evidence, stop conditions and explicit approval boundaries.",
+        "Draft experiments are NOT launched; missing baselines, user counts, revenue and conversion results remain UNKNOWN. Verify health freshness before treating a launched project as test-ready.",
     ])
     return "\n".join(lines) + "\n"
