@@ -111,7 +111,8 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Silent installation exited $($p.ExitCode)" }
           if (-not (Test-Path (Join-Path $dest "Synapse.exe"))) { throw "Installed Synapse.exe missing" }
           if (-not (Test-Path (Join-Path $dest "resources/daemon/synapse-daemon.exe"))) { throw "Installed daemon missing" }
-          Write-Host "PASS: NSIS installed Electron and frozen daemon to a fresh Windows folder"          $diagnostic = Join-Path $dest "resources/repair/synapse-repair-check.ps1"
+          Write-Host "PASS: NSIS installed Electron and frozen daemon to a fresh Windows folder"
+          $diagnostic = Join-Path $dest "resources/repair/synapse-repair-check.ps1"
           if (-not (Test-Path $diagnostic)) { throw "Installer repair diagnostics missing" }
           $dataRoot = Join-Path $env:APPDATA "Synapse"
           New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
