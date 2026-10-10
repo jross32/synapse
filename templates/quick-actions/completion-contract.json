@@ -1,0 +1,22 @@
+{
+  "id": "completion-contract",
+  "name": "Completion Contract",
+  "description": "Run an acceptance-driven autonomous development pass; repair errors, verify every relevant screen and interaction, checkpoint and hand off until independently verified.",
+  "icon": "check-check",
+  "category": "workflows",
+  "tags": [
+    "completion",
+    "autonomous",
+    "end-to-end",
+    "quality",
+    "qa",
+    "checkpoint"
+  ],
+  "launch_mode": "coder-thread",
+  "thread_title": "Completion Contract",
+  "prompt_filename": "COMPLETION-CONTRACT.md",
+  "prompt": "Use installed Synapse skill completion-contract as the default discipline for this development task, together with autonomous-dev-loop and existing Quality OS / browser-ui-audit / Repair Arena. Load full SKILL.md and project AI context; check concurrent writers and existing checkpoints before any edits. Define and execute a verifiable acceptance checklist, continue bounded work batches with durable checkpoints and recovery, test real desktop/mobile interactions and the backend, protect user data and unrelated work, and do not claim verified_complete until all required evidence and quality gates pass. Escalate only truly necessary user authorization, secrets, payment or potentially destructive actions; do not bypass authentication. At each model/tool boundary save exact next step for daemon supervisor to resume. Report test evidence and residual limitations faithfully.",
+  "default_argv": [
+    "chatgpt"
+  ]
+}

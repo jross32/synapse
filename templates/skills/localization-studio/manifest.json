@@ -1,0 +1,15 @@
+{
+  "id": "localization-studio",
+  "name": "Synapse Localization Studio",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Evidence-first multilingual app localization with standards-aware locale packs, es-MX first, optional personal-language overlays, benchmarking, and UI QA.",
+  "entrypoint": "SKILL.md",
+  "tags": ["localization", "translation", "i18n", "es-MX", "multilingual", "language-packs", "benchmarking"],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": ["browser", "playwright", "web"],
+  "optional_capabilities": ["ui-forge"],
+  "benchmark_spec": "references/benchmark-spec.json",
+  "baseline": null
+}

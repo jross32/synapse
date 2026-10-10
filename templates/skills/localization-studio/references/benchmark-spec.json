@@ -1,0 +1,21 @@
+{
+  "id": "localization-studio-v1",
+  "name": "Localization Studio Translation Quality",
+  "description": "Comparable translation/localization benchmark for the Synapse Localization Studio, beginning with en-US and es-MX.",
+  "primary_surface": "synapse_coder_thread",
+  "default_repeat_count": 3,
+  "official_weight_quality": 80.0,
+  "official_weight_efficiency": 10.0,
+  "official_weight_speed": 10.0,
+  "strict_comparable_policy": "matching-provenance",
+  "metadata": {
+    "primary_pair": ["en-US", "es-MX"],
+    "competitors": ["Synapse Localization Studio", "Google Translate", "DeepL", "Microsoft Translator"],
+    "slices": ["everyday", "ui", "emotional", "slang", "misspellings", "long-context", "ambiguous", "business", "resale", "numbers-dates-currency", "code-switching"],
+    "quality_metrics": ["semantic_fidelity", "critical_info", "naturalness", "context", "tone_register", "locale_fit", "idiom_slang", "terminology", "consistency", "omission_control", "addition_control"],
+    "operational_metrics": ["latency_p50_ms", "latency_p95_ms", "cache_hit_rate", "cost_per_1k_chars", "ui_coverage", "source_language_leakage", "user_correction_rate", "confidence_calibration"],
+    "rules": ["blind outputs before preference scoring", "retain failures", "no fabricated competitor scores", "report sample size", "separate personal-profile lift from base locale quality"]
+  },
+  "scenarios": []
+}
+

@@ -1,0 +1,4 @@
+interface:
+  display_name: "WhatIf Game Dev Studio"
+  short_description: "Build and test real games with engine, Blender, asset, and live-progress workflows."
+  default_prompt: "Use the WhatIf Game Dev Studio skill. Inspect the project first, preserve concurrent work, emit truthful live events, create or acquire licensed assets with provenance, and verify changes with real builds/playtests before claiming completion."

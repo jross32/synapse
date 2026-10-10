@@ -1,0 +1,67 @@
+/* Connected Brain visual language — original vector art, no external media required. */
+.synapse-brain-hero {
+  --synapse-hero-pink: #c04ffb;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(270px, .82fr);
+  min-height: 290px;
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-lg);
+  background:
+    radial-gradient(ellipse at 84% 42%, color-mix(in srgb, var(--synapse-accent) 18%, transparent), transparent 41%),
+    radial-gradient(ellipse at 8% 110%, color-mix(in srgb, var(--synapse-accent-glow) 11%, transparent), transparent 51%),
+    linear-gradient(126deg, var(--synapse-bg-nucleus), var(--synapse-bg-surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--synapse-accent-glow) 12%, transparent), 0 16px 55px rgba(0, 0, 0, .13);
+}
+.synapse-brain-hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--synapse-accent-glow) 7%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb, var(--synapse-accent-glow) 7%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: .32;
+  mask-image: linear-gradient(90deg, transparent 15%, #000);
+}
+.synapse-brain-hero__content { position: relative; z-index: 1; padding: clamp(24px, 3.2vw, 44px); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.synapse-brain-hero__eyebrow { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--synapse-border-strong); border-radius: var(--synapse-radius-pill); color: var(--synapse-accent-glow); background: color-mix(in srgb, var(--synapse-accent) 9%, transparent); font-size: 10px; font-weight: 750; letter-spacing: .18em; padding: 6px 11px; }
+.synapse-brain-hero__title { max-width: 600px; margin: 17px 0 9px; font-size: clamp(27px, 3.4vw, 44px); font-weight: 800; letter-spacing: -.045em; line-height: 1.1; color: var(--synapse-text-primary); }
+.synapse-brain-hero__title span { background: linear-gradient(108deg, var(--synapse-accent-glow), var(--synapse-accent) 58%, var(--synapse-hero-pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.synapse-brain-hero__summary { max-width: 495px; color: var(--synapse-text-secondary); font-size: 13px; line-height: 1.7; }
+.synapse-brain-hero__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.synapse-brain-hero__actions button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border-radius: 9px; font-size: 12px; font-weight: 700; transition: transform var(--synapse-duration-base) var(--synapse-ease-smooth), box-shadow var(--synapse-duration-base); }
+.synapse-brain-hero__actions button:hover { transform: translateY(-2px); }
+.synapse-brain-hero__primary { color: #fff; background: linear-gradient(120deg, var(--synapse-accent), #5b44f4 60%, var(--synapse-hero-pink)); box-shadow: 0 5px 22px color-mix(in srgb, var(--synapse-accent) 28%, transparent); }
+.synapse-brain-hero__secondary { color: var(--synapse-text-primary); background: color-mix(in srgb, var(--synapse-bg-elevated) 67%, transparent); border: 1px solid var(--synapse-border-strong); }
+.synapse-brain-hero__quicklinks { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 25px; }
+.synapse-brain-hero__quicklinks button { display: inline-flex; align-items: center; gap: 7px; color: var(--synapse-text-secondary); font-size: 11px; transition: color var(--synapse-duration-base); }
+.synapse-brain-hero__quicklinks button:hover, .synapse-brain-hero__quicklinks button:focus-visible { color: var(--synapse-accent-glow); }
+.synapse-brain-hero__quicklinks svg { color: var(--synapse-accent-glow); }
+.synapse-brain-hero button:focus-visible { outline: 2px solid var(--synapse-accent-glow); outline-offset: 3px; }
+.synapse-brain-hero__art { position: relative; display: flex; justify-content: center; align-items: center; min-width: 0; padding: 4px 18px 36px; }
+.synapse-brain-hero__art-halo { position: absolute; width: 72%; aspect-ratio: 1; background: radial-gradient(circle, color-mix(in srgb, var(--synapse-accent-glow) 16%, transparent), color-mix(in srgb, var(--synapse-accent) 15%, transparent) 41%, transparent 72%); filter: blur(18px); pointer-events: none; }
+.synapse-brain-hero__neural-svg { width: min(100%, 340px); max-height: 292px; overflow: visible; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--synapse-accent) 65%, transparent)); animation: synapse-neural-hover 7s ease-in-out infinite; }
+.synapse-brain-hero__art-caption { position: absolute; bottom: 21px; right: 31px; text-align: right; letter-spacing: .21em; color: var(--synapse-accent-glow); font-size: 9px; font-weight: 700; }
+.synapse-brain-hero__metric { position: absolute; top: 18px; right: 21px; color: var(--synapse-text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.synapse-brain-hero__metric strong { color: var(--synapse-text-primary); font-weight: 700; }
+.synapse-brain-hero__metric span { padding: 0 5px; color: var(--synapse-text-muted); }
+@keyframes synapse-neural-hover { 0%, 100% { transform: translateY(1px) scale(.99); } 50% { transform: translateY(-5px) scale(1.018); } }
+@media (max-width: 860px) {
+  .synapse-brain-hero { grid-template-columns: minmax(0, 1fr) 220px; }
+  .synapse-brain-hero__art-caption { right: 12px; font-size: 8px; }
+}
+@media (max-width: 600px) {
+  .synapse-brain-hero { grid-template-columns: 1fr; }
+  .synapse-brain-hero__content { padding: 24px 22px 0; }
+  .synapse-brain-hero__art { min-height: 160px; padding: 0 18px 20px; }
+  .synapse-brain-hero__neural-svg { height: 175px; }
+  .synapse-brain-hero__art-caption { bottom: 12px; right: 20px; }
+  .synapse-brain-hero__metric { top: 16px; right: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .synapse-brain-hero__neural-svg { animation: none; }
+  .synapse-brain-hero__actions button { transition: none; }
+  .synapse-brain-hero__actions button:hover { transform: none; }
+}
