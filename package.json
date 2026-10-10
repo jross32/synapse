@@ -118,6 +118,9 @@
       "icon": "electron/icons/synapse.ico"
     },
     "nsis": {
+        "installerSidebar": "installer/assets/installer-sidebar.bmp",
+        "uninstallerSidebar": "installer/assets/installer-sidebar.bmp",
+        "installerHeader": "installer/assets/installer-header.bmp",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

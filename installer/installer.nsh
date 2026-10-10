@@ -1,6 +1,51 @@
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 
+; Before setup tries to replace Electron files, allow graceful cleanup of a
+; desktop process that remained hidden after its window closed. The helper
+; checks the *exact executable path*, never the developer daemon or other apps.
+!macro customInit
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\synapse-close-desktop.ps1 "installer/synapse-close-desktop.ps1"
+  StrCpy $R8 "$INSTDIR"
+  IfFileExists "$R8\Synapse.exe" synapse_desktop_check
+    StrCpy $R8 "$LOCALAPPDATA\Programs\synapse"
+  synapse_desktop_check:
+  nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\synapse-close-desktop.ps1" -Action Check -InstallDir "$R8"'
+  Pop $R7
+  Pop $R6
+  ${If} $R7 == 10
+    Sleep 1500
+    nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\synapse-close-desktop.ps1" -Action Check -InstallDir "$R8"'
+    Pop $R7
+    Pop $R6
+    ${If} $R7 == 10
+      IfSilent synapse_desktop_close_done
+      MessageBox MB_YESNO|MB_ICONQUESTION "Synapse is still running in the background. Allow Setup to close the Synapse desktop app (not development workers), then continue the update?" IDNO synapse_desktop_close_done
+      nsExec::ExecToStack 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\synapse-close-desktop.ps1" -Action Close -InstallDir "$R8"'
+      Pop $R7
+      Pop $R6
+      ${If} $R7 == 0
+        Sleep 1500
+      ${Else}
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Synapse could not close automatically. Save your work, close Synapse in Task Manager, then choose Retry if prompted."
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  synapse_desktop_close_done:
+  StrCpy $RepairMode 0
+  ; Silent reinstallation preserves the user's existing optional bundle choices.
+  IfSilent 0 +4
+    IfFileExists "$INSTDIR\Synapse.exe" 0 +2
+      StrCpy $RepairMode 1
+    IfFileExists "$INSTDIR\resources\app\package.json" 0 +2
+      StrCpy $RepairMode 1
+  StrCpy $BundleResearchState 1
+  StrCpy $BundleFactoryState 1
+  StrCpy $BundleRescueState 1
+  StrCpy $BundleHarvestState 0
+  StrCpy $BundleImageStudioState 1
+!macroend
 Var ExistingInstallDialog
 Var ExistingInstallLabel
 Var ExistingInstallChoice
@@ -38,12 +83,15 @@ Function SynapseExistingInstallPageCreate
   ${If} $ExistingInstallDialog == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 48u "Existing Synapse installation: $ExistingInstallPath. Repair or update missing files while preserving local projects and account data."
+  ${NSD_CreateLabel} 0 0 100% 28u "SYNAPSE  /  REPAIR & UPDATE"
   Pop $ExistingInstallLabel
-  ${NSD_CreateCheckbox} 0 58u 100% 22u "Repair / update existing Synapse installation (recommended)"
+  SetCtlColors $ExistingInstallLabel 8A42CF transparent
+  ${NSD_CreateLabel} 0 30u 100% 32u "Existing workspace detected. Refresh application components without deleting accounts or project data."
+  Pop $ExistingInstallLabel
+  ${NSD_CreateCheckbox} 0 66u 100% 23u "Repair + update Synapse (recommended)"
   Pop $ExistingInstallChoice
   ${NSD_Check} $ExistingInstallChoice
-  ${NSD_CreateLabel} 0 88u 100% 38u "If you uncheck repair, Setup will continue as a regular installation. Existing Synapse app files are still replaced."
+  ${NSD_CreateLabel} 0 94u 100% 38u "Installed at: $ExistingInstallPath. Unchecking performs a standard install; your personal data is preserved either way."
   Pop $0
   nsDialogs::Show
 FunctionEnd
@@ -128,20 +176,7 @@ Function SynapseBundlesPageLeave
   ${NSD_GetState} $BundleImageStudioHandle $BundleImageStudioState
 FunctionEnd
 
-!macro customInit
-  StrCpy $RepairMode 0
-  ; Silent reinstallation preserves the user's existing optional bundle choices.
-  IfSilent 0 +4
-    IfFileExists "$INSTDIR\Synapse.exe" 0 +2
-      StrCpy $RepairMode 1
-    IfFileExists "$INSTDIR\resources\app\package.json" 0 +2
-      StrCpy $RepairMode 1
-  StrCpy $BundleResearchState 1
-  StrCpy $BundleFactoryState 1
-  StrCpy $BundleRescueState 1
-  StrCpy $BundleHarvestState 0
-  StrCpy $BundleImageStudioState 1
-!macroend
+
 
 !macro customInstall
   ${If} $RepairMode == 1
