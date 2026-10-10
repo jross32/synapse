@@ -108,7 +108,6 @@ FunctionEnd
 ; Branded journey pages follow the approved Synapse installer storyboard.
 ; The NSIS wizard keeps system-native installation semantics and silent mode.
 Var SynapseCheckDialog
-Var SynapseCheckText
 Var SynapseReleaseDialog
 
 Page custom SynapseReadinessPage
