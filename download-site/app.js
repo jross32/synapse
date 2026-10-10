@@ -25,3 +25,69 @@ async function updateLatestRelease(){
   }
 }
 void updateLatestRelease();
+
+// Rotating hero copy: 30-second readable holds, then a rapid erase-and-type transition.
+// The original headline stays in HTML for search engines, no-JS browsers, and reduced motion.
+const heroLede = document.querySelector('.hero .lede');
+if (heroLede && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const heroMessages = [
+    heroLede.textContent.trim(),
+    'One command center for your AI assistants, projects, favorite tools, and connected computers.',
+    'Give your AI staff clear roles. Keep their goals, assignments, and progress in view.',
+    'Turn big ideas into real builds with coding agents, shared tools, and an organized workspace.',
+    'See what your AI workers are doing, what needs attention, and what comes next.',
+    'Keep your projects, decisions, and development history connected instead of scattered across tabs.',
+    'Bring ChatGPT, Claude, Codex, and other AI workflows closer to the tools you already use.',
+    'Build, test, improve, and repeat—without losing track of the work already in motion.',
+    'From your desktop to your next device, keep your connected workspace ready to grow.',
+    'Create with AI. Coordinate your team. Stay in control of the projects that matter most.'
+  ];
+  // Time spent in a hidden tab does not count toward the 30-second display period.
+  function visibleDelay(milliseconds) {
+    return new Promise(resolve => {
+      let remaining = milliseconds;
+      let timer;
+      let startedAt = 0;
+      function finish() {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        resolve();
+      }
+      function resume() {
+        if (document.hidden) return;
+        startedAt = performance.now();
+        timer = window.setTimeout(finish, remaining);
+      }
+      function onVisibilityChange() {
+        window.clearTimeout(timer);
+        if (document.hidden) {
+          remaining = Math.max(0, remaining - (performance.now() - startedAt));
+        } else {
+          resume();
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      resume();
+    });
+  }
+  async function cycleHeroMessages() {
+    let current = 0;
+    while (heroLede.isConnected) {
+      await visibleDelay(30000);
+      const next = (current + 1) % heroMessages.length;
+      heroLede.classList.add('is-typing');
+      const outgoing = heroMessages[current];
+      for (let length = outgoing.length - 1; length >= 0; length--) {
+        heroLede.textContent = outgoing.slice(0, length);
+        await visibleDelay(7);
+      }
+      const incoming = heroMessages[next];
+      for (let length = 1; length <= incoming.length; length++) {
+        heroLede.textContent = incoming.slice(0, length);
+        await visibleDelay(16);
+      }
+      heroLede.classList.remove('is-typing');
+      current = next;
+    }
+  }
+  void cycleHeroMessages();
+}

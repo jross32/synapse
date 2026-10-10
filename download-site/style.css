@@ -6,3 +6,9 @@
 @media(max-width:900px){.support-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:680px){.support{padding-block:52px}.support-grid{grid-template-columns:1fr;gap:12px}.support-card{padding:21px}.support-card h3{font-size:16px}.support-card p{font-size:13px}.hero-buttons .btn{min-height:48px}.nav a{min-height:48px}.orbit{pointer-events:none}}
 @media(max-width:370px){.wrap{width:calc(100% - 28px)}.site-header{width:calc(100% - 28px)}.support-card{padding:16px}}
+/* Cursor appears only while erasing or typing. The copy remains readable between transitions. */
+.hero .lede{min-height:5.25em}
+.hero .lede.is-typing::after{content:"";display:inline-block;height:1.05em;margin-left:2px;border-right:2px solid #62d6ff;vertical-align:-.15em;animation:hero-caret .55s steps(1,end) infinite}
+@keyframes hero-caret{50%{border-right-color:transparent}}
+@media(max-width:680px){.hero .lede{min-height:8.5em}}
+@media(prefers-reduced-motion:reduce){.hero .lede{min-height:0}.hero .lede.is-typing::after{display:none}}
