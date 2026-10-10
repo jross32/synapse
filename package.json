@@ -1,7 +1,7 @@
 {
   "name": "synapse",
   "productName": "Synapse",
-  "version": "0.1.212",
+  "version": "0.1.213",
   "description": "Synapse \u2014 a modular developer command center. By The WhatIf Company.",
   "author": {
     "name": "The WhatIf Company",
@@ -64,6 +64,7 @@
       "electron/icons/**/*"
     ],
     "extraResources": [
+      { "from": "installer/synapse-repair-check.ps1", "to": "repair/synapse-repair-check.ps1" },
       {
         "from": "installer/daemon-dist",
         "to": "daemon"

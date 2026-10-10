@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.213] -- 2026-10-10
+
+### Added
+- Re-running the Windows installer detects an existing installation and offers an update/repair option; the default preserves the existing installation location, user data, credentials, and previously selected AI bundles.
+- Packaged Windows installer diagnostics assess executable, daemon, Electron UI and package integrity, installed version, available disk space, account cloud HTTPS reachability, DNS, localhost MCP daemon port conflicts and version mismatches, account endpoint overrides, and user application folders.
+- Automatic safe repair creates missing application data directories only; setup reinstalls missing or damaged bundled application files. It never deletes project databases, purges credentials, terminates user processes, changes firewall or DNS settings, or silently resets the account.
+- A timestamped JSON repair report is saved to the user's local Synapse repair-reports directory after setup.
+
+### Fixed
+- Account sign-in and sign-up now remain actionable when a stale account-service health probe says offline, and report the real remote request error rather than disabling the login form.
+- Daemon account credential requests run off the event loop, preventing stalled sign-ins from blocking other desktop requests.
 ## [0.1.212] -- 2026-10-09
 
 ### Added

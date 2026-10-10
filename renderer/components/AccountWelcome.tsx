@@ -30,7 +30,7 @@ export function AccountWelcome(): JSX.Element {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    if (!reachable || busy) return;
+    if (busy) return;
     if (mode === 'signup' && (password !== confirm || password.length < 8)) {
       setError('Use at least 8 characters and make sure both passwords match.');
       return;
@@ -109,8 +109,8 @@ export function AccountWelcome(): JSX.Element {
             <label className="block text-sm">Password <input className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} minLength={8} value={password} onChange={e => setPassword(e.target.value)} required /></label>
             {mode === 'signup' && <label className="block text-sm">Confirm password <input className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5" type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required /></label>}
             {(error || profileError) && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error || profileError}</p>}
-            {!reachable && <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-foreground"><span>Account service unavailable. Internet access is required for first sign-in.</span><button type="button" onClick={() => void refreshProfile()} className="flex items-center gap-1 underline"><RefreshCw className="h-3 w-3" />Retry</button></div>}
-            <button type="submit" disabled={!reachable || busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}{mode === 'signin' ? 'Sign in to Synapse' : 'Create account'}</button>
+            {!reachable && <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-foreground"><span>Synapse could not verify its account connection. You can still try signing in; any connection error will appear above.</span><button type="button" onClick={() => void refreshProfile()} className="flex items-center gap-1 underline"><RefreshCw className="h-3 w-3" />Retry</button></div>}
+            <button type="submit" disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}{mode === 'signin' ? 'Sign in to Synapse' : 'Create account'}</button>
           </form>
           <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground"><div className="h-px flex-1 bg-border" />or<div className="h-px flex-1 bg-border" /></div>
           <button type="button" disabled={!reachable || !googleAvailable || busy} onClick={() => void signInGoogle()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium disabled:opacity-50"><LockKeyhole className="h-4 w-4" />Continue with Google</button>

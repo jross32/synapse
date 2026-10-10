@@ -1,6 +1,62 @@
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 
+Var ExistingInstallDialog
+Var ExistingInstallLabel
+Var ExistingInstallChoice
+Var ExistingInstallPath
+Var RepairMode
+Var ExistingInstallDetected
+
+; Run before optional bundle page. NSIS keeps all account/project files outside
+; the application folder; never remove $APPDATA or local data on repair.
+Page custom SynapseExistingInstallPageCreate SynapseExistingInstallPageLeave
+
+Function SynapseExistingInstallPageCreate
+  StrCpy $ExistingInstallDetected 0
+  StrCpy $ExistingInstallPath "$INSTDIR"
+  IfFileExists "$INSTDIR\Synapse.exe" 0 +2
+    StrCpy $ExistingInstallDetected 1
+  ${If} $ExistingInstallDetected == 0
+    IfFileExists "$INSTDIR\resources\app\package.json" 0 +2
+      StrCpy $ExistingInstallDetected 1
+  ${EndIf}
+  ${If} $ExistingInstallDetected == 0
+    IfFileExists "$LOCALAPPDATA\Programs\synapse\Synapse.exe" 0 +3
+      StrCpy $ExistingInstallDetected 1
+      StrCpy $ExistingInstallPath "$LOCALAPPDATA\Programs\synapse"
+  ${EndIf}
+  ${If} $ExistingInstallDetected == 0
+    Abort ; fresh install; no repair page needed
+  ${EndIf}
+  ; Silent installs must repair/update existing files without blocking.
+  IfSilent 0 +3
+    StrCpy $RepairMode 1
+    Abort
+  nsDialogs::Create 1018
+  Pop $ExistingInstallDialog
+  ${If} $ExistingInstallDialog == error
+    Abort
+  ${EndIf}
+  ${NSD_CreateLabel} 0 0 100% 48u "Synapse is already installed at:$\\r$\\n$ExistingInstallPath$\\r$\\n$\\r$\\nYou can repair missing files and update Synapse without deleting your projects, account settings, or local data."
+  Pop $ExistingInstallLabel
+  ${NSD_CreateCheckbox} 0 58u 100% 22u "Repair / update existing Synapse installation (recommended)"
+  Pop $ExistingInstallChoice
+  ${NSD_Check} $ExistingInstallChoice
+  ${NSD_CreateLabel} 0 88u 100% 38u "If you uncheck repair, Setup will continue as a regular installation. Existing Synapse app files are still replaced."
+  Pop $0
+  nsDialogs::Show
+FunctionEnd
+
+Function SynapseExistingInstallPageLeave
+  ${If} $ExistingInstallDetected == 1
+    IfSilent +2 0
+      ${NSD_GetState} $ExistingInstallChoice $RepairMode
+    ${If} $RepairMode == 1
+      StrCpy $INSTDIR "$ExistingInstallPath"
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
 Var BundleDialog
 Var BundleResearchHandle
 Var BundleFactoryHandle
@@ -78,6 +134,9 @@ FunctionEnd
 !macroend
 
 !macro customInstall
+  ${If} $RepairMode == 1
+    Goto synapse_bundle_config_done
+  ${EndIf}
   CreateDirectory "$APPDATA\Synapse"
   FileOpen $0 "$APPDATA\Synapse\bootstrap-ai-bundles.json" w
   FileWrite $0 "{$\r$\n  $\"bundle_ids$\": ["
@@ -129,4 +188,13 @@ FunctionEnd
     FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [],$\r$\n  $\"uninstall_tool_ids$\": [$\"synapse-image-studio$\"]$\r$\n}$\r$\n"
   ${EndIf}
   FileClose $1
+  synapse_bundle_config_done:
+  ; Post-install diagnostics are non-destructive and write a report for support.
+  IfFileExists "$INSTDIR\resources\repair\synapse-repair-check.ps1" 0 synapse_repair_done
+  ${If} $RepairMode == 1
+    nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\repair\synapse-repair-check.ps1" -InstallDir "$INSTDIR" -Repair'
+  ${Else}
+    nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\repair\synapse-repair-check.ps1" -InstallDir "$INSTDIR"'
+  ${EndIf}
+  synapse_repair_done:
 !macroend

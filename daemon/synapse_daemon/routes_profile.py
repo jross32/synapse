@@ -180,7 +180,7 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/signup", response_model=None, dependencies=[guard])
     async def sign_up(payload: ProfileSignUpRequest, request: Request) -> dict:
-        summary, notice = manager.sign_up_password(
+        summary, notice = await asyncio.to_thread(manager.sign_up_password,
             username=payload.username,
             email=payload.email,
             password=payload.password,
@@ -191,7 +191,7 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/signin", response_model=None, dependencies=[guard])
     async def sign_in(payload: ProfileSignInRequest, request: Request) -> dict:
-        summary = manager.sign_in_password(login=payload.login, password=payload.password)
+        summary = await asyncio.to_thread(manager.sign_in_password, login=payload.login, password=payload.password)
         await _publish_profile_updated(request, manager, "signed-in")
         return summary.model_dump(mode="json")
 
