@@ -38,7 +38,7 @@ Function SynapseExistingInstallPageCreate
   ${If} $ExistingInstallDialog == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 48u "Synapse is already installed at:$\\r$\\n$ExistingInstallPath$\\r$\\n$\\r$\\nYou can repair missing files and update Synapse without deleting your projects, account settings, or local data."
+  ${NSD_CreateLabel} 0 0 100% 48u "Existing Synapse installation: $ExistingInstallPath. Repair or update missing files while preserving local projects and account data."
   Pop $ExistingInstallLabel
   ${NSD_CreateCheckbox} 0 58u 100% 22u "Repair / update existing Synapse installation (recommended)"
   Pop $ExistingInstallChoice
