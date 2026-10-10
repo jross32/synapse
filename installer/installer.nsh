@@ -105,6 +105,66 @@ Function SynapseExistingInstallPageLeave
     ${EndIf}
   ${EndIf}
 FunctionEnd
+; Branded journey pages follow the approved Synapse installer storyboard.
+; The NSIS wizard keeps system-native installation semantics and silent mode.
+Var SynapseCheckDialog
+Var SynapseCheckText
+Var SynapseReleaseDialog
+
+Page custom SynapseReadinessPage
+Page custom SynapseReleasePage
+
+Function SynapseReadinessPage
+  IfSilent 0 +2
+    Abort
+  nsDialogs::Create 1018
+  Pop $SynapseCheckDialog
+  ${If} $SynapseCheckDialog == error
+    Abort
+  ${EndIf}
+  ${NSD_CreateLabel} 0 0 100% 19u "SYNAPSE  /  SYSTEM READINESS"
+  Pop $0
+  SetCtlColors $0 8141D9 transparent
+  ${NSD_CreateLabel} 0 24u 100% 34u "Getting this computer ready for your connected AI workspace. Setup will preserve your project files, settings, and existing credentials."
+  Pop $0
+  ${NSD_CreateLabel} 0 66u 100% 15u "01    Windows desktop available"
+  Pop $0
+  ${NSD_CreateLabel} 0 86u 100% 15u "02    Install or repair application files"
+  Pop $0
+  ${NSD_CreateLabel} 0 106u 100% 15u "03    Account connection checked after installation"
+  Pop $0
+  ${NSD_CreateLabel} 0 137u 100% 30u "Automatic diagnostics run when setup finishes. Connection problems can be repaired or reported without deleting your workspace."
+  Pop $0
+  SetCtlColors $0 5352BD transparent
+  nsDialogs::Show
+FunctionEnd
+
+Function SynapseReleasePage
+  IfSilent 0 +2
+    Abort
+  nsDialogs::Create 1018
+  Pop $SynapseReleaseDialog
+  ${If} $SynapseReleaseDialog == error
+    Abort
+  ${EndIf}
+  ${NSD_CreateLabel} 0 0 100% 18u "SYNAPSE  /  WHAT'S NEW"
+  Pop $0
+  SetCtlColors $0 8141D9 transparent
+  ${NSD_CreateLabel} 0 24u 100% 27u "Your AI workspace, with smarter installation and recovery."
+  Pop $0
+  ${NSD_CreateLabel} 0 62u 100% 14u "* Repair and update an existing installation"
+  Pop $0
+  ${NSD_CreateLabel} 0 82u 100% 14u "* Connect devices through your Synapse account"
+  Pop $0
+  ${NSD_CreateLabel} 0 102u 100% 14u "* Keep projects and local credentials in place"
+  Pop $0
+  ${NSD_CreateLabel} 0 122u 100% 14u "* Diagnose account service and daemon connectivity"
+  Pop $0
+  ${NSD_CreateLabel} 0 148u 100% 25u "Continue to choose your AI bundles and start installation."
+  Pop $0
+  SetCtlColors $0 5352BD transparent
+  nsDialogs::Show
+FunctionEnd
 Var BundleDialog
 Var BundleResearchHandle
 Var BundleFactoryHandle

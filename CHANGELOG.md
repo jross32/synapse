@@ -10,6 +10,11 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.217] -- 2026-10-10
+
+### Added
+- First installer visual journey milestone: branded System Readiness and Whats New NSIS screens inspired by the approved eight-screen Synapse Setup design, alongside existing branded installer art and repair page.
+- Native NSIS remains the reliable extraction and silent-install path. Full-window animations and integrated account handoff remain future work for a custom installer shell.
 ## [0.1.216] -- 2026-10-10
 
 ### Fixed

@@ -244,6 +244,7 @@ The honest boundary matters: fresh-process CLI speed was only **1.45x**, and the
 
 ## Getting started
 
+**Synapse v0.1.217 installer styling:** Native NSIS now includes branded System Readiness and Whats New pages, existing neural-sidebar visuals, and safe repair/update. The full animated eight-screen mockup is the ongoing design target; this milestone does not yet reproduce full-screen animation or inline sign-in.
 **Synapse v0.1.216 account endpoint recovery:** Stale localhost account-service overrides from older Windows installs are ignored by default in favor of the Railway-hosted Synapse Accounts service. Developers who deliberately run a local accounts server can set `SYNAPSE_ALLOW_LOCAL_ACCOUNTS=1`. This is a client connectivity safeguard, not an automatic Windows network repair.
 
 **Synapse v0.1.215 branded installer:** Windows Setup now uses original glowing purple Synapse brain artwork and coordinated headers. For existing installs, Setup offers repair and can close a lingering installed desktop process with consent, while leaving development workers and saved data alone.
