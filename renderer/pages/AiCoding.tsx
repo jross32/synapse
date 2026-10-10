@@ -7,6 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { BlueprintsPage } from './Blueprints';
 import { LocalAiPage } from './LocalAi';
 import { ActiveTasksPage } from './ActiveTasks';
+import { MasterTodoPage } from './MasterTodo';
 import { AssistantPage } from './Assistant';
 import { ChatgptCompanionPage } from './ChatgptCompanion';
 import { CoderWorkspacePage } from './CoderWorkspace';
@@ -72,6 +73,7 @@ export function AiCodingPage({
           icon={AlarmClock}
           label='Active Tasks'
         />
+        <TopTab active={section === 'master-todo'} onClick={() => onSectionChange?.('master-todo')} icon={AlarmClock} label='My To-Dos' />
         <TopTab
           active={section === 'assistant'}
           onClick={() => onSectionChange?.('assistant')}
@@ -109,6 +111,7 @@ export function AiCodingPage({
         {section === 'local' && <LocalAiPage headerless />}
         {section === 'blueprints' && <BlueprintsPage headerless />}
         {section === 'active-tasks' && <ActiveTasksPage />}
+        {section === 'master-todo' && <MasterTodoPage />}
         {section === 'assistant' && <AssistantPage headerless />}
         {section === 'review' && (
           <ReviewPage headerless onOpenWorkspace={() => onSectionChange?.('sessions')} />

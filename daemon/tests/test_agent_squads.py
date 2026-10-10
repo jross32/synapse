@@ -96,6 +96,34 @@ def _create_work_item(
     return res.json()
 
 
+def test_get_work_item_by_id_uses_same_record_as_squad_listing(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    squad = _create_squad(client)
+    item = _create_work_item(client, squad["id"], title="Restore worker lookups")
+    found = client.get(f"/api/v1/agent-work-items/{item['id']}")
+    assert found.status_code == 200, found.text
+    assert found.json()["id"] == item["id"]
+    assert found.json()["squad_id"] == squad["id"]
+    assert found.json()["title"] == "Restore worker lookups"
+
+
+def test_get_missing_work_item_returns_not_found(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    response = client.get("/api/v1/agent-work-items/not-a-real-worker")
+    assert response.status_code == 404
+
+
+def test_get_work_item_requires_authentication(tmp_path: Path) -> None:
+    _app, client = _harness(tmp_path)
+    squad = _create_squad(client)
+    item = _create_work_item(client, squad["id"])
+    response = client.get(
+        f"/api/v1/agent-work-items/{item['id']}",
+        headers={"X-Synapse-Token": "incorrect-token"},
+    )
+    assert response.status_code in (401, 403)
+
+
 def test_list_squad_work_items_returns_focused_collection(tmp_path: Path) -> None:
     _app, client = _harness(tmp_path)
     squad = _create_squad(client)

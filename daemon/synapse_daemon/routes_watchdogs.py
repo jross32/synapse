@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query
 
 from .errors import not_found
 from .watchdogs import snapshot_watchdogs, watchdog_log
+from .routes_railway_costs import build_railway_costs_router
 
 
 def build_watchdogs_router(data_dir: Path) -> APIRouter:
@@ -27,4 +28,5 @@ def build_watchdogs_router(data_dir: Path) -> APIRouter:
         except KeyError:
             raise not_found("watchdog", watchdog_id) from None
 
+    router.include_router(build_railway_costs_router(data_dir))
     return router

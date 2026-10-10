@@ -16,6 +16,8 @@ import { StartupPanel } from '../components/StartupPanel';
 import { AuditLogPanel } from '../components/AuditLogPanel';
 import { PhoneAccessPanel } from '../components/PhoneAccessPanel';
 import { ThemePanel } from '../components/ThemePanel';
+import { MyMachinesPanel } from '../components/MyMachinesPanel';
+import { SetupReadinessPanel } from '../components/SetupReadinessPanel';
 
 const GITHUB_URL = 'https://github.com/jross32/synapse';
 
@@ -48,6 +50,7 @@ export function SettingsPage({
   return (
     <div className='flex flex-col gap-6'>
       <PageHeader title='Settings' subtitle='Daemon diagnostics, connection, and about.' />
+      <SetupReadinessPanel connected={connState === 'open'} />
 
       {mobileRoute && onForgetDevice && (
         <Card className='flex flex-col gap-4 p-6'>
@@ -134,6 +137,8 @@ export function SettingsPage({
           </Button>
         </div>
       </Card>
+
+      <MyMachinesPanel />
 
       <ThemePanel />
 

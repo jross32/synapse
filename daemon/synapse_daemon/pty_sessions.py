@@ -524,10 +524,20 @@ class PtySession:
             chunk = self._backend.read()
             if not chunk:
                 break
-            self._loop.call_soon_threadsafe(self._handle_chunk, chunk)
-        self._loop.call_soon_threadsafe(
-            lambda: asyncio.ensure_future(self._on_eof())
-        )
+            try:
+                self._loop.call_soon_threadsafe(self._handle_chunk, chunk)
+            except RuntimeError:
+                # A late Windows PTY read can outlive its asyncio owner.
+                if not self._loop.is_closed():
+                    raise
+                return
+        try:
+            self._loop.call_soon_threadsafe(
+                lambda: asyncio.ensure_future(self._on_eof())
+            )
+        except RuntimeError:
+            if not self._loop.is_closed():
+                raise
 
     def _handle_chunk(self, chunk: bytes) -> None:
         if not chunk:

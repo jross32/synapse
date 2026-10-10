@@ -106,6 +106,9 @@ def build_projects_router(
         if payload.create_path and not project_path.exists():
             project_path.mkdir(parents=True, exist_ok=True)
             path_created = True
+            # New folders get shared AI Git rules; existing paths remain untouched.
+            from .project_git_policy import provision_new_project_policy
+            provision_new_project_policy(project_path)
         project = payload.model_copy(
             update={"path": str(project_path)},
             deep=True,

@@ -12,9 +12,11 @@ import {
   Radio,
   Rocket,
   Settings,
+  Download,
   ShieldCheck,
   Sparkles,
   Wrench,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -23,10 +25,12 @@ export type CorePageId =
   | 'apps'
   | 'tools'
   | 'live'
+  | 'staff'
   | 'ai-coding'
   | 'ai-factory'
   | 'trace'
   | 'watchdogs'
+  | 'updates'
   | 'settings';
 
 export type RoutePageId = CorePageId | 'whatsnew';
@@ -45,12 +49,13 @@ export type AiCodingSection =
   | 'local'
   | 'blueprints'
   | 'active-tasks'
+  | 'master-todo'
   | 'assistant'
   | 'review'
   | 'chatgpt';
 
 export type NavigationIntent =
-  | { page: 'home' | 'live' | 'ai-factory' | 'trace' | 'watchdogs' | 'settings' | 'whatsnew' }
+  | { page: 'home' | 'live' | 'staff' | 'ai-factory' | 'trace' | 'watchdogs' | 'updates' | 'settings' | 'whatsnew' }
   | { page: 'apps'; section?: AppsSection }
   | {
       page: 'tools';
@@ -123,6 +128,13 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     section: 'ai',
   },
   {
+    id: 'staff',
+    label: 'My AI Staff',
+    icon: UsersRound,
+    description: 'Your persistent AI people, profiles, goals, permissions, and work',
+    section: 'ai',
+  },
+  {
     id: 'ai-coding',
     label: 'AI Coding',
     icon: Sparkles,
@@ -153,6 +165,14 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     locked: true,
   },
   {
+    id: 'updates',
+    label: 'Updates',
+    icon: Download,
+    description: 'Release channel, downloads, checksums, and install status',
+    section: 'system',
+    locked: true,
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: Settings,
@@ -169,14 +189,15 @@ export const MOBILE_NAV_ORDER: CorePageId[] = [
   'tools',
   'ai-coding',
   'ai-factory',
+  'updates',
   'settings',
 ];
 export const DEFAULT_ROUTE: AppRoute = { kind: 'core', page: 'home' };
 
 export interface SidebarLayout {
   main_order: Array<'apps' | 'tools'>;
-  ai_order: Array<'live' | 'ai-coding' | 'ai-factory'>;
-  hidden_core: Array<'apps' | 'tools' | 'live' | 'ai-coding' | 'ai-factory'>;
+  ai_order: Array<'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
+  hidden_core: Array<'apps' | 'tools' | 'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
   installed_page_order: string[];
   visible_installed_pages: string[];
 }
@@ -203,11 +224,12 @@ const STORAGE_KEY = 'synapse.sidebar.layout';
 const MAIN_DEFAULT: SidebarLayout['main_order'] = ['apps', 'tools'];
 // `completeOrder` appends any default missing from a saved layout, so adding a new
 // hub here makes it appear for existing users too (no migration needed).
-const AI_DEFAULT: SidebarLayout['ai_order'] = ['live', 'ai-coding', 'ai-factory'];
+const AI_DEFAULT: SidebarLayout['ai_order'] = ['staff', 'live', 'ai-coding', 'ai-factory'];
 const HIDEABLE_CORE = new Set<SidebarLayout['hidden_core'][number]>([
   'apps',
   'tools',
   'live',
+  'staff',
   'ai-coding',
   'ai-factory',
 ]);

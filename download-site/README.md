@@ -1,8 +1,8 @@
-﻿# Synapse public download website
+# Synapse public download website
 
 Production: https://download.whatapc.com/
 
-The static landing site in this folder is served independently from the private Synapse daemon. It supports desktop, tablet, and small mobile viewports. It currently provides the official Windows v0.1.210 release URL and marks macOS and Linux downloads unavailable until installers are published.
+The static landing site in this folder is served independently from the private Synapse daemon. It supports desktop, tablet, and small mobile viewports. It currently provides the official Windows v0.1.214 release URL and marks macOS and Linux downloads unavailable until installers are published.
 
 The site is publicly served through the existing Cloudflare route and Python static server. Cache-busting query parameters in index.html ensure the latest CSS and JS are used on public clients.
 

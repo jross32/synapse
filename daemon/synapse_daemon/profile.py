@@ -30,6 +30,7 @@ from .errors import invalid
 from .runtime_resolution import resolve_command
 from .secrets import decrypt, encrypt
 from .storage import Storage
+from .machine_fleet import ensure_machine_id
 from .subprocess_utils import headless_creationflags
 from .synapse_accounts_client import (
     AccountPayload,
@@ -746,7 +747,7 @@ class ProfileManager:
 
     def ensure_current_host(self) -> HostPresence:
         row = self._state_row()
-        current_host_id = row["current_host_id"] or str(uuid.uuid4())
+        current_host_id = ensure_machine_id(self._storage.data_dir)
         current_host_name = row["current_host_name"] or (socket.gethostname() or "This computer")
         current_host_platform = row["current_host_platform"] or platform_mod.system()
         now = _now_iso()

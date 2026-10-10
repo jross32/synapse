@@ -50,6 +50,9 @@ import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
 import { HomePage } from './pages/Home';
 
+const StaffPage = lazy(() =>
+  import('./pages/Staff').then((module) => ({ default: module.StaffPage }))
+);
 const LiveViewPage = lazy(() =>
   import('./pages/LiveView').then((module) => ({ default: module.LiveViewPage }))
 );
@@ -67,6 +70,9 @@ const AiFactoryPage = lazy(() =>
 );
 const WhatsnewPage = lazy(() =>
   import('./pages/Whatsnew').then((module) => ({ default: module.WhatsnewPage }))
+);
+const UpdatesPage = lazy(() =>
+  import('./pages/Updates').then((module) => ({ default: module.UpdatesPage }))
 );
 const TracePage = lazy(() =>
   import('./pages/Trace').then((module) => ({ default: module.TracePage }))
@@ -333,6 +339,10 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       setRoute({ kind: 'core', page: 'watchdogs' });
       return;
     }
+    if (intent.page === 'updates') {
+      setRoute({ kind: 'core', page: 'updates' });
+      return;
+    }
     if (intent.page === 'settings') {
       setRoute({ kind: 'core', page: 'settings' });
       return;
@@ -539,8 +549,10 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               />
             )}
             {route.kind === 'core' && route.page === 'live' && <LiveViewPage />}
+            {route.kind === 'core' && route.page === 'staff' && <StaffPage />}
             {route.kind === 'core' && route.page === 'ai-factory' && <AiFactoryPage />}
             {route.kind === 'core' && route.page === 'whatsnew' && <WhatsnewPage />}
+            {route.kind === 'core' && route.page === 'updates' && <UpdatesPage />}
             {route.kind === 'core' && route.page === 'trace' && <TracePage />}
             {route.kind === 'core' && route.page === 'watchdogs' && <WatchdogsPage />}
             {route.kind === 'core' && route.page === 'settings' && (

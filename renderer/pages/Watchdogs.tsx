@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { PageHeader } from '../components/PageHeader';
+import { RailwayCostPanel } from '../components/RailwayCostPanel';
 import {
   fetchWatchdogLog,
   fetchWatchdogs,
@@ -198,7 +199,9 @@ function LogPanel({ item }: { item: WatchdogItem }): JSX.Element {
       </div>
       {open && (
         <div className='mt-3'>
-          {error && (
+          <RailwayCostPanel />
+
+      {error && (
             <div className='rounded-xl border border-status-error/30 bg-status-error/10 p-3 text-xs text-status-error'>
               {error}
             </div>
@@ -378,6 +381,8 @@ export function WatchdogsPage(): JSX.Element {
           </button>
         }
       />
+
+      <RailwayCostPanel />
 
       {error && (
         <div className='flex items-start gap-3 rounded-2xl border border-status-error/30 bg-status-error/10 p-4 text-sm text-status-error'>

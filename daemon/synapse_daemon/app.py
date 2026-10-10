@@ -1,4 +1,4 @@
-﻿"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
+"""FastAPI app factory (Contracts #4, #5, #7, #11, #15).
 
 For Milestone B this app exposes:
 
@@ -40,6 +40,7 @@ from .profile import ProfileManager
 from .pty_sessions import PtySessionManager
 from .routes_about import build_about_router
 from .routes_active_tasks import build_active_tasks_router
+from .routes_master_todo import build_master_todo_router
 from .routes_activity import build_activity_router
 from .routes_agent_squads import (
     WorkerPresenceRegistry,
@@ -54,6 +55,9 @@ from .routes_ai_factory import build_ai_factory_router
 from .routes_assistant import build_assistant_router
 from .routes_audit import build_audit_router
 from .routes_auth import build_auth_router
+from .routes_design_references import build_design_references_router
+from .routes_machines import build_machine_router
+from .routes_mobile_lab import build_mobile_lab_router
 from .routes_benchmarks import build_benchmarks_router
 from .routes_blueprints import build_blueprints_router
 from .routes_capture import build_capture_router
@@ -72,6 +76,7 @@ from .routes_marketplace import build_marketplace_router
 from .routes_mcp_servers import build_mcp_servers_router
 from .routes_models import build_models_router
 from .routes_personalities import build_personalities_router
+from .routes_staff import build_staff_router
 from .routes_profile import build_profile_router
 from .routes_project_doctor import build_project_doctor_router
 from .routes_project_records import build_project_records_router
@@ -151,10 +156,14 @@ def build_app(
         from .ai_factory import seed_default_catalog
         from .benchmarks import seed_default_specs
         from .personalities import seed_default_personalities
+        from .staff import seed_staff_foundation
+        from .staff_operations import seed_staff_operations
         from .quality_os import seed_default_quality_os
 
         seed_default_role_templates(conn)
         seed_default_personalities(conn)
+        seed_staff_foundation(conn)
+        seed_staff_operations(conn)
         seed_default_catalog(conn)
         seed_default_specs(conn)
         seed_default_quality_os(conn)
@@ -435,6 +444,7 @@ def build_app(
     app.state.worker_presence_registry = worker_presence_registry
     chatgpt_child_pool = ChatGPTBrowserPool(storage.data_dir)
     app.state.chatgpt_child_pool = chatgpt_child_pool
+    app.include_router(build_master_todo_router(storage.data_dir), prefix=API_PREFIX, dependencies=[token_guard])
     active_task_scheduler = ActiveTaskScheduler(storage, ForemanDispatcher())
     app.state.active_task_scheduler = active_task_scheduler
     app.include_router(
@@ -570,6 +580,12 @@ def build_app(
     # AI personalities -- a worker = role + personality (ADR-0018 MW3).
     app.include_router(
         build_personalities_router(storage),
+        prefix=API_PREFIX,
+        dependencies=[token_guard],
+    )
+    # Persistent owner-facing AI staff built on existing role + personality workers.
+    app.include_router(
+        build_staff_router(storage),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -810,6 +826,9 @@ def build_app(
     )
     # The auth router guards its own routes (some are open: /pair, /local-token).
     app.include_router(build_auth_router(storage, auth), prefix=API_PREFIX)
+    app.include_router(build_design_references_router(storage), prefix=API_PREFIX, dependencies=[token_guard])
+    app.include_router(build_machine_router(storage, auth, storage.data_dir, __version__), prefix=API_PREFIX)
+    app.include_router(build_mobile_lab_router(auth), prefix=API_PREFIX)
 
     # MCP connector for the claude.ai custom connector (ADR-0012). NOT under
     # /api/v1 and NOT behind the global token guard -- claude.ai POSTs to

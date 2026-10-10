@@ -153,6 +153,72 @@ def _http_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) ->
         "clientInfo": {"name": "synapse", "version": __version__}}})
     return _post({"jsonrpc": "2.0", "id": 2, "method": method, "params": params})
 
+# Stateful stdio MCP tools such as Reflex retain their safety lease inside the
+# process. A fresh subprocess per tool call discards that lease immediately.
+# Keep one bounded, serialized connection per server; never persist credentials
+# or bypass the server's own permission checks.
+_persistent_stdio_lock = threading.RLock()
+_persistent_stdio_sessions: dict[str, Any] = {}
+
+
+def _persistent_stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -> Any:
+    import json as _json
+    import queue
+    import subprocess
+    with _persistent_stdio_lock:
+        key = server.id
+        session = _persistent_stdio_sessions.get(key)
+        if session is None or session[0].poll() is not None:
+            executable = resolve_command(server.command) or server.command
+            env = {**os.environ, **{k: str(v) for k, v in (server.env or {}).items()}}
+            proc = subprocess.Popen([executable, *(server.args or [])], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                encoding='utf-8', env=env, creationflags=headless_creationflags())
+            replies: queue.Queue[Any] = queue.Queue()
+            def reader():
+                try:
+                    for line in proc.stdout:
+                        try: replies.put(_json.loads(line))
+                        except ValueError: continue
+                finally: replies.put(None)
+            threading.Thread(target=reader, daemon=True).start()
+            session = (proc, replies)
+            _persistent_stdio_sessions[key] = session
+            initialized = False
+        else:
+            initialized = True
+        proc, replies = session
+        def exchange(rid, name, payload):
+            proc.stdin.write(_json.dumps({'jsonrpc':'2.0','id':rid,'method':name,'params':payload})+'\n')
+            proc.stdin.flush()
+            deadline = time.monotonic() + max(1,timeout)
+            while True:
+                remaining = deadline-time.monotonic()
+                if remaining <= 0: raise TimeoutError(f'{key} did not respond to {name}')
+                try: response = replies.get(timeout=remaining)
+                except queue.Empty: raise TimeoutError(f'{key} did not respond to {name}')
+                if response is None: raise RuntimeError(f'{key} closed its MCP session')
+                if response.get('id') != rid: continue
+                if 'error' in response: return {'_mcp_tool_error': response['error']}
+                return response.get('result')
+        try:
+            if not initialized:
+                exchange(1,'initialize',{'protocolVersion':'2024-11-05','capabilities':{},
+                    'clientInfo':{'name':'synapse','version':__version__}})
+                proc.stdin.write(_json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n')
+                proc.stdin.flush()
+            result = exchange(2 if not initialized else uuid.uuid4().hex,method,params)
+            if isinstance(result,dict) and '_mcp_tool_error' in result:
+                raise ValueError(f'{key}: {result["_mcp_tool_error"]}')
+            return result
+        except ValueError:
+            # MCP tool errors must not discard an otherwise healthy safety lease.
+            raise
+        except Exception:
+            _persistent_stdio_sessions.pop(key,None)
+            if proc.poll() is None: proc.kill()
+            raise
+
 def _stdio_mcp(server: Any, method: str, params: dict[str, Any], timeout: int) -> Any:
     """Speak MCP to a stdio server for exactly one call, then shut it down.
 
@@ -281,6 +347,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_mcp_executor_status": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_projects": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_records": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_get_project_design_references": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_project_doctor": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_repair_candidate_evaluate": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_ai_context": {"readOnlyHint": True, "idempotentHint": True},
@@ -366,6 +433,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
                                "idempotentHint": False, "openWorldHint": True},
     "synapse_edit_image": {"readOnlyHint": False, "destructiveHint": True,
                            "idempotentHint": False, "openWorldHint": True},
+    "synapse_import_chat_attachment_url": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True},
     "synapse_import_image_file": {"readOnlyHint": False, "destructiveHint": True,
                                   "idempotentHint": False, "openWorldHint": False},
     "synapse_begin_image_upload": {"readOnlyHint": False, "destructiveHint": False,
@@ -432,6 +500,16 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
         {
             "name": "synapse_get_project_records",
             "description": "Get a project's ADRs (decisions), backlog, and version history (ADR-0011).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"project_id": {"type": "string", "description": "The project id (kebab-case)."}},
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "synapse_get_project_design_references",
+            "description": "List AI-visible visual/design references attached to a Synapse project, including the current proposed UI. Use this before UI, branding, layout, or product-design work.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"project_id": {"type": "string", "description": "The project id (kebab-case)."}},
@@ -880,7 +958,7 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "Finalize one timed response/work turn before returning the final answer. "
                         "Adds the duration exactly once to this thread's cumulative worked time. "
                         "Use duration_source=ui_display when a local browser observer captured ChatGPT's "
-                        "own 'Worked for Ã¢â‚¬Â¦' value; otherwise omit duration_seconds for server wall-clock timing."
+                        "own 'Worked for ├â┬ó├óΓÇÜ┬¼├é┬ª' value; otherwise omit duration_seconds for server wall-clock timing."
                     ),
                     "inputSchema": {
                         "type": "object",
@@ -1470,6 +1548,22 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                     },
                 },
                 {
+                    "name": "synapse_import_chat_attachment_url",
+                    "description": "Import an HTTPS chat attachment from a trusted configured host into a project. Requires SYNAPSE_CHAT_ATTACHMENT_HOSTS; no redirects or private addresses.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {"type": "string"},
+                            "attachment_url": {"type": "string", "description": "Trusted HTTPS file URL."},
+                            "file_path": {"type": "string", "description": "ChatGPT attachment local path. Supported connector platforms may replace this with a fetchable HTTPS URL; plain local paths are not accepted."},
+                            "relative_path": {"type": "string"},
+                            "expected_sha256": {"type": "string"}
+                        },
+                        "required": ["project_id", "relative_path"],
+                        "additionalProperties": False
+                    }
+                },
+                {
                     "name": "synapse_begin_image_upload",
                     "description": (
                         "Begin a short-lived chunked image transfer for an AI runtime that has image "
@@ -1780,7 +1874,7 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
     return specs
 
 
-# Ã¢â€â‚¬Ã¢â€â‚¬ async command jobs Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+# ├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼ async command jobs ├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼├â┬ó├óΓé¼┬¥├óΓÇÜ┬¼
 #
 # synapse_run_command blocks the HTTP request for as long as the underlying shell
 # command takes (up to 900s). Every hop the request passes through on its way back to a
@@ -1856,6 +1950,7 @@ class McpDispatchExecutor:
         self._active = 0
         self._next_job_id = 0
         self._started: dict[int, float] = {}
+        self._labels: dict[int, str] = {}
         self._last_completed_monotonic = time.monotonic()
 
     async def run(
@@ -1874,6 +1969,7 @@ class McpDispatchExecutor:
             self._in_flight += 1
             self._next_job_id += 1
             job_id = self._next_job_id
+            self._labels[job_id] = label
 
         def invoke() -> tuple[Any, Exception | None, McpDispatchTiming]:
             started = time.perf_counter()
@@ -1906,6 +2002,7 @@ class McpDispatchExecutor:
                     self._active = max(0, self._active - 1)
                     self._in_flight = max(0, self._in_flight - 1)
                     self._started.pop(job_id, None)
+                    self._labels.pop(job_id, None)
                     self._last_completed_monotonic = time.monotonic()
                 self._slots.release()
 
@@ -1914,6 +2011,7 @@ class McpDispatchExecutor:
         except Exception:
             with self._state_lock:
                 self._in_flight = max(0, self._in_flight - 1)
+                self._labels.pop(job_id, None)
             self._slots.release()
             raise
         # Shield because cancelling the HTTP request cannot cancel a worker
@@ -1943,6 +2041,17 @@ class McpDispatchExecutor:
                 if self._started
                 else 0.0
             )
+            active_jobs = [
+                {
+                    "job_id": job_id,
+                    "label": self._labels.get(job_id, "unknown"),
+                    "active_seconds": round(max(0.0, now - started_at), 3),
+                }
+                for job_id, started_at in sorted(
+                    self._started.items(),
+                    key=lambda item: item[1],
+                )
+            ]
             return {
                 "name": self.name,
                 "max_workers": self.max_workers,
@@ -1952,6 +2061,7 @@ class McpDispatchExecutor:
                 "queued": max(0, self._in_flight - self._active),
                 "saturated": self._in_flight >= self.max_workers + self.max_queue,
                 "oldest_active_seconds": round(oldest_active_seconds, 3),
+                "active_jobs": active_jobs,
                 "seconds_since_completion": round(
                     max(0.0, now - self._last_completed_monotonic), 3
                 ),
@@ -2006,6 +2116,7 @@ _MEDIA_MCP_TOOLS = frozenset(
         "synapse_generate_image",
         "synapse_edit_image",
         "synapse_import_image_file",
+        "synapse_import_chat_attachment_url",
         "synapse_begin_image_upload",
         "synapse_append_image_upload",
         "synapse_finish_image_upload",
@@ -2185,7 +2296,14 @@ def _terminate_command_tree(root_pid: int, grace_seconds: float = 0.75) -> None:
 def _run_captured_command(
     shell_argv: list[str], *, cwd: str, timeout: float
 ) -> dict[str, Any]:
-    """Run one captured command with a hard, tree-aware wall-clock timeout."""
+    """Run one captured command without letting pipe EOF strand an executor worker.
+
+    Popen.communicate with a timeout can still strand the calling thread on Windows
+    when a descendant inherits stdout/stderr and keeps those pipe handles open. Run
+    communicate in a daemon reader thread instead. The MCP executor worker waits only
+    for the explicit wall-clock deadline plus bounded cleanup; a broken reader may
+    linger, but it can no longer consume one of the command lane's worker slots.
+    """
 
     import subprocess
 
@@ -2201,40 +2319,70 @@ def _run_captured_command(
             int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
         ),
     )
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        _terminate_command_tree(process.pid)
+    outcome: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _communicate_reader() -> None:
         try:
-            stdout, stderr = process.communicate(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            # A broken descendant can still retain an inherited pipe even after process-tree
-            # termination. Do not let pipe EOF keep the executor worker alive forever.
-            for stream in (process.stdout, process.stderr):
-                try:
-                    if stream is not None:
-                        stream.close()
-                except OSError:
-                    pass
-            stdout, stderr = "", ""
+            stdout, stderr = process.communicate()
+            outcome["stdout"] = stdout or ""
+            outcome["stderr"] = stderr or ""
+        except Exception as exc:  # noqa: BLE001 -- cleanup must never strand the caller
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    reader = threading.Thread(
+        target=_communicate_reader,
+        name=f"synapse-command-reader-{process.pid}",
+        daemon=True,
+    )
+    reader.start()
+
+    if not done.wait(timeout=max(0.01, float(timeout))):
+        _terminate_command_tree(process.pid)
+        # Give normal tree termination a brief chance to deliver pipe EOF. If an
+        # inaccessible or reparented descendant still owns a pipe handle, never close
+        # the stream synchronously from this worker: TextIOWrapper.close() can block on
+        # the reader thread's internal lock and recreate the very worker leak we are
+        # preventing. Move best-effort stream cleanup to a daemon helper instead.
+        if not done.wait(timeout=2.0):
+            def _close_capture_streams() -> None:
+                for stream in (process.stdout, process.stderr):
+                    try:
+                        if stream is not None:
+                            stream.close()
+                    except (OSError, ValueError):
+                        pass
+
+            threading.Thread(
+                target=_close_capture_streams,
+                name=f"synapse-command-pipe-cleanup-{process.pid}",
+                daemon=True,
+            ).start()
+
         return {
             "ok": False,
             "timed_out": True,
             "exit_code": process.poll(),
-            "stdout": (stdout or "")[-20000:],
-            "stderr": (stderr or "")[-8000:],
+            "stdout": str(outcome.get("stdout") or "")[-20000:],
+            "stderr": str(outcome.get("stderr") or "")[-8000:],
             "detail": f"did not finish within {timeout}s; process tree terminated",
         }
+
+    error = outcome.get("error")
+    if error is not None:
+        raise error
 
     return {
         "ok": process.returncode == 0,
         "exit_code": process.returncode,
-        "stdout": (stdout or "")[-20000:],
-        "stderr": (stderr or "")[-8000:],
+        "stdout": str(outcome.get("stdout") or "")[-20000:],
+        "stderr": str(outcome.get("stderr") or "")[-8000:],
     }
 
 
-def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float) -> None:
+def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float, data_dir: str | Path | None = None) -> None:
     try:
         # _run_captured_command uses explicit UTF-8 replacement decoding and tree-aware
         # timeout cleanup so malformed output and descendant-held pipes cannot strand this
@@ -2250,6 +2398,12 @@ def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeou
     job["finished_at"] = to_iso(finished_at)
     job["_finished_at_dt"] = finished_at
     job["result"] = result
+    if data_dir is not None:
+        from .command_job_store import save_job
+        save_job(data_dir, job_id, {
+            "status": "done", "cwd": cwd, "started_at": job["started_at"],
+            "finished_at": job["finished_at"], "result": result,
+        })
 
 
 def build_mcp_router(
@@ -2410,6 +2564,18 @@ def build_mcp_router(
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)  # 404s via SynapseError if unknown
             return records.get_records(storage.conn, project_id).model_dump(mode="json")
+        if name == "synapse_get_project_design_references":
+            project_id = str(args.get("project_id", "")).strip()
+            projects_module.get(storage.conn, project_id)
+            rows = storage.conn.execute("""SELECT d.id,d.role,d.title,d.description,d.is_current,d.ai_visible,d.file_id,f.original_name,f.mime,f.size_bytes
+                FROM project_design_references d JOIN project_files f ON f.id=d.file_id
+                WHERE d.project_id=? AND d.ai_visible=1 AND f.deleted_at IS NULL
+                ORDER BY d.is_current DESC,d.updated_at DESC""",(project_id,)).fetchall()
+            return {"project_id": project_id, "references": [
+                {**dict(r), "is_current": bool(r["is_current"]), "ai_visible": bool(r["ai_visible"]),
+                 "url": f"/api/v1/projects/{project_id}/files/{r['file_id']}"}
+                for r in rows
+            ]}
         if name == "synapse_repair_candidate_evaluate":
             from .repair_arena_candidates import evaluate_staged_candidate
 
@@ -2566,7 +2732,7 @@ def build_mcp_router(
                     for p in projects
                 ],
                 "writes_enabled": writes_allowed(),
-                "hint": "Use synapse_get_project_records for project decisions and synapse_get_skill_pack for reusable AI instructions.",
+                "hint": "Use synapse_get_project_records for project decisions, synapse_get_project_design_references before UI/branding/product-design work, and synapse_get_skill_pack for reusable AI instructions.",
                 "thread_tracking": {
                     "enabled": True,
                     "bootstrap_required_for_project_work": True,
@@ -3135,7 +3301,7 @@ def build_mcp_router(
             _prune_old_command_jobs()
             threading.Thread(
                 target=_run_command_job_thread,
-                args=(job_id, shell_argv, cwd, timeout),
+                args=(job_id, shell_argv, cwd, timeout, storage.data_dir),
                 daemon=True,
             ).start()
             return {
@@ -3152,6 +3318,10 @@ def build_mcp_router(
                 raise ValueError("job_id is required")
             job = _command_jobs.get(job_id)
             if job is None:
+                from .command_job_store import read_job
+                recovered = read_job(storage.data_dir, job_id)
+                if recovered is not None:
+                    return {"job_id": job_id, **recovered}
                 raise ValueError(
                     f"Unknown job_id: {job_id!r} (it may have expired -- results are kept for "
                     f"{_COMMAND_JOB_MAX_AGE_SECONDS}s after completion -- or the daemon restarted "
@@ -3285,6 +3455,26 @@ def build_mcp_router(
                 upload_id=upload_id,
                 audit_source="auto",
             )
+
+        if name == "synapse_import_chat_attachment_url":
+            _require_writes()
+            import os
+            from . import chat_attachment_fetch
+            allowed = {h.strip().lower() for h in os.environ.get("SYNAPSE_CHAT_ATTACHMENT_HOSTS", "").split(",") if h.strip()}
+            if not allowed:
+                raise ValueError("SYNAPSE_CHAT_ATTACHMENT_HOSTS is not configured")
+            project_id = str(args.get("project_id") or "").strip()
+            relative_path = str(args.get("relative_path") or "").strip()
+            url = str(args.get("attachment_url") or args.get("file_path") or "").strip()
+            if not all((project_id, relative_path, url)):
+                raise ValueError("project_id, relative_path and file_path or attachment_url are required")
+            if not url.startswith("https://"):
+                raise ValueError("ChatGPT file_path was not transformed into an HTTPS URL by the connector platform")
+            temp = chat_attachment_fetch.fetch_attachment(url, allowed_hosts=allowed, expected_sha256=args.get("expected_sha256"))
+            try:
+                return image_imports.import_project_image_file(storage, project_id=project_id, source_path=str(temp), relative_path=relative_path, origin="chatgpt_attachment_url", audit_source="auto")
+            finally:
+                temp.unlink(missing_ok=True)
 
         if name == "synapse_import_image_file":
             _require_writes()
@@ -3431,7 +3621,7 @@ def build_mcp_router(
                     f"{server_id} uses {server.transport} transport, which is not proxied.")
 
             timeout = min(int(args.get("timeout_seconds") or 120), _BLOCKING_CALL_TIMEOUT_MAX)
-            speak = _http_mcp if server.transport == "http" else _stdio_mcp
+            speak = _http_mcp if server.transport == "http" else (_persistent_stdio_mcp if server_id == "reflex" else _stdio_mcp)
             if name == "synapse_list_mcp_tools":
                 reply = speak(server, "tools/list", {}, timeout)
                 return [

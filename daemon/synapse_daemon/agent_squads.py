@@ -1066,6 +1066,8 @@ def argv_for_runtime(runtime: str) -> list[str]:
         if sys.platform == "darwin":
             return ["zsh", "-i"]
         return ["bash", "-i"]
+    if runtime == "local":
+        return [sys.executable, "-m", "synapse_daemon.local_worker"]
     return [runtime]
 
 

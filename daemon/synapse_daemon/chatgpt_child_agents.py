@@ -147,6 +147,8 @@ def readiness(data_dir: Path) -> dict[str, Any]:
         "worker_project_name": WORKER_PROJECT_NAME,
         "worker_project_url": project_url or None,
         "ready": profile_ready,
+        "login_verified": False,
+        "login_verification_note": "Profile presence does not establish a live ChatGPT session; run a browser-authenticated smoke check.",
         "setup_complete": profile_ready and bool(project_url),
         "requires_account_owner_login_or_project_bootstrap": not (profile_ready and bool(project_url)),
         "recommended_project_memory": "default",

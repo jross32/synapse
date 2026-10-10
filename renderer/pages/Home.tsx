@@ -29,7 +29,7 @@ import type { NavigationIntent } from '@shared/nav';
 import { getReviewInbox, type ReviewInbox } from '@shared/review-client';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { PageHeader } from '../components/PageHeader';
+import { ConnectedBrainHero } from '../components/ConnectedBrainHero';
 import { FeaturedSlideshow } from '../components/FeaturedSlideshow';
 
 const FEATURED_CAP = 5;
@@ -174,14 +174,14 @@ export function HomePage({ onNavigate }: HomePageProps): JSX.Element {
 
   return (
     <div className='flex flex-col gap-6'>
-      <PageHeader
-        title='Home'
-        subtitle={
-          health
-            ? `Synapse daemon v${health.version} — ${projects.length} project${projects.length === 1 ? '' : 's'} registered.`
-            : 'Connecting to the Synapse daemon…'
-        }
+      <ConnectedBrainHero
+        projectCount={projects.length}
+        activeCount={projects.filter((project) => project.status === 'launched').length}
+        onNavigate={onNavigate}
       />
+      <p role='status' className='text-xs text-muted-foreground'>
+        {health ? `Synapse daemon v${health.version} · ${projects.length} registered projects` : 'Connecting to the Synapse daemon…'}
+      </p>
 
       {projectsError ? (
         <Card className='border-dashed p-10 text-center'>

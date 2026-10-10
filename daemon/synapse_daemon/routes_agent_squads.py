@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -118,6 +119,8 @@ def _automatic_worker_argv(
         "and finish by POSTing an explicit handoff to the Synapse work-item handoff endpoint. "
         "Do not wait for more user input."
     )
+    if runtime == "local":
+        return [*argv, "--prompt-file", str(prompt_file), "--workspace", str(prompt_file.parent), "--authority", authority.value]
     try:
         return coder_runtimes.headless_argv(
             argv, runtime=runtime, authority=authority, prompt=prompt
@@ -951,6 +954,8 @@ def build_agent_squads_router(
                         if selected_capacity.evidence_at else None
                     ),
                 )
+            if chosen_runtime == "local" and execution_mode != squads.AgentExecutionMode.AUTOMATIC:
+                raise invalid("agent_work_item", "Local Ollama workers require automatic execution mode.")
             argv = [] if chosen_runtime == "chatgpt_web" else squads.argv_for_runtime(chosen_runtime)
             runtime_mcp_env: dict[str, str] = {}
             installed_mcp_servers = mcp_servers_module.list_servers(storage.conn)
@@ -1077,6 +1082,8 @@ def build_agent_squads_router(
                 "SYNAPSE_LEAD_SESSION_ID": (
                     parent_session_id or lead_session_id or coordination_session.id
                 ),
+                "SYNAPSE_PROJECT_WORKSPACE": str(Path(body.cwd_override or project.path).resolve()),
+                "PYTHONPATH": str(Path(__file__).resolve().parent.parent) + os.pathsep + env.get("PYTHONPATH", os.environ.get("PYTHONPATH", "")),
                 "SYNAPSE_ROLE_PROMPT_FILE": str(prompt_file),
                 "SYNAPSE_AI_CONTEXT": str(ai_context_path(storage.data_dir, project.id).resolve()),
                 "SYNAPSE_AI_CONTEXT_DIRECTION_PROMPT": AI_CONTEXT_DIRECTION_PROMPT,
@@ -1372,6 +1379,12 @@ def build_agent_squads_router(
     ) -> dict[str, Any]:
         async with launch_lock:
             return await _do_launch_serialized(work_item_id, body)
+
+    @router.get("/agent-work-items/{work_item_id}", response_model=None)
+    async def get_agent_work_item_detail(work_item_id: str) -> dict[str, Any]:
+        """Return the durable work-item record; launch is a separate POST action."""
+        item = squads.get_work_item(storage.conn, work_item_id)
+        return item.model_dump(mode="json")
 
     @router.post("/agent-work-items/{work_item_id}/launch", response_model=None)
     async def launch_work_item(
