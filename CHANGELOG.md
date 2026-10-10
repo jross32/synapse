@@ -10,6 +10,12 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.216] -- 2026-10-10
+
+### Fixed
+- Packaged Windows clients now ignore stale loopback account endpoint overrides from old installs unless SYNAPSE_ALLOW_LOCAL_ACCOUNTS=1 is explicitly set. This prevents retired localhost:8788 configurations from blocking Railway-hosted Synapse sign-in with WinError 10061.
+- Repair diagnostic output explains the safe fallback and reports remaining custom account endpoints.
+
 ## [0.1.215] -- 2026-10-10
 ### Added
 - Branded Windows Setup with dark violet gradient, glowing Synapse neural artwork, matched installer header, and clearer repair/update screens.

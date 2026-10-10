@@ -4,6 +4,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -55,7 +56,16 @@ class OAuthStartResponse(BaseModel):
 
 class SynapseAccountsClient:
     def __init__(self, base_url: str | None = None) -> None:
-        self._base_url = (base_url or os.getenv("SYNAPSE_ACCOUNTS_BASE_URL") or _DEFAULT_BASE_URL).rstrip("/")
+        configured = (base_url or os.getenv("SYNAPSE_ACCOUNTS_BASE_URL") or _DEFAULT_BASE_URL).rstrip("/")
+        # Older installers/dev environments may persist an account endpoint
+        # pointing at the retired localhost:8788 server. Packaged apps must not
+        # strand first-time users with WinError 10061 when that service is gone.
+        # Developers can explicitly opt back into loopback account servers.
+        parsed = urlsplit(configured)
+        loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if loopback and os.getenv("SYNAPSE_ALLOW_LOCAL_ACCOUNTS") != "1":
+            configured = _DEFAULT_BASE_URL
+        self._base_url = configured
 
     @property
     def base_url(self) -> str:

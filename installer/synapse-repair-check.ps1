@@ -86,7 +86,7 @@ try {
 } catch { Add-Check 'Local port 7878' 'warn' 'Cannot probe localhost port; check local network restrictions' }
 
 if ($env:SYNAPSE_ACCOUNTS_BASE_URL -and $env:SYNAPSE_ACCOUNTS_BASE_URL -notlike 'https://accounts-api-production-f84a.up.railway.app*') {
-  Add-Check 'Account endpoint override' 'warn' 'A custom SYNAPSE_ACCOUNTS_BASE_URL overrides the shared cloud; remove it manually if unintended'
+  Add-Check 'Account endpoint override' 'warn' 'A custom account endpoint exists. Current installers ignore localhost endpoints unless SYNAPSE_ALLOW_LOCAL_ACCOUNTS=1. Check any other custom URL if sign-in fails'
 } else {
   Add-Check 'Account endpoint override' 'pass' 'Default cloud account service is not overridden'
 }
