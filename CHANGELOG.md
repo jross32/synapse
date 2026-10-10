@@ -10,6 +10,12 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.214] -- 2026-10-10
+
+### Added
+- Expanded safe installer repair health report: 19 diagnostics covering executable/daemon/UI files, installed version consistency, Windows user-data and temporary-folder writability, configuration JSON validity, TLS certificate trust, account service reachability/DNS, disk capacity, old daemons on port 7878, account endpoint overrides and data preservation.
+- Rerunning Setup repairs missing or damaged packaged application files without removing projects, SQLite data, account files, or previous bundle selections. The report explains which conditions require user action and never deletes credentials, changes proxies/firewall, or forcibly terminates active agents.
+- The repair smoke test verifies diagnostic report generation in addition to restoring a missing packaged daemon and preserving existing user preferences.
 ## [0.1.213] -- 2026-10-10
 
 ### Added

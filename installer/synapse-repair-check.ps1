@@ -95,6 +95,64 @@ try {
   $dbs = @(Get-ChildItem -LiteralPath $data -Filter '*.sqlite' -File -ErrorAction SilentlyContinue)
   Add-Check 'User data preservation' 'pass' ('No user or project databases modified; local database files detected: '+$dbs.Count)
 } catch { Add-Check 'User data preservation' 'warn' 'Could not list local user data; no files changed' }
+# Writable application-data locations are essential for login sessions, device
+# credentials, downloads, settings and diagnostics. Never alter their contents.
+foreach ($entry in @(
+  @{name='Roaming settings access';path=(Join-Path $env:APPDATA 'Synapse')},
+  @{name='Local settings access';path=(Join-Path $env:LOCALAPPDATA 'Synapse')},
+  @{name='Temporary file access';path=$env:TEMP}
+)) {
+  try {
+    if (-not (Test-Path $entry.path -PathType Container)) {
+      if ($Repair) { New-Item -ItemType Directory -Path $entry.path -Force -ErrorAction Stop | Out-Null }
+      else { Add-Check $entry.name 'warn' 'Directory absent; rerun Setup with repair selected'; continue }
+    }
+    $probe=Join-Path $entry.path ('.synapse-repair-probe-'+[guid]::NewGuid().ToString('N'))
+    try { [IO.File]::WriteAllText($probe,'ok'); if ([IO.File]::ReadAllText($probe) -ne 'ok') {throw 'Readback mismatch'} }
+    finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
+    Add-Check $entry.name 'pass' 'Create/read/delete test succeeded'
+  } catch { Add-Check $entry.name 'warn' 'Directory is not writable. Check permissions and security software' }
+}
+
+try {
+  $cfg=Join-Path $env:APPDATA 'Synapse\bootstrap-ai-bundles.json'
+  if (Test-Path $cfg -PathType Leaf) {
+    $bundleConfig=Get-Content -LiteralPath $cfg -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    if ($null -ne $bundleConfig.bundle_ids -and $bundleConfig.bundle_ids -is [array]) {
+      Add-Check 'Bundle preferences JSON' 'pass' 'Existing selections are valid and preserved'
+    } else { Add-Check 'Bundle preferences JSON' 'warn' 'Configuration structure is invalid; repair does not overwrite user preferences' }
+  } else { Add-Check 'Bundle preferences JSON' 'pass' 'No existing preferences to preserve' }
+} catch { Add-Check 'Bundle preferences JSON' 'warn' 'User configuration is not valid JSON; back up before correcting manually' }
+
+try {
+  $source=Join-Path $InstallDir 'resources\app\package.json'
+  $config=Get-Content -LiteralPath $source -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+  if ($config.name -and $config.version) { Add-Check 'Package metadata integrity' 'pass' 'Package configuration parses correctly' }
+  else { Add-Check 'Package metadata integrity' 'fail' 'Invalid application metadata; installer repair is required' }
+} catch { Add-Check 'Package metadata integrity' 'fail' 'Corrupt application metadata; run installer repair' }
+
+try {
+  $uri=[uri]'https://accounts-api-production-f84a.up.railway.app/v1/health'
+  if ($uri.Scheme -ne 'https') {throw 'TLS required'}
+  $net=[System.Net.WebRequest]::Create($uri)
+  $net.Timeout=8000
+  $reply=$net.GetResponse()
+  try { Add-Check 'TLS certificate trust' 'pass' 'HTTPS handshake and certificate validation succeeded' }
+  finally { $reply.Close() }
+} catch { if (-not $SkipNetwork) {Add-Check 'TLS certificate trust' 'warn' 'HTTPS validation failed; check date/time, certificates, VPN or proxy'} }
+
+try {
+  $drive=Get-PSDrive -Name ([IO.Path]::GetPathRoot($InstallDir).Substring(0,1)) -ErrorAction Stop
+  if ($drive.Free -lt 2GB) {Add-Check 'Update working space' 'warn' 'Less than 2 GB available; a future update may fail during extraction'}
+  else {Add-Check 'Update working space' 'pass' 'Enough free disk space for typical upgrades'}
+} catch {Add-Check 'Update working space' 'warn' 'Could not verify space for update extraction'}
+
+try {
+  $dbPaths=@((Join-Path $env:LOCALAPPDATA 'Synapse\synapse.sqlite'),(Join-Path $env:APPDATA 'Synapse\synapse.sqlite'))
+  $found=@($dbPaths | Where-Object {Test-Path $_ -PathType Leaf})
+  if ($found.Count -gt 0) {Add-Check 'Database preservation' 'pass' ('Detected '+$found.Count+' databases; no migrations or modifications performed')}
+  else {Add-Check 'Database preservation' 'pass' 'No standard database files to modify; data may be in a custom Synapse workspace'}
+} catch {Add-Check 'Database preservation' 'warn' 'Could not inspect local database paths' }
 $result=[pscustomobject]@{
   schema_version=1
   repair_requested=[bool]$Repair

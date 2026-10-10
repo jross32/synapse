@@ -129,6 +129,10 @@ jobs:
           $reportDir = Join-Path $env:LOCALAPPDATA "Synapse/repair-reports"
           if (-not (Get-ChildItem $reportDir -Filter "repair-*.json" -ErrorAction SilentlyContinue | Select-Object -First 1)) { throw "Installer did not write health report" }
           Write-Host "PASS: running setup again restored the bundled daemon and preserved existing data"
+          $report = Get-ChildItem $reportDir -Filter "repair-*.json" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $health = Get-Content $report.FullName -Raw | ConvertFrom-Json
+          if (@($health.checks).Count -lt 19) { throw "Expected at least 19 installer health checks" }
+          if (-not (@($health.checks | Where-Object { $_.name -eq "Temporary file access" }).Count)) { throw "Folder permission test missing" }
 
       - name: Upload tested Windows installer
         uses: actions/upload-artifact@v4
