@@ -31,3 +31,19 @@ def test_visual_qa_default_skill_and_completion_contract():
 if __name__ == "__main__":
     test_visual_qa_default_skill_and_completion_contract()
     print("VISUAL QA DEFAULT PASS: installed implicit skills, completion contract, runner, action")
+
+
+def test_visual_qa_injected_into_new_squad_prompts(tmp_path):
+    from synapse_daemon.ai_context_memory import write_role_prompt
+    prompt = write_role_prompt(
+        data_dir=tmp_path, project_id='sample', project_name='Sample App',
+        squad_name='UI Squad', squad_goal_md='Build a UI',
+        work_item_title='Check frontend', instructions_md='Test app',
+        role_name='QA Agent', role_description='Test browser',
+        prompt_preamble_md='', context_mode='minimal',
+        handoff_summary_md=None, handoff_blockers_md=None, files_touched=[],
+    ).read_text(encoding='utf-8')
+    assert 'Default Visual QA for Synapse UI work' in prompt
+    assert 'browser-ui-audit' in prompt
+    assert 'scripts/visual-qa-suite.mjs' in prompt
+    assert 'For tasks without a graphical UI, skip' in prompt

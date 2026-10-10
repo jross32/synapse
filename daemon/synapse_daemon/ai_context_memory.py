@@ -62,6 +62,17 @@ AI_WORKING_AGREEMENT_PROMPT = (
     "parent squad/reviewer receipts automatically without copying bodies or secrets."
 )
 
+AI_VISUAL_QA_DEFAULT_PROMPT = (
+    "## Default Visual QA for Synapse UI work\n"
+    "If the assignment creates, changes, tests, or releases a website or user-facing UI, "
+    "automatically retrieve installed skill browser-ui-audit and follow it with the "
+    "existing completion-contract before claiming completion. Run scripts/visual-qa.mjs "
+    "for isolated desktop and mobile color, overflow, console, and screenshot checks. "
+    "When authorized disposable test credentials and scenarios exist, run "
+    "scripts/visual-qa-suite.mjs for isolated buttons, forms, uploads, and approved "
+    "reference comparisons. Record blocked and untested checks, never call them passed. "
+    "For tasks without a graphical UI, skip this browser gate.\n"
+)
 AI_SKILL_PACKS_PROMPT = (
     "## Synapse skill packs\n"
     "Before inventing a workflow, inspect installed reusable skills with `GET "
@@ -248,6 +259,7 @@ def write_role_prompt(
             AI_WORKING_AGREEMENT_PROMPT,
             "",
             AI_SKILL_PACKS_PROMPT,
+            AI_VISUAL_QA_DEFAULT_PROMPT,
             "",
             "## AI context excerpt",
             _context_excerpt(context_file, context_mode),
