@@ -1,0 +1,32 @@
+{
+  "id": "visual-fidelity-loop",
+  "name": "Visual Fidelity Loop",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Shared ChatGPT/Claude/Blender/Image Studio routing and fail-closed real-browser screenshot comparison against approved UI design references.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "ui",
+    "visual-target",
+    "claude",
+    "svg",
+    "image-studio",
+    "blender",
+    "visual-diff",
+    "reference-fidelity",
+    "quality-os",
+    "browser-proof"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "ui-forge",
+    "image-studio",
+    "playwright"
+  ],
+  "optional_capabilities": [
+    "claude",
+    "blender-studio",
+    "reflex"
+  ]
+}
