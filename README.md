@@ -244,6 +244,8 @@ The honest boundary matters: fresh-process CLI speed was only **1.45x**, and the
 
 ## Getting started
 
+**Synapse v0.1.215 branded installer:** Windows Setup now uses original glowing purple Synapse brain artwork and coordinated headers. For existing installs, Setup offers repair and can close a lingering installed desktop process with consent, while leaving development workers and saved data alone.
+
 **Synapse v0.1.214 repair diagnostics:** Re-run the installer and select **Repair / update** when an existing Synapse installation is detected. Setup restores packaged app files, preserves user accounts and projects, and produces a diagnostic report in `%LOCALAPPDATA%\Synapse\repair-reports` covering local daemon, login network/TLS, disk space, user folder permissions and configuration issues. Safe repairs run automatically; changes to live workers, databases, passwords, firewall, VPN, DNS and proxy settings require separate user action.
 
 **Synapse v0.1.213 installer self-check and repair:** The Windows installer detects an existing copy and offers Repair / update by default. It verifies bundled app and daemon files, installed version, user data directories, available disk, localhost daemon port/version conflicts, HTTPS account service, and DNS. Re-installing restores missing application files but never deletes projects or credentials. Safe repairs create missing user application directories; all other issues are recorded with next steps in `%LOCALAPPDATA%\Synapse\repair-reports`. Login is no longer disabled by a stale network health indicator.

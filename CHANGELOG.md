@@ -10,8 +10,13 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.1.215] -- 2026-10-10
+### Added
+- Branded Windows Setup with dark violet gradient, glowing Synapse neural artwork, matched installer header, and clearer repair/update screens.
+- Detects lingering installed Synapse desktop processes by exact executable path, waits for graceful exit and offers consent-based desktop shutdown before retrying setup. Development daemons and other applications remain untouched.
+
 ## [0.1.214] -- 2026-10-10
-- Branded the NSIS setup wizard with dark violet gradient, glowing Synapse neural artwork, matching inner-page header and clearer repair/update copy. Desktop processes are detected by exact executable path and can be closed on explicit consent during upgrade.
+
 
 ### Added
 - Expanded safe installer repair health report: 19 diagnostics covering executable/daemon/UI files, installed version consistency, Windows user-data and temporary-folder writability, configuration JSON validity, TLS certificate trust, account service reachability/DNS, disk capacity, old daemons on port 7878, account endpoint overrides and data preservation.
