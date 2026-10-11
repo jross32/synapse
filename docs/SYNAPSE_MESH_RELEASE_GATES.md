@@ -43,3 +43,9 @@
 ## Release safety
 Do not overwrite the official v0.1.217 release with a distinct binary using the same version.
 Candidate build version is 0.1.218-rc.1. No production cloud migration or update should be applied until it is reviewed and migration/rollback paths are verified.
+
+## Packaged daemon smoke findings, 2026-10-10
+- The isolated v0.1.218-rc.1 daemon started on a dynamically allocated loopback port, returned HTTP 200 from /api/v1/health and the authenticated machine inventory endpoint, and left the live port 7878 untouched.
+- Authenticated inventory reported LAPTOP-GOMKH6MT, 9 development-tool entries, and 1 local disk. Fresh smoke SQLite integrity_check returned ok. The isolated test daemon was shut down.
+- An intermittent heartbeat error (`sqlite3.OperationalError: cannot commit - no transaction is active`) appeared in the packaged daemon. Audit located a direct shared-connection commit in routes_local_ai.py. That call now uses storage.transaction(); 51 related Python tests passed. Commit fa85bde. This is a candidate fix, not verified elimination of every possible shared-connection race.
+- Release candidates built before fa85bde are stale and must not be published; rebuild and repeat smoke tests on the fresh binary.- The PyInstaller onefile daemon creates child processes. Smoke-test cleanup discovered 9 orphaned test processes in the isolated release tree; all 9 were terminated after verifying exact executable and test data path. Live Synapse port 7878 remained healthy. Future smoke harness must stop every matching test child before rebuilding/releasing.
