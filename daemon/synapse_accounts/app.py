@@ -1062,6 +1062,9 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
             )
         return RedirectResponse(url=redirect_url, status_code=302)
 
+    from .workspace import install_workspace_routes
+    install_workspace_routes(app, current_account, get_db)
+
     app.state.accounts_service = service
     app.state.accounts_settings = active_settings
     return app

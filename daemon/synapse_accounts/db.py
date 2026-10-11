@@ -99,6 +99,30 @@ class SyncDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class WorkspaceLocation(Base):
+    __tablename__ = "workspace_locations"
+    __table_args__ = (UniqueConstraint("account_id", "project_id", "device_id", name="uq_workspace_location"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    project_path: Mapped[str] = mapped_column(Text, nullable=False)
+    revision: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class WorkspaceNote(Base):
+    __tablename__ = "workspace_notes"
+    __table_args__ = (UniqueConstraint("account_id", "project_id", "note_key", name="uq_workspace_note"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    note_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class RelayConnector(Base):
     __tablename__ = "relay_connectors"
     account_id: Mapped[str] = mapped_column(String(64), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
