@@ -85,6 +85,30 @@
         "to": "templates"
       },
       {
+        "from": "scripts/visual-qa.mjs",
+        "to": "scripts/visual-qa.mjs"
+      },
+      {
+        "from": "scripts/visual-qa-suite.mjs",
+        "to": "scripts/visual-qa-suite.mjs"
+      },
+      {
+        "from": "scripts/visual-qa-e2e-worker.mjs",
+        "to": "scripts/visual-qa-e2e-worker.mjs"
+      },
+      {
+        "from": "node_modules/playwright",
+        "to": "node_modules/playwright"
+      },
+      {
+        "from": "node_modules/playwright-core",
+        "to": "node_modules/playwright-core"
+      },
+      {
+        "from": "tools/ui_lab_reference_compare.py",
+        "to": "tools/ui_lab_reference_compare.py"
+      },
+      {
         "from": "docs",
         "to": "docs",
         "filter": [

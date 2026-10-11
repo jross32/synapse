@@ -13,7 +13,7 @@ for(const device of sizes){
   const entry={device:device.name,url:start,status:null,errors:[],consoleErrors:[],overflow:[],contrast:[],screenshots:[]};
   try {
     // New browser per device: no long-lived browser session that can poison later tests.
-    browser=await chromium.launch({headless:true,executablePath:process.env.SYNAPSE_CHROME_PATH||undefined,timeout:12000});
+    browser=await chromium.launch({headless:true,...(process.env.SYNAPSE_CHROME_PATH?{executablePath:process.env.SYNAPSE_CHROME_PATH}:(process.platform==='win32'?{channel:'msedge'}:{})),timeout:12000});
     context=await browser.newContext({viewport:{width:device.width,height:device.height},isMobile:device.name!=='desktop',hasTouch:device.name!=='desktop'});
     page=await context.newPage();page.setDefaultTimeout(6500);
     page.on('pageerror',e=>entry.errors.push('JS: '+e.message));

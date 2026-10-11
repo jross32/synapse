@@ -105,12 +105,12 @@ def test_skill_routes_and_mcp_expose_installed_instructions(tmp_path: Path) -> N
     with TestClient(app, headers=headers) as client:
         before = client.get("/api/v1/ai-bundles/skills")
         assert before.status_code == 200
-        assert before.json()["installed_ids"] == []
+        assert set(before.json()["installed_ids"]) == set(skill_packs.DEFAULT_UI_SKILL_IDS)
 
         install = client.post("/api/v1/ai-bundles/install/super-internet-digger")
         assert install.status_code == 200, install.text
         after = client.get("/api/v1/ai-bundles/skills")
-        assert after.json()["installed_ids"] == ["super-internet-digger"]
+        assert set(after.json()["installed_ids"]) == set(skill_packs.DEFAULT_UI_SKILL_IDS) | {"super-internet-digger"}
         detail = client.get("/api/v1/ai-bundles/skills/super-internet-digger")
         assert detail.status_code == 200
         assert "Fast Research Loop" in detail.json()["instructions_md"]

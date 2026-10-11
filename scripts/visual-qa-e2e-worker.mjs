@@ -19,7 +19,7 @@ const out=path.resolve(outDir);await fs.mkdir(out,{recursive:true});
 const report={name:test.name,viewport:test.viewport||{width:390,height:844},url:root.origin,steps:[],errors:[],consoleErrors:[],requestsFailed:[],status:'FAIL',screenshot:null};
 let browser,ctx,page;
 try{
- browser=await chromium.launch({headless:true,timeout:10000,executablePath:process.env.SYNAPSE_CHROME_PATH||undefined});
+ browser=await chromium.launch({headless:true,timeout:10000,...(process.env.SYNAPSE_CHROME_PATH?{executablePath:process.env.SYNAPSE_CHROME_PATH}:(process.platform==='win32'?{channel:'msedge'}:{}))});
  ctx=await browser.newContext({viewport:report.viewport,isMobile:report.viewport.width<700,hasTouch:report.viewport.width<700,storageState:test.storageStatePath||undefined,acceptDownloads:false});
  page=await ctx.newPage();page.setDefaultTimeout(5500);
  page.on('pageerror',e=>report.errors.push(e.message));

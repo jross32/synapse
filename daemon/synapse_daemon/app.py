@@ -150,6 +150,11 @@ def build_app(
         tool_registry.load()
     if auth is None:
         auth = AuthManager(storage, ensure_local_token(storage.data_dir))
+    # Install default QA skills on fresh Windows profiles and upgrades.
+    from .skill_packs import ensure_default_ui_skills
+    for skill_id, result in ensure_default_ui_skills(storage.data_dir).items():
+        if result.startswith("error:"):
+            log.warning("Default Synapse skill %s bootstrap failed: %s", skill_id, result)
     profile_manager = ProfileManager(storage)
     with storage.transaction() as conn:
         from .agent_squads import seed_default_role_templates

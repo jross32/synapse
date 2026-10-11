@@ -47,3 +47,38 @@ def test_visual_qa_injected_into_new_squad_prompts(tmp_path):
     assert 'browser-ui-audit' in prompt
     assert 'scripts/visual-qa-suite.mjs' in prompt
     assert 'For tasks without a graphical UI, skip' in prompt
+
+
+def test_fresh_install_bootstraps_default_visual_qa(tmp_path):
+    from synapse_daemon import skill_packs
+    data_dir = tmp_path / 'fresh'
+    results = skill_packs.ensure_default_ui_skills(data_dir)
+    assert results['browser-ui-audit'].startswith('installed:'), results
+    assert results['completion-contract'].startswith('installed:'), results
+    assert all(skill_packs.get_installed(data_dir, x).manifest.implicit_invocation
+               for x in skill_packs.DEFAULT_UI_SKILL_IDS)
+    assert all(x == 'current' for x in skill_packs.ensure_default_ui_skills(data_dir).values())
+    # Upgrade a previous version without altering unrelated installed skills.
+    root = data_dir / 'skill-packs' / 'browser-ui-audit'
+    marker = root / 'current.json'
+    import json
+    current = json.loads(marker.read_text(encoding='utf-8'))
+    current['version'] = '0.0.1'
+    marker.write_text(json.dumps(current), encoding='utf-8')
+    repaired = skill_packs.ensure_default_ui_skills(data_dir)
+    assert repaired['browser-ui-audit'].startswith('installed:'), repaired
+    assert skill_packs.get_installed(data_dir, 'browser-ui-audit').manifest.version == '0.2.1'
+
+
+def test_windows_installer_contains_visual_qa_dependencies():
+    import json
+    root = Path(__file__).resolve().parents[2]
+    package = json.loads((root / 'package.json').read_text(encoding='utf-8'))
+    packaged = {item['to']: item['from'] for item in package['build']['extraResources']}
+    expected = ('templates', 'scripts/visual-qa.mjs',
+                'scripts/visual-qa-suite.mjs', 'scripts/visual-qa-e2e-worker.mjs',
+                'node_modules/playwright', 'node_modules/playwright-core',
+                'tools/ui_lab_reference_compare.py')
+    for target in expected:
+        assert target in packaged, target
+        assert (root / packaged[target]).exists(), target

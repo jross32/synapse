@@ -195,6 +195,34 @@ def install(data_dir: Path, skill_id: str) -> InstalledSkillPack:
     return get_installed(data_dir, skill_id)
 
 
+DEFAULT_UI_SKILL_IDS = ("completion-contract", "browser-ui-audit")
+
+
+def ensure_default_ui_skills(data_dir: Path) -> dict[str, str]:
+    """Provision essential UI/QA skills on fresh and upgraded Windows installs.
+
+    Preserve existing immutable versions. Install only when the bundled version
+    differs; a broken or absent package is reported per skill, not silently
+    treated as installed. Does not modify unrelated user-installed skills.
+    """
+    outcomes: dict[str, str] = {}
+    for skill_id in DEFAULT_UI_SKILL_IDS:
+        try:
+            bundled = get_catalog_item(skill_id)
+            try:
+                current = get_installed(data_dir, skill_id)
+                if current.manifest.version == bundled.manifest.version:
+                    outcomes[skill_id] = "current"
+                    continue
+            except Exception:  # damaged or missing installation: attempt safe repair
+                pass
+            installed = install(data_dir, skill_id)
+            outcomes[skill_id] = f"installed:{installed.manifest.version}"
+        except Exception as exc:
+            outcomes[skill_id] = f"error:{type(exc).__name__}: {exc}"
+    return outcomes
+
+
 def uninstall(data_dir: Path, skill_id: str) -> bool:
     root = installed_skill_packs_dir(data_dir) / skill_id
     if not root.exists():
