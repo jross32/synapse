@@ -325,8 +325,8 @@ def build_local_ai_router(storage: Any, data_dir: Path) -> APIRouter:
             sets.append("workspace=?"); vals.append(payload.workspace)
         if sets:
             vals.append(chat_id)
-            storage.conn.execute(f"UPDATE local_chats SET {', '.join(sets)} WHERE id=?", vals)
-            storage.conn.commit()
+            with storage.transaction() as conn:
+                conn.execute(f"UPDATE local_chats SET {', '.join(sets)} WHERE id=?", vals)
         return local_chat.get_chat(storage.conn, chat_id)
 
     @router.delete("/chats/{chat_id}")
