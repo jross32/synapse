@@ -143,3 +143,23 @@ def test_absent_account_secret_disables_public_connector(tmp_path, monkeypatch):
     with TestClient(create_app(settings)) as client:
         owner = _owner(client, "no-key")
         assert client.get("/v1/relay/connector", headers=owner).status_code == 503
+
+
+def test_multiple_enrolled_devices_require_explicit_selection(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        owner = _owner(client, "selector")
+        _hosts(client, owner, "desktop-a", "laptop-b")
+        path = _connector(client, owner)
+        a = _enroll(client, owner, "desktop-a")
+        _enroll(client, owner, "laptop-b")
+        payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+        unselected = client.post(path, json=payload)
+        assert unselected.status_code == 409
+        assert "Select a target computer" in unselected.text
+        # A query parameter supplied by an external MCP caller cannot bypass
+        # account-owned device selection.
+        bypass = client.post(path + "?device=desktop-a", json=payload)
+        assert bypass.status_code == 409
+        _select(client, owner, "desktop-a")
+        job = _rpc(client, path, "desktop-a", a)
+        assert job["mode"] == "full"

@@ -27,6 +27,10 @@ class ProfileSignUpRequest(BaseModel):
     display_name: str | None = None
 
 
+class RenameCurrentHostRequest(BaseModel):
+    nickname: str = Field(..., min_length=1, max_length=80)
+
+
 class AccountMcpDeviceSelection(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=128)
 class DeviceAccessUpdate(BaseModel):
@@ -335,6 +339,11 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
             raise invalid("profile", "Sign in before changing MCP provisioning.")
         set_device_preference(storage.data_dir, account.user_id, ensure_machine_id(storage.data_dir), payload.enabled)
         return mcp_connections()
+
+    @router.put("/hosts/current/nickname", dependencies=[guard])
+    async def rename_current_host(payload: RenameCurrentHostRequest) -> dict:
+        host = await asyncio.to_thread(manager.rename_current_host, payload.nickname)
+        return {"host": host.model_dump(mode="json")}
 
     @router.get("/hosts", response_model=None, dependencies=[guard])
     async def list_hosts() -> dict:

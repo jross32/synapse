@@ -363,3 +363,17 @@ def test_local_cli_detection_is_cached(tmp_path: Path, monkeypatch: pytest.Monke
 
     manager.verify_service(provider="claude-code")
     assert calls["n"] > first, "an explicit verify must bypass the cache and re-probe"
+
+
+def test_current_machine_can_be_given_nickname(tmp_path: Path) -> None:
+    client, _, _ = _harness(tmp_path)
+    with client as c:
+        before = c.get("/api/v1/profile/hosts").json()["hosts"]
+        assert len(before) == 1
+        renamed = c.put("/api/v1/profile/hosts/current/nickname", json={"nickname": "My Build Computer"})
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["host"]["name"] == "My Build Computer"
+        again = c.get("/api/v1/profile").json()
+        assert again["current_host"]["name"] == "My Build Computer"
+        invalid = c.put("/api/v1/profile/hosts/current/nickname", json={"nickname": ""})
+        assert invalid.status_code == 422

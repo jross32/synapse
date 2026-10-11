@@ -119,13 +119,20 @@ def choose_device(db: Session, account_id: str, preferred: str | None) -> str:
         if enrolled is None:
             raise HTTPException(status_code=503, detail="Selected Synapse computer is not connected yet.")
         return preferred
-    # Prefer the most recent device heartbeat, otherwise stable alphabetical order.
+    # A missing selection must never silently route writes to a different computer.
+    # A single enrolled device is unambiguous; multiple devices require explicit
+    # account-owner selection through /v1/relay/connector/selection.
     devices = list(db.scalars(select(RelayDevice).where(
         RelayDevice.account_id == account_id, RelayDevice.revoked_at.is_(None))))
     active = [device for device in devices if device.device_id in known]
     if not active:
         raise HTTPException(status_code=503, detail="No MCP devices enrolled yet.")
-    return sorted(active, key=lambda device: (device.last_seen_at or datetime.min, device.device_id), reverse=True)[0].device_id
+    if len(active) > 1:
+        raise HTTPException(status_code=409, detail=(
+            "More than one Synapse computer is enrolled. Select a target computer "
+            "in Synapse Profile before issuing remote commands."
+        ))
+    return active[0].device_id
 
 
 def create_job(db: Session, account_id: str, device_id: str, payload: Any, *, mode: str) -> str:

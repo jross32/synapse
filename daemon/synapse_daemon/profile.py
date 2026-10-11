@@ -777,6 +777,20 @@ class ProfileManager:
             conn.execute("DELETE FROM service_connections WHERE id = ?", (connection_id,))
         self._sync_to_remote(best_effort=True)
 
+    def rename_current_host(self, name: str) -> HostPresence:
+        nickname = name.strip()
+        if not 1 <= len(nickname) <= 80 or any(ord(c) < 32 for c in nickname):
+            raise ValueError("Computer nickname must contain 1 to 80 printable characters")
+        host = self.ensure_current_host()
+        now = _now_iso()
+        with self._storage.transaction() as conn:
+            conn.execute("UPDATE profile_state SET current_host_name=?, updated_at=? WHERE id=1",
+                         (nickname, now))
+            conn.execute("UPDATE profile_hosts SET name=?, updated_at=? WHERE id=?",
+                         (nickname, now, host.id))
+        self._sync_to_remote(best_effort=True)
+        return self.ensure_current_host()
+
     def ensure_current_host(self) -> HostPresence:
         row = self._state_row()
         current_host_id = ensure_machine_id(self._storage.data_dir)

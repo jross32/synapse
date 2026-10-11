@@ -40,6 +40,7 @@
       StrCpy $RepairMode 1
     IfFileExists "$INSTDIR\resources\app\package.json" 0 +2
       StrCpy $RepairMode 1
+  StrCpy $DevToolsState 0
   StrCpy $BundleResearchState 1
   StrCpy $BundleFactoryState 1
   StrCpy $BundleRescueState 1
@@ -178,6 +179,39 @@ Var BundleImageStudioState
 
 Page custom SynapseBundlesPageCreate SynapseBundlesPageLeave
 
+Var DevToolsDialog
+Var DevToolsCheckbox
+Var DevToolsState
+
+Page custom SynapseDevToolsPageCreate SynapseDevToolsPageLeave
+
+Function SynapseDevToolsPageCreate
+  ${If} $RepairMode == 1
+    Abort
+  ${EndIf}
+  IfSilent 0 +2
+    Abort
+  nsDialogs::Create 1018
+  Pop $DevToolsDialog
+  ${If} $DevToolsDialog == error
+    Abort
+  ${EndIf}
+  ${NSD_CreateLabel} 0 0 100% 38u "Development tools: Git, Node.js LTS and Python. Synapse detects already installed tools and only installs missing ones using trusted Windows Package Manager packages."
+  Pop $0
+  ${NSD_CreateCheckbox} 0 57u 100% 24u "Automatically set up missing tools for this Windows user (recommended)"
+  Pop $DevToolsCheckbox
+  ${NSD_Check} $DevToolsCheckbox
+  ${NSD_CreateLabel} 0 89u 100% 44u "You can uncheck this and finish setup without downloads. Administrator-only changes still require Windows approval. Large optional packages are not installed automatically."
+  Pop $0
+  nsDialogs::Show
+FunctionEnd
+
+Function SynapseDevToolsPageLeave
+  ${NSD_GetState} $DevToolsCheckbox $DevToolsState
+FunctionEnd
+
+
+
 Function SynapseBundlesPageCreate
   ${If} $RepairMode == 1
     Abort ; previous selections are intentionally preserved on repair
@@ -302,4 +336,13 @@ FunctionEnd
     nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\repair\synapse-repair-check.ps1" -InstallDir "$INSTDIR"'
   ${EndIf}
   synapse_repair_done:
+  ; Runs only after an interactive fresh install and explicit checked consent.
+  ; Winget uses user scope; we never suppress OS privilege prompts.
+  ${If} $DevToolsState == 1
+    ${If} $RepairMode != 1
+      IfFileExists "$INSTDIR\resources\setup\synapse-dev-toolchain.ps1" 0 synapse_devtools_done
+      Exec 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\resources\setup\synapse-dev-toolchain.ps1" -Mode Install -Profile Essential -ReportPath "$APPDATA\Synapse\setup-toolchain-report.json"'
+    ${EndIf}
+  ${EndIf}
+  synapse_devtools_done:
 !macroend

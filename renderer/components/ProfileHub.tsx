@@ -38,6 +38,9 @@ import {
   getProfile,
   getProfileHosts,
   getDeviceAccessPolicies,
+  getLocalMachineInventory,
+  renameCurrentHost,
+  type LocalMachineInventory,
   getAccountMcpLink,
   rotateAccountMcpLink,
   selectAccountMcpDevice,
@@ -97,6 +100,10 @@ export function ProfileHub({
   const [services, setServices] = useState<ServiceConnection[]>([]);
   const [hosts, setHosts] = useState<HostPresence[]>([]);
   const [devicePolicies, setDevicePolicies] = useState<DeviceAccessPolicy[]>([]);
+  const [localMachine, setLocalMachine] = useState<LocalMachineInventory | null>(null);
+  const [nickname, setNickname] = useState('');
+  const [nicknameDismissed, setNicknameDismissed] = useState(false);
+
   const [mcpLink, setMcpLink] = useState<AccountMcpLink | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [loadingHub, setLoadingHub] = useState(false);
@@ -165,6 +172,8 @@ export function ProfileHub({
   async function loadHubData(): Promise<void> {
     setLoadingHub(true);
     setError(null);
+    try { setLocalMachine(await getLocalMachineInventory()); }
+    catch { setLocalMachine(null); }
     const issues: string[] = [];
     try {
       const summary = (await refreshProfile()) ?? (await getProfile());
@@ -378,6 +387,27 @@ export function ProfileHub({
           </Button>
         </div>
       </div>
+
+      {profile?.signed_in && localMachine && profile.current_host.name === localMachine.hostname && !nicknameDismissed && (
+        <div role='region' aria-label='New computer setup' className='mx-5 mt-4 rounded-2xl border border-primary/40 bg-primary/10 p-4 sm:mx-6'>
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div>
+              <h3 className='font-semibold'>Welcome to Synapse on this computer</h3>
+              <p className='mt-1 text-sm text-muted-foreground'>Choose a nickname to recognize this machine when routing tools and sharing projects. Your other account computers appear below.</p>
+            </div>
+            <Button variant='ghost' size='sm' onClick={() => setNicknameDismissed(true)}>Skip</Button>
+          </div>
+          <div className='mt-3 flex flex-wrap gap-2'>
+            <Input value={nickname || profile.current_host.name} onChange={event => setNickname(event.target.value)} aria-label='Computer nickname' className='min-w-[180px] flex-1' />
+            <Button disabled={busyKey !== null} onClick={() => void runAction('nickname', async () => {
+              await renameCurrentHost((nickname || profile.current_host.name).trim());
+              setNicknameDismissed(true);
+              await refreshProfile();
+              await loadHubData();
+            })}>Save computer name</Button>
+          </div>
+        </div>
+      )}
 
       {profile?.signed_in ? (
         <div className='grid gap-4 p-5 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] sm:p-6'>
@@ -651,6 +681,27 @@ export function ProfileHub({
               </div>
             </Card>
 
+
+            <Card className='space-y-3 p-5'>
+              <div>
+                <h3 className='text-lg font-semibold'>This computer's capabilities</h3>
+                <p className='mt-1 text-sm text-muted-foreground'>Read-only inventory for machine selection and development setup.</p>
+              </div>
+              {localMachine ? (
+                <>
+                  <div className='text-sm font-medium'>{localMachine.hostname} ? {localMachine.architecture} ? {localMachine.cpu_logical} logical CPUs</div>
+                  <div className='flex flex-wrap gap-2'>
+                    {localMachine.tools.map(tool => <Pill key={tool.name} label={`${tool.name}: ${tool.available ? 'Ready' : 'Missing'}`} />)}
+                  </div>
+                  {localMachine.disks.map(disk => (
+                    <div key={disk.mount} className='flex justify-between gap-2 text-xs text-muted-foreground'>
+                      <span>{disk.mount}</span>
+                      <span>{(disk.free_bytes / 1024 ** 3).toFixed(1)} GB free of {(disk.total_bytes / 1024 ** 3).toFixed(1)} GB</span>
+                    </div>
+                  ))}
+                </>
+              ) : <p className='text-xs text-muted-foreground'>Hardware inventory unavailable for this runtime.</p>}
+            </Card>
 
             <Card className='space-y-4 p-5'>
               <div>

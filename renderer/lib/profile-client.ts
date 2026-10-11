@@ -187,3 +187,29 @@ export async function getMcpConnections(): Promise<McpConnections> {
 export async function setMcpPreference(enabled:boolean): Promise<McpConnections> {
   return apiFetch<McpConnections>('/profile/mcp-connections', {method:'PATCH',body:{enabled}});
 }
+
+
+export interface LocalMachineInventory {
+  hostname: string;
+  platform: string;
+  architecture: string;
+  cpu_logical: number;
+  memory_total_bytes: number | null;
+  battery_percent: number | null;
+  on_ac_power: boolean | null;
+  tools: { name: string; available: boolean; version: string | null }[];
+  disks: { mount: string; total_bytes: number; used_bytes: number; free_bytes: number }[];
+}
+
+export async function getLocalMachineInventory(): Promise<LocalMachineInventory> {
+  const response = await apiFetch<{ inventory: LocalMachineInventory }>('/machines/local/inventory');
+  return response.inventory;
+}
+
+
+export async function renameCurrentHost(nickname: string): Promise<HostPresence> {
+  const response = await apiFetch<{ host: HostPresence }>('/profile/hosts/current/nickname', {
+    method: 'PUT', body: { nickname }
+  });
+  return response.host;
+}
