@@ -61,13 +61,15 @@ def check() -> list[str]:
     pkg_v = _package_json_version()
     pyproject_v = _pyproject_version()
 
-    if not (init_v == pkg_v == pyproject_v):
+    # PEP 440 spells npm prerelease 0.1.218-rc.1 as 0.1.218rc1.
+    canonical = lambda value: value.replace("-rc.", "rc")
+    if not (canonical(init_v) == canonical(pkg_v) == canonical(pyproject_v)):
         problems.append(
             "version-file drift (run scripts/version-bump.ps1): "
             f"__init__.py={init_v!r}, package.json={pkg_v!r}, pyproject.toml={pyproject_v!r}"
         )
 
-    version = init_v
+    version = pkg_v
     changelog = _read("CHANGELOG.md")
     if f"## [{version}]" not in changelog:
         problems.append(
