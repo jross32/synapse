@@ -2,12 +2,16 @@
 from fastapi.testclient import TestClient
 
 from synapse_accounts.app import create_app
-from synapse_accounts.config import AccountsSettings
+from synapse_accounts.config import load_settings
+
+
+def _settings(path):
+    import dataclasses
+    return dataclasses.replace(load_settings(), database_url=f"sqlite:///{path}", public_base_url="http://localhost:8788")
 
 
 def test_catalog_is_not_sellable_and_subscription_requires_login(tmp_path):
-    settings = AccountsSettings(database_url=f"sqlite:///{tmp_path / 'plans.sqlite'}",
-                                public_base_url="http://localhost:8788")
+    settings = _settings(tmp_path / "plans.sqlite")
     client = TestClient(create_app(settings))
     catalog = client.get("/v1/plans")
     assert catalog.status_code == 200
@@ -19,8 +23,7 @@ def test_catalog_is_not_sellable_and_subscription_requires_login(tmp_path):
 
 
 def test_new_account_defaults_to_free(tmp_path):
-    settings = AccountsSettings(database_url=f"sqlite:///{tmp_path / 'accounts.sqlite'}",
-                                public_base_url="http://localhost:8788")
+    settings = _settings(tmp_path / "accounts.sqlite")
     client = TestClient(create_app(settings))
     response = client.post("/v1/auth/signup", json={
         "username": "tier_test",
