@@ -120,6 +120,18 @@ class MaintenanceCoordinator:
             self._save(data)
             return self._state(data)
 
+    def commit_ready(self, operation_id: str) -> dict[str, Any]:
+        """Consume readiness exactly once; a second commit must not restart again."""
+        with LOCK:
+            data = self._state(self._load())
+            if not data or data["id"] != operation_id or data["status"] != "ready":
+                raise MaintenanceError("Restart blocked: maintenance is not ready or already committed")
+            # Snapshot stays durable even if Electron/daemon dies after accepting commit.
+            data["status"] = "committed"
+            data["committed_at"] = self.clock()
+            self._save(data)
+            return data
+
     def cancel(self, operation_id: str) -> dict[str, Any]:
         with LOCK:
             data = self._load()

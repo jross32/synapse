@@ -47,3 +47,14 @@ def test_invalid_checkpoints_and_duplicate_roster(tmp_path):
         a.acknowledge(d["id"], "id", "paused")
     with pytest.raises(MaintenanceError):
         a.prepare([])
+
+
+def test_commit_is_one_shot_and_durable(tmp_path):
+    a = MaintenanceCoordinator(tmp_path)
+    d = a.prepare([{"id": "w", "capability": "drain"}])
+    a.acknowledge(d["id"], "w", "drained")
+    committed = a.commit_ready(d["id"])
+    assert committed["status"] == "committed"
+    assert MaintenanceCoordinator(tmp_path).inspect()["status"] == "committed"
+    with pytest.raises(MaintenanceError):
+        a.commit_ready(d["id"])

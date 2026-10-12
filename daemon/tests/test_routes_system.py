@@ -412,3 +412,35 @@ def test_remote_access_marks_fresh_cloudtap_probe_failures_as_warming(
     body = res.json()
     assert body["wan"]["verification"]["status"] == "warming"
     assert "warming up" in body["wan"]["verification"]["failure_message"]
+
+
+def test_restart_manager_maintenance_blocks_legacy_and_commits_once(tmp_path: Path) -> None:
+    client, _ = _harness(tmp_path)
+    base = "/api/v1/system/restart"
+    with client as c:
+        start = c.post(base + "/maintenance", json={
+            "workers": [{"id": "agent-worker-1", "capability": "checkpoint"}],
+            "grace_seconds": 120
+        })
+        assert start.status_code == 202, start.text
+        maintenance_id = start.json()["maintenance"]["id"]
+        blocked = c.post(base, json={"operation_id": "legacy-restart-01"})
+        assert blocked.status_code == 409
+        early_commit = c.post(base + "/maintenance/" + maintenance_id + "/commit", json={
+            "operation_id": "coordinated-01"
+        })
+        assert early_commit.status_code == 409
+        ack = c.post(base + "/maintenance/" + maintenance_id + "/ack", json={
+            "worker_id": "agent-worker-1", "status": "paused",
+            "checkpoint": "durable:agent:state"
+        })
+        assert ack.status_code == 200, ack.text
+        committed = c.post(base + "/maintenance/" + maintenance_id + "/commit", json={
+            "operation_id": "coordinated-01"
+        })
+        assert committed.status_code == 202, committed.text
+        assert committed.json()["maintenance"]["status"] == "committed"
+        again = c.post(base + "/maintenance/" + maintenance_id + "/commit", json={
+            "operation_id": "coordinated-02"
+        })
+        assert again.status_code == 409

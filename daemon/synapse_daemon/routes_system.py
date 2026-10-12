@@ -545,6 +545,9 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
             raise conflict("system_restart", str(exc)) from exc
         # Only this explicitly coordinated route gates restart against the ACK roster.
         operation = create_restart_operation(storage, payload)
+        # Consume the prepared barrier before notifying the desktop poller.
+        # Existing duplicate restart protection still applies at create above.
+        maintenance.commit_ready(operation_id)
         await request.app.state.bus.publish(
             event_name("system", "restart_requested"),
             {"operation_id": operation["operation_id"], "source": payload.source.value, "maintenance_id": operation_id},
@@ -569,6 +572,13 @@ def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
 
     @router.post("/system/restart", response_model=None, status_code=202)
     async def request_restart(payload: RestartRequest, request: Request) -> dict[str, Any]:
+        pending = maintenance.inspect()
+        if pending and pending["status"] in {"preparing", "ready"}:
+            raise conflict(
+                "system_restart",
+                "A coordinated worker maintenance window is in progress. Complete or cancel it before using legacy restart.",
+                diagnostic_code="SYN-RST-001",
+            )
         operation = create_restart_operation(storage, payload)
         await request.app.state.bus.publish(
             event_name("system", "restart_requested"),

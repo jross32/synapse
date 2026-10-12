@@ -20,3 +20,5 @@ Before enabling it for user-facing automatic restart:
 4. Route all restart entry points through the barrier, integrate worker-status indicators in the existing Electron Restart Manager, and recover after daemon crashes.
 5. Verify real cross-version upgrades and two-computer E2E, including old active jobs, reconnect, 120s deadline and failure rollback.
 6. Resolve observed dev frontend 0.2.218 and Python backend 0.1.209 skew and dual port-7878 listeners.
+
+The guarded commit consumes ready state exactly once and rejects repeated commits. A user-supplied roster is NOT proof of complete worker discovery; the route remains experimental until server-side worker identification and authenticated worker ACKs are implemented.
