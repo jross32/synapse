@@ -17,3 +17,10 @@ To publish a newer installer, update the release link in index.html only once Gi
 Hero animation: The initial message and each of nine alternate messages stays visible for 30 seconds of foreground viewing, then erases at 7 ms/character and retypes at 16 ms/character. The 10-message rotation loops. It pauses when the tab is hidden and stays static for reduced-motion visitors. The original SEO-friendly HTML text remains visible without JavaScript.
 
     node download-site/hero-animation-test.cjs
+
+## Premium preview and release hygiene (2026-10-11)
+
+The optional premium preview is at https://github.com/jross32/synapse/releases/tag/premium-preview-0.1.209-20261011 and is linked from #premium-preview. It is an unsigned v0.1.209 testing build, NOT a replacement for stable v0.1.217. The preview binary was built from a dirty worktree and is not reproducible from its Git tag alone. Complete clean-install, upgrade/repair, login/device, signing and visual comparison gates before a stable release. Preserve historical releases and document the latest stable vs preview separately.
+
+Site uptime depends on the localhost:8879 static server and Cloudflare tunnel. If the domain returns 502, verify the local server first; the current static server was restarted manually and is not yet guaranteed to restart on boot. The download-site source should gain an explicit managed startup/service definition. The fallback version in app.js is older than the stable release and should be reconciled. Release documentation should include installer SHA-256, provenance, tested OS versions, backup/rollback and known limitations.
+
