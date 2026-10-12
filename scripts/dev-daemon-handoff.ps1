@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $preflightPath = Join-Path $RepoRoot 'scripts\dev-daemon-preflight.ps1'
 if (-not (Test-Path $preflightPath)) { throw 'Missing daemon startup preflight' }
 $diagnosis = & $preflightPath -RepoRoot $RepoRoot -CheckOnly | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect development daemon state' }
+if (-not $diagnosis -or -not $diagnosis.repo) { throw 'Unable to inspect development daemon state' }
 $source = Join-Path $RepoRoot 'daemon\synapse_daemon'
 $python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 $state = [ordered]@{
