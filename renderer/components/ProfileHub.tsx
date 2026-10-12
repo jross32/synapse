@@ -633,18 +633,26 @@ export function ProfileHub({
                       setNotice('Connector link copied. Treat it like a password: it grants MCP access to your selected computer.');
                     })}>Copy MCP link</Button>
                   </div>
-                  <label className='block text-sm'>Active Synapse computer
+                  <label className='block text-sm'>Default execution computer (account MCP)
                     <select className='mt-1 w-full rounded-lg border border-border bg-background p-2 text-sm'
                       value={mcpLink.selected_device_id ?? ''}
                       disabled={busyKey === 'select-mcp'}
-                      onChange={event => void runAction('select-mcp', async () => {
-                        await selectAccountMcpDevice(event.target.value);
-                        setMcpLink(previous => previous ? { ...previous, selected_device_id: event.target.value } : null);
-                      })}>
-                      <option value='' disabled>Automatic: most recently online</option>
+                      onChange={event => {
+                        const target = event.target.value;
+                        const host = hosts.find(item => item.id === target);
+                        if (!host || target === mcpLink.selected_device_id) return;
+                        if (!window.confirm(`Make ${host.name} the default computer for account MCP commands? This changes the target for other connected AI clients too; it does not synchronize project files.`)) return;
+                        void runAction('select-mcp', async () => {
+                          await selectAccountMcpDevice(target);
+                          setMcpLink(await getAccountMcpLink());
+                          setNotice(`Default MCP execution computer changed to ${host.name}. Shared project-file access still requires a verified transfer or remote workspace connection.`);
+                        });
+                      }}>
+                      <option value='' disabled>Select a computer before running commands</option>
                       {hosts.map(host => <option key={host.id} value={host.id}>{host.name}{host.current_host ? ' (this computer)' : ''}</option>)}
                     </select>
                   </label>
+                  <p className='text-xs text-muted-foreground'>Your account owns this MCP link. Signing in enrolls each computer separately. The selection above changes only where new MCP operations run; it does not copy or expose files automatically. Choose a reachable machine and check its access policy below.</p>
                   <div className='flex items-center justify-between gap-3 text-xs text-muted-foreground'>
                     <span>All ChatGPT and Claude clients use this same URL.</span>
                     <Button variant='outline' size='sm' onClick={() => {
