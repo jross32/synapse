@@ -1,10 +1,10 @@
-# AGENTS.md â€” Synapse
+# AGENTS.md — Synapse
 
-Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`PROGRESS.md`](./PROGRESS.md) first to know where the project is. **The current active plan lives in-repo** â€” see the latest ADRs in [`docs/adr/`](./docs/adr/) (e.g. ADR-0028) + [`docs/roadmap.json`](./docs/roadmap.json). The plan is here, in the repo, on purpose: every AI (Claude, Codex, Copilot) codes to the same plan, not to one AI's private notes.
+Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`PROGRESS.md`](./PROGRESS.md) first to know where the project is. **The current active plan lives in-repo** — see the latest ADRs in [`docs/adr/`](./docs/adr/) (e.g. ADR-0028) + [`docs/roadmap.json`](./docs/roadmap.json). The plan is here, in the repo, on purpose: every AI (Claude, Codex, Copilot) codes to the same plan, not to one AI's private notes.
 
 > **More than one AI works this repo, sometimes concurrently.** If another
 > agent may be editing right now, read [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md)
-> â€” concurrent-edit protocol, commit-race avoidance, migration/version
+> — concurrent-edit protocol, commit-race avoidance, migration/version
 > collision rules, and scratch-file hygiene. It supersedes Rule #1's
 > per-commit version bump during `-dev` waves.
 
@@ -15,17 +15,17 @@ Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`P
 **Never leave the repo broken.** If you can't finish a milestone in one session, finish a *commit* that compiles, typechecks, and passes tests. Then update `PROGRESS.md` to record what's left.
 
 **Run preflight first + commit small complete units.** Before you start, run
-`pwsh -NoProfile -File scripts/preflight.ps1` â€” it prints the **next-free ADR +
+`pwsh -NoProfile -File scripts/preflight.ps1` — it prints the **next-free ADR +
 migration numbers to claim** (re-checked from disk, incl. untracked files, so two
 coders never collide) and your **uncommitted footprint**. Do **not** accumulate a
 multi-thousand-line uncommitted dump across many half-built features; land each
 **complete, compiling, tested** piece as its own commit as you go. (Both of these
-drifted recently and had to be reconciled â€” this rule prevents a repeat.)
+drifted recently and had to be reconciled — this rule prevents a repeat.)
 
 **When another AI is working in this tree, run the lane gate before you commit.**
 `scripts/preflight.ps1` (above) covers numbering + footprint; the *separate*
 `scripts/coordination-preflight.ps1 -Staged` is ADR-0024's one enforceable
-coordination gate â€” it fails (exit 1) when your staged files overlap a lane another
+coordination gate — it fails (exit 1) when your staged files overlap a lane another
 session holds. Pass your own session id so your own claim isn't reported against you:
 
 ```
@@ -33,23 +33,23 @@ pwsh -NoProfile -File scripts/coordination-preflight.ps1 -Staged -SessionId <you
 ```
 
 (or set `$env:SYNAPSE_SESSION_ID`). Claim a lane first via `POST /api/v1/coordination/lanes`.
-This gate was silently broken until `0.1.97`â€“`0.1.98` partly because nothing here pointed at it.
+This gate was silently broken until `0.1.97`–`0.1.98` partly because nothing here pointed at it.
 
-**Never leave the app half-done at a usage limit.** When usage/tokens run low â€”
-for *any* AI coder (Claude, Codex, Copilot, local) â€” the last action before
+**Never leave the app half-done at a usage limit.** When usage/tokens run low —
+for *any* AI coder (Claude, Codex, Copilot, local) — the last action before
 stopping must be to bring the current unit to a working, tested state and
 **commit + push** it. Never stop mid-edit leaving the app broken because credits
 ran out. The emergency commit still runs the standard ceremony (it's fast):
-`version-bump.ps1` + a one-line `CHANGELOG.md` + `PROGRESS.md` entry â€” do not
+`version-bump.ps1` + a one-line `CHANGELOG.md` + `PROGRESS.md` entry — do not
 silently skip it. Prefer smaller units that each land green so there's always a
 safe point to stop at.
 
-**Don't work alone â€” run an AI Council Review on meaningful work (ADR-0023).**
+**Don't work alone — run an AI Council Review on meaningful work (ADR-0023).**
 Before building, run a **pre-work council** (a small panel of reviewer lenses
 critiques your plan); after building, a **post-work council** (they hunt
 bugs/gaps before you claim done). Adaptive size: 2 reviewers for tiny tasks,
-3â€“5 normal, 6â€“10 only for complex/risky/architectural work. You synthesize the
-prioritized (critical/important/optional) findings â€” you don't blindly follow.
+3–5 normal, 6–10 only for complex/risky/architectural work. You synthesize the
+prioritized (critical/important/optional) findings — you don't blindly follow.
 Full discipline + mechanism in [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md);
 launchable as the `ai-council-review` quick-action.
 
@@ -57,19 +57,19 @@ launchable as the `ai-council-review` quick-action.
 is only half-done if a person can click it but an AI running inside Synapse can't
 drive it. Synapse is built *for* AI operators as much as for the user. So every new
 capability MUST:
-1. **Be a REST endpoint on the daemon** â€” the daemon is the single source of truth;
+1. **Be a REST endpoint on the daemon** — the daemon is the single source of truth;
    the desktop UI, mobile UI, and AI all call the *same* API. Never put logic only
    in the renderer where an AI can't reach it.
 2. **Be advertised in `endpoints_for_ai`** inside `daemon/synapse_daemon/routes_ai.py`
    so `GET /api/v1/ai/context` tells any AI the capability exists and how to call it.
-3. **Be documented in [`docs/api-finds.md`](./docs/api-finds.md)** â€” the complete
+3. **Be documented in [`docs/api-finds.md`](./docs/api-finds.md)** — the complete
    AI-capability reference (every endpoint, WS event, injected env var, memory file).
    Re-audit it when you add a `routes_*.py` file.
 4. **Inject any env vars / context** a spawned session needs to use it, and list any
    new WS events it emits.
 
 A capability an AI cannot *discover* (via `ai/context`) and *drive* (via the API) is
-not shippable â€” treat that gap like a failing test.
+not shippable — treat that gap like a failing test.
 
 **Enforce it in the feature's tests.** Every new AI-usable operation must assert its REST
 route appears in live OpenAPI and its task-oriented pointer appears in `/api/v1/ai/context`
@@ -78,9 +78,9 @@ MCP-only duplicate, or an undocumented route is a failed implementation, not fol
 
 ---
 
-## AI Working Agreement â€” every AI, every session
+## AI Working Agreement — every AI, every session
 
-**This applies to you** â€” Claude, Codex, Copilot, Cursor, a local model, anything â€” and it applies
+**This applies to you** — Claude, Codex, Copilot, Cursor, a local model, anything — and it applies
 whether you are driving Synapse from inside its Sessions tab **or editing this repo from a plain
 terminal outside Synapse.** Synapse exists so multiple AIs can work as one coordinated developer; act
 like it. Two habits, both backed by the daemon's REST API. The daemon runs on `127.0.0.1:7878`; the
@@ -88,24 +88,24 @@ trusted-local token is in `data/auth-token`, sent as the `X-Synapse-Token` heade
 Synapse app itself, so it is almost always running while you work on this repo.)
 
 > **Want to actually _drive_ Synapse (spin up squads, run workflows, harvest the web, evaluate an app)?**
-> See **[docs/DRIVE-SYNAPSE-FROM-AI.md](docs/DRIVE-SYNAPSE-FROM-AI.md)** â€” the task-oriented guide with real
+> See **[docs/DRIVE-SYNAPSE-FROM-AI.md](docs/DRIVE-SYNAPSE-FROM-AI.md)** — the task-oriented guide with real
 > `curl` flows. The full endpoint surface + schemas are live at `GET /api/v1/openapi.json` (ADR-0027).
 
-### 1. Check in so agents don't collide (coordination â€” ADR-0024)
+### 1. Check in so agents don't collide (coordination — ADR-0024)
 
 At the **start** of any Synapse work session, and periodically as you work:
 
-- **See who else is here:** `GET /api/v1/coordination/snapshot` â†’ live sessions + claimed file lanes.
+- **See who else is here:** `GET /api/v1/coordination/snapshot` → live sessions + claimed file lanes.
   If another agent is already editing files you were about to touch, pick different work or coordinate.
 - **Register yourself:** `POST /api/v1/coordination/sessions`
-  `{"runtime_id":"claude|codex|copilot|â€¦","agent_label":"<name>","task":"<what you're doing>"}` â†’
+  `{"runtime_id":"claude|codex|copilot|…","agent_label":"<name>","task":"<what you're doing>"}` →
   returns a `session_id`. Heartbeat with `POST /api/v1/coordination/sessions/{id}/heartbeat` more often
-  than every 90s (or the stale-sweep marks you gone). End with `DELETE â€¦/sessions/{id}` when done.
+  than every 90s (or the stale-sweep marks you gone). End with `DELETE …/sessions/{id}` when done.
 - **Claim a lane before editing:** `POST /api/v1/coordination/lanes?project_id=<id>`
-  `{"session_id":"â€¦","path_globs":["daemon/synapse_daemon/foo.py"]}` â†’ `conflicts[]` lists overlapping
-  lanes owned by **other** agents (advisory, never hard-blocks). Release with `DELETE â€¦/lanes/{lane_id}`.
+  `{"session_id":"…","path_globs":["daemon/synapse_daemon/foo.py"]}` → `conflicts[]` lists overlapping
+  lanes owned by **other** agents (advisory, never hard-blocks). Release with `DELETE …/lanes/{lane_id}`.
 
-If the daemon isn't reachable, proceed best-effort â€” but still stage only your own files, rebase before
+If the daemon isn't reachable, proceed best-effort — but still stage only your own files, rebase before
 pushing, and never `git add -A` when another AI may be mid-edit (`docs/MULTI-AI-WORKFLOW.md`).
 
 ### 2. File improvement ideas as you work (proposals -> durable backlog)
@@ -128,7 +128,7 @@ can then reconcile lifecycle from strong evidence and preserve the evidence trai
 Promoting a project-scoped proposal still creates a project backlog item, but promotion/acceptance
 and implementation completion remain separate facts.
 
-### 3. Keep the operator's Live View current (activity journal â€” ADR-0033)
+### 3. Keep the operator's Live View current (activity journal — ADR-0033)
 
 After registering, include `X-Synapse-Session: <your session id>` on other Synapse API calls. The daemon
 then records a clean method/result/authority receipt without copying request bodies, response bodies, or
@@ -177,7 +177,7 @@ return `already_running` while that profile is open instead of spawning duplicat
 electron/   Electron main + preload (TypeScript)
 renderer/   React UI shown inside Electron
 mobile/     Responsive Web UI served by the daemon to phones
-daemon/     Python (FastAPI) execution layer â€” owns all state
+daemon/     Python (FastAPI) execution layer — owns all state
 tools/      Plugin manifests (drop in a folder, no code surgery needed)
 installer/  PyInstaller + electron-builder + NSIS configs (Milestone J)
 scripts/    PowerShell helpers (dev mode, version bump)
@@ -202,26 +202,26 @@ const STYLE = {
 
 Match the surrounding file when editing existing code. These are defaults for new files.
 
-Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings. Type hints required on all public functions. Pydantic models for everything crossing the daemon â†” client boundary.
+Python: PEP 8, 4-space indent, double quotes for docstrings, single for strings. Type hints required on all public functions. Pydantic models for everything crossing the daemon ↔ client boundary.
 
 ---
 
-## Frontend UI standard â€” one window (ADR-0028)
+## Frontend UI standard — one window (ADR-0028)
 
 Build every new surface as a **fixed-height shell whose inner panels scroll, not the page.** Model it on Claude / Claude-Code's split layout.
 
-- **The page body never scrolls.** The route root is `h-full min-h-0 flex` (or grid). Each region â€” left rail, main area, any right-side panel â€” is its own scroll container: `min-h-0 overflow-y-auto`. No `overflow` on the outer page; nothing makes the whole page taller than the viewport.
-- **Right-side panels (Plan / Files / Diff / Terminal / Preview) open and close** â€” they're absent when unused, not always-on dead space.
+- **The page body never scrolls.** The route root is `h-full min-h-0 flex` (or grid). Each region — left rail, main area, any right-side panel — is its own scroll container: `min-h-0 overflow-y-auto`. No `overflow` on the outer page; nothing makes the whole page taller than the viewport.
+- **Right-side panels (Plan / Files / Diff / Terminal / Preview) open and close** — they're absent when unused, not always-on dead space.
 - **Styled scrollbars, never the OS default.** Use the shared `.scrollbar-thin` utility (theme-var `::-webkit-scrollbar` + Firefox `scrollbar-width`/`scrollbar-color`) on every inner scroll area.
 - Keep the 6-tier responsive rules + CSS-variable-only colors. Verify no page-body scroll (horizontal *or* vertical) at 375 / 1024 / 1280 / 2560.
-- **Apps** and **AI Coding** are the long-scroll offenders â€” refactor them to this pattern. New work sets the standard; old surfaces converge to it.
+- **Apps** and **AI Coding** are the long-scroll offenders — refactor them to this pattern. New work sets the standard; old surfaces converge to it.
 
 ---
 
 ## Commit rules (non-negotiable)
 
 1. **Every commit bumps a version** via `scripts/version-bump.ps1` (updates `package.json`, `pyproject.toml`, and `daemon/synapse_daemon/__init__.py` together).
-   - Docs-only commits use `-Kind design` (`X.Y.Z` â†’ `X.Y.Z.5`).
+   - Docs-only commits use `-Kind design` (`X.Y.Z` → `X.Y.Z.5`).
    - Code commits use `-Kind patch | minor | major`.
 2. **Every commit appends a `CHANGELOG.md` entry** under the in-progress version header. Group by Added / Changed / Fixed / Notes.
 3. **Every commit updates `PROGRESS.md`** as the last edit before staging. State current version, current milestone, what's done, what's next, any broken state.
@@ -232,30 +232,30 @@ Build every new surface as a **fixed-height shell whose inner panels scroll, not
    - Top-level features advertised in the feature list.
    - Getting-started commands.
 
-   If unsure whether README needs an edit, open it and check â€” staleness is much worse than an unnecessary edit.
+   If unsure whether README needs an edit, open it and check — staleness is much worse than an unnecessary edit.
 5. **Every commit syncs the affected docs in `docs/`**:
-   - New REST endpoint or WS event â†’ `docs/api-changes.md`.
-   - Security-related change â†’ `docs/security.md`.
-   - New CLI command â†’ README's CLI section + this file's CLI table.
-   - Architectural decision that touches a contract â†’ new `docs/adr/NNNN-*.md`.
-   - **A user-visible feature shipped, changed, or newly planned â†’ update
+   - New REST endpoint or WS event → `docs/api-changes.md`.
+   - Security-related change → `docs/security.md`.
+   - New CLI command → README's CLI section + this file's CLI table.
+   - Architectural decision that touches a contract → new `docs/adr/NNNN-*.md`.
+   - **A user-visible feature shipped, changed, or newly planned → update
      `docs/roadmap.json`** (flip an item's `status` shipped/in_progress/coming, or
      add a `coming` item). This feeds the in-app **What's New** surface (ADR-0019),
      so a stale roadmap = a stale "path" shown to the user. Keep ADR + CHANGELOG +
      roadmap consistent when an idea changes the plan.
-   - **A new or re-run benchmark â†’ `benchmarks/<name>/`** (nested: `apps/`,
-     `results/tokens/`, `results/quality/`, `screenshots/`, `raw-logs/` â€” see
+   - **A new or re-run benchmark → `benchmarks/<name>/`** (nested: `apps/`,
+     `results/tokens/`, `results/quality/`, `screenshots/`, `raw-logs/` — see
      `benchmarks/makeup-business-demo/` for the shape) **and** the README's
      Benchmarks section. Only commit numbers you actually observed from a real
      run; never hand-wave a score.
    - **A change that alters a user-visible surface (new panel, redesign, notable
-     UI/UX change) â†’ refresh the affected image(s) in `docs/screenshots/`** (real
+     UI/UX change) → refresh the affected image(s) in `docs/screenshots/`** (real
      Playwright captures of the running renderer at 1280 + 375, per the E2E rule
      below) in the same commit, and update any README references. The gallery is
-     meant to evolve *with* the app â€” a stale screenshot is a stale "this is what
+     meant to evolve *with* the app — a stale screenshot is a stale "this is what
      Synapse looks like."
 
-This rule is not Claude-specific â€” it applies to every AI coder that touches this
+This rule is not Claude-specific — it applies to every AI coder that touches this
 repo (see the audience line at the top of this file). If you are Codex, Copilot,
 Cursor, a local model, or anything else editing Synapse: the same doc-sync
 obligation applies to you. A commit that changes behavior without updating the
@@ -279,20 +279,20 @@ made it.
    ```
 9. **Run `npm run typecheck && pytest` before committing.** CI will catch you if you skip.
 10. **Never force-push.** Never `reset --hard`. Never bypass hooks (`--no-verify`).
-11. **Commit AND push after every logical change** (a feature, a bug fix, a UI/UX change) â€” once it's green (typecheck + pytest per #9, plus the E2E pass per Rule #6 for code bumps). **Green then push.** Don't batch unrelated changes into one commit. Push frequency vs. concurrent-edit safety defers to [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md).
+11. **Commit AND push after every logical change** (a feature, a bug fix, a UI/UX change) — once it's green (typecheck + pytest per #9, plus the E2E pass per Rule #6 for code bumps). **Green then push.** Don't batch unrelated changes into one commit. Push frequency vs. concurrent-edit safety defers to [`docs/MULTI-AI-WORKFLOW.md`](./docs/MULTI-AI-WORKFLOW.md).
 
 ### Docs-sync pre-flight (run before every commit)
 
-> **Hard gate â€” run `python scripts/docs_sync_check.py` before staging.** It fails if the three version
+> **Hard gate — run `python scripts/docs_sync_check.py` before staging.** It fails if the three version
 > files disagree, if `CHANGELOG.md` has no `## [<version>]` entry for the current version, or if
 > `README.md` doesn't name the current version. CI runs the same checks (as `test_version_consistency`
 > tests), so a stale-docs commit is caught either way (ADR-0028).
 
 > Then, by judgement: open `README.md` and `PROGRESS.md`. Does the **first 30 lines** of each still
 > accurately describe the repo + its **capabilities** after my change? Keep the README current with what
-> the app can now do â€” not just the version number. If no, edit them now.
+> the app can now do — not just the version number. If no, edit them now.
 
-If a commit ever ships with a stale README header, that's a regression â€” open a follow-up commit immediately.
+If a commit ever ships with a stale README header, that's a regression — open a follow-up commit immediately.
 
 ### Mandatory visual verification and evidence for every UI change (all AI agents)
 
@@ -301,7 +301,7 @@ If a commit ever ships with a stale README header, that's a regression â€” 
 Before claiming completion: (1) identify the actual running desktop/browser build, authenticated identity, route and feature flags; (2) navigate and interact in the real UI as a user through Playwright or authorized desktop-control tools; (3) capture screenshots and accessibility/DOM evidence for desktop and mobile, check contrast/overflow and error/console logs; (4) test the full relevant action through daemon/API including authorized and unauthorized user states; (5) compare observed state to source and expected behavior, then record screenshot paths, assertions, environment and command outcomes in Synapse Quality OS/trace. **Fail closed** if browser/desktop access, required identities, credentials, external consent, or end-to-end proof are unavailable. Leave the quality gate open, report the exact blocker, and never substitute source inspection or compilation for visual confirmation. Never fabricate screenshot or browser proof. Protect active user's desktop: obtain explicit Reflex input-control lease before driving it, respect pause/stop and release control afterwards. When a live build is stale, establish the loaded version and rebuild/reload safely; do not disrupt other AI workers or wipe sessions.
 ### E2E verification on every version bump (Rule #6)
 
-**Every** version bump that adds or changes user-visible behaviour must close with a real end-to-end pass before the commit lands. Typecheck + pytest alone aren't enough â€” they don't catch broken renderer wiring, broken CORS, missing preload bridge fields, or daemon contracts that fail when a real HTTP client / WS client / browser talks to them.
+**Every** version bump that adds or changes user-visible behaviour must close with a real end-to-end pass before the commit lands. Typecheck + pytest alone aren't enough — they don't catch broken renderer wiring, broken CORS, missing preload bridge fields, or daemon contracts that fail when a real HTTP client / WS client / browser talks to them.
 
 Minimum E2E for any version that touches the daemon, renderer, or Electron lifecycle:
 
@@ -310,28 +310,28 @@ Minimum E2E for any version that touches the daemon, renderer, or Electron lifec
 3. **Click-through.** For any feature touched in this bump, drive the interaction with `mcp__playwright__browser_click` / `browser_fill_form` and snapshot the resulting state. State badges should reflect the daemon's REST + WS responses without a manual refresh.
 4. **Tear down.** Kill the daemon (and any process it spawned during the test) and Vite. Confirm `netstat -ano | findstr :7878` returns empty.
 
-If Playwright cannot reach the renderer in step 2 â€” or the screenshot in step 3 shows a state badge that disagrees with `GET /api/v1/health` or the WS feed â€” **the bump is not done.** Open a follow-up fix before pushing.
+If Playwright cannot reach the renderer in step 2 — or the screenshot in step 3 shows a state badge that disagrees with `GET /api/v1/health` or the WS feed — **the bump is not done.** Open a follow-up fix before pushing.
 
 For pure-docs bumps (`X.Y.Z.5` design rounds, READMEs, ADRs) E2E is optional but still encouraged. For code bumps it's mandatory.
 
-Steps 1â€“4 are repeatable from the developer's machine as well: that's what `synapse.cmd` (Electron) + `python -m synapse_daemon` (loose daemon) + Vite let you do without any PowerShell or external tooling.
+Steps 1–4 are repeatable from the developer's machine as well: that's what `synapse.cmd` (Electron) + `python -m synapse_daemon` (loose daemon) + Vite let you do without any PowerShell or external tooling.
 
 ---
 
-## Design Contracts (load-bearing â€” applies to every milestone)
+## Design Contracts (load-bearing — applies to every milestone)
 
-These 28 contracts are baked into the architecture from v0.1. **Every milestone must honour them.** If a feature can't satisfy a contract, write an ADR in `docs/adr/` before merging â€” never silently violate.
+These 28 contracts are baked into the architecture from v0.1. **Every milestone must honour them.** If a feature can't satisfy a contract, write an ADR in `docs/adr/` before merging — never silently violate.
 
-Round 1 (#1â€“#16) locked in `v0.1.0.5`, scaffolded in `v0.1.1`.
-Round 2 (#17â€“#28) locked in `v0.1.1.5`, scaffolded in `v0.1.2`.
+Round 1 (#1–#16) locked in `v0.1.0.5`, scaffolded in `v0.1.1`.
+Round 2 (#17–#28) locked in `v0.1.1.5`, scaffolded in `v0.1.2`.
 
 ### 1. Everything must be editable from the UI
 
 Anything the user can configure must have an in-app editor. No "edit the JSON file by hand" UX.
 
-- **Projects/apps:** edit name, icon, thumbnail, working directory, launch command, env vars, health-check URL, port, category â€” from a per-project Settings panel reachable from the tile's right-click / "â‹¯" menu.
+- **Projects/apps:** edit name, icon, thumbnail, working directory, launch command, env vars, health-check URL, port, category — from a per-project Settings panel reachable from the tile's right-click / "⋯" menu.
 - **Tools (Synapses):** every manifest field editable in the card's Expanded View. Reordering, hiding, and uninstalling are all UI actions.
-- **System settings:** daemon port, auto-start toggle, LAN exposure, theme, update channel â€” all in a `Settings` page.
+- **System settings:** daemon port, auto-start toggle, LAN exposure, theme, update channel — all in a `Settings` page.
 - **Adding new:** "+ Add" button in each section opens a form. Backed by daemon REST (POST/PATCH/DELETE).
 - **Storage:** the daemon's SQLite DB is the source of truth. Tool manifests under `tools/<id>/manifest.json` are *defaults* on first run; the DB wins after that. "Reset to defaults" re-copies the manifest.
 - **Validation:** every edit form validates inputs and shows inline errors. Pydantic models enforce the contract server-side.
@@ -341,23 +341,23 @@ Anything the user can configure must have an in-app editor. No "edit the JSON fi
 The user must never wonder "did it work?" Every action displays a real-time state machine:
 
 ```
-idle  â†’  launching  â†’  launched  â†’  stopped
-              â”‚
-              â””â†’  error: <reason>
+idle  →  launching  →  launched  →  stopped
+              │
+              └→  error: <reason>
 ```
 
 - **State badges** on every tile/card: coloured pill + animated spinner during transitions.
 - **Toast/inline messages** for one-shot actions ("Tunnel URL copied", "Project saved").
 - **WebSocket-driven**: the daemon broadcasts state changes immediately; UI never polls.
-- **Error display**: failures show the actual error inline on the tile (truncated with "details" expander). Full log via tile menu â†’ "View logs".
+- **Error display**: failures show the actual error inline on the tile (truncated with "details" expander). Full log via tile menu → "View logs".
 - **History strip**: last 5 state transitions with timestamps, visible on hover or in Expanded View.
-- **No optimistic UI** until daemon acks. "Launch" â†’ "launchingâ€¦" â†’ "launched" only after daemon confirms PID assignment.
+- **No optimistic UI** until daemon acks. "Launch" → "launching…" → "launched" only after daemon confirms PID assignment.
 
 Every Pydantic model for a managed entity carries: `name`, `status`, `last_error`, `updated_at`, `last_transition_at`. Every mutating REST endpoint returns the new state object.
 
 ### 3. Log capture for every managed process
 
-Daemon tees stdout + stderr of every spawned child to `data/logs/<entity-id>/<timestamp>.log` with rotation (10 MB Ã— 5 files). Every tile has a "View logs" button: opens latest file + a live-tail mode streamed over WebSocket. **No process is launched without a log file behind it.**
+Daemon tees stdout + stderr of every spawned child to `data/logs/<entity-id>/<timestamp>.log` with rotation (10 MB × 5 files). Every tile has a "View logs" button: opens latest file + a live-tail mode streamed over WebSocket. **No process is launched without a log file behind it.**
 
 ### 4. Single error envelope
 
@@ -375,29 +375,29 @@ UI has one `<ErrorBanner code={...}>` component handling every failure. No ad-ho
 
 ### 5. WebSocket reconnect protocol
 
-Daemon assigns monotonically increasing IDs to every broadcast and keeps the last 1 000 events in a ring buffer. Client tracks `lastEventId`; on reconnect it sends `{"since": <id>}` and daemon replays missed events. Reconnect backoff: 1s, 2s, 4s, 8s, max 30s. UI shows a "reconnectingâ€¦" badge during gaps. **Never silently desync.**
+Daemon assigns monotonically increasing IDs to every broadcast and keeps the last 1 000 events in a ring buffer. Client tracks `lastEventId`; on reconnect it sends `{"since": <id>}` and daemon replays missed events. Reconnect backoff: 1s, 2s, 4s, 8s, max 30s. UI shows a "reconnecting…" badge during gaps. **Never silently desync.**
 
 ### 6. Daemon orphan reconciliation
 
 On daemon startup, before accepting any client connections, the daemon scans the DB's `managed_processes` table for non-terminal rows. For each, it calls `psutil.pid_exists` and `psutil.Process(pid).cmdline()`:
 
-- Alive AND cmdline matches â†’ re-attach (resume monitoring).
-- Alive but cmdline differs â†’ mark `stopped` with reason `pid-recycled`.
-- Dead â†’ mark `stopped` with reason `daemon-restart`.
+- Alive AND cmdline matches → re-attach (resume monitoring).
+- Alive but cmdline differs → mark `stopped` with reason `pid-recycled`.
+- Dead → mark `stopped` with reason `daemon-restart`.
 
 This is what makes the "processes persist past UI death" promise actually survive a daemon restart.
 
 ### 7. Versioned API surface
 
-REST is `/api/v1/...`; WS events are `v1.entity.event` from day 1. Breaking changes require a new version prefix + a documented migration in `docs/api-changes.md`. Old versions stay alive â‰¥ one minor release after deprecation.
+REST is `/api/v1/...`; WS events are `v1.entity.event` from day 1. Breaking changes require a new version prefix + a documented migration in `docs/api-changes.md`. Old versions stay alive ≥ one minor release after deprecation.
 
 ### 8. Single schema source of truth
 
-Daemon's Pydantic models are the canonical schema. `scripts/gen-types.ps1` exports them to `renderer/lib/generated-types.ts`. UI imports those types â€” never hand-maintains parallel ones. CI fails if `generated-types.ts` is stale.
+Daemon's Pydantic models are the canonical schema. `scripts/gen-types.ps1` exports them to `renderer/lib/generated-types.ts`. UI imports those types — never hand-maintains parallel ones. CI fails if `generated-types.ts` is stale.
 
 ### 9. DB migrations from day 1
 
-Every schema change is a numbered migration file: `daemon/synapse_daemon/migrations/<NNN>_<slug>.sql`. Daemon runs unapplied migrations on startup against a `schema_migrations` table. **Never edit a shipped migration** â€” always add a new one.
+Every schema change is a numbered migration file: `daemon/synapse_daemon/migrations/<NNN>_<slug>.sql`. Daemon runs unapplied migrations on startup against a `schema_migrations` table. **Never edit a shipped migration** — always add a new one.
 
 ### 10. Naming conventions
 
@@ -410,11 +410,11 @@ Every schema change is a numbered migration file: `daemon/synapse_daemon/migrati
 
 ### 11. Audit log
 
-Every state-changing action writes to `audit_log`: `id, timestamp_utc, entity_type, entity_id, action, source (desktop/mobile/tray/cli/auto), result, error_code, details`. UI surface: `Settings â†’ Audit`. Never auto-delete rows; manual export + truncate only.
+Every state-changing action writes to `audit_log`: `id, timestamp_utc, entity_type, entity_id, action, source (desktop/mobile/tray/cli/auto), result, error_code, details`. UI surface: `Settings → Audit`. Never auto-delete rows; manual export + truncate only.
 
 ### 12. Confirm-before-destructive
 
-Kill process, delete project, uninstall tool, reset config, "stop all" â€” every destructive action goes through a confirm dialog showing **exactly** what will happen, with a "Don't ask again for this action" checkbox stored per-user.
+Kill process, delete project, uninstall tool, reset config, "stop all" — every destructive action goes through a confirm dialog showing **exactly** what will happen, with a "Don't ask again for this action" checkbox stored per-user.
 
 ### 13. Empty states everywhere
 
@@ -453,10 +453,10 @@ class HealthProbe(BaseModel):
 Daemon polls the probe on the declared interval and surfaces a **separate** `health` field alongside `status`. The state-machine is independent:
 
 ```
-health:  unknown  â†’  healthy  â†’  degraded  â†’  unhealthy
+health:  unknown  →  healthy  →  degraded  →  unhealthy
 ```
 
-UI shows a second pill on every tile. A process can be `status=launched` AND `health=unhealthy` (alive but hung) â€” Synapse must not lie that it's working.
+UI shows a second pill on every tile. A process can be `status=launched` AND `health=unhealthy` (alive but hung) — Synapse must not lie that it's working.
 
 ### 18. Restart policy per project
 
@@ -470,11 +470,11 @@ class RestartPolicy(BaseModel):
     max_backoff_seconds: int = 60
 ```
 
-Daemon's process manager consults this on every child exit. Audit log records every restart attempt with attempt-number + delay. UI shows "restarting (attempt 2/3)" as a transitional status. Default `never` â€” autonomous restarts are opt-in.
+Daemon's process manager consults this on every child exit. Audit log records every restart attempt with attempt-number + delay. UI shows "restarting (attempt 2/3)" as a transitional status. Default `never` — autonomous restarts are opt-in.
 
 ### 19. Resource observability per process
 
-`v1.process.heartbeat` events carry `cpu_percent` (0â€“100, system-normalised) and `rss_mb` per managed PID, broadcast on the daemon's heartbeat cadence. Tiles render mini-gauges. Manifests can declare soft caps:
+`v1.process.heartbeat` events carry `cpu_percent` (0–100, system-normalised) and `rss_mb` per managed PID, broadcast on the daemon's heartbeat cadence. Tiles render mini-gauges. Manifests can declare soft caps:
 
 ```python
 max_rss_mb: int | None
@@ -512,11 +512,11 @@ Daemon emits a structured `v1.notification` event whenever:
 - A scheduled launch fires or fails.
 - A user-flagged error occurs.
 
-Electron renders these as Windows toast notifications. **Per-event opt-out** stored in the `notification_preferences` table â€” never globally muted by default. Mobile users opt in to Web Push separately (v0.2+).
+Electron renders these as Windows toast notifications. **Per-event opt-out** stored in the `notification_preferences` table — never globally muted by default. Mobile users opt in to Web Push separately (v0.2+).
 
 ### 23. Accessibility minimums
 
-- **Contrast:** WCAG AA â€” already covered by `theme-tokens.css` ratios.
+- **Contrast:** WCAG AA — already covered by `theme-tokens.css` ratios.
 - **Focus:** every interactive element has a visible focus ring using `--synapse-accent`. No `outline: none` without a replacement.
 - **ARIA:** every icon-only button has `aria-label`; every status badge has `aria-live="polite"`; every modal traps focus and restores on close.
 - **Keyboard:** every action reachable via keyboard. Standard shortcuts: `Tab` (next), `Shift+Tab` (prev), `Enter` (activate), `Esc` (close), `Ctrl+K` (palette, #21).
@@ -530,7 +530,7 @@ Codified here so AI sessions can't silently regress. Add `eslint-plugin-jsx-a11y
 
 **Transport layer:** REST + WS always send UTC ISO 8601.
 
-**Render layer:** UI is the only place that converts to the user's local timezone, via `Intl.DateTimeFormat`. Components must call a shared `formatLocal(ts, kind)` helper â€” never call `new Date(ts).toLocaleString()` directly. One rule, no exceptions.
+**Render layer:** UI is the only place that converts to the user's local timezone, via `Intl.DateTimeFormat`. Components must call a shared `formatLocal(ts, kind)` helper — never call `new Date(ts).toLocaleString()` directly. One rule, no exceptions.
 
 ### 25. Secrets management
 
@@ -546,9 +546,9 @@ class EnvVar(BaseModel):
 Storage rules:
 
 - Secret values stored in `project_secrets` table, encrypted with Windows DPAPI scoped to the daemon's user account. Plaintext never written to disk in any other location (logs included).
-- After the initial save, `GET /api/v1/projects/{id}` returns `value: "(set)"` for secrets â€” never plaintext.
+- After the initial save, `GET /api/v1/projects/{id}` returns `value: "(set)"` for secrets — never plaintext.
 - Audit log entries that record an env-var change record only `key` + `redacted_value: true`. The value never enters the audit log.
-- Spawning a child injects the decrypted value into the child's environment only â€” never logged, never broadcast.
+- Spawning a child injects the decrypted value into the child's environment only — never logged, never broadcast.
 
 ### 26. Hot manifest reload
 
@@ -575,7 +575,7 @@ The `synapse` command (installed alongside the daemon, same Python entry point) 
 | `synapse restore <path>` | `POST /api/v1/restore` |
 | `synapse doctor` | local diagnostics, no daemon needed |
 
-The CLI never talks directly to the DB â€” always via the daemon, so single source of truth is preserved.
+The CLI never talks directly to the DB — always via the daemon, so single source of truth is preserved.
 
 ### 28. Snapshot / restore
 
@@ -593,17 +593,17 @@ The CLI never talks directly to the DB â€” always via the daemon, so single
 }
 ```
 
-`POST /api/v1/restore` accepts the same shape and either creates fresh entities or merges by id (user chooses). **Secrets are NOT included** in snapshots â€” restoring on a new machine surfaces a list of secrets the user must re-enter.
+`POST /api/v1/restore` accepts the same shape and either creates fresh entities or merges by id (user chooses). **Secrets are NOT included** in snapshots — restoring on a new machine surfaces a list of secrets the user must re-enter.
 
 Snapshots are the disaster-recovery story and the cross-machine portability story rolled into one. Stable schema today makes this trivial; sprawling schema later makes it weeks of work.
 
 ---
 
-## Plugin contract â€” adding a new tool
+## Plugin contract — adding a new tool
 
 Implemented in **v0.1.9** as a **hybrid model**: a tool's *manifest* is pure
 data; its *behaviour* is a curated handler compiled into the daemon. The
-daemon **never imports code from a tool folder** â€” so dropping in a
+daemon **never imports code from a tool folder** — so dropping in a
 third-party manifest can never run untrusted Python.
 
 A "Synapse" (tool card) is **one folder under `tools/`** with just a
@@ -611,38 +611,38 @@ A "Synapse" (tool card) is **one folder under `tools/`** with just a
 
 ```
 tools/
-â””â”€â”€ cloudtap/
-    â””â”€â”€ manifest.json      # id, name, icon, fields[], actions[]
+└── cloudtap/
+    └── manifest.json      # id, name, icon, fields[], actions[]
 ```
 
 The manifest is validated against `ToolManifest` (`daemon/synapse_daemon/models.py`).
 `ToolAction.available_in` lists the statuses in which an action is enabled so
-the UI greys buttons by state. The UI renders the card automatically â€”
+the UI greys buttons by state. The UI renders the card automatically —
 **you do not edit `renderer/pages/Tools.tsx` or `ToolCard.tsx` to add a
 tool.** If you want to, the manifest schema needs extending instead.
 
 ### Single-shot vs multi-instance tools
 
-A tool may be **single-shot** (one state â€” `ToolState.status` / `result`) or
-**multi-instance** (a list of live instances â€” `ToolState.items`, each a
+A tool may be **single-shot** (one state — `ToolState.status` / `result`) or
+**multi-instance** (a list of live instances — `ToolState.items`, each a
 `ToolItem`). Cloudtap is multi-instance: each open tunnel is one `ToolItem`
 with its own row + buttons. An action's `scope` decides where its button
 renders: `tool` actions are the card's own buttons (e.g. "Open tunnel");
 `item` actions render once per instance and carry that instance's id (e.g.
 "Close" *this* tunnel). The action POST body's `item_id` targets an instance.
-The generic `ToolCard` handles both â€” no per-tool UI.
+The generic `ToolCard` handles both — no per-tool UI.
 
 ### Adding a *built-in* tool (one with behaviour)
 
 1. Drop the manifest folder in `tools/<id>/manifest.json`.
 2. Add a handler class in `daemon/synapse_daemon/tools/<id>.py` subclassing
    `ToolHandler` (implement `run_action` + `state`; optionally `shutdown`).
-3. Register it in `_BUILTIN_HANDLER_FACTORIES` in `tools_registry.py` â€”
+3. Register it in `_BUILTIN_HANDLER_FACTORIES` in `tools_registry.py` —
    one line: `"<id>": <HandlerClass>`.
 4. Add tests in `daemon/tests/test_<id>.py` (mock any external process).
 
 A manifest whose id is **not** in `_BUILTIN_HANDLER_FACTORIES` still loads and
-displays (`runnable=false`) â€” its action buttons are inert. That is the safe
+displays (`runnable=false`) — its action buttons are inert. That is the safe
 default for any folder a user drops in.
 
 `tools/cloudtap/` + `synapse_daemon/tools/cloudtap.py` is the reference
@@ -658,7 +658,7 @@ seeded from `daemon/synapse_daemon/seed.py`. wbscrper is the seed example.
 | Path | Status | Why |
 |---|---|---|
 | `daemon/synapse_daemon/process_manager.py` | **Fragile** | Detached spawn + psutil tracking is subtle; breaking it kills the persistence guarantee |
-| `electron/main.ts` | **Fragile** | Tray + window lifecycle + login items â€” easy to make the app un-quittable or invisible |
+| `electron/main.ts` | **Fragile** | Tray + window lifecycle + login items — easy to make the app un-quittable or invisible |
 | `daemon/synapse_daemon/ws.py` | **Fragile** | WebSocket hub broadcasts to all clients; bugs here break real-time sync |
 | `renderer/components/Nucleus.tsx` | Stable | Layout pivot; explain risk before restructuring |
 | `tools/*/manifest.json` | Stable | Drop-in; safe to add new ones |
@@ -682,32 +682,32 @@ are operating inside the app:
 - Use the per-project workbench launcher at
   `POST /api/v1/projects/{id}/workbench` to spawn a coder session
   pre-`cd`'d into a project's working directory. If you don't pass an
-  `argv`, the daemon picks claude â†’ codex â†’ shell based on what's on PATH.
-- **PTY default cwd (v0.1.35)** â€” when `POST /api/v1/pty` is called
+  `argv`, the daemon picks claude → codex → shell based on what's on PATH.
+- **PTY default cwd (v0.1.35)** — when `POST /api/v1/pty` is called
   with no `cwd`, the daemon defaults to the user's home directory.
   This pins quick-launch claude/codex sessions to `~` so each launch
   reuses the CLI's OAuth cache (`~/.claude`, `~/.config/codex`) and
   per-project state. Workbench callers pass an explicit project cwd
   and are unaffected.
-- **Project files (ADR-0003 Phase A)** â€” list / upload / download / delete
+- **Project files (ADR-0003 Phase A)** — list / upload / download / delete
   at `/api/v1/projects/{id}/files`. Shared scope at `/api/v1/files`
   (rows with `project_id IS NULL`). When you're inside a workbench-spawned
   PTY, `$SYNAPSE_FILES` / `$SYNAPSE_SHARED_FILES` / `$SYNAPSE_PROJECT_ID`
   / `$SYNAPSE_API` / `$SYNAPSE_TOKEN` are set so `ls $SYNAPSE_FILES` and
   `curl $SYNAPSE_API/...` work straight from the prompt.
-- **Workbench transcripts (ADR-0003 Phase D)** â€” PTY sessions opened via
+- **Workbench transcripts (ADR-0003 Phase D)** — PTY sessions opened via
   the workbench persist their scrollback to `project_files` rows tagged
   `source='transcript'` on exit. `GET /api/v1/projects/{id}/transcripts`
   lists them.
-- **AV scan results (ADR-0003 Phase C)** â€” every file carries
+- **AV scan results (ADR-0003 Phase C)** — every file carries
   `scan_result` (`clean` / `blocked` / `unavailable`) and `scan_engine`
   (`defender` / `clamav`). Blocked uploads are recorded but never land
   on disk for download.
-- **ChatGPT export import (ADR-0003 Phase E)** â€”
+- **ChatGPT export import (ADR-0003 Phase E)** —
   `POST /api/v1/imports/chatgpt` accepts the user's official ChatGPT
   export.zip; conversations land as deterministic Markdown under the
   auto-created `imported-chatgpt` project (kind=`other`).
-- **AI quick-actions (ADR-0003 Phase F)** â€” `GET /api/v1/quick-actions`
+- **AI quick-actions (ADR-0003 Phase F)** — `GET /api/v1/quick-actions`
   lists curated templates from `templates/quick-actions/*.json`;
   `POST /api/v1/quick-actions/{id}/launch` spawns a workbench session
   in the auto-created `scratch` project with the templated prompt
@@ -739,20 +739,20 @@ write the design as an ADR in `docs/adr/` and then implement.
 
 ## Forbidden
 
-- Don't add a second port (we use 7878 only â€” daemon allocates any others it needs).
+- Don't add a second port (we use 7878 only — daemon allocates any others it needs).
 - Don't make the desktop UI hold state the daemon doesn't know about.
 - Don't introduce a third runtime (no Go, no Rust, no Bun) without an ADR in `docs/`.
-- Don't add a tool by editing UI source â€” write a manifest.
+- Don't add a tool by editing UI source — write a manifest.
 - Don't change `commitAuthor` in git config.
-- **Don't put non-ASCII characters in PowerShell `.ps1` files.** Windows PowerShell 5.1 reads `.ps1` files as Windows-1252 unless they start with a UTF-8 BOM, and several authoring tools used in this project do not emit a BOM. Multi-byte characters get split into garbled bytes that break the parser with errors like *"String is missing the terminator"* â€” exactly the failure mode that bit `v0.1.5`. Allowed substitutions:
-  - `â†’` / `â†` â†’ `->` / `<-`
-  - `â€”` (em-dash) â†’ `--`
-  - `â€¢` (bullet) â†’ `*` or `-`
-  - `â•` (box drawing) â†’ `=`
-  - `â€¦` â†’ `...`
-  - `Â·` â†’ `|` or `-`
+- **Don't put non-ASCII characters in PowerShell `.ps1` files.** Windows PowerShell 5.1 reads `.ps1` files as Windows-1252 unless they start with a UTF-8 BOM, and several authoring tools used in this project do not emit a BOM. Multi-byte characters get split into garbled bytes that break the parser with errors like *"String is missing the terminator"* — exactly the failure mode that bit `v0.1.5`. Allowed substitutions:
+  - `→` / `←` → `->` / `<-`
+  - `—` (em-dash) → `--`
+  - `•` (bullet) → `*` or `-`
+  - `═` (box drawing) → `=`
+  - `…` → `...`
+  - `·` → `|` or `-`
 
-  CI should `grep -P '[^\x00-\x7F]' scripts/*.ps1` and fail if any matches appear. Daemon Python files may use UTF-8 freely (Python 3 reads source as UTF-8 by default) **except** in strings that are written to stdout or to a console log â€” those should also stay ASCII, since Windows console encoding defaults to cp1252 and renders multi-byte UTF-8 as `ï¿½`.
+  CI should `grep -P '[^\x00-\x7F]' scripts/*.ps1` and fail if any matches appear. Daemon Python files may use UTF-8 freely (Python 3 reads source as UTF-8 by default) **except** in strings that are written to stdout or to a console log — those should also stay ASCII, since Windows console encoding defaults to cp1252 and renders multi-byte UTF-8 as `�`.
 
 ---
 
@@ -780,10 +780,10 @@ For ResellTogether/ChatGPT photo imports, read [docs/CHATGPT_ATTACHMENT_TRANSPOR
 
 Every AI session must read [docs/ALL_AI_REUSE_AND_COST_POLICY.md](docs/ALL_AI_REUSE_AND_COST_POLICY.md) before design, code generation, or external model delegation. Inspect existing implementations and active workers first; account for provider credits, 5-hour/daily/weekly/monthly usage windows, token estimates, reset times and research-first design. Never waste credits rebuilding implemented features or overlapping active edits.
 
-## Universal Quality Gate — required for UI work
+## Universal Quality Gate � required for UI work
 
 Every Synapse-connected agent changing a website, CSS, theme, visual layout or frontend must discover and load `universal-quality-gate` (along with `browser-ui-audit` and `completion-contract`). Canonical tool/API and code map: `docs/UNIVERSAL_VISUAL_QUALITY_GATE.md`. The implicit skill is provisioned by `ensure_default_ui_skills` and injected into Synapse agent prompts. For scoped Agent Squad work items, completion is blocked until latest passing browser-proof evidence is registered. This does **not** imply all independent agent paths or deployments are gated yet; verify scope before claiming success. Do not bypass gates or confuse HTTP 200 with rendered color proof.
 
 ## ChatGPT UI workers via Synapse and Reflex
 
-If the owner says **AI worker**, **sub-worker**, **subagent**, **ChatGPT UI worker**, **ChatGPT browser worker**, or **ChatGPT in Synapse** in a ChatGPT-UI context, prefer the existing signed-in Chrome browser workflow described in [docs/CHATGPT_CHROME_WORKER_RUNBOOK.md](docs/CHATGPT_CHROME_WORKER_RUNBOOK.md). This is distinct from Codex, Work mode, and backend-only Agent Squads. Stay in **Chat** mode; create/reuse chats in the **Synapse2GPT Workers** ChatGPT Project, explicitly connect **@Synapse**, use Reflex as the default desktop-control route, and keep all worker chats in a SINGLE existing Chrome tab group. The **Synapse ChatGPT Presence** Chrome extension under `browser-extensions/chatgpt-presence-companion/` handles automatic group creation/reuse, tab membership, count/active badge, and a brief activity notice. Record canonical conversation URLs and independently verify any reported work. Extension source v0.4.0 and the Worker Catalog are documented in docs/CHATGPT_WORKER_CATALOG.md; future agents must query the durable registry, write verified handoffs, and reuse saved conversation URLs before creating duplicate workers. Closing a tab parks a worker, not completes/archives it. Do not claim live Chrome verification until the installed unpacked extension is reloaded and smoke-tested. Never extract Chrome cookies or profiles; release Reflex control when finished.
+If the owner says **AI worker**, **sub-worker**, **subagent**, **ChatGPT UI worker**, **ChatGPT browser worker**, or **ChatGPT in Synapse** in a ChatGPT-UI context, prefer the existing signed-in Chrome browser workflow described in [docs/CHATGPT_CHROME_WORKER_RUNBOOK.md](docs/CHATGPT_CHROME_WORKER_RUNBOOK.md). This is distinct from Codex, Work mode, and backend-only Agent Squads. Stay in **Chat** mode; create/reuse chats in the **Synapse2GPT Workers** ChatGPT Project, explicitly connect **@Synapse**, use Reflex as the default desktop-control route, and keep all worker chats in a SINGLE existing Chrome tab group. The **Synapse ChatGPT Presence** Chrome extension under `browser-extensions/chatgpt-presence-companion/` handles automatic group creation/reuse, tab membership, count/active badge, and a brief activity notice. Record canonical conversation URLs and independently verify any reported work. Extension source v0.4.0 and the Worker Catalog are documented in docs/CHATGPT_WORKER_CATALOG.md; future agents must query the durable registry, save a verified handoff and reuse saved conversation URLs before creating duplicate workers. Closing a tab parks a worker, not completes/archives it. Do not claim live Chrome verification until the installed unpacked extension is reloaded and smoke-tested. Never extract Chrome cookies or profiles; release Reflex control when finished.
