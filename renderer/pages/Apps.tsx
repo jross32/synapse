@@ -4,7 +4,7 @@
 // resource snapshots, refresh. No own WebSocket.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BookOpen, Download, FolderSearch, HelpCircle, Loader2, Plus, Search, X } from 'lucide-react';
+import { Activity, BookOpen, Bot, Download, FolderSearch, HelpCircle, Loader2, Plus, Search, X } from 'lucide-react';
 
 import { deleteProject } from '@shared/projects-client';
 import type { Project, ProjectKind } from '@shared/generated-types';
@@ -30,6 +30,7 @@ import { ProjectTile } from '../components/ProjectTile';
 import { PageHeader } from '../components/PageHeader';
 import { StatusLegend } from '../components/StatusLegend';
 import { ProcessesPage } from './Processes';
+import { WorkerCatalog } from './WorkerCatalog';
 
 function matchesQuery(p: Project, q: string): boolean {
   if (!q) return true;
@@ -51,7 +52,7 @@ function matchesQuery(p: Project, q: string): boolean {
     .every((word) => haystack.includes(word));
 }
 
-type AppsSection = 'projects' | 'running' | 'memory';
+type AppsSection = 'projects' | 'running' | 'memory' | 'workers';
 
 interface FormState {
   mode: ProjectFormMode;
@@ -174,6 +175,8 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
         subtitle={
           section === 'projects'
             ? 'Your registered projects. Each tile is a folder Synapse manages. Installable plugins live in My Tools.'
+            : section === 'workers'
+            ? 'Saved ChatGPT AI workers, assignments, handoffs, and conversations. Reopen workers without losing their history.'
             : section === 'memory'
             ? 'Project Memory — ADRs, backlog, and version history for a project. Synapse stores these so any AI session can read and add to them.'
             : 'Everything Synapse is running right now, with live CPU and memory telemetry.'
@@ -249,10 +252,18 @@ export function AppsPage({ initialSection = 'projects' }: AppsPageProps): JSX.El
           label='Memory'
           icon={BookOpen}
         />
+        <TopTab
+          active={section === 'workers'}
+          onClick={() => setSection('workers')}
+          label='AI Workers'
+          icon={Bot}
+        />
       </div>
 
       {section === 'running' ? (
         <ProcessesPage headerless />
+      ) : section === 'workers' ? (
+        <WorkerCatalog />
       ) : section === 'memory' ? (
         <div className='flex flex-col gap-4'>
           {sorted.length === 0 ? (

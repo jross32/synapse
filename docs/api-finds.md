@@ -1604,6 +1604,6 @@ accounting until they use the same execution service.
 - **Handoff:** `POST /api/v1/chatgpt-workers/{id}/handoff` JSON `{"handoff_md":"...","next_step":"..."}` saves reviewable bounded notes in existing metadata for the next AI. No credential or full transcript copying.
 - **Resume:** Resolve saved URL through catalog, open it in the signed-in Chrome profile, stay in Chat mode, select @Synapse, and continue the existing conversation. The v0.4.0 Chrome companion automatically groups open worker tabs.
 - **Retire/restore:** `POST /api/v1/chatgpt-workers/{id}/archive` (body with reason) and `POST /api/v1/chatgpt-workers/{id}/unarchive` are explicit lifecycle actions; closing a browser tab means parked, not archived. No provider conversation is deleted.
-- **UI:** Synapse AI Coding → ChatGPT → Worker Catalog, with search, status filters, archived/parked/open indicators, Resume, Handoff, Archive and Restore.
+- **UI:** Synapse Apps → AI Workers, with search, status filters, archived/parked/open indicators, Resume, Handoff, Archive and Restore.
 - **Verification:** `daemon/tests/test_chatgpt_worker_catalog.py`; `browser-extensions/chatgpt-presence-companion/test-{group-workers,service-worker,content}.mjs`; `npm run typecheck`. These tests do not certify a live Chrome v0.4.0 installation.
 - **Runbooks:** `docs/CHATGPT_CHROME_WORKER_RUNBOOK.md`, `docs/CHATGPT_WORKER_CATALOG.md` and `browser-extensions/chatgpt-presence-companion/README.md`.

@@ -5,6 +5,7 @@
 
 import {
   Activity,
+  ChartNoAxesCombined,
   BrainCircuit,
   FolderKanban,
   Globe,
@@ -16,6 +17,9 @@ import {
   ShieldCheck,
   Sparkles,
   Wrench,
+  Cloud,
+  HardDrive,
+  Images,
   UsersRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,12 +30,16 @@ export type CorePageId =
   | 'tools'
   | 'live'
   | 'staff'
+  | 'usage-costs'
   | 'ai-coding'
   | 'ai-factory'
   | 'trace'
   | 'watchdogs'
   | 'updates'
-  | 'settings';
+  | 'settings'
+  | 'cloud-storage'
+  | 'storage-explorer'
+  | 'assets-library';
 
 export type RoutePageId = CorePageId | 'whatsnew';
 
@@ -39,7 +47,7 @@ export type AppRoute =
   | { kind: 'core'; page: RoutePageId }
   | { kind: 'installed'; id: string };
 
-export type AppsSection = 'projects' | 'running' | 'memory';
+export type AppsSection = 'projects' | 'running' | 'memory' | 'workers';
 export type ToolsSection = 'tools' | 'marketplace' | 'mcp' | 'installed-pages';
 export type ToolsTab = 'installed' | 'discover';
 export type MarketplaceSection = 'tools' | 'bundles' | 'models' | 'workers' | 'squads';
@@ -55,7 +63,7 @@ export type AiCodingSection =
   | 'chatgpt';
 
 export type NavigationIntent =
-  | { page: 'home' | 'live' | 'staff' | 'ai-factory' | 'trace' | 'watchdogs' | 'updates' | 'settings' | 'whatsnew' }
+  | { page: 'home' | 'live' | 'staff' | 'usage-costs' | 'ai-factory' | 'trace' | 'watchdogs' | 'updates' | 'settings' | 'whatsnew' | 'cloud-storage' | 'storage-explorer' | 'assets-library' }
   | { page: 'apps'; section?: AppsSection }
   | {
       page: 'tools';
@@ -98,6 +106,9 @@ export interface SidebarSection {
 }
 
 export const CORE_NAV_ITEMS: CoreNavItem[] = [
+  { id: 'assets-library', label: 'Assets Library', icon: Images, description: 'Reusable project assets and media', section: 'main' },
+  { id: 'storage-explorer', label: 'Storage Explorer', icon: HardDrive, description: 'Unified files, backups, transfers, rules and usage', section: 'main' },
+  { id: 'cloud-storage', label: 'Cloud Storage', icon: Cloud, description: 'Cloud storage connections and providers', section: 'system', locked: true },
   {
     id: 'home',
     label: 'Home',
@@ -129,9 +140,16 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
   },
   {
     id: 'staff',
-    label: 'My AI Staff',
+    label: 'AI Workforce',
     icon: UsersRound,
     description: 'Your persistent AI people, profiles, goals, permissions, and work',
+    section: 'ai',
+  },
+  {
+    id: 'usage-costs',
+    label: 'Usage & Costs',
+    icon: ChartNoAxesCombined,
+    description: 'AI usage, image generation and provider cost analytics',
     section: 'ai',
   },
   {
@@ -196,8 +214,8 @@ export const DEFAULT_ROUTE: AppRoute = { kind: 'core', page: 'home' };
 
 export interface SidebarLayout {
   main_order: Array<'apps' | 'tools'>;
-  ai_order: Array<'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
-  hidden_core: Array<'apps' | 'tools' | 'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
+  ai_order: Array<'live' | 'staff' | 'usage-costs' | 'ai-coding' | 'ai-factory'>;
+  hidden_core: Array<'apps' | 'tools' | 'live' | 'staff' | 'usage-costs' | 'ai-coding' | 'ai-factory'>;
   installed_page_order: string[];
   visible_installed_pages: string[];
 }
@@ -213,7 +231,10 @@ type LegacyPageId =
   | 'marketplace'
   | 'processes'
   | 'whatsnew'
-  | 'settings';
+  | 'settings'
+  | 'cloud-storage'
+  | 'storage-explorer'
+  | 'assets-library';
 
 interface LegacySidebarLayout {
   order?: LegacyPageId[];
@@ -224,7 +245,7 @@ const STORAGE_KEY = 'synapse.sidebar.layout';
 const MAIN_DEFAULT: SidebarLayout['main_order'] = ['apps', 'tools'];
 // `completeOrder` appends any default missing from a saved layout, so adding a new
 // hub here makes it appear for existing users too (no migration needed).
-const AI_DEFAULT: SidebarLayout['ai_order'] = ['staff', 'live', 'ai-coding', 'ai-factory'];
+const AI_DEFAULT: SidebarLayout['ai_order'] = ['staff', 'usage-costs', 'live', 'ai-coding', 'ai-factory'];
 const HIDEABLE_CORE = new Set<SidebarLayout['hidden_core'][number]>([
   'apps',
   'tools',
@@ -426,6 +447,7 @@ export function buildDesktopSidebarSections(
     });
   }
 
+  for (const id of ['assets-library', 'storage-explorer'] as const) { const item = coreNavItem(id); mainItems.push({ route: {kind:'core',page:id}, label:item.label,description:item.description,icon:item.icon }); }
   const aiItems: SidebarSectionItem[] = [];
   for (const id of layout.ai_order) {
     if (hidden.has(id)) continue;
@@ -438,7 +460,13 @@ export function buildDesktopSidebarSections(
     });
   }
 
+  if (!hidden.has('usage-costs') && !aiItems.some((item) => item.route.kind === 'core' && item.route.page === 'usage-costs')) {
+    const item = coreNavItem('usage-costs');
+    aiItems.splice(1, 0, { route: {kind: 'core', page: 'usage-costs'}, label: item.label, description: item.description, icon: item.icon });
+  }
+
   const systemItems: SidebarSectionItem[] = [
+    { route:{kind:'core',page:'cloud-storage'},label:'Cloud Storage',description:'Manage storage providers',icon:Cloud,locked:true },
     {
       route: { kind: 'core', page: 'trace' },
       label: coreNavItem('trace').label,

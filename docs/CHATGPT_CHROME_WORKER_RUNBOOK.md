@@ -1,4 +1,4 @@
-﻿# ChatGPT Chrome worker runbook (Synapse / Reflex)
+# ChatGPT Chrome worker runbook (Synapse / Reflex)
 
 Last live verification: 2026-10-12. Project: Synapse Self. This is an **observed, partially automated workflow**, not yet an autonomous five-worker system.
 
@@ -77,7 +77,7 @@ Closing a worker Chrome tab parks it: preserve its canonical conversation URL, a
 
 ## Source v0.4.0 Worker Catalog and safe park workflow
 
-- Synapse UI: AI Coding → ChatGPT → Worker Catalog (search, Current/Open/Working/Parked/Failed/Archived, Resume saved URL, handoff and next step, Archive/Restore). Backend REST: GET /api/v1/chatgpt-workers/catalog, POST /api/v1/chatgpt-workers/{id}/handoff, /archive and /unarchive.
+- Synapse UI: Apps → AI Workers (search, Current/Open/Working/Parked/Failed/Archived, Resume saved URL, handoff and next step, Archive/Restore). Backend REST: GET /api/v1/chatgpt-workers/catalog, POST /api/v1/chatgpt-workers/{id}/handoff, /archive and /unarchive.
 - Chrome companion v0.4.0 has a page context-menu command **Park Synapse worker (close tab, keep saved chat)**; it refuses to close when active generation, unsent draft or safety state unknown. Otherwise it closes the selected worker tab and preserves its canonical URL via session storage and Synapse observation API. The toolbar badge counts open worker tabs, not the durable catalog inventory.
 - Automatically observed browser-created worker conversations in the exact Synapse2GPT Workers project are idempotently registered to Synapse's existing worker registry. Work-item-managed and archived records are protected against lifecycle clobbering.
 - The worker's actual source-code outcome, tests and next step must be recorded using the Handoff API/work-item journal. Never imply that an observed green badge means a coding task succeeded.

@@ -4,7 +4,7 @@ The **Worker Catalog** is a durable, AI-readable index of ChatGPT UI workers. A 
 
 ## Where to find it
 
-Open **Synapse → AI Coding → ChatGPT → Worker Catalog**. The screen lives in `renderer/pages/WorkerCatalog.tsx`, wired through `renderer/pages/AiCoding.tsx`. It uses the existing Synapse daemon API, not localStorage or a second independent database.
+Open **Synapse → Apps → AI Workers**. The screen lives in `renderer/pages/WorkerCatalog.tsx`, wired through `renderer/pages/AiCoding.tsx`. It uses the existing Synapse daemon API, not localStorage or a second independent database.
 
 The catalog presents **Current, Open, Working, Parked, Failed, Archived** views, search by project/title/work item/assignment/handoff, and buttons for **Resume**, **Handoff**, **Archive** and **Restore**. Its worker count describes saved records; the Chrome extension badge counts *open browser tabs only*.
 

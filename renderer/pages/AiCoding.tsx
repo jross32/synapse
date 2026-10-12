@@ -117,7 +117,7 @@ export function AiCodingPage({
         {section === 'review' && (
           <ReviewPage headerless onOpenWorkspace={() => onSectionChange?.('sessions')} />
         )}
-        {section === 'chatgpt' && <div className='space-y-4'><WorkerCatalog/><ChatgptCompanionPage headerless /></div>}
+        {section === 'chatgpt' && <ChatgptCompanionPage headerless />}
       </div>
     </div>
   );

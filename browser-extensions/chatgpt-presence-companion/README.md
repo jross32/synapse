@@ -11,7 +11,7 @@ Synapse's owner-controlled Chrome companion for ChatGPT UI workers. It manages *
 4. Toolbar badge = number of **open worker chat tabs**. Purple indicates no currently observed active generation; green indicates at least one observed active generation. The group title and tooltip include the active count.
 5. When generating, the ChatGPT worker page briefly displays an activity notice. It does not claim that source-code changes succeeded.
 6. To **park** a finished worker, close its browser tab normally, or right-click **inside the worker ChatGPT page** and choose **Park Synapse worker (close tab, keep saved chat)**. The menu refuses to close a worker that is generating, has an unsent draft, or cannot be inspected safely.
-7. The Chrome extension reports canonical conversation URL and gone/idle status to Synapse; the durable Synapse Worker Catalog preserves the conversation and assignment. Resume later from **Synapse → AI Coding → ChatGPT → Worker Catalog → Resume**. Opening the saved URL rejoins the group.
+7. The Chrome extension reports canonical conversation URL and gone/idle status to Synapse; the durable Synapse Worker Catalog preserves the conversation and assignment. Resume later from **Synapse → Apps → AI Workers → Resume**. Opening the saved URL rejoins the group.
 8. **Archive** is a separate explicit catalog action and does not delete the conversation in ChatGPT.
 
 ## Install/upgrade in existing Chrome
