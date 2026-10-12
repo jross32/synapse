@@ -10,6 +10,29 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.2.219] -- 2026-10-12
+
+### Added
+- Unified premium installer with version-matched fresh daemon and source/artifact provenance.
+- Account signup/signin after launching Synapse, shared HTTPS account service, and connected-device onboarding.
+- Native release requests, durable ordered run receipts, source/Git checks, verified publication staging and signed desktop update configuration.
+- Restored relay/device authorization, cloud workspace metadata and preview subscription metering from integration branches.
+
+### Fixed
+- Installer retry, preflight failures, navigation during install, installed-version attestation and launch failures.
+- Account endpoint recovery, async network routes, host publication after signin and relay credential cleanup on signout.
+- Authentication recovery after an account-service outage and stale overlapping profile refresh responses.
+- Backwards-compatible legacy settings sync alongside revision conflict protection.
+- Per-request MCP write restrictions and semantic update version comparison.
+- Corrupted activity labels and release builds importing a different editable Python checkout.
+- Background startup visibility, explicit tray reopen and packaged app/daemon version mismatch diagnostics.
+- Trusted browser PUT preflight and frozen video worker dispatch.
+- Clean test-environment screenshot dependency declaration.
+
+### Release status
+- Candidate until Windows clean/upgrade/repair/uninstall/rollback, trusted signing and physical two-device checks pass.
+- Subscription quotas remain preview definitions with checkout disabled. Settings and workspace metadata sync do not imply source file replication.
+
 ## [0.1.209] -- 2026-08-30
 
 ### Fixed

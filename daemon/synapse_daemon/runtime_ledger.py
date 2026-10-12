@@ -17,6 +17,9 @@ class Entry:
     credits: float = 0.0
     requests: int = 0
     exhausted: str = ""   # non-empty if the runtime reported being out of room
+    usage_source: str = ""  # "provider_reported" | "untracked" | "" (legacy rows)
+    quota_remaining: float | None = None  # only when the provider supplied it
+    quota_reset_at: str | None = None     # only when the provider supplied it
 
 @dataclass
 class Rollup:
@@ -29,6 +32,25 @@ class Rollup:
     credits: float = 0.0
     requests: int = 0
     last_exhausted_at: str = ""   # "" if never
+    last_at: str = ""             # latest recorded invocation, "" if none
+    last_ok: bool | None = None
+    last_model: str = ""
+    provider_reported_calls: int = 0  # calls whose usage the provider actually reported
+    untracked_calls: int = 0          # calls with no usage data; totals exclude them
+    quota_remaining: float | None = None
+    quota_reset_at: str | None = None
+    quota_at: str = ""
+
+def _opt_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+def _opt_str(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 def record(entry: Entry, *, path: Path) -> None:
     # Ensure parent directories exist
@@ -71,7 +93,10 @@ def read_entries(path: Path, *, since: str = "") -> list[Entry]:
                         cost_usd=float(d.get("cost_usd", 0.0)),
                         credits=float(d.get("credits", 0.0)),
                         requests=int(d.get("requests", 0)),
-                        exhausted=str(d.get("exhausted", ""))
+                        exhausted=str(d.get("exhausted", "")),
+                        usage_source=str(d.get("usage_source", "") or ""),
+                        quota_remaining=_opt_float(d.get("quota_remaining")),
+                        quota_reset_at=_opt_str(d.get("quota_reset_at")),
                     )
                     
                     if since and entry.at < since:
@@ -103,7 +128,24 @@ def rollup(path: Path, *, since: str = "") -> dict[str, Rollup]:
         r.cost_usd += entry.cost_usd
         r.credits += entry.credits
         r.requests += entry.requests
-        
+
+        if entry.usage_source == "untracked":
+            r.untracked_calls += 1
+        elif entry.usage_source == "provider_reported" or entry.total_tokens or entry.cost_usd \
+                or entry.credits or entry.requests:
+            r.provider_reported_calls += 1
+        else:
+            r.untracked_calls += 1
+
+        if entry.at >= r.last_at:
+            r.last_at = entry.at
+            r.last_ok = entry.ok
+            r.last_model = entry.model
+        if (entry.quota_remaining is not None or entry.quota_reset_at) and entry.at >= r.quota_at:
+            r.quota_at = entry.at
+            r.quota_remaining = entry.quota_remaining
+            r.quota_reset_at = entry.quota_reset_at
+
         if entry.exhausted:
             if not r.last_exhausted_at or entry.at > r.last_exhausted_at:
                 r.last_exhausted_at = entry.at

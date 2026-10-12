@@ -17,6 +17,8 @@ import socket
 import sqlite3
 import subprocess
 import time
+import threading
+from functools import wraps
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -46,7 +48,7 @@ _PUBLIC_CONFIG_CACHE_TTL_SECONDS = 300
 # trying it again. Without this, a down accounts server makes every /profile read
 # block the async event loop on a synchronous urllib call, wedging the whole app.
 _REMOTE_FAILURE_COOLDOWN_SECONDS = 60
-# Local CLI/service detection shells out (`where claude`, `gh auth status`, …) and
+# Local CLI/service detection shells out (`where claude`, `gh auth status`, Ã¢â‚¬Â¦) and
 # costs ~1-1.5s per profile read. Cache the per-provider result briefly; an explicit
 # connect/verify bypasses the cache for a fresh probe.
 _LOCAL_DETECT_CACHE_TTL_SECONDS = 45
@@ -129,6 +131,7 @@ class CatalogPreferenceState(BaseModel):
 class ProfilePreferences(BaseModel):
     theme: str | None = None
     sidebar_layout: dict[str, Any] | None = None
+    dashboard_layout: dict[str, Any] | None = None
     sessions_quick_actions_collapsed: bool | None = None
     discover_recent_keys: list[str] = Field(default_factory=list)
     build_mode: str = "review"
@@ -181,6 +184,7 @@ BUILD_MODES = ("assist", "review", "auto")
 class ProfilePreferencesUpdate(BaseModel):
     theme: str | None = None
     sidebar_layout: dict[str, Any] | None = None
+    dashboard_layout: dict[str, Any] | None = None
     sessions_quick_actions_collapsed: bool | None = None
     discover_recent_keys: list[str] | None = None
     build_mode: str | None = None
@@ -222,6 +226,25 @@ def _timestamp_or_empty(value: str | None) -> str:
     return value or ""
 
 
+def _serialized_account_operation(method):
+    """Serialize identity changes with in-flight sync/token operations.
+
+    Blocking account work runs in worker threads. This lock is separate from
+    SQLite transactions and is reentrant for composed sync/auth operations.
+    """
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        # Logout intent invalidates queued relay work before waiting for
+        # preceding network operations. Admission uses its own short mutex.
+        if method.__name__ == "sign_out":
+            self._invalidate_relay_dispatch()
+        with self._account_operation_lock:
+            if method.__name__ in {"sign_up_password", "sign_in_password", "complete_oauth"}:
+                self._begin_relay_session()
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class ProfileManager:
     """Owns local profile state, optional Synapse Accounts auth, and sync."""
 
@@ -231,6 +254,10 @@ class ProfileManager:
         accounts_client: SynapseAccountsClient | None = None,
     ) -> None:
         self._storage = storage
+        self._account_operation_lock = threading.RLock()
+        self._relay_admission_lock = threading.RLock()
+        self._relay_epoch = uuid.uuid4().hex
+        self._relay_logout_pending = False
         self._accounts = accounts_client or SynapseAccountsClient()
         self._cached_auth_providers: list[str] = ["native"]
         self._cached_auth_providers_at: datetime | None = None
@@ -242,7 +269,33 @@ class ProfileManager:
         # -> (monotonic_stamp, ServiceConnection). See _LOCAL_DETECT_CACHE_TTL_SECONDS.
         self._local_detect_cache: dict[str, tuple[float, ServiceConnection]] = {}
 
-    # ── public summary / preferences ───────────────────────────────────
+    def _begin_relay_session(self) -> None:
+        with self._relay_admission_lock:
+            self._relay_epoch = uuid.uuid4().hex
+            # A competing login can acquire the network mutex before a queued
+            # logout. It must not reopen relay admission for the old identity.
+            if not self._relay_logout_pending or not self._state_row()["user_id"]:
+                self._relay_logout_pending = False
+
+    def _invalidate_relay_dispatch(self) -> None:
+        with self._relay_admission_lock:
+            self._relay_logout_pending = True
+            self._relay_epoch = uuid.uuid4().hex
+
+    def relay_dispatch_stamp(self) -> str | None:
+        """Opaque, process-local session fence; never a substitute for auth."""
+        with self._relay_admission_lock:
+            row = self._state_row()
+            if self._relay_logout_pending or not row["user_id"] or not row["current_host_id"]:
+                return None
+            return self._relay_epoch
+
+    def admit_relay_dispatch(self, stamp: str) -> bool:
+        """Linearize worker admission vs logout; admitted work may finish."""
+        with self._relay_admission_lock:
+            return bool(stamp) and stamp == self.relay_dispatch_stamp()
+
+    # ---- public summary / preferences ----
 
     def summary(self, *, refresh_remote: bool = True) -> ProfileSummary:
         current_host = self.ensure_current_host()
@@ -320,6 +373,8 @@ class ProfileManager:
         current = self.preferences().model_dump()
         if payload.theme is not None:
             current["theme"] = payload.theme
+        if payload.dashboard_layout is not None:
+            current['dashboard_layout'] = payload.dashboard_layout
         if payload.sidebar_layout is not None:
             current["sidebar_layout"] = payload.sidebar_layout
         if payload.sessions_quick_actions_collapsed is not None:
@@ -343,8 +398,9 @@ class ProfileManager:
         self._sync_to_remote(best_effort=True)
         return self.preferences()
 
-    # ── auth lifecycle ─────────────────────────────────────────────────
+    # ---- auth lifecycle ----
 
+    @_serialized_account_operation
     def sign_up_password(
         self,
         *,
@@ -359,14 +415,18 @@ class ProfileManager:
             password=password,
             display_name=display_name,
         )
-        self._store_session_payload(session)
+        self._store_session_payload(session, establish_relay_session=True)
+        self.ensure_current_host()
         self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False), None
 
+    @_serialized_account_operation
     def sign_in_password(self, *, login: str, password: str) -> ProfileSummary:
         session = self._accounts.sign_in(login=login, password=password)
-        self._store_session_payload(session)
+        self._store_session_payload(session, establish_relay_session=True)
         self._refresh_from_remote(best_effort=True)
+        self.ensure_current_host()
+        self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
     def start_oauth(self, *, provider: str, redirect_to: str, mode: str = "signin") -> str:
@@ -379,12 +439,16 @@ class ProfileManager:
         )
         return response.url
 
+    @_serialized_account_operation
     def complete_oauth(self, *, handoff: str) -> ProfileSummary:
         session = self._accounts.exchange_oauth(handoff=handoff)
-        self._store_session_payload(session)
+        self._store_session_payload(session, establish_relay_session=True)
         self._refresh_from_remote(best_effort=True)
+        self.ensure_current_host()
+        self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
+    @_serialized_account_operation
     def unlink_provider(self, *, provider: str) -> ProfileSummary:
         access_token = self._ensure_access_token()
         account = self._accounts.unlink_provider(provider=provider, access_token=access_token)
@@ -392,18 +456,13 @@ class ProfileManager:
         self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
+    @_serialized_account_operation
     def sign_out(self) -> ProfileSummary:
         row = self._state_row()
+        # Capture the existing session; never renew account credentials merely
+        # to log out. Clear local identity before best-effort cloud cleanup.
         access_token = _token_plaintext(row["access_token_cipher"], storage=self._storage)
         refresh_token = _token_plaintext(row["refresh_token_cipher"], storage=self._storage)
-        if access_token or refresh_token:
-            try:
-                self._accounts.sign_out(
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                )
-            except Exception:
-                pass
         with self._storage.transaction() as conn:
             conn.execute(
                 """
@@ -425,9 +484,26 @@ class ProfileManager:
                 """,
                 (_now_iso(),),
             )
+        try:
+            (self._storage.data_dir / "relay-device-credential.json").unlink(missing_ok=True)
+        except OSError:
+            log.warning("Unable to delete local relay credential on sign-out.")
+        if row["user_id"] and row["current_host_id"] and access_token:
+            try:
+                self._accounts.revoke_relay_device(
+                    access_token=access_token,
+                    device_id=str(row["current_host_id"]),
+                )
+            except Exception:
+                log.warning("Could not confirm cloud relay device revocation on sign-out.")
+        if access_token or refresh_token:
+            try:
+                self._accounts.sign_out(access_token=access_token, refresh_token=refresh_token)
+            except Exception:
+                pass
         return self.summary(refresh_remote=False)
 
-    # ── catalog state ──────────────────────────────────────────────────
+    # â”€â”€ catalog state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def catalog_state(self) -> CatalogPreferenceState:
         current_host = self.ensure_current_host()
@@ -592,8 +668,26 @@ class ProfileManager:
     def record_tool_uninstall(self, *, tool_id: str) -> None:
         self.record_catalog_uninstall(kind="tool", item_id=tool_id)
 
-    # ── services / hosts ───────────────────────────────────────────────
+    # ---- services / hosts ----
 
+    def select_account_mcp_device(self, device_id: str) -> dict[str, Any]:
+        if not device_id or len(device_id) > 128:
+            raise invalid("profile", "Invalid device identifier.")
+        return self._accounts.select_mcp_device(access_token=self._ensure_access_token(), device_id=device_id)
+    def get_account_mcp_link(self) -> dict[str, Any]:
+        return self._accounts.create_mcp_connector(access_token=self._ensure_access_token())
+
+    def rotate_account_mcp_link(self) -> dict[str, Any]:
+        return self._accounts.rotate_mcp_connector(access_token=self._ensure_access_token())
+    def list_device_access(self) -> dict[str, Any]:
+        self._refresh_from_remote(best_effort=True)
+        return self._accounts.list_device_access(access_token=self._ensure_access_token())
+
+    def update_device_access(self, device_id: str, enabled: bool) -> dict[str, Any]:
+        if not device_id or len(device_id) > 128:
+            raise invalid("profile", "Invalid device identifier.")
+        return self._accounts.update_device_access(access_token=self._ensure_access_token(),
+                                                    device_id=device_id, enabled=enabled)
     def list_hosts(self) -> list[HostPresence]:
         self.ensure_current_host()
         rows = self._storage.conn.execute(
@@ -745,6 +839,20 @@ class ProfileManager:
             conn.execute("DELETE FROM service_connections WHERE id = ?", (connection_id,))
         self._sync_to_remote(best_effort=True)
 
+    def rename_current_host(self, name: str) -> HostPresence:
+        nickname = name.strip()
+        if not 1 <= len(nickname) <= 80 or any(ord(c) < 32 for c in nickname):
+            raise ValueError("Computer nickname must contain 1 to 80 printable characters")
+        host = self.ensure_current_host()
+        now = _now_iso()
+        with self._storage.transaction() as conn:
+            conn.execute("UPDATE profile_state SET current_host_name=?, updated_at=? WHERE id=1",
+                         (nickname, now))
+            conn.execute("UPDATE profile_hosts SET name=?, updated_at=? WHERE id=?",
+                         (nickname, now, host.id))
+        self._sync_to_remote(best_effort=True)
+        return self.ensure_current_host()
+
     def ensure_current_host(self) -> HostPresence:
         row = self._state_row()
         current_host_id = ensure_machine_id(self._storage.data_dir)
@@ -799,8 +907,9 @@ class ProfileManager:
             updated_at=refreshed["updated_at"],
         )
 
-    # ── remote sync ─────────────────────────────────────────────────────
+    # ---- remote sync ----
 
+    @_serialized_account_operation
     def _refresh_from_remote(self, *, best_effort: bool) -> None:
         row = self._state_row()
         if not row["user_id"]:
@@ -825,6 +934,7 @@ class ProfileManager:
                 return
             raise
 
+    @_serialized_account_operation
     def _sync_to_remote(self, *, best_effort: bool) -> None:
         row = self._state_row()
         if not row["user_id"] or not row["sync_enabled"]:
@@ -833,8 +943,43 @@ class ProfileManager:
             return
         try:
             access_token = self._ensure_access_token()
+            remote = self._accounts.get_sync_document(access_token=access_token)
+            if not remote.revision:
+                raise invalid("profile", "Account service does not support safe revision-based sync.")
+            # Pull remote changes before composing the next snapshot, and
+            # retain keys unknown to this older client.
+            if not isinstance(remote.document, dict):
+                raise invalid("profile", "Account service returned an invalid sync document.")
+            schema = remote.document.get("schema", 1)
+            if not isinstance(schema, int) or schema > 2 or schema < 1:
+                raise invalid("profile", "Remote profile schema is newer than this Synapse version.")
+            self._merge_remote_payload(remote.document)
             document = self._build_remote_payload()
-            self._accounts.put_sync_document(access_token=access_token, document=document)
+            for key, value in remote.document.items():
+                if key not in document:
+                    document[key] = value
+            for collection, identity in (("catalog_preferences", "item_key"), ("service_connections", "id"), ("hosts", "id")):
+                local_rows = document.get(collection, [])
+                remote_rows = remote.document.get(collection, [])
+                if not isinstance(remote_rows, list):
+                    continue
+                by_id = {item[identity]: item for item in local_rows if isinstance(item, dict) and item.get(identity)}
+                for item in remote_rows:
+                    if not isinstance(item, dict) or not item.get(identity):
+                        continue
+                    key = item[identity]
+                    if key not in by_id:
+                        local_rows.append(item)
+                    else:
+                        # Keep newer-client fields even when this client's known
+                        # columns have a more recent timestamp.
+                        for i, row in enumerate(local_rows):
+                            if isinstance(row, dict) and row.get(identity) == key:
+                                local_rows[i] = {**item, **row}
+                                break
+            self._accounts.put_sync_document(
+                access_token=access_token, document=document, expected_revision=remote.revision,
+            )
             self._set_sync_status(error=None)
             self._remote_cooldown_until = 0.0
         except Exception as exc:
@@ -919,6 +1064,10 @@ class ProfileManager:
     def _merge_remote_payload(self, document: dict[str, Any]) -> None:
         if not isinstance(document, dict):
             return
+        # Preserve local state when a future client publishes an incompatible schema.
+        schema = document.get("schema", 1)
+        if not isinstance(schema, int) or schema > 2 or schema < 1:
+            return
         preferences_payload = document.get("preferences")
         with self._storage.transaction() as conn:
             if isinstance(preferences_payload, dict):
@@ -934,8 +1083,8 @@ class ProfileManager:
                         (json.dumps(preferences_payload), remote_updated, _now_iso()),
                     )
 
-            for item in document.get("catalog_preferences", []):
-                if not isinstance(item, dict):
+            for item in (document.get("catalog_preferences") if isinstance(document.get("catalog_preferences"), list) else []):
+                if not isinstance(item, dict) or not isinstance(item.get("item_key"), str) or not item.get("item_key"):
                     continue
                 existing = conn.execute(
                     "SELECT updated_at FROM catalog_preferences WHERE item_key = ?",
@@ -973,8 +1122,8 @@ class ProfileManager:
                     ),
                 )
 
-            for connection in document.get("service_connections", []):
-                if not isinstance(connection, dict):
+            for connection in (document.get("service_connections") if isinstance(document.get("service_connections"), list) else []):
+                if not isinstance(connection, dict) or not isinstance(connection.get("id"), str) or not connection.get("id"):
                     continue
                 existing = conn.execute(
                     "SELECT updated_at FROM service_connections WHERE id = ?",
@@ -1015,8 +1164,8 @@ class ProfileManager:
                     ),
                 )
 
-            for host in document.get("hosts", []):
-                if not isinstance(host, dict):
+            for host in (document.get("hosts") if isinstance(document.get("hosts"), list) else []):
+                if not isinstance(host, dict) or not isinstance(host.get("id"), str) or not host.get("id"):
                     continue
                 conn.execute(
                     """
@@ -1039,8 +1188,9 @@ class ProfileManager:
                     ),
                 )
 
-    # ── account transport helpers ──────────────────────────────────────
+    # ---- account transport helpers ----
 
+    @_serialized_account_operation
     def _ensure_access_token(self) -> str:
         row = self._state_row()
         access_token = _token_plaintext(row["access_token_cipher"], storage=self._storage)
@@ -1059,14 +1209,26 @@ class ProfileManager:
             raise invalid("profile", "Could not refresh the Synapse account session.")
         return renewed
 
-    def _store_session_payload(self, payload: SessionPayload) -> None:
+    def _store_session_payload(self, payload: SessionPayload, *, establish_relay_session: bool = False) -> None:
         expires_at = to_iso(utc_now() + timedelta(seconds=int(payload.expires_in or 900)))
-        self._store_account_payload(
-            payload.account,
-            access_token=payload.access_token,
-            refresh_token=payload.refresh_token,
-            expires_at=expires_at,
-        )
+        # Identity replacement and epoch rotation are atomic relative to relay
+        # admission. Jobs captured while authentication was pending cannot enter
+        # the replacement account. Same-account token renewal preserves admission.
+        with self._relay_admission_lock:
+            previous_user_id = self._state_row()["user_id"]
+            self._store_account_payload(
+                payload.account,
+                access_token=payload.access_token,
+                refresh_token=payload.refresh_token,
+                expires_at=expires_at,
+            )
+            if establish_relay_session or previous_user_id != payload.account.account_id:
+                self._relay_epoch = uuid.uuid4().hex
+        # Successful authentication (or token renewal) proves that the account
+        # service recovered. Do not let a previous outage suppress the initial
+        # settings pull and publication of this computer after signing in.
+        self._remote_cooldown_until = 0.0
+        self._account_backend_reachable = True
 
     def _store_account_payload(
         self,
@@ -1154,7 +1316,7 @@ class ProfileManager:
                 return self._cached_auth_providers
             raise
 
-    # ── internal helpers ───────────────────────────────────────────────
+    # ---- internal helpers ----
 
     def _state_row(self):
         row = self._storage.conn.execute("SELECT * FROM profile_state WHERE id = 1").fetchone()
@@ -1299,6 +1461,28 @@ class ProfileManager:
             details["message"] = "Local sign-in cache was found, but the CLI is not on PATH here."
         else:
             details["message"] = "No local sign-in cache or CLI was detected on this host."
+
+        if provider == "claude-code":
+            # The existence of ~/.claude is not proof of a valid OAuth session.
+            status = ServiceConnectionStatus.NEEDS_ATTENTION if binary_path else ServiceConnectionStatus.DISCONNECTED
+            details["auth_verified"] = False
+            if binary_path:
+                try:
+                    auth_result = subprocess.run(
+                        [binary_path, "auth", "status"], capture_output=True, text=True,
+                        timeout=12, check=False, creationflags=headless_creationflags(),
+                    )
+                    # Never persist raw CLI output, which may contain account metadata.
+                    details["auth_verified"] = auth_result.returncode == 0
+                    status = (ServiceConnectionStatus.READY if auth_result.returncode == 0
+                              else ServiceConnectionStatus.NEEDS_ATTENTION)
+                    details["message"] = ("Claude Code authentication verified on this desktop."
+                                          if auth_result.returncode == 0
+                                          else "Claude Code is installed but needs sign-in. Choose Connect Claude.")
+                except (subprocess.TimeoutExpired, OSError):
+                    details["message"] = "Could not verify Claude Code sign-in. Retry or reconnect."
+            else:
+                details["message"] = "Claude Code CLI is not installed on this desktop."
 
         if provider == "github-copilot":
             gh_path = resolve_command("gh")

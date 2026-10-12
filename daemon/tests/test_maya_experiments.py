@@ -43,7 +43,7 @@ def storage(seeded_storage):
     with seeded_storage.transaction() as conn:
         conn.execute("DELETE FROM staff_events WHERE staff_member_id=(SELECT id FROM staff_members WHERE handle='maya')")
         conn.execute(
-            "UPDATE projects SET status='idle', current_health=NULL, last_health_at=NULL,"
+            "UPDATE projects SET status='idle', current_health='unknown', last_health_at=NULL,"
             " deleted_at=NULL WHERE id IN ('reselltogether','nabsignal','synapse')"
         )
         conn.execute(

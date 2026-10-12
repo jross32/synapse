@@ -52,6 +52,7 @@ def test_a_cooling_rung_is_not_usable_and_says_when_it_returns(tmp_path, monkeyp
 
 
 def test_expired_claude_oauth_is_not_reported_usable(tmp_path, monkeypatch):
+    monkeypatch.setattr(cr, "_claude_oauth_has_refresh", lambda: False)
     monkeypatch.setattr(cr, "resolve_command", lambda command: f"/fake/{command}")
     monkeypatch.setattr(
         cr,

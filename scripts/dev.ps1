@@ -12,6 +12,9 @@ param(
   [switch]$AppOnly,
   [switch]$BindLan,
   [switch]$ShortcutMode,
+  # Optional data folder (e.g. the installed app's %APPDATA%\Synapse\data) so the
+  # dev build and the release build share one set of data.
+  [string]$DataDir = '',
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$ElectronArgs
 )
@@ -20,7 +23,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$dataDir = Join-Path $root 'data'
+$dataDir = if ($DataDir) { $DataDir } else { Join-Path $root 'data' }
 $daemonLog = Join-Path $dataDir 'daemon-runtime.log'
 $viteLog = Join-Path $dataDir 'vite-runtime.log'
 $restartExitCode = 75
@@ -299,7 +302,7 @@ function Start-DaemonWatchdog {
   $watchdogScript = Join-Path $PSScriptRoot 'daemon-watchdog-v2.ps1'
   $watchdogArgs = @(
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchdogScript,
-    '-Port', "$Port", '-DataDir', 'data'
+    '-Port', "$Port", '-DataDir', $dataDir
   )
   if ($BindLan) {
     $watchdogArgs += '-BindLan'
@@ -393,7 +396,7 @@ function Start-TerminalCloak {
 }
 
 function Start-DaemonOnly {
-  $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', 'data')
+  $daemonArgs = @('-m', 'synapse_daemon', '--port', '7878', '--data-dir', $dataDir)
   if ($BindLan) {
     $daemonArgs += '--bind-lan'
   }
@@ -429,7 +432,7 @@ do {
   try {
     if (-not $AppOnly) {
       Clear-StalePort -Port 7878 -Match 'synapse_daemon' -Label 'daemon'
-      $daemonCommand = '"' + $pythonExe + '" -m synapse_daemon --port 7878 --data-dir data'
+      $daemonCommand = '"' + $pythonExe + '" -m synapse_daemon --port 7878 --data-dir "' + $dataDir + '"'
       if ($BindLan) {
         $daemonCommand += ' --bind-lan'
       }

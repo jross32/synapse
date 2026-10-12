@@ -129,7 +129,7 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
   },
   {
     id: 'staff',
-    label: 'My AI Staff',
+    label: 'AI Workforce',
     icon: UsersRound,
     description: 'Your persistent AI people, profiles, goals, permissions, and work',
     section: 'ai',

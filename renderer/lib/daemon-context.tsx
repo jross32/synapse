@@ -90,6 +90,9 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [healthError, setHealthError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileSummary | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  // Boot, account actions and WebSocket events may overlap. A slow response
+  // from an earlier session must not replace the latest account state.
+  const profileRequestRef = useRef(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
@@ -132,12 +135,15 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
   }, []);
 
   const refreshProfile = useCallback(async () => {
+    const request = ++profileRequestRef.current;
     try {
       const next = await getProfile();
+      if (request !== profileRequestRef.current) return null;
       setProfile(next);
       setProfileError(null);
       return next;
     } catch (err) {
+      if (request !== profileRequestRef.current) return null;
       setProfileError((err as Error).message || 'Failed to load profile');
       return null;
     }
@@ -223,6 +229,7 @@ export function DaemonProvider({ children }: { children: ReactNode }): JSX.Eleme
 
     return () => {
       cancelled = true;
+      ++profileRequestRef.current; // Ignore pending profile responses after cleanup.
       unsubState();
       unsubEvent();
       ws.stop();

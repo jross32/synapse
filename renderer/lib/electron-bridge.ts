@@ -1,3 +1,4 @@
+export interface DesktopUpdateInfo { status: 'disabled' | 'current' | 'available' | 'error'; currentVersion: string; version?: string; notes?: string; error?: string }
 // Thin wrapper over the Electron preload bridge (window.synapse).
 //
 // Everything here degrades gracefully when running in a plain browser
@@ -12,9 +13,12 @@ interface SynapseBridge {
   openExternal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   openInVscode?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   openInTerminal?: (target: string) => Promise<{ ok: boolean; error?: string }>;
+  claudeAuthLogin?: () => Promise<{ ok: boolean; error?: string }>;
   getAutostart?: () => Promise<boolean>;
   setAutostart?: (enabled: boolean) => Promise<boolean>;
   restart?: () => Promise<boolean>;
+  checkUpdate?: () => Promise<DesktopUpdateInfo>;
+  installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
   exit?: () => Promise<boolean>;
 }
 
@@ -69,6 +73,14 @@ export async function openInVscode(
   return b.openInVscode(target);
 }
 
+/** Launch official Claude Code OAuth from the trusted local Electron desktop. */
+export async function openClaudeLogin(): Promise<{ ok: boolean; error?: string }> {
+  const b = bridge();
+  if (!b?.claudeAuthLogin) {
+    return { ok: false, error: 'Connect Claude from the Synapse desktop app on the computer running Claude Code.' };
+  }
+  return b.claudeAuthLogin();
+}
 /** Read whether Synapse starts at login. Returns null outside Electron. */
 export async function getAutostart(): Promise<boolean | null> {
   const b = bridge();
@@ -130,3 +142,6 @@ export async function openExternal(
     error: 'Opening local paths is only available in the desktop app.',
   };
 }
+
+export async function checkDesktopUpdate(): Promise<DesktopUpdateInfo | null> { return bridge()?.checkUpdate?.() ?? null; }
+export async function installDesktopUpdate(): Promise<{ ok: boolean; error?: string }> { return bridge()?.installUpdate?.() ?? { ok: false, error: 'Desktop update installer unavailable.' }; }

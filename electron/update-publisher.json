@@ -1,0 +1,5 @@
+{
+  "schema": "synapse.update-publisher/v1",
+  "feedUrl": "https://download.whatapc.com/updates.json",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA9jAs935JXa0joeLERHa7QABhwA5j9J+klKKzt6rNiOI=\n-----END PUBLIC KEY-----\n"
+}

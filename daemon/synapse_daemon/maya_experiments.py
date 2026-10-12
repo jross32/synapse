@@ -37,7 +37,15 @@ def build_experiment_plan(
     """Read-only draft. Observed metrics remain None until measured externally."""
     observed_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     review = build_growth_review(conn)
+    # Fresh health evidence outranks an older green registry label; this
+    # prioritization is operational readiness only, never predicted sales.
     candidate = next(
+        (x for x in review["candidates"]
+         if x["registered_status"] == "launched"
+         and x["recorded_health"] == "healthy"
+         and _snapshot_freshness(x["last_health_at"], now=observed_at) == "fresh"),
+        None,
+    ) or next(
         (x for x in review["candidates"]
          if x["project_id"] == review["recommended_project_id"]), None,
     )
@@ -136,10 +144,9 @@ def record_experiment_plan(conn: sqlite3.Connection) -> dict[str, Any]:
     plan = build_experiment_plan(conn)
     if plan["status"] == "no_candidate":
         return {"created": False, "event_id": None, "plan": plan}
-    material = {
-        key: value for key, value in plan.items()
-        if key not in {"health_freshness", "next_action", "readiness_gate"}
-    }
+    # A material readiness transition (fresh -> stale, ready -> blocked) should
+    # be visible as a new review version, but clock ticks alone must not spam.
+    material = {key: value for key, value in plan.items() if key != "next_action"}
     fingerprint = hashlib.sha256(
         json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

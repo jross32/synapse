@@ -2413,6 +2413,7 @@ def build_mcp_router(
     bus: EventBus | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
+    read_only_tool_names = frozenset(spec["name"] for spec in _tool_specs(False))
     event_loop: asyncio.AbstractEventLoop | None = None
 
     def _emit_collaboration_event(verb: str, payload: dict[str, Any]) -> None:
@@ -2428,6 +2429,8 @@ def build_mcp_router(
         return _writes_allowed(storage.data_dir)
 
     def _call_tool(name: str, args: dict[str, Any], *, allow_writes: bool = True) -> Any:
+        if not allow_writes and name not in read_only_tool_names:
+            raise ValueError("This is the read-only connector URL. Remote write access is disabled for this device.")
         def _require_writes() -> None:
             """Refuse a write on the read-only URL, whatever the server-wide setting says.
 
@@ -2832,8 +2835,7 @@ def build_mcp_router(
             return dumped
 
         if name == "synapse_set_project_chat_url":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             project_id = str(args.get("project_id", "")).strip()
             projects_module.get(storage.conn, project_id)
             raw_url = args.get("url")
@@ -2944,8 +2946,7 @@ def build_mcp_router(
                 "note": "Synapse Active Tasks do not consume ChatGPT built-in task slots.",
             }
         if name == "synapse_add_project_idea":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             project_id = str(args.get("project_id", "")).strip()
             title = str(args.get("title", "")).strip()
             if not title:
@@ -2957,8 +2958,7 @@ def build_mcp_router(
                 adr = records.create_adr(conn, project_id, ProjectAdrCreate(title=title))
             return adr.model_dump(mode="json")
         if name == "synapse_create_active_task":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             from . import active_tasks as _active_tasks
             from .ai_context_memory import append_capture_note
             project_id = str(args.get("project_id") or "").strip()
@@ -2989,8 +2989,7 @@ def build_mcp_router(
             )
             return row.model_dump(mode="json")
         if name == "synapse_update_active_task":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             from . import active_tasks as _active_tasks
             task_id = str(args.get("task_id") or "").strip()
             try:
@@ -3013,8 +3012,7 @@ def build_mcp_router(
                 )
             return row.model_dump(mode="json")
         if name == "synapse_capture_note":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             from .capture import CaptureDestination, CaptureRequest, capture
 
             project_id = str(args.get("project_id", "")).strip()
@@ -3032,8 +3030,7 @@ def build_mcp_router(
                 result = capture(conn, storage.data_dir, req)
             return result.model_dump(mode="json")
         if name == "synapse_create_squad":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             project_id = str(args.get("project_id", "")).strip()
             name_arg = str(args.get("name", "")).strip()
             if not name_arg:
@@ -3051,8 +3048,7 @@ def build_mcp_router(
                 )
             return squad.model_dump(mode="json")
         if name == "synapse_add_work_item":
-            if not writes_allowed():
-                raise ValueError("Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+            _require_writes()
             squad_id = str(args.get("squad_id", "")).strip()
             title = str(args.get("title", "")).strip()
             if not title:
@@ -3612,6 +3608,16 @@ def build_mcp_router(
                 raise ValueError("server is required")
             with storage.transaction() as conn:
                 servers = {row.id: row for row in mcp_servers.list_servers(conn)}
+            # Resolve common scraper aliases against THIS Synapse connection's
+            # registered servers; never point a remote client at its own localhost.
+            if server_id.lower().replace("_", "-") in {
+                "webscraper", "web-scraper", "wbscrper", "scraper"
+            }:
+                from .mcp_servers import WEB_SCRAPER_KNOWN_IDS
+                server_id = next(
+                    (candidate for candidate in WEB_SCRAPER_KNOWN_IDS if candidate in servers),
+                    server_id,
+                )
             server = servers.get(server_id)
             if server is None:
                 raise ValueError(
@@ -3756,6 +3762,42 @@ def build_mcp_router(
             return None
         return _error(msg_id, -32601, f"Method not found: {method}")
 
+    @router.post("/mcp/device/{device_id}/{token}", response_model=None)
+    async def device_mcp_post(device_id: str, token: str, request: Request) -> Response:
+        """Per-device MCP entrance with separate credentials and normal write policy."""
+        from .machine_fleet import ensure_machine_id
+        from .mcp_device_registry import get_device_preference, device_token
+        import secrets
+        if device_id != ensure_machine_id(storage.data_dir):
+            return JSONResponse(_error(None, -32004, "Device not hosted here"), status_code=404)
+        row = storage.conn.execute("SELECT user_id FROM profile_state WHERE id=1").fetchone()
+        user_id = row["user_id"] if row else None
+        if not user_id:
+            return JSONResponse(_error(None, -32001, "Unauthorized"), status_code=401)
+        if not get_device_preference(storage.data_dir, user_id, device_id):
+            return JSONResponse(_error(None, -32003, "Device MCP disabled"), status_code=403)
+        if not secrets.compare_digest(token, device_token(storage.data_dir, user_id, device_id)):
+            return JSONResponse(_error(None, -32001, "Unauthorized"), status_code=401)
+        try:
+            payload = await request.json()
+        except Exception:
+            return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
+        async def dispatch(message: Any) -> Any:
+            lane, executor = _mcp_dispatch_executor(message)
+            response, _timing = await executor.run(
+                _handle, message, True, label=_mcp_request_label(message)
+            )
+            return response
+        try:
+            if isinstance(payload, list):
+                responses = await asyncio.gather(*(dispatch(m) for m in payload))
+                visible = [r for r in responses if r is not None]
+                return JSONResponse(visible) if visible else Response(status_code=202)
+            response = await dispatch(payload)
+        except McpExecutorBusy as exc:
+            return JSONResponse(_error(None, -32002, str(exc)), status_code=503)
+        return JSONResponse(response) if response is not None else Response(status_code=202)
+
     @router.post("/mcp/{token}", response_model=None)
     async def mcp_post(token: str, request: Request) -> Response:
         nonlocal event_loop
@@ -3779,10 +3821,23 @@ def build_mcp_router(
         # operations use their own bounded lane; a separate reserved control lane keeps
         # cheap local reads/recovery calls responsive even while shell/browser/network
         # work is saturated. Both expose queue-vs-execution timing on every response.
+        # Only outbound account relay calls carry this process-local fence.
+        # Check inside the worker, after executor queuing, so logout invalidates
+        # pending jobs. Normal trusted-local MCP requests keep their semantics.
+        relay_stamp = request.headers.get("X-Synapse-Relay-Session")
+
+        def handle_admitted(message: Any, writes: bool) -> Any:
+            if relay_stamp is not None:
+                manager = getattr(request.app.state, "profile_manager", None)
+                if manager is None or not manager.admit_relay_dispatch(relay_stamp):
+                    msg_id = message.get("id") if isinstance(message, dict) else None
+                    return _error(msg_id, -32001, "Synapse account session changed before dispatch.")
+            return _handle(message, writes)
+
         async def dispatch(message: Any) -> tuple[Any, McpDispatchTiming, str]:
             lane, executor = _mcp_dispatch_executor(message)
             response, timing = await executor.run(
-                _handle, message, allow_writes, label=_mcp_request_label(message)
+                handle_admitted, message, allow_writes, label=_mcp_request_label(message)
             )
             return response, timing, lane
 

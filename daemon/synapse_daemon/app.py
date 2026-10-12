@@ -2,9 +2,9 @@
 
 For Milestone B this app exposes:
 
-  â€¢ ``GET  /api/v1/health``  â€” daemon liveness, version, applied schema,
+  Ã¢â‚¬Â¢ ``GET  /api/v1/health``  Ã¢â‚¬â€ daemon liveness, version, applied schema,
                                 contracts honoured (Contract #7).
-  â€¢ ``WS   /api/v1/ws``     â€” the event bus hub (Contract #5).
+  Ã¢â‚¬Â¢ ``WS   /api/v1/ws``     Ã¢â‚¬â€ the event bus hub (Contract #5).
 
 The factory pattern (``build_app(storage, bus)``) lets tests instantiate the
 app against a temp directory without going through ``__main__``.
@@ -12,12 +12,13 @@ app against a temp directory without going through ``__main__``.
 Every uncaught :class:`SynapseError` from a handler is rendered as an
 :class:`ErrorEnvelope` JSON response (Contract #4). CORS is opened just wide
 enough for the Electron renderer's Vite dev server and the loopback origin
-(Contract #15 â€” no third-party calls).
+(Contract #15 Ã¢â‚¬â€ no third-party calls).
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -78,6 +79,8 @@ from .routes_models import build_models_router
 from .routes_personalities import build_personalities_router
 from .routes_staff import build_staff_router
 from .routes_profile import build_profile_router
+from .routes_hybrid_storage import build_hybrid_storage_router
+from .routes_workspace import build_workspace_router
 from .routes_project_doctor import build_project_doctor_router
 from .routes_project_records import build_project_records_router
 from .routes_projects import build_projects_router
@@ -89,6 +92,7 @@ from .routes_search import build_search_router
 from .routes_snapshot import build_snapshot_router
 from .routes_operator import build_operator_router
 from .routes_synapse_dev import build_synapse_dev_router
+from .routes_release_pipeline import build_release_pipeline_router
 from .routes_system import build_system_router
 from .routes_thread_presence import build_thread_presence_router
 from .routes_trace import build_trace_router
@@ -108,7 +112,7 @@ log = logging.getLogger(__name__)
 
 
 # CORS origins permitted to talk to the daemon. The packaged Electron build
-# loads from a ``file://`` origin which JSON serialises as ``null`` â€” so we
+# loads from a ``file://`` origin which JSON serialises as ``null`` Ã¢â‚¬â€ so we
 # allow ``null`` explicitly. The Vite dev server is 5173.
 _ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -135,7 +139,7 @@ def build_app(
     ``process_manager``, ``tool_registry`` and ``auth`` are created on demand
     if not supplied (so tests that only care about ``/health`` don't have to
     wire them up themselves). A freshly-created registry is loaded immediately
-    â€” scanning ``tools/`` is pure file IO and safe before the lifespan starts.
+    Ã¢â‚¬â€ scanning ``tools/`` is pure file IO and safe before the lifespan starts.
     """
 
     started_at = utc_now()
@@ -150,7 +154,8 @@ def build_app(
         tool_registry.load()
     if auth is None:
         auth = AuthManager(storage, ensure_local_token(storage.data_dir))
-    # Install default QA skills on fresh Windows profiles and upgrades.
+    # Fresh installs and upgrades must expose default Visual QA skills before
+    # any AI session can request them. Never block daemon boot for a bad pack.
     from .skill_packs import ensure_default_ui_skills
     for skill_id, result in ensure_default_ui_skills(storage.data_dir).items():
         if result.startswith("error:"):
@@ -163,12 +168,14 @@ def build_app(
         from .personalities import seed_default_personalities
         from .staff import seed_staff_foundation
         from .staff_operations import seed_staff_operations
+        from .staff_hq_catalog import seed_creator_revenue_staff
         from .quality_os import seed_default_quality_os
 
         seed_default_role_templates(conn)
         seed_default_personalities(conn)
         seed_staff_foundation(conn)
         seed_staff_operations(conn)
+        seed_creator_revenue_staff(conn)
         seed_default_catalog(conn)
         seed_default_specs(conn)
         seed_default_quality_os(conn)
@@ -189,7 +196,7 @@ def build_app(
         CORSMiddleware,
         allow_origins=_ALLOWED_ORIGINS,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Content-Type",
             "Accept",
@@ -317,13 +324,13 @@ def build_app(
                     _activity.ActivityJournalCreate(
                         category=category,
                         status=status,
-                        title=f"Synapse · {label}",
+                        title=f"Synapse \u00b7 {label}",
                         summary_md=(
                             f"{request.method.upper()} /{relative_path} completed with HTTP "
                             f"{response.status_code}. Request and response bodies were not copied into Live View."
                         ),
                         mcp_server_id=mcp_server_id,
-                        tool_name=f"Synapse · {label}",
+                        tool_name=f"Synapse \u00b7 {label}",
                         authority=authority,
                     ),
                     session_id=session_id,
@@ -342,7 +349,7 @@ def build_app(
             pass
         return response
 
-    # â”€â”€ exception handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Ã¢â€â‚¬Ã¢â€â‚¬ exception handler Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     @app.exception_handler(SynapseError)
     async def synapse_error_handler(request: Request, exc: SynapseError) -> JSONResponse:
@@ -358,7 +365,7 @@ def build_app(
         )
         return JSONResponse(status_code=500, content=envelope.model_dump())
 
-    # â”€â”€ routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Ã¢â€â‚¬Ã¢â€â‚¬ routes Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     @app.get(f"{API_PREFIX}/health")
     async def health() -> HealthResponse:
@@ -420,22 +427,24 @@ def build_app(
         dependencies=[token_guard],
     )
     app.include_router(build_profile_router(storage, auth, profile_manager), prefix=API_PREFIX)
+    app.include_router(build_hybrid_storage_router(auth, Path.home()), prefix=API_PREFIX)
+    app.include_router(build_workspace_router(auth, profile_manager, storage.data_dir), prefix=API_PREFIX)
 
-    # â”€â”€ Local AI: hardware profile, measured model strengths, agent runs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Local AI: hardware profile, measured model strengths, agent runs Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     app.include_router(
         build_local_ai_router(storage, storage.data_dir),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
 
-    # â”€â”€ Blueprints: verified recipes any AI or human can build from â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Blueprints: verified recipes any AI or human can build from Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     app.include_router(
         build_blueprints_router(storage, storage.data_dir),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
 
-    # â”€â”€ PTY sessions (v0.1.25 Â· ADR-0002 Phase A) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Ã¢â€â‚¬Ã¢â€â‚¬ PTY sessions (v0.1.25 Ã‚Â· ADR-0002 Phase A) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     # The manager is attached to the bus so the pty.spawn tool primitive
     # can find it without an import cycle. Storage is passed in so
     # workbench-tagged sessions can persist their scrollback as a
@@ -524,9 +533,16 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    # The Railway OAuth callback is delivered as a browser redirect without the
+    # daemon API header. It lives in its own router and still validates loopback,
+    # signed-in owner, single-use state and PKCE before storing credentials.
+    from .routes_railway_costs import build_railway_callback_router
+    app.include_router(build_railway_callback_router(storage.data_dir, profile_manager),
+                       prefix=API_PREFIX)
+
     # Unified watchdog/background-service observability dashboard.
     app.include_router(
-        build_watchdogs_router(storage.data_dir),
+        build_watchdogs_router(storage.data_dir, profile_manager),
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
@@ -537,6 +553,7 @@ def build_app(
         dependencies=[token_guard],
     )
     synapse_dev_manager = SynapseDevManager(storage.data_dir)
+    app.include_router(build_release_pipeline_router(storage, synapse_dev_manager), prefix=API_PREFIX, dependencies=[token_guard])
     app.include_router(
         build_synapse_dev_router(storage, synapse_dev_manager),
         prefix=API_PREFIX,
@@ -588,6 +605,13 @@ def build_app(
         prefix=API_PREFIX,
         dependencies=[token_guard],
     )
+    # Opt-in reminders only: low-memory polling, durable SQLite checkpoints,
+    # no model calls or external sends. Live capture remains explicit opt-in.
+    from .staff_hq_proactivity import StaffProactivityService
+    staff_proactivity = StaffProactivityService(storage)
+    app.router.on_startup.append(staff_proactivity.start)
+    app.router.on_shutdown.append(staff_proactivity.stop)
+
     # Persistent owner-facing AI staff built on existing role + personality workers.
     app.include_router(
         build_staff_router(storage),
@@ -874,7 +898,7 @@ def build_app(
 
     # Serve the phone-facing Web UI. Prefer the built React renderer (the
     # full app shell, now mobile-aware); fall back to the legacy standalone
-    # mobile page if the repo hasn't been built yet. Static files stay open â€”
+    # mobile page if the repo hasn't been built yet. Static files stay open Ã¢â‚¬â€
     # a phone must load the page before it can pair.
     mobile_dir = bundled_mobile_dir()
     dist_dir = bundled_dist_dir()
@@ -934,7 +958,7 @@ async def boot_publish_reconciliation(
 ) -> None:
     """Emit one event per non-trivial reconcile outcome.
 
-    Re-attached rows are quiet â€” the consumer was already tracking them in a
+    Re-attached rows are quiet Ã¢â‚¬â€ the consumer was already tracking them in a
     previous life. We only broadcast the rows whose state actually changed.
     """
 

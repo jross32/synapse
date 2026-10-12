@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('synapse', {
   openInTerminal: (target: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('synapse:open-in-terminal', target),
 
+  /** Start the official Claude Code login on this desktop (no credentials in Synapse). */
+  claudeAuthLogin: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('synapse:claude-auth-login'),
   /** Whether Synapse is registered to start at Windows login (Milestone I). */
   getAutostart: (): Promise<boolean> => ipcRenderer.invoke('synapse:get-autostart'),
 
@@ -51,6 +54,9 @@ contextBridge.exposeInMainWorld('synapse', {
   /** Restart the whole app (kills the daemon child, re-launches Electron).
    *  Used by Settings → Network after the LAN-exposure toggle changes. */
   restart: (): Promise<boolean> => ipcRenderer.invoke('synapse:restart'),
+
+  checkUpdate: (): Promise<unknown> => ipcRenderer.invoke('synapse:update-check'),
+  installUpdate: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('synapse:update-install'),
 
   /** Exit cleanly (same as Tray → Exit Synapse). */
   exit: (): Promise<boolean> => ipcRenderer.invoke('synapse:exit'),
@@ -67,9 +73,12 @@ declare global {
       openExternal: (target: string) => Promise<{ ok: boolean; error?: string }>;
       openInVscode: (target: string) => Promise<{ ok: boolean; error?: string }>;
       openInTerminal: (target: string) => Promise<{ ok: boolean; error?: string }>;
+      claudeAuthLogin: () => Promise<{ ok: boolean; error?: string }>;
       getAutostart: () => Promise<boolean>;
       setAutostart: (enabled: boolean) => Promise<boolean>;
       restart: () => Promise<boolean>;
+      checkUpdate: () => Promise<unknown>;
+      installUpdate: () => Promise<{ ok: boolean; error?: string }>;
       exit: () => Promise<boolean>;
     };
   }

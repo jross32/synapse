@@ -677,6 +677,12 @@ def build_ai_router(
                 ],
             },
             "endpoints_for_ai": [
+                {"purpose": "Native release workflow: POST request with version/source_root/publish_requested; GET plan; POST start; poll run; attach real lifecycle proof; request-publication; publish; verify-live. Durable local runs, no Work Mode, no automatic publication.", "method": "GET", "path": "/api/v1/release-pipeline"},
+                {"purpose": "Remember and order a source-backed release request; publish_requested records explicit intent but never bypasses proof", "method": "POST", "path": "/api/v1/release-pipeline"},
+                {"purpose": "Run or resume ordered local source/build/check/staging with durable receipts and source locks", "method": "POST", "path": "/api/v1/release-pipeline/{run_id}/start"},
+                {"purpose": "Resume an interrupted native release without repeating completed stages or unknown deployment", "method": "POST", "path": "/api/v1/release-pipeline/{run_id}/resume"},
+                {"purpose": "Attach version/artifact-bound real Windows lifecycle, account and sync proof", "method": "POST", "path": "/api/v1/release-pipeline/{run_id}/proof"},
+                {"purpose": "Publish only after explicit intent and proof, then verify served feed/site/artifact bytes", "method": "POST", "path": "/api/v1/release-pipeline/{run_id}/publish"},
                 {
                     "purpose": "read evidence-backed AI runtime readiness and measured usage",
                     "method": "GET",

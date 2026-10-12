@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Settings,
+  Monitor,
+  LayoutDashboard,
+  X,
+  Check,
   CheckCircle2,
   Cloud,
+  Copy,
   Globe2,
   Laptop2,
   Link2,
@@ -27,10 +33,18 @@ import type {
   HostPresence,
   ServiceConnection,
 } from '@shared/generated-types';
+import type { AccountMcpConnector, McpConnectionCheck, McpConnections, McpProbeResult } from '@shared/profile-client';
 import {
+  checkMcpConnections,
+  getAccountMcpConnector,
+  maskMcpUrl,
+  rotateAccountMcpConnector,
   connectService,
+  startClaudeLogin,
   deleteServiceConnection,
   getCatalogState,
+  getMcpConnections,
+  setMcpPreference,
   getProfile,
   getProfileHosts,
   getServiceConnections,
@@ -47,6 +61,7 @@ import { cn } from '@shared/utils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { AccountAppsCatalog } from './AccountAppsCatalog';
+import { DevicesSavedWork } from './DevicesSavedWork';
 import { Input } from './ui/input';
 import { Modal } from './ui/modal';
 
@@ -54,6 +69,7 @@ export interface ProfileHubProps {
   open: boolean;
   onClose: () => void;
   mobileRoute?: boolean;
+  initialView?: 'devices' | 'account' | 'apps';
 }
 
 interface SignInFormState {
@@ -80,6 +96,7 @@ export function ProfileHub({
   open,
   onClose,
   mobileRoute = false,
+  initialView = 'devices',
 }: ProfileHubProps): JSX.Element | null {
   const { profile, profileError, refreshProfile } = useDaemon();
   const [catalogState, setCatalogState] = useState<CatalogPreferenceState | null>(null);
@@ -87,10 +104,13 @@ export function ProfileHub({
   const [hosts, setHosts] = useState<HostPresence[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [loadingHub, setLoadingHub] = useState(false);
+  const [loadingDevices, setLoadingDevices] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [profileView, setProfileView] = useState<'devices' | 'account' | 'apps'>('devices');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [syncEnabled, setSyncEnabled] = useState(true);
+  const [createMcp, setCreateMcp] = useState(true);
+  const [mcpConnections, setMcpConnections] = useState<McpConnections | null>(null);
   const [signinForm, setSigninForm] = useState<SignInFormState>({
     login: '',
     password: '',
@@ -105,11 +125,7 @@ export function ProfileHub({
 
   useEffect(() => {
     if (!open) return;
-    setSyncEnabled(profile?.sync_enabled ?? true);
-  }, [open, profile?.sync_enabled]);
-
-  useEffect(() => {
-    if (!open) return;
+    setProfileView(initialView);
     void loadHubData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -149,21 +165,32 @@ export function ProfileHub({
 
   async function loadHubData(): Promise<void> {
     setLoadingHub(true);
+    setLoadingDevices(true);
     setError(null);
     const issues: string[] = [];
     try {
-      const summary = (await refreshProfile()) ?? (await getProfile());
+      let summary = (await refreshProfile()) ?? (await getProfile());
+      if (summary.signed_in && !summary.sync_enabled) {
+        try {
+          summary = await updateProfileConfig({ sync_enabled: true });
+          await refreshProfile();
+        } catch (err) {
+          issues.push((err as Error).message || 'Automatic sync could not be enabled.');
+        }
+      }
       if (!summary.signed_in) {
         setCatalogState(null);
         setServices([]);
         setHosts([]);
+        setMcpConnections(null);
         return;
       }
 
-      const [catalogRes, servicesRes, hostsRes] = await Promise.allSettled([
+      const [catalogRes, servicesRes, hostsRes, mcpRes] = await Promise.allSettled([
         getCatalogState(),
         getServiceConnections(),
-        getProfileHosts(),
+        getProfileHosts().then((value) => { setHosts(value); return value; }),
+        getMcpConnections().then((value) => { setMcpConnections(value); return value; }).finally(() => setLoadingDevices(false)),
       ]);
 
       if (catalogRes.status === 'fulfilled') setCatalogState(catalogRes.value);
@@ -172,12 +199,15 @@ export function ProfileHub({
       if (servicesRes.status === 'fulfilled') setServices(servicesRes.value);
       else issues.push((servicesRes.reason as Error).message);
 
+      if (mcpRes.status === 'fulfilled') setMcpConnections(mcpRes.value);
+      else issues.push((mcpRes.reason as Error).message);
       if (hostsRes.status === 'fulfilled') setHosts(hostsRes.value);
       else issues.push((hostsRes.reason as Error).message);
     } catch (err) {
       issues.push((err as Error).message);
     } finally {
       setLoadingHub(false);
+      setLoadingDevices(false);
     }
     if (issues.length > 0) setError(issues.join(' '));
   }
@@ -193,14 +223,6 @@ export function ProfileHub({
     } finally {
       setBusyKey(null);
     }
-  }
-
-  async function saveSyncSettings(): Promise<void> {
-    await runAction('sync-settings', async () => {
-      await updateProfileConfig({ sync_enabled: syncEnabled });
-      await loadHubData();
-      setNotice(syncEnabled ? 'Portable sync is enabled for this account.' : 'Portable sync is paused on this host.');
-    });
   }
 
   async function signIn(): Promise<void> {
@@ -228,8 +250,12 @@ export function ProfileHub({
         password: signupForm.password,
         display_name: signupForm.displayName.trim() || null,
       });
+      let mcpNote = '';
+      try { await setMcpPreference(createMcp); } catch (_error) {
+        mcpNote = ' MCP preference could not be saved; check MCP Connections.';
+      }
       await loadHubData();
-      setNotice(res.notice ?? 'Synapse account created and connected.');
+      setNotice((res.notice ?? 'Synapse account created and connected.') + mcpNote);
       setSignupForm((prev) => ({
         ...prev,
         password: '',
@@ -298,14 +324,27 @@ export function ProfileHub({
     <Modal
       open={open}
       onClose={onClose}
-      labelledBy='profile-hub-title'
+      labelledBy={profile?.signed_in && profileView === 'devices' ? 'saved-work-title' : 'profile-hub-title'}
       className={cn(
-        'max-w-6xl p-0',
+        'profile-work-modal max-w-6xl p-0',
         mobileRoute &&
           'h-[100dvh] max-h-[100dvh] max-w-none rounded-none border-x-0 border-b-0 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl sm:border'
       )}
     >
-      <div className='flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6'>
+      <div className={profile?.signed_in ? 'profile-work-shell' : ''}>
+      {profile?.signed_in && <aside className='profile-work-rail'>
+        <div className='profile-work-brand'><span className='profile-work-logo' aria-hidden='true'><svg viewBox='0 0 60 60'><path d='M30 8C22 1 13 5 12 14C3 15 1 25 7 31C1 39 7 48 15 47C17 57 25 59 30 53C36 59 45 56 46 47C56 47 60 37 54 31C60 23 55 14 47 14C46 5 36 1 30 8Z' fill='none' stroke='currentColor' strokeWidth='2.5'/><text x='30' y='42' textAnchor='middle' fontSize='35' fontWeight='500' fill='#929eff'>S</text></svg></span><strong>Synapse</strong></div>
+        <nav aria-label='Profile navigation'>
+          <button type='button' onClick={onClose}><LayoutDashboard size={20}/> Back to Synapse</button>
+          <button type='button' aria-current={profileView === 'devices' ? 'page' : undefined} onClick={() => setProfileView('devices')}><Monitor size={20}/> Devices &amp; saved work</button>
+          <button type='button' aria-current={profileView === 'account' ? 'page' : undefined} onClick={() => setProfileView('account')}><Settings size={20}/> Account settings</button>
+          <button type='button' aria-current={profileView === 'apps' ? 'page' : undefined} onClick={() => setProfileView('apps')}><Link2 size={20}/> Connected apps</button>
+        </nav>
+        <div className='profile-work-user'><span>{(profile.display_name || profile.username || 'S').slice(0,1).toUpperCase()}</span><div><strong>{profile.display_name || profile.username || 'Synapse account'}</strong><small>{profile.email}</small></div></div>
+      </aside>}
+      <div className='profile-work-content'>
+      <button type='button' className='profile-work-close' aria-label='Close profile' onClick={onClose}><X size={19}/></button>
+      <div hidden={Boolean(profile?.signed_in && profileView === 'devices')} className='flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6'>
         <div className='min-w-0'>
           <div className='flex items-center gap-3'>
             <div className='flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary'>
@@ -348,7 +387,16 @@ export function ProfileHub({
       </div>
 
       {profile?.signed_in ? (
-        <div className='grid gap-4 p-5 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] sm:p-6'>
+        <div className='profile-work-body'>
+          {profileView === 'devices' && <DevicesSavedWork profile={profile} hosts={hosts} connections={mcpConnections}
+            busy={busyKey !== null || loadingDevices}
+            onRefresh={() => runAction('sync-refresh', loadHubData)}
+            onToggleAccess={(enabled) => runAction('device-access', async () => {
+              setMcpConnections(await setMcpPreference(enabled));
+              setNotice(enabled ? 'AI access reconnected on this computer.' : 'AI access disconnected. Saved work and preference sync are retained.');
+            })}
+          />}
+          <div hidden={profileView !== 'account'} className='profile-work-account-grid'>
           <div className='space-y-4'>
             <Card className='space-y-4 p-5'>
               <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -382,32 +430,6 @@ export function ProfileHub({
                   </div>
                 </div>
 
-                <div className='rounded-3xl border border-border/70 bg-secondary/20 p-4'>
-                  <p className='text-xs font-semibold uppercase tracking-[0.18em] text-primary/85'>
-                    Sync controls
-                  </p>
-                  <label className='mt-3 flex items-start gap-3 rounded-2xl border border-border/60 bg-background/50 px-3 py-3 text-sm'>
-                    <input
-                      type='checkbox'
-                      className='mt-0.5 h-4 w-4 rounded border-border'
-                      checked={syncEnabled}
-                      onChange={(e) => setSyncEnabled(e.target.checked)}
-                    />
-                    <span className='min-w-0'>
-                      <span className='font-medium text-foreground'>Keep portable sync enabled</span>
-                      <span className='mt-1 block text-xs text-muted-foreground'>
-                        Favorites, recent tools, host memory, and UI setup follow you. Files, logs,
-                        transcripts, uploads, paired devices, and local CLI sign-ins stay local.
-                      </span>
-                    </span>
-                  </label>
-                  <div className='mt-3 flex justify-end'>
-                    <Button onClick={() => void saveSyncSettings()} disabled={busyKey === 'sync-settings'}>
-                      {busyKey === 'sync-settings' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles className='h-4 w-4' />}
-                      Save sync settings
-                    </Button>
-                  </div>
-                </div>
               </div>
 
               <div className='space-y-3 rounded-3xl border border-border/70 bg-secondary/20 p-4'>
@@ -557,6 +579,14 @@ export function ProfileHub({
               )}
             </Card>
 
+            {profile?.signed_in && mcpConnections && (
+              <McpConnectionCard
+                connections={mcpConnections}
+                hosts={hosts}
+                onToggleDesktop={(enabled) => runAction('mcp', async () => { await setMcpPreference(enabled); await loadHubData(); })}
+              />
+            )}
+
             <Card className='space-y-4 p-5'>
               <div>
                 <h3 className='text-lg font-semibold'>Hosts & installs</h3>
@@ -623,6 +653,7 @@ export function ProfileHub({
                 )
               )}
             </Card>
+          </div>
           </div>
         </div>
       ) : (
@@ -809,6 +840,7 @@ export function ProfileHub({
                       />
                     </label>
                   </div>
+                  <label className='flex items-start gap-2 text-sm'><input type='checkbox' checked={createMcp} onChange={(e) => setCreateMcp(e.target.checked)} /> Enable full Synapse MCP access for this desktop (recommended)</label>
                   <Button
                     className='w-full rounded-2xl'
                     onClick={() => void signUp()}
@@ -864,8 +896,10 @@ export function ProfileHub({
         </div>
       )}
 
-      <div className='border-t border-border/70 p-5 sm:p-6'>
+      <div hidden={Boolean(profile?.signed_in && profileView !== 'apps')} className='profile-work-apps border-t border-border/70 p-5 sm:p-6'>
         <AccountAppsCatalog
+          isDeveloper={Boolean(profile?.signed_in && profile.email?.trim().toLowerCase() === 'justinwross32@gmail.com')}
+          developerEmailVerified={Boolean(profile?.email_verified)}
           services={services}
           busyKey={busyKey}
           availableProviders={availableProviders}
@@ -892,6 +926,13 @@ export function ProfileHub({
               });
             }
           }}
+          onClaudeLogin={async () => {
+            await runAction('service:claude-code', async () => {
+              const result = await startClaudeLogin();
+              setNotice(result.message);
+              // Do not mark connected yet: only a successful auth status check can do that.
+            });
+          }}
           onDisconnect={forgetService}
         />
       </div>
@@ -903,6 +944,8 @@ export function ProfileHub({
           {!error && !profileError && notice && <p className='text-sm text-muted-foreground'>{notice}</p>}
         </div>
       )}
+      </div>
+      </div>
     </Modal>
   );
 }
@@ -1032,6 +1075,152 @@ function CatalogRow({
     </div>
   );
 }
+
+function McpConnectionCard({
+  connections,
+  hosts,
+  onToggleDesktop,
+}: {
+  connections: McpConnections;
+  hosts: HostPresence[];
+  onToggleDesktop: (enabled: boolean) => Promise<void>;
+}): JSX.Element {
+  const [account, setAccount] = useState<AccountMcpConnector | null>(null);
+  const [check, setCheck] = useState<McpConnectionCheck | null>(null);
+  const [busy, setBusy] = useState<string | null>('load');
+  const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+
+  async function run(key: string, task: () => Promise<void>): Promise<void> {
+    setBusy(key);
+    setError(null);
+    try {
+      await task();
+    } catch (err) {
+      setError((err as Error).message || 'MCP action failed.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  useEffect(() => {
+    void run('load', async () => setAccount(await getAccountMcpConnector()));
+  }, []);
+
+  async function copy(key: string, value: string | null | undefined): Promise<void> {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopied(key);
+    window.setTimeout(() => setCopied((current) => (current === key ? null : current)), 2000);
+  }
+
+  const selectedId = account?.selected_device_id ?? null;
+  const routedName = hosts.find((host) => host.id === selectedId)?.name;
+  const thisName = hosts.find((host) => host.current_host)?.name ?? 'this computer';
+
+  return (
+    <Card className='space-y-4 p-5'>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h3 className='text-lg font-semibold'>MCP connection</h3>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            One link connects Claude, ChatGPT and other AI tools to Synapse. It stays the same on every computer you sign in to.
+          </p>
+        </div>
+        <McpStatusPill probe={check?.account} testing={busy === 'check'} />
+      </div>
+
+      <div className='space-y-2'>
+        <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>Your Synapse MCP URL</p>
+        {busy === 'load' && !account ? (
+          <div className='flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-3 text-sm text-muted-foreground'>
+            <Loader2 className='h-4 w-4 animate-spin' /> Getting your account link…
+          </div>
+        ) : account?.url ? (
+          <McpUrlField url={account.url} copied={copied === 'account'} onCopy={() => void copy('account', account.url)} primary />
+        ) : (
+          <p className='rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive'>
+            {account?.error ?? 'Your account MCP URL is not available yet.'}
+          </p>
+        )}
+      </div>
+
+      {account?.url && (
+        <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/20 px-3 py-2 text-sm'>
+          <span className='flex items-center gap-2'>
+            <Laptop2 className='h-4 w-4 text-muted-foreground' />
+            {selectedId ? (
+              <span>Pinned to <span className='font-medium'>{selectedId === account.this_device_id ? `${thisName} (this computer)` : routedName ?? 'another computer'}</span>. AI tools can't reach Synapse while it's off.</span>
+            ) : (
+              <span>Works from whichever of your computers is online.</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className='flex flex-wrap items-center gap-3'>
+        <Button variant='outline' disabled={!!busy} onClick={() => void run('check', async () => setCheck(await checkMcpConnections()))}>
+          {busy === 'check' ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : <RefreshCw className='mr-2 h-4 w-4' />}
+          Test connection
+        </Button>
+        {check && <span className='text-xs text-muted-foreground'>Checked {formatLocal(check.checked_at)}</span>}
+      </div>
+      {error && <p className='text-sm text-destructive'>{error}</p>}
+
+      <details className='group rounded-lg border border-border/60 px-3 py-2 text-sm'>
+        <summary className='cursor-pointer select-none font-medium text-muted-foreground group-open:text-foreground'>Advanced</summary>
+        <div className='mt-3 space-y-4'>
+          <label className='flex items-center gap-2'>
+            <input type='checkbox' checked={!!connections.device?.enabled} onChange={(e) => void onToggleDesktop(e.target.checked)} />
+            Allow AI tools to use this computer
+          </label>
+          {account?.url && (
+            <div className='space-y-2 border-t border-border/60 pt-3'>
+              <p className='text-xs text-muted-foreground'>Rotating gives you a new account URL. The old one stops working everywhere.</p>
+              {confirmRotate ? (
+                <div className='flex flex-wrap gap-2'>
+                  <Button size='sm' variant='destructive' disabled={!!busy} onClick={() => void run('rotate', async () => { setAccount(await rotateAccountMcpConnector()); setConfirmRotate(false); })}>
+                    {busy === 'rotate' ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+                    Rotate now
+                  </Button>
+                  <Button size='sm' variant='ghost' onClick={() => setConfirmRotate(false)}>Cancel</Button>
+                </div>
+              ) : (
+                <Button size='sm' variant='outline' onClick={() => setConfirmRotate(true)}>Rotate account URL…</Button>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
+    </Card>
+  );
+}
+
+function McpUrlField({ url, copied, onCopy, primary = false }: { url: string; copied: boolean; onCopy: () => void; primary?: boolean }): JSX.Element {
+  return (
+    <div className={cn('flex items-center gap-2 rounded-lg border px-3 py-2', primary ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-muted/20')}>
+      <Link2 className='h-4 w-4 shrink-0 text-muted-foreground' />
+      <span className='min-w-0 flex-1 truncate font-mono text-xs' title='Copy gives the full URL. The token is hidden here.'>{maskMcpUrl(url)}</span>
+      <Button size='sm' variant={primary ? 'default' : 'outline'} onClick={onCopy}>
+        {copied ? <Check className='mr-1 h-4 w-4' /> : <Copy className='mr-1 h-4 w-4' />}
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
+    </div>
+  );
+}
+
+function McpStatusPill({ probe, testing }: { probe?: McpProbeResult; testing: boolean }): JSX.Element {
+  const [label, tone] = testing
+    ? ['Testing…', 'bg-muted text-muted-foreground']
+    : !probe
+      ? ['Not tested', 'bg-muted text-muted-foreground']
+      : probe.ok
+        ? ['Connected', 'bg-emerald-500/15 text-emerald-500']
+        : ['Not reaching this computer', 'bg-destructive/15 text-destructive'];
+  return <span className={cn('shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium', tone)}>{label}</span>;
+}
+
 
 function MetaRow({ label, value }: { label: string; value: string }): JSX.Element {
   return (

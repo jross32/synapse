@@ -1,4 +1,5 @@
 import { apiFetch } from './api-client';
+import { openClaudeLogin } from './electron-bridge';
 import type {
   CatalogPreferenceItem,
   CatalogPreferenceState,
@@ -117,6 +118,11 @@ export async function connectService(provider: string): Promise<ServiceConnectio
   );
 }
 
+export async function startClaudeLogin(): Promise<{started:boolean;message:string}> {
+  const result = await openClaudeLogin();
+  if (!result.ok) throw new Error(result.error || 'Could not open Claude sign-in.');
+  return {started:true,message:'Finish Claude sign-in in the terminal/browser, then click Verify connection.'};
+}
 export async function verifyService(provider: string): Promise<ServiceConnection> {
   return apiFetch<ServiceConnection>(
     `/profile/service-connections/${encodeURIComponent(provider)}/verify`,
@@ -134,4 +140,35 @@ export async function deleteServiceConnection(connectionId: string): Promise<voi
 export async function getProfileHosts(): Promise<HostPresence[]> {
   const res = await apiFetch<HostsResponse>('/profile/hosts', { method: 'GET' });
   return res.hosts;
+}
+
+export interface McpConnections {
+  primary: {configured:boolean; local_url:string|null; remote_url:string|null; remote_hostname?:string|null};
+  device: {id:string; enabled:boolean; endpoint:string|null; remote_endpoint?:string|null};
+}
+export interface McpProbeResult {ok:boolean; status:number|null; ms:number|null; server_version:string|null; error:string|null}
+export interface McpConnectionCheck {account:McpProbeResult; local:McpProbeResult; remote:McpProbeResult; checked_at:string}
+/** The account-wide MCP URL hosted by Synapse accounts (Railway); same on every signed-in computer. */
+export interface AccountMcpConnector {url:string|null; selected_device_id:string|null; this_device_id:string|null; error:string|null}
+export async function getAccountMcpConnector(): Promise<AccountMcpConnector> {
+  return apiFetch<AccountMcpConnector>('/profile/mcp-connections/account', {method:'GET'});
+}
+export async function routeAccountMcpToDevice(deviceId?:string): Promise<AccountMcpConnector> {
+  return apiFetch<AccountMcpConnector>('/profile/mcp-connections/account/selection', {method:'PUT', body:{device_id: deviceId ?? null}});
+}
+export async function rotateAccountMcpConnector(): Promise<AccountMcpConnector> {
+  return apiFetch<AccountMcpConnector>('/profile/mcp-connections/account/rotate', {method:'POST'});
+}
+export async function getMcpConnections(): Promise<McpConnections> {
+  return apiFetch<McpConnections>('/profile/mcp-connections', {method:'GET'});
+}
+export async function checkMcpConnections(): Promise<McpConnectionCheck> {
+  return apiFetch<McpConnectionCheck>('/profile/mcp-connections/check', {method:'POST'});
+}
+/** Show an MCP URL with its bearer token masked: the token is the only credential. */
+export function maskMcpUrl(url:string): string {
+  return url.replace(/\/([A-Za-z0-9_-]{16,})$/, (_m, token:string) => `/${token.slice(0, 4)}…`);
+}
+export async function setMcpPreference(enabled:boolean): Promise<McpConnections> {
+  return apiFetch<McpConnections>('/profile/mcp-connections', {method:'PATCH',body:{enabled}});
 }

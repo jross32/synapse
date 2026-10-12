@@ -50,7 +50,8 @@ for(const device of sizes){
     console.log(device.name+': '+(entry.errors.length?'errors='+entry.errors.length:'captured')+', overflow='+(entry.overflow?.length||0)+', contrast candidates='+(entry.contrast?.length||0));
   }
 }
-const failures=report.pages.filter(x=>x.errors.length||x.status>=400||x.horizontalOverflow||x.overflow?.length);
+// Contrast candidates and console errors block completion until resolved or explicitly reviewed.
+const failures=report.pages.filter(x=>x.errors.length||x.status>=400||x.horizontalOverflow||x.overflow?.length||x.contrast?.length||x.consoleErrors?.length);
 report.failureCount=failures.length;await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 console.log(JSON.stringify({report:path.join(out,'report.json'),devices:report.pages.length,failures:failures.length},null,2));
 process.exitCode=failures.length?1:0;

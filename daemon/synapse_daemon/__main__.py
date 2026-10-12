@@ -153,7 +153,19 @@ def _build_lifespan(
             schema,
             app.state.bound_port,
         )
-        yield
+        from .outbound_mcp_relay import OutboundMcpRelay
+        relay_agent = OutboundMcpRelay(app.state.profile_manager, app.state.auth.local_token,
+                                      local_port=app.state.bound_port)
+        relay_task = asyncio.create_task(relay_agent.run(), name="synapse-outbound-mcp-relay")
+        try:
+            yield
+        finally:
+            relay_agent.stop()
+            relay_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.gather(relay_task, return_exceptions=True), timeout=2)
+            except asyncio.TimeoutError:
+                pass
         log.info("Synapse daemon shutting down.")
         await app.router._shutdown()  # type: ignore[attr-defined]
         await registry.shutdown_all()
@@ -168,7 +180,11 @@ def _build_lifespan(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _build_argparser().parse_args(argv)
+    effective_argv = list(argv) if argv is not None else sys.argv[1:]
+    if effective_argv[:1] == ["--video-worker"]:
+        from .video_worker import main as video_main
+        return video_main(effective_argv[1:])
+    args = _build_argparser().parse_args(effective_argv)
     _configure_logging(args.log_level)
 
     if install_accept_reset_workaround():

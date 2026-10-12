@@ -363,3 +363,130 @@ def test_local_cli_detection_is_cached(tmp_path: Path, monkeypatch: pytest.Monke
 
     manager.verify_service(provider="claude-code")
     assert calls["n"] > first, "an explicit verify must bypass the cache and re-probe"
+
+
+def test_mcp_connection_check_reports_unconfigured_when_signed_out(tmp_path: Path) -> None:
+    client, _, _ = _harness(tmp_path)
+    with client as c:
+        res = c.post("/api/v1/profile/mcp-connections/check")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["local"] == {"ok": False, "status": None, "ms": None, "server_version": None, "error": "not configured"}
+    assert body["remote"]["error"] == "not configured"
+    assert body["checked_at"]
+
+
+def test_probe_mcp_reads_server_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import json as _json
+
+    from synapse_daemon import routes_profile
+
+    class FakeResponse(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    payload = _json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "synapse", "version": "0.1.209"}}})
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["method"] = req.get_method()
+        seen["body"] = _json.loads(req.data)
+        return FakeResponse(payload.encode())
+
+    monkeypatch.setattr(routes_profile.urllib.request, "urlopen", fake_urlopen)
+    result = routes_profile._probe_mcp("https://synapse.example.com/mcp/secret-token-value-123456")
+    assert result["ok"] is True
+    assert result["server_version"] == "0.1.209"
+    assert seen["method"] == "POST"
+    assert seen["body"]["method"] == "initialize"
+
+
+def test_probe_mcp_never_leaks_token_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.error
+
+    from synapse_daemon import routes_profile
+
+    token = "secret-token-value-123456"
+
+    def fake_urlopen(req, timeout):
+        raise urllib.error.URLError(TimeoutError(f"timed out reaching {req.full_url}"))
+
+    monkeypatch.setattr(routes_profile.urllib.request, "urlopen", fake_urlopen)
+    result = routes_profile._probe_mcp(f"https://synapse.example.com/mcp/{token}")
+    assert result["ok"] is False
+    assert result["error"] == "timed out"
+    assert token not in repr(result)
+
+
+class _StubAccounts:
+    def __init__(self, fail: bool = False) -> None:
+        self.calls: list[tuple[str, object]] = []
+        self.fail = fail
+
+    def create_mcp_connector(self, *, access_token: str) -> dict:
+        self.calls.append(("read", access_token))
+        if self.fail:
+            from synapse_daemon.errors import SynapseError
+
+            raise SynapseError(code="profile.remote_unreachable", message="Could not reach https://x/mcp/secret", status=422)
+        return {"url": "https://accounts.example/mcp/" + "A" * 43, "selected_device_id": "host-1"}
+
+    def rotate_mcp_connector(self, *, access_token: str) -> dict:
+        self.calls.append(("rotate", access_token))
+        return {"url": "https://accounts.example/mcp/" + "B" * 43, "selected_device_id": "host-1"}
+
+    def select_mcp_device(self, *, access_token: str, device_id: str) -> dict:
+        self.calls.append(("select", device_id))
+        return {"selected_device_id": device_id}
+
+
+class _StubManager:
+    def __init__(self, accounts: _StubAccounts, signed_in: bool = True) -> None:
+        self._accounts = accounts
+        self._signed_in = signed_in
+
+    def summary(self, refresh_remote: bool = False):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(signed_in=self._signed_in)
+
+    def _state_row(self) -> dict:
+        return {"current_host_id": "host-1"}
+
+    def _ensure_access_token(self) -> str:
+        return "access"
+
+
+def test_account_connector_reads_selects_and_rotates() -> None:
+    from synapse_daemon.routes_profile import _account_connector
+
+    accounts = _StubAccounts()
+    manager = _StubManager(accounts)
+    read = _account_connector(manager)
+    assert read["url"].endswith("A" * 43)
+    assert read["selected_device_id"] == read["this_device_id"] == "host-1"
+    assert read["error"] is None
+
+    _account_connector(manager, "select")
+    assert ("select", "host-1") in accounts.calls
+
+    rotated = _account_connector(manager, "rotate")
+    assert rotated["url"].endswith("B" * 43)
+
+
+def test_account_connector_requires_sign_in_and_hides_errors() -> None:
+    from synapse_daemon.routes_profile import _account_connector
+
+    signed_out = _account_connector(_StubManager(_StubAccounts(), signed_in=False))
+    assert signed_out["url"] is None and "Sign in" in signed_out["error"]
+
+    failed = _account_connector(_StubManager(_StubAccounts(fail=True)))
+    assert failed["url"] is None
+    assert failed["error"] == "Couldn't reach Synapse accounts (unreachable)."
+    assert "secret" not in repr(failed)

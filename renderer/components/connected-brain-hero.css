@@ -65,3 +65,6 @@
   .synapse-brain-hero__actions button { transition: none; }
   .synapse-brain-hero__actions button:hover { transform: none; }
 }
+
+.synapse-brain-hero__art { padding: 0 8px; min-height: 325px; }
+.synapse-brain-hero__art > .synapse-brain-3d { width: 100%; }

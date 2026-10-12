@@ -880,7 +880,10 @@ def create_work_item(
         ),
     )
     touch_squad_activity(conn, squad_id, when=now)
-    return get_work_item(conn, work_item_id)
+    from .universal_visual_gate import ensure_work_item_gate
+    item = get_work_item(conn, work_item_id)
+    ensure_work_item_gate(conn, item)
+    return item
 
 
 def set_work_item_session(
@@ -943,6 +946,9 @@ def handoff_work_item(
     payload: AgentWorkItemHandoffRequest,
 ) -> AgentWorkItem:
     current = get_work_item(conn, work_item_id)
+    if payload.status == AgentWorkItemStatus.COMPLETED:
+        from .universal_visual_gate import assert_work_item_can_complete
+        assert_work_item_can_complete(conn, current)
     now = utc_now()
     completed_at = to_iso(now) if payload.status == AgentWorkItemStatus.COMPLETED else None
     conn.execute(
@@ -974,6 +980,9 @@ def update_work_item_status(
     status: AgentWorkItemStatus,
 ) -> AgentWorkItem:
     current = get_work_item(conn, work_item_id)
+    if status == AgentWorkItemStatus.COMPLETED:
+        from .universal_visual_gate import assert_work_item_can_complete
+        assert_work_item_can_complete(conn, current)
     now = utc_now()
     completed_at = to_iso(now) if status == AgentWorkItemStatus.COMPLETED else None
     conn.execute(

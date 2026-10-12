@@ -252,8 +252,15 @@ def calculate_status(config: dict[str, Any], observation: dict[str, Any] | None,
         "prices_url": KNOWN_PRICES_URL,
     }
 
-def get_status(data_dir: Path, *, refresh: bool = False) -> dict[str, Any]:
-    token = read_railway_token(data_dir)
+def get_status(data_dir: Path, *, refresh: bool = False, owner_id: str | None = None) -> dict[str, Any]:
+    token = ""
+    if owner_id:
+        from .railway_oauth import token as oauth_token
+        try:
+            token = oauth_token(data_dir, owner_id)
+        except RuntimeError:
+            pass
+    token = token or read_railway_token(data_dir)
     with _guard:
         config = load_config(data_dir)
         observation = _json_file(_paths(data_dir)[1], None)

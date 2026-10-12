@@ -622,12 +622,12 @@ def run_job(*, data_dir: Path, project_id: str, job_id: str) -> None:
 http_client = httpx.Client(follow_redirects=True)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Synapse Video Studio detached renderer")
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--job-id", required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         run_job(data_dir=Path(args.data_dir), project_id=args.project_id, job_id=args.job_id)
         return 0

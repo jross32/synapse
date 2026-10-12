@@ -15,8 +15,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
-$logPath = Join-Path $root (Join-Path $DataDir 'daemon-runtime.log')
-$watchdogLogPath = Join-Path $root (Join-Path $DataDir 'daemon-watchdog.log')
+$dataPath = if ([System.IO.Path]::IsPathRooted($DataDir)) { $DataDir } else { Join-Path $root $DataDir }
+$logPath = Join-Path $dataPath 'daemon-runtime.log'
+$watchdogLogPath = Join-Path $dataPath 'daemon-watchdog.log'
 $recoveryScript = Join-Path $PSScriptRoot 'recover_daemon.py'
 
 # The daemon (`synapse_daemon`) is an editable install that exists only in the

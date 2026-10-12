@@ -42,13 +42,15 @@ import { cn } from '@shared/utils';
 import { reportRendererReady } from '@shared/electron-bridge';
 import { CaptureButton } from './components/CaptureButton';
 import { NotificationCenter } from './components/NotificationCenter';
+import { DesktopUpdateNotice } from './components/DesktopUpdateNotice';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
+import { AccountWelcome } from './components/AccountWelcome';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
-import { HomePage } from './pages/Home';
+import { SynapseDashboard } from './pages/SynapseDashboard';
 
 const StaffPage = lazy(() =>
   import('./pages/Staff').then((module) => ({ default: module.StaffPage }))
@@ -161,15 +163,20 @@ export default function App(): JSX.Element {
   return (
     <DaemonProvider>
       <PortablePreferencesBridge />
-      <Shell
-        mobileRoute={mobileRoute}
-        onForgetDevice={() => {
-          forgetDeviceToken();
-          setAuthMode('pair-required');
-        }}
-      />
+      {mobileRoute ? (
+        <Shell mobileRoute={mobileRoute} onForgetDevice={() => {
+          forgetDeviceToken(); setAuthMode('pair-required');
+        }} />
+      ) : <DesktopAccountGate />}
     </DaemonProvider>
   );
+}
+
+function DesktopAccountGate(): JSX.Element {
+  const { profile, profileError } = useDaemon();
+  if (!profile && !profileError) return <BootSplash />;
+  if (!profile?.signed_in) return <AccountWelcome />;
+  return <Shell mobileRoute={false} onForgetDevice={() => undefined} />;
 }
 
 function PortablePreferencesBridge(): null {
@@ -252,7 +259,11 @@ interface ShellProps {
 
 function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const { recentEvents } = useDaemon();
-  const [route, setRoute] = useState<AppRoute>(DEFAULT_ROUTE);
+  const [route, setRoute] = useState<AppRoute>(() =>
+    new URLSearchParams(window.location.search).get('staff_hq') === '1'
+      ? { kind: 'core', page: 'staff' }
+      : DEFAULT_ROUTE
+  );
   const [appsSection, setAppsSection] = useState<AppsSection>('projects');
   const [toolsSection, setToolsSection] = useState<ToolsSection>('tools');
   const [toolsTab, setToolsTab] = useState<ToolsTab>('installed');
@@ -264,6 +275,11 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const [toolsFocusId, setToolsFocusId] = useState<string | undefined>(undefined);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileInitialView, setProfileInitialView] = useState<'devices' | 'account' | 'apps'>('devices');
+  function openProfile(view: 'devices' | 'account' | 'apps' = 'devices'): void {
+    setProfileInitialView(view);
+    setProfileOpen(true);
+  }
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarSettingsOpen, setSidebarSettingsOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
@@ -461,6 +477,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       )}
 
       <div className='flex min-w-0 flex-1 flex-col'>
+        {!mobileRoute && <DesktopUpdateNotice />}
         {mobileRoute && (
           <header className='border-b border-border bg-card/95 backdrop-blur'>
             <div className='mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 pb-3 pt-4'>
@@ -497,7 +514,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
                 </button>
                 <button
                   type='button'
-                  onClick={() => setProfileOpen(true)}
+                  onClick={() => openProfile('apps')}
                   className='rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground'
                 >
                   Profile
@@ -526,7 +543,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
           >
             <Suspense fallback={<RouteFallback />}>
               {route.kind === 'core' && route.page === 'home' && (
-                <HomePage onNavigate={navigate} />
+                <SynapseDashboard onNavigate={navigate} />
               )}
             {route.kind === 'core' && route.page === 'apps' && (
               <AppsPage initialSection={appsSection} />
@@ -559,7 +576,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               <SettingsPage
                 mobileRoute={mobileRoute}
                 onForgetDevice={onForgetDevice}
-                onOpenProfile={() => setProfileOpen(true)}
+                onOpenProfile={() => openProfile('apps')}
                 onOpenSidebarSettings={() => setSidebarSettingsOpen(true)}
                 onOpenWhatsNew={() => navigate({ page: 'whatsnew' })}
               />
@@ -645,10 +662,11 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onNavigate={navigate}
-        onOpenProfile={() => setProfileOpen(true)}
+        onOpenProfile={() => openProfile('apps')}
       />
       <ProfileHub
         open={profileOpen}
+        initialView={profileInitialView}
         onClose={() => setProfileOpen(false)}
         mobileRoute={mobileRoute}
       />

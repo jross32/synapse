@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from . import quality_os
+from . import quality_os, visual_audit_ingest
 from .storage import Storage
 
 
@@ -101,6 +101,11 @@ def build_quality_os_router(storage: Storage) -> APIRouter:
             contract = quality_os.promote_contract(conn, payload)
         return contract.model_dump(mode="json")
 
+    @router.post("/visual-audits/import", response_model=None, status_code=201)
+    async def import_visual_audit(payload: visual_audit_ingest.VisualAuditImport) -> dict[str, Any]:
+        with storage.transaction() as conn:
+            evidence = visual_audit_ingest.ingest_visual_report(conn, payload)
+        return evidence.model_dump(mode="json")
     @router.get("/ui-surface-map", response_model=None)
     async def get_ui_surface_map() -> dict[str, Any]:
         return {

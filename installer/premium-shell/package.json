@@ -1,0 +1,42 @@
+{
+    "name":  "synapse-premium-setup",
+    "version":  "0.2.219",
+    "private":  true,
+    "main":  "host-chatgpt.cjs",
+    "description":  "Synapse premium setup frontend",
+    "scripts":  {
+                    "preview":  "node serve.cjs",
+                    "test":  "node scripts/capture-screenshots.js"
+                },
+    "build":  {
+                  "appId":  "com.whatif.synapse.premiumsetup",
+                  "productName":  "Synapse Premium Setup",
+                  "directories":  {
+                                      "output":  "../../release-premium-shell"
+                                  },
+                  "files":  [
+                                "index.html",
+                                "installer.css",
+                                "installer.js",
+                                "native-adapter-chatgpt.js",
+                                "host-chatgpt.cjs",
+                                "preload-chatgpt.cjs",
+                                "assets/**/*",
+                                "payload-manifest.json",
+                                "premium-polish.css"
+                            ],
+                  "win":  {
+                              "target":  "portable",
+                              "icon":  "../../electron/icons/synapse.ico",
+                              "signAndEditExecutable":  false
+                          },
+                  "asar":  true,
+                  "electronVersion":  "31.7.7",
+                  "extraResources":  [
+                                         {
+                                             "from":  "payload/Synapse Setup 0.2.219.exe",
+                                             "to":  "synapse-payload/Synapse Setup 0.2.219.exe"
+                                         }
+                                     ]
+              }
+}

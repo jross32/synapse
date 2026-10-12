@@ -11,6 +11,7 @@
 
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron';
 import { ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { registerDesktopUpdater } from './desktop-updater';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -30,6 +31,7 @@ const daemonUrl = `http://${daemonHost}:${daemonPort}`;
 const FULL_DEV_RESTART_EXIT_CODE = 75;
 
 const ALLOW_ADMIN = process.argv.includes('--allow-admin');
+const START_BACKGROUND = process.argv.includes('--background');
 
 // Renderer inspection (Contract: E2E verification, AGENTS.md Rule #6).
 // When --inspect-renderer is passed (or SYNAPSE_INSPECT=1), Electron exposes
@@ -61,6 +63,7 @@ let isQuitting = false;
 // True only when *this* Electron spawned the daemon. If we attached to a
 // daemon that was already running, we must not kill it on quit.
 let spawnedDaemon = false;
+let daemonVersionMismatch: string | null = null;
 let trayRefreshTimer: ReturnType<typeof setInterval> | null = null;
 // Projects last fetched for the tray submenu.
 let trayProjects: Array<{ id: string; name: string; status: string }> = [];
@@ -198,8 +201,10 @@ function showRestartWindow(progress: RestartProgress): void {
   restartWindow.webContents.on('did-finish-load', () => {
     restartWindowReady = true;
     pushRestartProgressToWindow();
-    restartWindow?.show();
-    restartWindow?.focus();
+    if (!START_BACKGROUND || progress.kind !== 'startup') {
+      restartWindow?.show();
+      restartWindow?.focus();
+    }
   });
   restartWindow.on('closed', () => {
     restartWindow = null;
@@ -444,7 +449,7 @@ function formatDaemonStartupError(prefix: string): Error {
 async function waitForDaemon(timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await probeHealth()) return;
+    if (await probeHealth(true)) return;
     if (spawnedDaemon && daemonLastExit !== null) {
       throw formatDaemonStartupError('Daemon exited before /api/v1/health became ready.');
     }
@@ -455,14 +460,35 @@ async function waitForDaemon(timeoutMs = 30_000): Promise<void> {
   );
 }
 
-function probeHealth(): Promise<boolean> {
-  return new Promise((resolve) => {
+function probeHealth(requireCurrentVersion = false): Promise<boolean> {
+  return new Promise((resolve, reject) => {
     const req = http.get(
       `${daemonUrl}/api/v1/health`,
       { timeout: 1000 },
       (res) => {
-        res.resume();
-        resolve(res.statusCode === 200);
+        if (!requireCurrentVersion || isDev || res.statusCode !== 200) {
+          res.resume();
+          resolve(res.statusCode === 200);
+          return;
+        }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => {
+          body += chunk;
+          if (body.length > 65536) req.destroy(new Error('Health response exceeded its size limit.'));
+        });
+        res.on('error', () => resolve(false));
+        res.on('end', () => {
+          try {
+            const health = JSON.parse(body) as { version?: string };
+            if (health.version !== app.getVersion()) {
+              daemonVersionMismatch = `Running Synapse daemon version ${health.version ?? 'unknown'} differs from installed version ${app.getVersion()}. Quit the existing Synapse instance and launch the updated app again.`;
+              reject(new Error(daemonVersionMismatch));
+              return;
+            }
+            resolve(true);
+          } catch { resolve(false); }
+        });
       }
     );
     req.on('error', () => resolve(false));
@@ -777,7 +803,12 @@ async function applyBootstrapOptionalTools(): Promise<void> {
   }
 }
 
-function createWindow(): void {
+function createWindow(showOnReady = !START_BACKGROUND): void {
+  if (daemonVersionMismatch) {
+    restartWindow?.show();
+    restartWindow?.focus();
+    return;
+  }
   let interfaceReady = false;
   let interfaceDocumentLoaded = false;
   let interfaceReadyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -798,8 +829,8 @@ function createWindow(): void {
     if (interfaceReady) return;
     interfaceReady = true;
     clearInterfaceReadyTimer();
-    mainWindow?.show();
-    setRestartStage('interface', 'success', 'The Synapse interface is loaded and visible.');
+    if (showOnReady) mainWindow?.show();
+    setRestartStage('interface', 'success', 'The Synapse interface is loaded and ready.');
     finishRestartWindow();
   };
 
@@ -856,9 +887,53 @@ function createWindow(): void {
     clearInterfaceReadyTimer();
   });
 
+  // Staff HQ is a genuine companion window sharing this Synapse instance,
+  // login and /staff API. Only the exact same renderer document is allowed.
+  // Other links keep the existing external-browser behavior.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const currentUrl = mainWindow?.webContents.getURL() ?? '';
+    try {
+      const target = new URL(url);
+      const current = new URL(currentUrl);
+      if (
+        target.protocol === current.protocol &&
+        target.host === current.host &&
+        target.pathname === current.pathname &&
+        target.searchParams.get('staff_hq') === '1'
+      ) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 1360,
+            height: 900,
+            minWidth: 720,
+            minHeight: 520,
+            backgroundColor: '#0b1020',
+            autoHideMenuBar: true,
+            title: 'Synapse Staff HQ',
+            webPreferences: {
+              preload: path.join(__dirname, 'preload.js'),
+              contextIsolation: true,
+              nodeIntegration: false,
+              sandbox: false,
+              webviewTag: false,
+            },
+          },
+        };
+      }
+    } catch {
+      // Malformed external URL: block it instead of attempting a popup.
+      return { action: 'deny' };
+    }
     void shell.openExternal(url);
     return { action: 'deny' };
+  });
+  mainWindow.webContents.on('did-create-window', (child, details) => {
+    const allowedUrl = details.url;
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    child.webContents.on('will-navigate', (event, nextUrl) => {
+      if (nextUrl !== allowedUrl) event.preventDefault();
+    });
   });
 
   mainWindow.webContents.on(
@@ -1132,12 +1207,12 @@ async function refreshTrayMenu(): Promise<void> {
 
 // Toggle the Windows login item (Milestone I — auto-start on login).
 function setAutostart(enabled: boolean): void {
-  app.setLoginItemSettings({ openAtLogin: enabled, args: [] });
+  app.setLoginItemSettings({ openAtLogin: enabled, args: enabled ? ['--background'] : [] });
 }
 
 function showWindow(): void {
   if (!mainWindow) {
-    createWindow();
+    createWindow(true);
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -1249,6 +1324,32 @@ ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
 });
 
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
+// Only the trusted local Electron renderer may launch this fixed provider login.
+// Never expose a shell-execution auth endpoint through the remote-accessible daemon.
+ipcMain.handle('synapse:claude-auth-login', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    return { ok: false, error: 'Claude sign-in requires the local Synapse desktop.' };
+  }
+  if (process.platform !== 'win32') {
+    return { ok: false, error: 'Interactive Claude sign-in is supported on Windows desktops.' };
+  }
+  const claudeCmd = path.join(process.env.APPDATA || '', 'npm', 'claude.cmd');
+  const installed = fs.existsSync(claudeCmd);
+  if (!installed && spawnSync('where.exe', ['claude'], {windowsHide:true, timeout:2000}).status !== 0) {
+    return {ok:false,error:'Claude Code is not installed on this desktop. Install Claude Code first.'};
+  }
+  const binary = installed ? claudeCmd : 'claude';
+  // Opens a visible interactive console; Claude Code initiates the official
+  // Anthropic browser authorization. Synapse never touches its credentials.
+  return new Promise<{ok:boolean;error?:string}>((resolve) => {
+    const child = spawn('cmd.exe', ['/k', `call "${binary}" auth login`], {
+      detached:true, stdio:'ignore', windowsHide:false, cwd:app.getPath('home'),
+    });
+    child.once('error', error => resolve({ok:false,error:error.message}));
+    child.once('spawn', () => {child.unref();resolve({ok:true});});
+  });
+});
+registerDesktopUpdater();
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('synapse:restart', () => restartApp('desktop'));
 ipcMain.handle('synapse:exit', () => {
@@ -1399,8 +1500,8 @@ app.whenReady().then(async () => {
       setRestartStage(
         'daemon',
         'error',
-        'The Synapse daemon did not become healthy in time.',
-        'SYN-BOOT-102',
+        daemonVersionMismatch ? 'Close the previous Synapse instance to finish updating.' : 'The Synapse daemon did not become healthy in time.',
+        daemonVersionMismatch ? 'SYN-BOOT-103' : 'SYN-BOOT-102',
         err instanceof Error ? err.message : String(err)
       );
     }

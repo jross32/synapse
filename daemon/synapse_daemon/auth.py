@@ -498,6 +498,7 @@ def _enforce_worker_scope(request: Request, subject: TokenSubject) -> None:
 
     if authority == "workspace":
         sensitive_prefixes = (
+            "release-pipeline",
             "system/",
             "auth/",
             "pair",

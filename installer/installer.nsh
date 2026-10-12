@@ -78,6 +78,8 @@ FunctionEnd
 !macroend
 
 !macro customInstall
+  ; Preserve established profile choices on upgrade; bootstrap files belong to first install.
+  IfFileExists "$APPDATA\Synapse\data\*.*" SynapseBootstrapDone 0
   CreateDirectory "$APPDATA\Synapse"
   FileOpen $0 "$APPDATA\Synapse\bootstrap-ai-bundles.json" w
   FileWrite $0 "{$\r$\n  $\"bundle_ids$\": ["
@@ -129,4 +131,5 @@ FunctionEnd
     FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [],$\r$\n  $\"uninstall_tool_ids$\": [$\"synapse-image-studio$\"]$\r$\n}$\r$\n"
   ${EndIf}
   FileClose $1
+  SynapseBootstrapDone:
 !macroend

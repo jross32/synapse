@@ -398,10 +398,9 @@ def start_video_render(
     path = _job_path(root, job_id)
     _write_json_atomic(path, job)
 
-    command = [
-        sys.executable,
-        "-m",
-        "synapse_daemon.video_worker",
+    command = [sys.executable]
+    command += ["--video-worker"] if getattr(sys, "frozen", False) else ["-m", "synapse_daemon.video_worker"]
+    command += [
         "--data-dir",
         str(storage.data_dir),
         "--project-id",

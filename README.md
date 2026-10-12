@@ -1,3 +1,7 @@
+# Synapse 0.2.219 unified premium release candidate
+
+This isolated candidate integrates current app and daemon changes with premium setup and post-launch account onboarding. It is not yet the published stable download. See docs/PREMIUM_RELEASE_READINESS.md for exact verification and remaining release gates.
+
 # Synapse — by The WhatIf Company
 
 **Synapse is a command center for building apps with AI — and it's built for AI to drive, not just for a human to click around in.**

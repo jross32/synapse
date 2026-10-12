@@ -138,10 +138,16 @@ def test_sync_document_round_trips_per_account(tmp_path: Path) -> None:
             },
         )
         token = signup.json()["access_token"]
+        initial = client.get(
+            "/v1/sync/document",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        revision = initial.json()["revision"]
         put_doc = client.put(
             "/v1/sync/document",
             headers={"Authorization": f"Bearer {token}"},
             json={
+                "expected_revision": revision,
                 "document": {
                     "preferences": {"theme": "hacker"},
                     "catalog_preferences": [{"item_key": "tool:cloudtap"}],
@@ -155,6 +161,23 @@ def test_sync_document_round_trips_per_account(tmp_path: Path) -> None:
     assert put_doc.status_code == 200, put_doc.text
     assert get_doc.status_code == 200, get_doc.text
     assert get_doc.json()["document"]["preferences"]["theme"] == "hacker"
+
+    assert get_doc.json()["revision"] != revision
+    with _client(tmp_path) as client:
+        # A second device with the stale revision cannot erase newer data.
+        stale = client.put(
+            "/v1/sync/document",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"expected_revision": revision, "document": {"preferences": {}}},
+        )
+        legacy = client.put(
+            "/v1/sync/document",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"document": {}},
+        )
+    assert stale.status_code == 409
+    assert legacy.status_code == 200
+    assert legacy.json()["document"]["preferences"]["theme"] == "hacker"
 
 
 def test_social_signin_rejects_unsafe_implicit_linking(tmp_path: Path) -> None:

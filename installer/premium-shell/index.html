@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synapse Setup</title>
+  <link rel="stylesheet" href="installer.css">
+  <link rel="stylesheet" href="premium-polish.css">
+</head>
+<body>
+
+
+<div id="chrome-bar">
+  <div class="chrome-icon-wrap">
+    <svg width="14" height="14" viewBox="0 0 14 14"><defs><radialGradient id="cg"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#22d3ee"/></radialGradient></defs><circle cx="7" cy="7" r="7" fill="url(#cg)"/></svg>
+  </div>
+  <span class="chrome-title">Synapse Setup</span>
+  <div class="chrome-controls">
+    <button class="wbtn wmin" title="Minimize" aria-label="Minimize installer">&#8722;</button>
+    <button class="wbtn wclose" title="Close" aria-label="Close installer">&#215;</button>
+  </div>
+</div>
+
+
+<div id="installer-root">
+
+  
+  <aside id="sidebar">
+    <div id="sidebar-brand">
+      <div id="brain-wrap">
+        
+        <div id="brain-pulse-ring"></div>
+        <div id="brain-pulse-ring2"></div>
+        <svg id="brain-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="128" height="128" aria-hidden="true">
+          <defs>
+            <filter id="gs" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="gh" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <linearGradient id="bst" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22d3ee"/><stop offset="50%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
+            <radialGradient id="aura" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7c3aed" stop-opacity="0.25"/><stop offset="55%" stop-color="#06b6d4" stop-opacity="0.08"/><stop offset="100%" stop-color="#0a0f1e" stop-opacity="0"/></radialGradient>
+            <linearGradient id="bfill" x1="20%" y1="0%" x2="80%" y2="100%"><stop offset="0%" stop-color="#1e1b4b" stop-opacity="0.7"/><stop offset="100%" stop-color="#0d1229" stop-opacity="0.7"/></linearGradient>
+          </defs>
+          <ellipse cx="100" cy="100" rx="88" ry="88" fill="url(#aura)"/>
+          <path d="M100,45 C84,41 68,46 60,56 C51,67 49,81 52,92 C49,99 45,108 48,117 C51,126 60,133 69,136 C78,139 87,136 93,131 C96,129 98,131 100,133" fill="url(#bfill)" stroke="url(#bst)" stroke-width="2" filter="url(#gs)"/>
+          <path d="M62,62 C68,58 75,60 77,66" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M51,84 C57,80 65,82 67,88" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M50,104 C57,100 65,102 67,108" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M59,122 C66,118 73,119 75,124" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M100,45 C116,41 132,46 140,56 C149,67 151,81 148,92 C151,99 155,108 152,117 C149,126 140,133 131,136 C122,139 113,136 107,131 C104,129 102,131 100,133" fill="url(#bfill)" stroke="url(#bst)" stroke-width="2" filter="url(#gs)"/>
+          <path d="M138,62 C132,58 125,60 123,66" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M149,84 C143,80 135,82 133,88" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M150,104 C143,100 135,102 133,108" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <path d="M141,122 C134,118 127,119 125,124" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#gh)"/>
+          <line x1="100" y1="47" x2="100" y2="133" stroke="#22d3ee" stroke-width="1" stroke-opacity="0.3" stroke-dasharray="4,4"/>
+          <circle cx="100" cy="68" r="5.5" fill="#22d3ee" filter="url(#gh)"/>
+          <circle cx="77" cy="80" r="3.5" fill="#8b5cf6" filter="url(#gh)"/>
+          <circle cx="123" cy="80" r="3.5" fill="#8b5cf6" filter="url(#gh)"/>
+          <circle cx="68" cy="100" r="3" fill="#22d3ee" filter="url(#gh)"/>
+          <circle cx="132" cy="100" r="3" fill="#22d3ee" filter="url(#gh)"/>
+          <circle cx="80" cy="118" r="3" fill="#67e8f9" filter="url(#gh)"/>
+          <circle cx="120" cy="118" r="3" fill="#67e8f9" filter="url(#gh)"/>
+          <circle cx="100" cy="108" r="4.5" fill="#a78bfa" filter="url(#gh)"/>
+          <g opacity="0.65" filter="url(#gh)">
+            <line x1="100" y1="68" x2="77" y2="80" stroke="#22d3ee" stroke-width="1.2"/>
+            <line x1="100" y1="68" x2="123" y2="80" stroke="#22d3ee" stroke-width="1.2"/>
+            <line x1="77" y1="80" x2="68" y2="100" stroke="#8b5cf6" stroke-width="1.2"/>
+            <line x1="123" y1="80" x2="132" y2="100" stroke="#8b5cf6" stroke-width="1.2"/>
+            <line x1="68" y1="100" x2="80" y2="118" stroke="#22d3ee" stroke-width="1.2"/>
+            <line x1="132" y1="100" x2="120" y2="118" stroke="#22d3ee" stroke-width="1.2"/>
+            <line x1="80" y1="118" x2="100" y2="108" stroke="#67e8f9" stroke-width="1.2"/>
+            <line x1="120" y1="118" x2="100" y2="108" stroke="#67e8f9" stroke-width="1.2"/>
+          </g>
+          <g opacity="0.45">
+            <line x1="100" y1="45" x2="100" y2="26" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3,5"/>
+            <line x1="60" y1="56" x2="44" y2="40" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3,5"/>
+            <line x1="140" y1="56" x2="156" y2="40" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3,5"/>
+            <line x1="49" y1="92" x2="28" y2="92" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3,5"/>
+            <line x1="151" y1="92" x2="172" y2="92" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3,5"/>
+          </g>
+          <circle cx="100" cy="24" r="2.5" fill="#22d3ee" opacity="0.75" filter="url(#gh)"/>
+          <circle cx="42" cy="38" r="2.5" fill="#8b5cf6" opacity="0.75" filter="url(#gh)"/>
+          <circle cx="158" cy="38" r="2.5" fill="#8b5cf6" opacity="0.75" filter="url(#gh)"/>
+          <circle cx="26" cy="92" r="2.5" fill="#22d3ee" opacity="0.75" filter="url(#gh)"/>
+          <circle cx="174" cy="92" r="2.5" fill="#22d3ee" opacity="0.75" filter="url(#gh)"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">Synapse</span>
+        <span class="brand-version" data-release-version>Version unavailable</span>
+      </div>
+    </div>
+
+    <nav id="step-nav" aria-label="Setup steps">
+      <div class="step" data-step="0"><span class="step-dot"></span><span class="step-label">Welcome</span></div>
+      <div class="step" data-step="1"><span class="step-dot"></span><span class="step-label">Installation</span></div>
+      <div class="step" data-step="2"><span class="step-dot"></span><span class="step-label">System Check</span></div>
+      <div class="step" data-step="3"><span class="step-dot"></span><span class="step-label">Installing</span></div>
+      <div class="step" data-step="4"><span class="step-dot"></span><span class="step-label">Your Account</span></div>
+      <div class="step" data-step="5"><span class="step-dot"></span><span class="step-label">Complete</span></div>
+      <div class="step" data-step="6"><span class="step-dot"></span><span class="step-label">What's New</span></div>
+      <div class="step" data-step="7"><span class="step-dot"></span><span class="step-label">Launch</span></div>
+    </nav>
+
+    <div id="sidebar-foot">&copy; 2026 The WhatIf Company</div>
+  </aside>
+
+
+  <main id="content-wrap">
+    <section class="screen active" id="screen-0" data-screen="0" aria-labelledby="title-0">
+      <div class="sc-inner">
+        <div class="welcome-badge">Windows 10 / 11 &middot; 64-bit</div>
+        <h1 class="sc-title welcome-h1" id="title-0" tabindex="-1">Welcome to<br><span class="gtext">Synapse</span></h1>
+        <p class="sc-sub">Your AI-native developer command center. One hub for your tools, context, and projects.</p>
+        <div class="feature-chips">
+          <span class="chip"><span class="chip-icon" aria-hidden="true">&#9889;</span>AI-powered workflows</span>
+          <span class="chip"><span class="chip-icon" aria-hidden="true">&#128279;</span>Tool integrations</span>
+          <span class="chip"><span class="chip-icon" aria-hidden="true">&#129504;</span>Your workspace</span>
+        </div>
+        <p class="runtime-notice" id="runtime-notice" role="status">Connecting to the installer...</p>
+        <div class="welcome-cta">
+          <button class="btn-cta" id="btn-welcome-start">Begin Setup &rarr;</button>
+          <span class="cta-hint">Everything needed to install is included.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-1" data-screen="1" aria-labelledby="title-1" inert>
+      <div class="sc-inner">
+        <h2 class="sc-title" id="title-1" tabindex="-1">Installation</h2>
+        <p class="sc-sub">Install Synapse for your Windows account using the setup package bundled with this download.</p>
+        <div class="type-grid">
+          <div class="type-card selected">
+            <div class="card-ico" aria-hidden="true">&#128640;</div>
+            <div class="card-name">Your account</div>
+            <div class="card-desc">The bundled setup installs Synapse in your local Programs folder.</div>
+          </div>
+          <div class="type-card">
+            <div class="card-ico" aria-hidden="true">&#128230;</div>
+            <div class="card-name">One download</div>
+            <div class="card-desc">The installer verifies its bundled package before running it silently.</div>
+          </div>
+        </div>
+        <div class="path-section">
+          <label class="field-label" for="install-path">Install location</label>
+          <input type="text" id="install-path" class="path-input" value="Available in the Windows installer" readonly>
+          <span class="path-hint">If Synapse is already installed here, setup updates this installation.</span>
+        </div>
+        <p class="sc-sub">Close Synapse before continuing. System Check validates the package and available space before you choose Install.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-2" data-screen="2" aria-labelledby="title-2" inert>
+      <div class="sc-inner">
+        <h2 class="sc-title" id="title-2" tabindex="-1">System Check</h2>
+        <p class="sc-sub">Checking Windows, disk space, and the bundled setup package.</p>
+        <ul class="checks-list" id="checks-list" aria-live="polite"></ul>
+        <div class="checks-summary hidden" id="checks-summary" role="status">
+          <span class="sum-icon" id="sum-icon" aria-hidden="true"></span>
+          <span class="sum-text" id="sum-text"></span>
+        </div>
+        <button class="btn-browse hidden" id="btn-retry-checks">Run checks again</button>
+        <p class="path-hint">Install runs the verified bundled setup silently. Account sign-in happens in Synapse after installation.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-3" data-screen="3" aria-labelledby="title-3" inert>
+      <div class="sc-inner">
+        <h2 class="sc-title" id="title-3" tabindex="-1">Installing Synapse</h2>
+        <p class="sc-sub" id="prog-step-label" role="status">Waiting to begin installation.</p>
+        <div class="progress-wrap">
+          <div class="prog-track" id="prog-track" role="progressbar" aria-label="Installation activity">
+            <div class="prog-fill" id="prog-fill"><div class="prog-shimmer"></div></div>
+          </div>
+          <div class="prog-meta">
+            <span class="prog-pct" id="prog-pct">Waiting</span>
+            <span class="prog-eta" id="prog-eta">Setup does not report a percentage.</span>
+          </div>
+        </div>
+        <ul class="install-log" id="install-log" aria-live="polite" aria-label="Installation activity"></ul>
+        <div class="form-error hidden" id="install-error" role="alert"></div>
+        <p class="path-hint">Keep this window open while setup runs. Installation is complete only after the installed application is verified.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-4" data-screen="4" aria-labelledby="title-4" inert>
+      <div class="sc-inner">
+        <div class="welcome-badge">Your account &middot; In the app</div>
+        <h2 class="sc-title" id="title-4" tabindex="-1">Make it yours</h2>
+        <p class="sc-sub">Use Synapse's existing account sign-in when you launch the installed app at the end of setup.</p>
+        <div class="account-card">
+          <span class="account-icon" aria-hidden="true">&#128100;</span>
+          <div>
+            <h3>Your existing Synapse account</h3>
+            <p>Sign in or create an account inside Synapse using its account screen. This installer does not collect credentials or sign you in.</p>
+          </div>
+        </div>
+        <p class="sc-sub">Your account and workspace settings remain part of the app's onboarding.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-5" data-screen="5" aria-labelledby="title-5" inert>
+      <div class="sc-inner centered">
+        <div class="success-circle" aria-hidden="true">
+          <div class="success-ring-outer"></div>
+          <div class="success-check">&#10003;</div>
+        </div>
+        <h2 class="sc-title" id="title-5" tabindex="-1">Installation Complete</h2>
+        <p class="sc-sub">Setup finished and the installed application was verified.</p>
+        <div class="install-summary">
+          <div class="sum-row"><span class="sum-k">Version</span><span class="sum-v" data-release-version>Unavailable</span></div>
+          <div class="sum-row"><span class="sum-k">Application</span><span class="sum-v mono" id="inst-loc">Not yet installed</span></div>
+          <div class="sum-row"><span class="sum-k">Account</span><span class="sum-v">Continue in Synapse</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-6" data-screen="6" aria-labelledby="title-6" inert>
+      <div class="sc-inner">
+        <h2 class="sc-title" id="title-6" tabindex="-1">What's New in Setup</h2>
+        <p class="sc-sub">A single guided journey from download to your workspace.</p>
+        <ul class="changelog">
+          <li class="cl-item cl-new"><span class="cl-ico" aria-hidden="true">&#10024;</span><span class="cl-body"><span class="cl-tag new-tag">SETUP</span>Eight screens with the premium Synapse design.</span></li>
+          <li class="cl-item cl-new"><span class="cl-ico" aria-hidden="true">&#128230;</span><span class="cl-body"><span class="cl-tag new-tag">BUNDLED</span>The Windows setup package is included in this download.</span></li>
+          <li class="cl-item cl-imp"><span class="cl-ico" aria-hidden="true">&#128274;</span><span class="cl-body"><span class="cl-tag imp-tag">VERIFIED</span>Package checks run before installation, with errors reported here.</span></li>
+          <li class="cl-item cl-imp"><span class="cl-ico" aria-hidden="true">&#128100;</span><span class="cl-body"><span class="cl-tag imp-tag">ACCOUNT</span>Sign in using the installed app's existing account experience.</span></li>
+        </ul>
+        <p class="path-hint">Explore the installed app for its features and release information.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-7" data-screen="7" aria-labelledby="title-7" inert>
+      <div class="sc-inner centered">
+        <div class="final-glow" aria-hidden="true"></div>
+        <h2 class="sc-title final-title" id="title-7" tabindex="-1">Your workspace awaits.</h2>
+        <p class="sc-sub">Open the installed Synapse app to continue with your account and workspace.</p>
+        <div class="launch-actions">
+          <button class="btn-launch" id="btn-launch"><span class="launch-ico" aria-hidden="true">&#9889;</span>Launch Synapse</button>
+          <p class="path-hint">Startup preferences can be managed in the app.</p>
+        </div>
+        <p class="launch-status" id="launch-status" role="status"></p>
+        <div class="form-error hidden" id="launch-error" role="alert"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="installer-footer">
+  <div class="foot-left">
+    <span id="foot-step-label">Step <span id="foot-cur">1</span> of 8</span>
+    <span id="build-mode" class="build-mode" role="status"></span>
+  </div>
+  <div class="foot-center">
+    <div class="foot-dots" aria-label="Setup progress">
+      <button class="fdot active" data-dot="0" aria-label="Step 1"></button>
+      <button class="fdot" data-dot="1" aria-label="Step 2" disabled></button>
+      <button class="fdot" data-dot="2" aria-label="Step 3" disabled></button>
+      <button class="fdot" data-dot="3" aria-label="Step 4" disabled></button>
+      <button class="fdot" data-dot="4" aria-label="Step 5" disabled></button>
+      <button class="fdot" data-dot="5" aria-label="Step 6" disabled></button>
+      <button class="fdot" data-dot="6" aria-label="Step 7" disabled></button>
+      <button class="fdot" data-dot="7" aria-label="Step 8" disabled></button>
+    </div>
+  </div>
+  <div class="foot-right">
+    <button class="btn-foot btn-back" id="btn-back" disabled>Back</button>
+    <button class="btn-foot btn-next" id="btn-next">Next &rarr;</button>
+  </div>
+</div>
+
+<script src="installer.js"></script>
+<script src="native-adapter-chatgpt.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-﻿"""Durable, project-scoped Synapse Active Tasks.
+"""Durable, project-scoped Synapse Active Tasks.
 
 This subsystem is deliberately independent of ChatGPT's built-in Tasks product.
 It stores recurrence and run history in Synapse SQLite and lets a daemon-owned
@@ -11,6 +11,7 @@ import asyncio
 import json
 import math
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -328,7 +329,7 @@ class ForemanDispatcher:
     def __init__(self, root: Path | None = None, python_executable: str | None = None):
         configured = os.environ.get("SYNAPSE_FOREMAN_ROOT", "").strip()
         self.root = Path(configured) if configured else (root or Path.home() / "ChatForeman")
-        self.python_executable = python_executable or sys.executable
+        self.python_executable = (python_executable or os.environ.get("SYNAPSE_FOREMAN_PYTHON", "").strip() or (shutil.which("python") if Path(sys.executable).stem.lower() not in {"python", "pythonw", "python3"} else sys.executable) or sys.executable)
 
     @property
     def script(self) -> Path:

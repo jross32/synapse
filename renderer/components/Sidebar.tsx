@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Search, Wifi, WifiOff } from 'lucide-react';
+import { SynapseMark } from './SynapseMark';
 
 import type { InstalledPageView } from '@shared/installed-pages-client';
 import { useDaemon } from '@shared/daemon-context';
@@ -29,7 +30,7 @@ export function Sidebar({
   const online = connState === 'open';
   const reviewCount = useReviewCount();
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
-  const shortcutKey = isMac ? '⌘K' : 'Ctrl+K';
+  const shortcutKey = isMac ? 'âŒ˜K' : 'Ctrl+K';
 
   const installedIds = useMemo(
     () => installedPages.map((page) => page.id),
@@ -60,25 +61,9 @@ export function Sidebar({
   return (
     <nav
       aria-label='Primary'
-      className='flex h-full w-[104px] shrink-0 flex-col border-r border-border bg-card px-2 py-4'
+      className='synapse-sidebar flex h-full w-[210px] shrink-0 flex-col border-r border-border bg-card px-3 py-4'
     >
-      <div className='mb-4 flex items-center justify-center'>
-        <div className='rounded-full bg-[#0b0e1c] shadow-md ring-1 ring-white/15'>
-          <svg viewBox='0 0 256 256' className='h-10 w-10' role='img' aria-label='Synapse'>
-            <circle cx='128' cy='128' r='128' fill='#0b0e1c' />
-            <circle cx='128' cy='128' r='90' fill='none' stroke='#7c3aed' strokeWidth='28' />
-            <circle cx='128' cy='128' r='34' fill='#eef2fb' />
-            <g fill='#22d3a6'>
-              <circle cx='128' cy='38' r='13' />
-              <circle cx='206' cy='83' r='13' />
-              <circle cx='206' cy='173' r='13' />
-              <circle cx='128' cy='218' r='13' />
-              <circle cx='50' cy='173' r='13' />
-              <circle cx='50' cy='83' r='13' />
-            </g>
-          </svg>
-        </div>
-      </div>
+      <div className='synapse-sidebar-brand'><SynapseMark size={42} /><div><strong>SYNAPSE</strong><span>Your Mind. Amplified.</span></div></div>
 
       <div className='flex flex-1 flex-col gap-4 overflow-y-auto'>
         {sections.map((section) => (
@@ -98,13 +83,13 @@ export function Sidebar({
                     type='button'
                     title={
                       showReviewBadge
-                        ? `${item.description} — ${reviewCount} need review`
+                        ? `${item.description} â€” ${reviewCount} need review`
                         : item.description
                     }
                     aria-current={isActive ? 'page' : undefined}
                     onClick={() => onNavigate(item.route)}
                     className={cn(
-                      'group relative flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition-colors',
+                      'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       isActive
                         ? 'bg-accent text-foreground'
@@ -123,7 +108,7 @@ export function Sidebar({
                       className={cn('h-5 w-5', isActive ? 'text-primary' : 'text-current')}
                       aria-hidden='true'
                     />
-                    <span className='text-center leading-tight'>{item.label}</span>
+                    <span className='text-left leading-tight'>{item.label}</span>
                   </button>
                 );
               })}

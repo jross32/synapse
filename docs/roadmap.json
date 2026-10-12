@@ -1,7 +1,14 @@
 {
   "_comment": "User-facing roadmap shown in the in-app What's New surface (ADR-0019). status: shipped | in_progress | coming. Keep in sync with docs/adr + the plan.",
-  "generated_at": "2026-08-27",
+  "generated_at": "2026-10-12",
   "items": [
+    {
+      "id": "unified-premium-release-0219",
+      "title": "Unified premium setup and account onboarding",
+      "status": "in_progress",
+      "phase": "Release readiness",
+      "summary": "Version 0.2.219 combines current source with premium installer and post-launch signup/signin. Native failure tests and account settings sync checks are implemented; Windows lifecycle, signing, real two-device E2E and stable publication remain release gates."
+    },
     {
       "id": "canonical-ai-execution-accounting",
       "title": "Canonical AI execution and usage accounting",

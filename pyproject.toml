@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse-daemon"
-version = "0.1.209"
+version = "0.2.219"
 description = "Synapse execution layer Ã¢â‚¬â€ FastAPI daemon that owns all managed processes. By The WhatIf Company."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "pytest-xdist>=3.6,<4.0",
+  "pillow>=10.0.0,<13.0.0",
   "pytest>=8.3.0,<9.0.0",
   "pytest-asyncio>=0.24.0,<1.0.0",
   "pytest-timeout>=2.3.0,<3.0.0",
