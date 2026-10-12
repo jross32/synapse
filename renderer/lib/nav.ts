@@ -7,6 +7,7 @@ import {
   Activity,
   BrainCircuit,
   FolderKanban,
+  Images,
   Globe,
   House,
   Radio,
@@ -22,6 +23,7 @@ import {
 
 export type CorePageId =
   | 'home'
+  | 'assets'
   | 'apps'
   | 'tools'
   | 'live'
@@ -56,6 +58,7 @@ export type AiCodingSection =
 
 export type NavigationIntent =
   | { page: 'home' | 'live' | 'staff' | 'ai-factory' | 'trace' | 'watchdogs' | 'updates' | 'settings' | 'whatsnew' }
+  | { page: 'assets' }
   | { page: 'apps'; section?: AppsSection }
   | {
       page: 'tools';
@@ -111,6 +114,13 @@ export const CORE_NAV_ITEMS: CoreNavItem[] = [
     label: 'Apps',
     icon: FolderKanban,
     description: 'Projects and everything running right now',
+    section: 'main',
+  },
+  {
+    id: 'assets',
+    label: 'Asset Library',
+    icon: Images,
+    description: 'Search and reuse project assets and design references',
     section: 'main',
   },
   {
@@ -195,15 +205,16 @@ export const MOBILE_NAV_ORDER: CorePageId[] = [
 export const DEFAULT_ROUTE: AppRoute = { kind: 'core', page: 'home' };
 
 export interface SidebarLayout {
-  main_order: Array<'apps' | 'tools'>;
+  main_order: Array<'apps' | 'assets' | 'tools'>;
   ai_order: Array<'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
-  hidden_core: Array<'apps' | 'tools' | 'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
+  hidden_core: Array<'apps' | 'assets' | 'tools' | 'live' | 'staff' | 'ai-coding' | 'ai-factory'>;
   installed_page_order: string[];
   visible_installed_pages: string[];
 }
 
 type LegacyPageId =
   | 'home'
+  | 'assets'
   | 'apps'
   | 'tools'
   | 'sessions'
@@ -221,7 +232,7 @@ interface LegacySidebarLayout {
 }
 
 const STORAGE_KEY = 'synapse.sidebar.layout';
-const MAIN_DEFAULT: SidebarLayout['main_order'] = ['apps', 'tools'];
+const MAIN_DEFAULT: SidebarLayout['main_order'] = ['apps', 'assets', 'tools'];
 // `completeOrder` appends any default missing from a saved layout, so adding a new
 // hub here makes it appear for existing users too (no migration needed).
 const AI_DEFAULT: SidebarLayout['ai_order'] = ['staff', 'live', 'ai-coding', 'ai-factory'];
@@ -281,13 +292,13 @@ function migrateLegacyLayout(
   return normalizeSidebarLayout(
     {
       main_order: completeOrder(
-        order.filter((id): id is 'apps' | 'tools' => id === 'apps' || id === 'tools'),
+        order.filter((id): id is 'apps' | 'assets' | 'tools' => id === 'apps' || id === 'assets' || id === 'tools'),
         MAIN_DEFAULT
       ) as SidebarLayout['main_order'],
       ai_order,
       hidden_core: hidden.filter(
-        (id): id is 'apps' | 'tools' | 'ai-factory' =>
-          id === 'apps' || id === 'tools' || id === 'ai-factory'
+        (id): id is 'apps' | 'assets' | 'tools' | 'ai-factory' =>
+          id === 'apps' || id === 'assets' || id === 'tools' || id === 'ai-factory'
       ) as SidebarLayout['hidden_core'],
       installed_page_order: [],
       visible_installed_pages: [],

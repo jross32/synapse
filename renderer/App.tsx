@@ -50,6 +50,7 @@ import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
 import { HomePage } from './pages/Home';
+const AssetLibraryPage = lazy(() => import('./pages/AssetLibrary').then(m => ({ default: m.AssetLibraryPage })));
 
 const StaffPage = lazy(() =>
   import('./pages/Staff').then((module) => ({ default: module.StaffPage }))
@@ -360,6 +361,10 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       setRoute({ kind: 'core', page: 'whatsnew' });
       return;
     }
+    if (intent.page === 'assets') {
+      setRoute({ kind: 'core', page: 'assets' });
+      return;
+    }
     if (intent.page === 'apps') {
       setAppsSection(intent.section ?? 'projects');
       setRoute({ kind: 'core', page: 'apps' });
@@ -537,6 +542,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
               {route.kind === 'core' && route.page === 'home' && (
                 <HomePage onNavigate={navigate} />
               )}
+            {route.kind === 'core' && route.page === 'assets' && <AssetLibraryPage />}
             {route.kind === 'core' && route.page === 'apps' && (
               <AppsPage initialSection={appsSection} />
             )}

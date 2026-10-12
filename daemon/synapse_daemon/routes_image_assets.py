@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, Literal
+from pathlib import Path
+from fastapi.responses import FileResponse
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -384,6 +386,25 @@ def build_image_generation_router(storage: Storage) -> APIRouter:
             ),
         }
 
+    @router.get("/preview/{project_id}")
+    async def preview_project_image(
+        project_id: str,
+        relative_path: str = Query(min_length=1, max_length=1_024),
+    ) -> FileResponse:
+        """Serve only cataloged, project-contained raster images to authorized clients."""
+        project = projects_module.get(storage.conn, project_id)
+        asset = await asyncio.to_thread(image_asset_catalog.get_image_asset, project.path, relative_path)
+        if not asset or not asset.get("exists"):
+            raise SynapseError(code="asset.not_found", message="Asset not found", retryable=False, status=404)
+        target = (Path(project.path).resolve() / relative_path).resolve()
+        try:
+            target.relative_to(Path(project.path).resolve())
+        except ValueError:
+            raise SynapseError(code="asset.invalid_path", message="Invalid asset path", retryable=False, status=400)
+        media = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif"}.get(target.suffix.lower())
+        if not media or not target.is_file():
+            raise SynapseError(code="asset.unsupported_preview", message="Preview not available", retryable=False, status=404)
+        return FileResponse(target, media_type=media, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
     @router.get("/assets/{project_id}/audit")
     async def audit_project_images(project_id: str) -> dict[str, Any]:
         project = projects_module.get(storage.conn, project_id)
