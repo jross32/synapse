@@ -294,6 +294,11 @@ made it.
 
 If a commit ever ships with a stale README header, that's a regression — open a follow-up commit immediately.
 
+### Mandatory visual verification and evidence for every UI change (all AI agents)
+
+**Universal release blocker:** No AI, including ChatGPT, Claude, Codex, Copilot, Gemini, and delegated workers, may report a UI task "complete", "done", "fixed", "shipped", or close its Quality OS gate merely because code was edited, linted, typechecked, or unit-tested. This applies to tiny layout fixes, accounts/permissions, onboarding, themes, mobile, and dialogs, whether or not the version changed.
+
+Before claiming completion: (1) identify the actual running desktop/browser build, authenticated identity, route and feature flags; (2) navigate and interact in the real UI as a user through Playwright or authorized desktop-control tools; (3) capture screenshots and accessibility/DOM evidence for desktop and mobile, check contrast/overflow and error/console logs; (4) test the full relevant action through daemon/API including authorized and unauthorized user states; (5) compare observed state to source and expected behavior, then record screenshot paths, assertions, environment and command outcomes in Synapse Quality OS/trace. **Fail closed** if browser/desktop access, required identities, credentials, external consent, or end-to-end proof are unavailable. Leave the quality gate open, report the exact blocker, and never substitute source inspection or compilation for visual confirmation. Never fabricate screenshot or browser proof. Protect active user's desktop: obtain explicit Reflex input-control lease before driving it, respect pause/stop and release control afterwards. When a live build is stale, establish the loaded version and rebuild/reload safely; do not disrupt other AI workers or wipe sessions.
 ### E2E verification on every version bump (Rule #6)
 
 **Every** version bump that adds or changes user-visible behaviour must close with a real end-to-end pass before the commit lands. Typecheck + pytest alone aren't enough — they don't catch broken renderer wiring, broken CORS, missing preload bridge fields, or daemon contracts that fail when a real HTTP client / WS client / browser talks to them.
@@ -769,3 +774,16 @@ write the design as an ADR in `docs/adr/` and then implement.
 ## ChatGPT original image attachments (cross-agent)
 For ResellTogether/ChatGPT photo imports, read [docs/CHATGPT_ATTACHMENT_TRANSPORT_AI_GUIDANCE.md](docs/CHATGPT_ATTACHMENT_TRANSPORT_AI_GUIDANCE.md) before designing or claiming an attachment transfer. The existing direct ResellTogether MCP image ingestion works on base64; the unresolved prerequisite is securely obtaining original ChatGPT attachment bytes through the ChatGPT-facing connector. Never treat manifests or Windows paths as proof of upload.
 
+
+
+## Reuse-first and budget-aware AI workflow (mandatory)
+
+Every AI session must read [docs/ALL_AI_REUSE_AND_COST_POLICY.md](docs/ALL_AI_REUSE_AND_COST_POLICY.md) before design, code generation, or external model delegation. Inspect existing implementations and active workers first; account for provider credits, 5-hour/daily/weekly/monthly usage windows, token estimates, reset times and research-first design. Never waste credits rebuilding implemented features or overlapping active edits.
+
+## Universal Quality Gate � required for UI work
+
+Every Synapse-connected agent changing a website, CSS, theme, visual layout or frontend must discover and load `universal-quality-gate` (along with `browser-ui-audit` and `completion-contract`). Canonical tool/API and code map: `docs/UNIVERSAL_VISUAL_QUALITY_GATE.md`. The implicit skill is provisioned by `ensure_default_ui_skills` and injected into Synapse agent prompts. For scoped Agent Squad work items, completion is blocked until latest passing browser-proof evidence is registered. This does **not** imply all independent agent paths or deployments are gated yet; verify scope before claiming success. Do not bypass gates or confuse HTTP 200 with rendered color proof.
+
+## ChatGPT UI workers via Synapse and Reflex
+
+If the owner says **AI worker**, **sub-worker**, **subagent**, **ChatGPT UI worker**, **ChatGPT browser worker**, or **ChatGPT in Synapse** in a ChatGPT-UI context, prefer the existing signed-in Chrome browser workflow described in [docs/CHATGPT_CHROME_WORKER_RUNBOOK.md](docs/CHATGPT_CHROME_WORKER_RUNBOOK.md). This is distinct from Codex, Work mode, and backend-only Agent Squads. Stay in **Chat** mode; create/reuse chats in the **Synapse2GPT Workers** ChatGPT Project, explicitly connect **@Synapse**, use Reflex as the default desktop-control route, and keep all worker chats in a SINGLE existing Chrome tab group. The **Synapse ChatGPT Presence** Chrome extension under `browser-extensions/chatgpt-presence-companion/` handles automatic group creation/reuse, tab membership, count/active badge, and a brief activity notice. Record canonical conversation URLs and independently verify any reported work. Extension v0.3.0 source tests are documented; do not claim real-Chrome verification until the installed unpacked extension is reloaded and smoke-tested. Never extract Chrome cookies or profiles; release Reflex control when finished.
