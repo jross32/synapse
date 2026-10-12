@@ -299,6 +299,8 @@ class AccountsService:
         providers = ["native"]
         if self.settings.google_client_id and self.settings.google_client_secret:
             providers.append("google")
+        if self.settings.github_client_id and self.settings.github_client_secret:
+            providers.append("github")
         return PublicConfigPayload(available_providers=providers)
 
     def get_account_for_access_token(self, db: Session, access_token: str) -> Account:
@@ -449,10 +451,12 @@ class AccountsService:
         mode: Literal["signin", "link"],
         current_account: Account | None,
     ) -> OAuthStartResponse:
-        if provider != "google":
+        if provider not in ("google", "github"):
             raise HTTPException(status_code=400, detail=f"Unsupported provider '{provider}'.")
-        if not (self.settings.google_client_id and self.settings.google_client_secret):
+        if provider == "google" and not (self.settings.google_client_id and self.settings.google_client_secret):
             raise HTTPException(status_code=503, detail="Google sign-in is not configured on the Synapse Accounts server.")
+        if provider == "github" and not (self.settings.github_client_id and self.settings.github_client_secret):
+            raise HTTPException(status_code=503, detail="GitHub sign-in is not configured on the Synapse Accounts server.")
         if mode == "link" and current_account is None:
             raise HTTPException(status_code=401, detail="Sign into Synapse before linking Google.")
 
@@ -468,6 +472,9 @@ class AccountsService:
                 expires_at=expires_at,
             )
         )
+        if provider == "github":
+            query = urllib.parse.urlencode({"client_id": self.settings.github_client_id, "redirect_uri": f"{self.settings.public_base_url}/v1/oauth/github/callback", "scope": "read:user user:email", "state": state})
+            return OAuthStartResponse(url=f"https://github.com/login/oauth/authorize?{query}")
         query = urllib.parse.urlencode(
             {
                 "client_id": self.settings.google_client_id,
@@ -529,6 +536,43 @@ class AccountsService:
         )
         self._log_event(db, account_id=account.id, event_kind="account.oauth.google", provider="google")
         return f"{state_row.callback_url}?handoff={urllib.parse.quote(handoff)}"
+
+    def finalize_github_callback(self, db: Session, *, state: str, code: str) -> str:
+        state_row = db.scalar(select(OAuthState).where(OAuthState.state == state, OAuthState.provider == "github"))
+        if state_row is None or state_row.used_at is not None or _utc(state_row.expires_at) <= _now():
+            raise HTTPException(status_code=410, detail="GitHub authorization expired or was already used.")
+        social = self._exchange_github_code(code)
+        account = self._resolve_social_account(db, provider="github", state_row=state_row, social=social)
+        state_row.used_at = _now()
+        handoff = secrets.token_urlsafe(32)
+        db.add(OAuthHandoff(handoff_code=handoff, account_id=account.id, provider="github", expires_at=_now() + timedelta(seconds=self.settings.oauth_handoff_ttl_seconds)))
+        self._log_event(db, account_id=account.id, event_kind="account.oauth.github", provider="github")
+        return f"{state_row.callback_url}?handoff={urllib.parse.quote(handoff)}"
+
+    def _exchange_github_code(self, code: str) -> SocialIdentity:
+        payload = urllib.parse.urlencode({"client_id": self.settings.github_client_id, "client_secret": self.settings.github_client_secret, "code": code, "redirect_uri": f"{self.settings.public_base_url}/v1/oauth/github/callback"}).encode()
+        headers = {"Accept": "application/json", "User-Agent": "Synapse-Accounts"}
+        try:
+            req = urllib.request.Request("https://github.com/login/oauth/access_token", data=payload, headers={**headers, "Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+            with urllib.request.urlopen(req, timeout=self.settings.request_timeout_seconds) as response:
+                token_data = json.load(response)
+            token = token_data.get("access_token")
+            if not token:
+                raise HTTPException(status_code=502, detail="GitHub did not authorize this request.")
+            auth_headers = {**headers, "Authorization": f"Bearer {token}"}
+            with urllib.request.urlopen(urllib.request.Request("https://api.github.com/user", headers=auth_headers), timeout=self.settings.request_timeout_seconds) as response:
+                user = json.load(response)
+            with urllib.request.urlopen(urllib.request.Request("https://api.github.com/user/emails", headers=auth_headers), timeout=self.settings.request_timeout_seconds) as response:
+                emails = json.load(response)
+        except (urllib.error.URLError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="GitHub authorization or profile lookup failed.") from exc
+        subject = user.get("id")
+        if not isinstance(subject, int) or subject <= 0:
+            raise HTTPException(status_code=502, detail="GitHub returned an invalid account identity.")
+        verified = next((item.get("email") for item in emails if item.get("verified") and item.get("primary") and item.get("email")), None)
+        if not verified:
+            verified = next((item.get("email") for item in emails if item.get("verified") and item.get("email")), None)
+        return SocialIdentity(provider="github", subject=str(subject), email=verified, display_name=user.get("name") or user.get("login"), avatar_url=user.get("avatar_url"), email_verified=bool(verified))
 
     def unlink_provider(self, db: Session, *, account: Account, provider: str) -> AccountPayload:
         identity = db.scalar(
@@ -613,7 +657,7 @@ class AccountsService:
             if identity is not None and identity.account_id != account.id:
                 raise HTTPException(
                     status_code=409,
-                    detail="That Google account is already linked to a different Synapse account.",
+                    detail="That provider account is already linked to a different Synapse account.",
                 )
             if identity is None:
                 db.add(
@@ -656,7 +700,7 @@ class AccountsService:
             if existing_by_email is not None:
                 raise HTTPException(
                     status_code=409,
-                    detail="A Synapse account with that email already exists. Sign in first, then link Google from Profile.",
+                    detail="A Synapse account with that email already exists. Sign in first, then link the provider from Profile.",
                 )
 
         username = self._unique_username(db, _slug_base(social.display_name or social.email or "synapse"))
@@ -912,6 +956,16 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
                 title="Google sign-in could not continue",
                 message=str(exc.detail),
             )
+        return RedirectResponse(url=redirect_url, status_code=302)
+
+    @app.get("/v1/oauth/github/callback", include_in_schema=False, response_model=None)
+    def github_callback(state: str | None = None, code: str | None = None, error: str | None = None, error_description: str | None = None, db: Session = Depends(get_db)) -> Any:
+        if error or not state or not code:
+            return _callback_page(ok=False, title="GitHub connection could not continue", message=error_description or error or "Missing authorization response.")
+        try:
+            redirect_url = service.finalize_github_callback(db, state=state, code=code)
+        except HTTPException as exc:
+            return _callback_page(ok=False, title="GitHub connection could not continue", message=str(exc.detail))
         return RedirectResponse(url=redirect_url, status_code=302)
 
     app.state.accounts_service = service

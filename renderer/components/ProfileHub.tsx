@@ -46,6 +46,7 @@ import {
 import { cn } from '@shared/utils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { AccountAppsCatalog } from './AccountAppsCatalog';
 import { Input } from './ui/input';
 import { Modal } from './ui/modal';
 
@@ -862,6 +863,38 @@ export function ProfileHub({
           </Card>
         </div>
       )}
+
+      <div className='border-t border-border/70 p-5 sm:p-6'>
+        <AccountAppsCatalog
+          services={services}
+          busyKey={busyKey}
+          availableProviders={availableProviders}
+          onConnect={async (provider) => {
+            if (!profile?.signed_in) {
+              setError('Sign in to your Synapse account first, then connect apps independently.');
+              return;
+            }
+            const existing = services.find((item) => item.provider === provider);
+            if (provider === 'google' && !linkedProviders.has('google')) {
+              await beginSocial('google', 'link');
+              return;
+            }
+            if (provider === 'github' && !linkedProviders.has('github')) {
+              await beginSocial('github', 'link');
+              return;
+            }
+            if (existing) await reconnectService(existing);
+            else {
+              await runAction('service:' + provider, async () => {
+                await connectService(provider);
+                setServices(await getServiceConnections());
+                await refreshProfile();
+              });
+            }
+          }}
+          onDisconnect={forgetService}
+        />
+      </div>
 
       {(error || profileError || notice) && (
         <div className='border-t border-border/70 px-5 py-3 sm:px-6'>

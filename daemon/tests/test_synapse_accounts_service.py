@@ -223,3 +223,17 @@ def test_reserved_password_reset_tokens_can_be_issued_and_consumed(tmp_path: Pat
     with session_scope(service.session_factory) as db:
         consumed_account = consume_reserved_token(db, PasswordResetToken, token=token)
     assert consumed_account == "account-native"
+
+def test_github_oauth_availability_and_start(tmp_path):
+    from synapse_accounts.app import AccountsService
+    settings = _settings(tmp_path)
+    settings.github_client_id = "test-client"
+    settings.github_client_secret = "test-secret"
+    service = AccountsService(settings)
+    assert "github" in service.public_config().available_providers
+    from synapse_accounts.db import session_scope
+    with session_scope(service.session_factory) as db:
+        result = service.start_oauth(db, provider="github", callback_url="http://127.0.0.1:7878/auth/callback", mode="signin", current_account=None)
+        assert result.url.startswith("https://github.com/login/oauth/authorize?")
+        assert "read%3Auser" in result.url
+        assert "user%3Aemail" in result.url
