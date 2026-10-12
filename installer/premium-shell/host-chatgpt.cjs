@@ -2,6 +2,7 @@
 const {app,BrowserWindow,ipcMain}=require('electron');
 const os=require('node:os'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
+const {awaitMatchingDaemonVersion}=require('./daemon-version-check.cjs');
 let window=null,running=false,installedPath=null,installedVersion=null;
 const ROOT=__dirname,RESOURCES=process.resourcesPath;
 const manifestPath=path.join(ROOT,'payload-manifest.json');
@@ -107,6 +108,10 @@ ipcMain.handle('setup:launch',async()=>{
   const child=spawn(installedPath,[],{detached:true,stdio:'ignore',windowsHide:false});
   child.once('error',reject);child.once('spawn',()=>{child.unref();resolve()});
  });
+ // Verify the daemon that actually owns the API port. An older daemon can
+ // survive installation and silently break device/account sync. Do not kill
+ // existing work; surface actionable instructions if the old daemon remains.
+ await awaitMatchingDaemonVersion(installedVersion);
  return {ok:true};
 });
 ipcMain.handle('setup:window',(_event,action)=>{if(!window)return;if(action==='minimize')window.minimize();if(action==='close'&&!running)window.close()});

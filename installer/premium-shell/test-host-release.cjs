@@ -23,7 +23,7 @@ function harness(options={}){
  }
  const electron={app:{whenReady:()=>({then:()=>{}}),on:()=>{},quit:()=>{}},BrowserWindow:function(){},ipcMain:{handle:(name,fn)=>handlers.set(name,fn)}};
  vm.runInNewContext(code,{
-  require:name=>({'electron':electron,'node:os':{release:()=>options.osRelease||'10.0.22631'},'node:fs':fakeFs,'node:path':path.win32,'node:crypto':{createHash:()=>({update:()=>{},digest:()=>options.badHash?'b'.repeat(64):'a'.repeat(64)})},'node:child_process':{spawn:fakeSpawn}}[name]),
+  require:name=>({'electron':electron,'node:os':{release:()=>options.osRelease||'10.0.22631'},'node:fs':fakeFs,'node:path':path.win32,'node:crypto':{createHash:()=>({update:()=>{},digest:()=>options.badHash?'b'.repeat(64):'a'.repeat(64)})},'node:child_process':{spawn:fakeSpawn},'./daemon-version-check.cjs':{awaitMatchingDaemonVersion:async(expected)=>{if(options.liveDaemonVersion&&options.liveDaemonVersion!==expected)throw Error('Background daemon version mismatch');return {ok:true,version:expected}}}}[name]),
   __dirname:'C:\\shell',process:{resourcesPath:'C:\\resources',platform:options.platform||'win32',arch:options.arch||'x64',env:{LOCALAPPDATA:'C:\\Users\\test\\AppData\\Local'}},
   setTimeout,clearTimeout,Buffer,console
  });
@@ -38,6 +38,7 @@ function harness(options={}){
   const h=harness(options);assert.equal((await h.call('install')).ok,false);await assert.rejects(h.call('launch'));
  }
  const good=harness();assert.equal((await good.call('install')).ok,true);assert.equal((await good.call('launch')).ok,true);
+ const stale=harness({liveDaemonVersion:'0.1.209'});assert.equal((await stale.call('install')).ok,true);await assert.rejects(stale.call('launch'),/daemon version mismatch/);
  const denied=harness({launchError:true});assert.equal((await denied.call('install')).ok,true);await assert.rejects(denied.call('launch'),/Launch denied/);
  console.log('PASS host: compatibility, disk, hash, old-version, daemon, install exit and launch failure gates');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -19,6 +19,11 @@ $lockVersion=(& node -p "require('./package-lock.json').version")
 if ($lockVersion -ne $Version) { throw 'package-lock version does not match package.json' }
 if ($SkipDaemon) { throw 'Unified releases require a fresh daemon build; SkipDaemon is not allowed.' }
 & node installer/premium-shell/build-provenance.cjs begin; if ($LASTEXITCODE -ne 0) { throw 'Build source freeze failed' }
+Write-Host 'Checking active-daemon version handoff regression...'
+& node installer/premium-shell/test-daemon-version-check.cjs
+if ($LASTEXITCODE -ne 0) { throw 'Daemon version handoff tests failed: block release' }
+& node installer/premium-shell/test-host-release.cjs
+if ($LASTEXITCODE -ne 0) { throw 'Premium wrapper host regression tests failed: block release' }
 Write-Host 'Typechecking Synapse source...'
 & npm run typecheck; if ($LASTEXITCODE -ne 0) { throw 'Typecheck failed' }
 Write-Host 'Building Synapse UI and Electron...'
