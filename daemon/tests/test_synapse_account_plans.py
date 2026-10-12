@@ -111,3 +111,29 @@ def test_no_public_upgrade_endpoint(tmp_path):
             response = client.post(path, json={"plan": "unlimited"}, headers=headers(a))
             assert response.status_code in (404, 405)
         assert client.get("/v1/subscription", headers=headers(a)).json()["plan"] == "free"
+
+
+def test_plan_and_usage_persist_across_sessions_and_app_restart(tmp_path):
+    app = app_for(tmp_path)
+    with TestClient(app) as client:
+        a = signup(client, "persist")
+        account_id = a["account"]["account_id"]
+        with session_scope(app.state.accounts_service.session_factory) as db:
+            set_plan_trusted(db, account_id=account_id, plan_id="plus",
+                             billing_status="active", provider="admin")
+        action = {"metric": "preview_actions", "units": 4, "event_key": "persisted-event"}
+        assert client.post("/v1/subscription/preview-usage", json=action,
+                           headers=headers(a)).status_code == 200
+    with TestClient(app_for(tmp_path)) as restarted:
+        signin = restarted.post("/v1/auth/signin", json={
+            "login": "persist@example.org", "password": "test_secure_password_123"
+        })
+        assert signin.status_code == 200
+        session = signin.json()
+        assert restarted.get("/v1/subscription", headers=headers(session)).json()["plan"] == "plus"
+        usage = restarted.get("/v1/subscription/usage", headers=headers(session)).json()
+        assert usage["metrics"]["preview_actions"]["used"] == 4
+        replay = restarted.post("/v1/subscription/preview-usage", json=action,
+                                headers=headers(session))
+        assert replay.status_code == 200 and replay.json()["duplicate"] is True
+
