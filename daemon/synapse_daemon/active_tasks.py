@@ -1,4 +1,4 @@
-﻿"""Durable, project-scoped Synapse Active Tasks.
+"""Durable, project-scoped Synapse Active Tasks.
 
 This subsystem is deliberately independent of ChatGPT's built-in Tasks product.
 It stores recurrence and run history in Synapse SQLite and lets a daemon-owned
@@ -11,6 +11,7 @@ import asyncio
 import json
 import math
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -328,7 +329,11 @@ class ForemanDispatcher:
     def __init__(self, root: Path | None = None, python_executable: str | None = None):
         configured = os.environ.get("SYNAPSE_FOREMAN_ROOT", "").strip()
         self.root = Path(configured) if configured else (root or Path.home() / "ChatForeman")
-        self.python_executable = python_executable or sys.executable
+        configured_python = python_executable or os.environ.get("SYNAPSE_FOREMAN_PYTHON", "").strip()
+        running_python = Path(sys.executable).stem.lower() in {"python", "pythonw", "python3"}
+        self.python_executable = configured_python or (sys.executable if running_python else shutil.which("python"))
+        if not self.python_executable:
+            raise RuntimeError("Chat Foreman requires Python; set SYNAPSE_FOREMAN_PYTHON to a Python executable")
 
     @property
     def script(self) -> Path:
@@ -341,7 +346,7 @@ class ForemanDispatcher:
             raise RuntimeError(f"Chat Foreman entry point not found: {self.script}")
         args = [
             self.python_executable, str(self.script), "iterate", "1", task.project_id,
-            "--name", f"Active Task · {task.name} · {run_id[:6]}",
+            "--name", f"Active Task - {task.name} - {run_id[:6]}",
         ]
         runtime = task.preferred_runtime.strip().lower()
         if runtime and runtime != "auto":

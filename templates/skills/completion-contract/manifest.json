@@ -2,7 +2,7 @@
     "id":  "completion-contract",
     "name":  "Synapse Completion Contract",
     "publisher":  "The WhatIf Company",
-    "version":  "0.1.2",
+    "version":  "0.1.1",
     "description":  "Default Synapse completion contract with automatic Visual QA gate for web and UI development.",
     "entrypoint":  "SKILL.md",
     "tags":  [

@@ -195,7 +195,7 @@ def install(data_dir: Path, skill_id: str) -> InstalledSkillPack:
     return get_installed(data_dir, skill_id)
 
 
-DEFAULT_UI_SKILL_IDS = ("completion-contract", "browser-ui-audit")
+DEFAULT_UI_SKILL_IDS = ("completion-contract", "browser-ui-audit", "universal-quality-gate")
 
 
 def ensure_default_ui_skills(data_dir: Path) -> dict[str, str]:

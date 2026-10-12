@@ -4,6 +4,28 @@ import re
 
 _ANSI_CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
+# Runtimes whose parsers can extract at least partial usage from their output.
+# Any runtime NOT in this set is recorded with usage_source="untracked".
+KNOWN_RUNTIMES: frozenset[str] = frozenset({"claude", "gemini", "codex", "copilot"})
+
+
+def usage_source(u: "Usage") -> str:
+    """Return the ledger usage_source value for a parsed Usage.
+
+    "provider_reported" — the runtime emitted structured data we could read.
+    "untracked"         — the runtime is instrumented but yielded no numeric fields,
+                          or it is not in KNOWN_RUNTIMES at all.
+
+    We deliberately avoid claiming a complete total for any CLI invocation where
+    the output was absent or unparseable; callers must never sum "untracked" rows
+    into cost/token totals.
+    """
+    if u.runtime not in KNOWN_RUNTIMES:
+        return "untracked"
+    if u.reported_fields:
+        return "provider_reported"
+    return "untracked"
+
 
 def _plain_terminal_text(value: str) -> str:
     return _ANSI_CSI_RE.sub("", value).replace("\r", "")

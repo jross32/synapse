@@ -1,0 +1,22 @@
+{
+  "id": "talk-to-ai-staff",
+  "name": "Talk to AI Staff",
+  "description": "Open a chat-first staff concierge. Choose Maya, Lena, Eli, or another employee; ask questions, coordinate work, or convene a staff meeting in the conversation.",
+  "icon": "messages-square",
+  "category": "workflows",
+  "tags": [
+    "staff",
+    "chat",
+    "employees",
+    "delegation",
+    "growth",
+    "creator"
+  ],
+  "launch_mode": "coder-thread",
+  "thread_title": "My AI Staff",
+  "prompt_filename": "MY-AI-STAFF.md",
+  "prompt": "Use the installed staff-chat-router Synapse skill. Act as the user's staff concierge in this chat. Offer their real verified staff roster, let them select a person by name, and route direct consultations or team assignments using actual Synapse tools. Do not require navigating a separate Staff app. Important: check the installed /api/v1/staff route; if unavailable (404), transparently offer conversational assistance and/or a real squad work-item handoff, never claim an employee is running without evidence. Distinguish pending from launched/completed. Keep account/camera/spending/posting actions approval-first.",
+  "default_argv": [
+    "chatgpt"
+  ]
+}

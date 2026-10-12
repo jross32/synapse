@@ -10,6 +10,7 @@ import { ActiveTasksPage } from './ActiveTasks';
 import { MasterTodoPage } from './MasterTodo';
 import { AssistantPage } from './Assistant';
 import { ChatgptCompanionPage } from './ChatgptCompanion';
+import { WorkerCatalog } from './WorkerCatalog';
 import { CoderWorkspacePage } from './CoderWorkspace';
 import { ReviewPage } from './Review';
 import { SessionsPage } from './Sessions';

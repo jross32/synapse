@@ -345,3 +345,33 @@ def test_mcp_can_create_and_list_more_than_five_synapse_active_tasks(tmp_path: P
     assert listed["count"] == 7
     assert "do not consume ChatGPT" in listed["note"]
     db.close()
+
+@pytest.mark.asyncio
+async def test_foreman_dispatcher_launches_real_python_subprocess(tmp_path: Path):
+    root = tmp_path / "ChatForeman"
+    root.mkdir()
+    (root / "foreman.py").write_text(
+        'import json,sys\nassert sys.argv[1:4] == ["iterate", "1", "ai-world"]\nprint(json.dumps({"id":"real-subprocess-campaign","status":"active"}))\n',
+        encoding="utf-8",
+    )
+    import sys
+    dispatcher = ForemanDispatcher(root=root, python_executable=sys.executable)
+    task = active_tasks.ActiveTask(
+        id="t-real", project_id="ai-world", name="Real subprocess proof",
+        created_at=to_iso(utc_now()), updated_at=to_iso(utc_now()),
+    )
+    receipt = await dispatcher.dispatch(task, "run-real")
+    assert receipt.ref_id == "real-subprocess-campaign"
+
+def test_foreman_dispatcher_uses_python_for_packaged_daemon(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("SYNAPSE_FOREMAN_PYTHON", raising=False)
+    monkeypatch.setattr(active_tasks.sys, "executable", str(tmp_path / "synapsed.exe"))
+    monkeypatch.setattr(active_tasks.shutil, "which", lambda name: str(tmp_path / "python.exe") if name == "python" else None)
+    dispatcher = ForemanDispatcher(root=tmp_path)
+    assert dispatcher.python_executable == str(tmp_path / "python.exe")
+
+
+def test_foreman_dispatcher_honors_explicit_python_override(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("SYNAPSE_FOREMAN_PYTHON", str(tmp_path / "custom-python.exe"))
+    dispatcher = ForemanDispatcher(root=tmp_path)
+    assert dispatcher.python_executable == str(tmp_path / "custom-python.exe")

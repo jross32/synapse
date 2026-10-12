@@ -1,0 +1,25 @@
+﻿{
+    "id":  "threejs-studio",
+    "tags":  [
+                 "threejs-studio",
+                 "3d",
+                 "game-development",
+                 "assets"
+             ],
+    "version":  "0.1.0",
+    "required_capabilities":  [
+
+                              ],
+    "description":  "Synapse AI capability pack for threejs-studio workflows",
+    "preferred_capabilities":  [
+                                   "blender",
+                                   "playwright"
+                               ],
+    "optional_capabilities":  [
+                                  "reflex"
+                              ],
+    "name":  "threejs-studio",
+    "publisher":  "The WhatIf Company",
+    "implicit_invocation":  true,
+    "entrypoint":  "SKILL.md"
+}

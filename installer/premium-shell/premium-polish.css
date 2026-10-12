@@ -1,0 +1,51 @@
+/* Synapse Premium — responsive design system and accessibility layer */
+:root {
+  --premium-shadow: 0 22px 70px rgba(0,0,0,.38), 0 0 46px rgba(124,58,237,.12);
+}
+html, body { width:100%; height:100%; min-width:0; min-height:0; }
+body { background: radial-gradient(circle at 24% 4%,rgba(78,36,147,.23),transparent 40%),#050915; }
+#installer-root { height:calc(100dvh - 88px); min-height:0; }
+#content-wrap { min-width:0; background:linear-gradient(140deg,#070d1e 0%,#080b17 55%,#0b0e21 100%); }
+#content-wrap::after { content:""; position:absolute;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(132,180,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(132,180,255,.025) 1px,transparent 1px);background-size:30px 30px; }
+#sidebar { background:linear-gradient(165deg,rgba(16,23,53,.98),rgba(9,13,30,.98));box-shadow:9px 0 38px rgba(2,5,20,.28); }
+.sc-inner { position:relative;z-index:1; padding:clamp(20px,3.5vw,42px);scrollbar-gutter:stable; }
+.screen { visibility:hidden; }
+.screen.active { visibility:visible; }
+.screen.exit { visibility:hidden; }
+.type-card,.account-card,.install-summary,.checks-list,.path-section { backdrop-filter:blur(14px); }
+.type-card { transition:border-color .22s,transform .22s,box-shadow .22s,background .22s; }
+.type-card:hover { transform:translateY(-2px);box-shadow:0 12px 35px rgba(0,0,0,.20),0 0 22px rgba(34,211,238,.08); }
+.type-card.selected { box-shadow:0 0 0 1px rgba(34,211,238,.15),0 0 24px rgba(34,211,238,.08); }
+.btn-next,.btn-cta,.btn-launch { box-shadow:0 8px 30px rgba(10,185,215,.15),0 0 25px rgba(135,90,250,.15);transition:transform .18s,box-shadow .18s,filter .18s; }
+.btn-next:hover:not(:disabled),.btn-cta:hover:not(:disabled),.btn-launch:hover:not(:disabled) { filter:brightness(1.12);box-shadow:0 12px 38px rgba(34,211,238,.22),0 0 28px rgba(139,92,246,.21); }
+#brain-wrap { isolation:isolate; }
+#brain-svg { filter:drop-shadow(0 0 22px rgba(58,192,244,.22)); }
+#brain-pulse-ring,#brain-pulse-ring2 { pointer-events:none; }
+button:focus-visible,[role=radio]:focus-visible,.type-card:focus-visible,input:focus-visible,a:focus-visible { outline:2px solid #6ae7fa!important;outline-offset:3px!important; }
+#installer-footer { background:linear-gradient(90deg,#0b1226,#0b1025); }
+#foot-step-label { color:#a7b9d2; }
+.fdot { min-width:10px;min-height:10px; }
+@media (max-width:900px) {
+  #sidebar {width:190px;min-width:190px;}
+  .sc-inner {padding:22px;}
+  #installer-footer {padding-inline:13px;}
+}
+@media (max-width:700px) {
+  #sidebar {width:145px;min-width:145px;}
+  #brain-svg {width:86px;height:86px;}
+  #sidebar-brand {padding-inline:7px;}
+  .step {font-size:11px;}
+  .sc-inner {padding:16px;gap:10px;}
+  .foot-left {min-width:55px;}
+  .foot-right {min-width:135px;}
+  .btn-foot {padding:7px 12px;}
+}
+@media (max-height:540px) {
+  #sidebar-brand {padding-block:5px;}
+  #brain-wrap {transform:scale(.72);margin-block:-10px;}
+  #step-nav {padding-block:3px;gap:0;}
+  .sc-inner {padding-block:12px;}
+}
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after {animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
+}

@@ -615,7 +615,7 @@ def list_evidence(
         params.append(gate_id)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
-        f"SELECT * FROM quality_evidence {where} ORDER BY created_at DESC",  # noqa: S608
+        f"SELECT * FROM quality_evidence {where} ORDER BY created_at DESC, rowid DESC",  # noqa: S608
         tuple(params),
     ).fetchall()
     return [_row_to_evidence(row) for row in rows]

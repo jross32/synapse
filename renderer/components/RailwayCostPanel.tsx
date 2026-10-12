@@ -37,7 +37,15 @@ interface RailwayCostStatus {
 const usd = (n: number | null) => n === null ? 'Unavailable' : '$' + n.toFixed(2);
 const nfmt = (n: number | null, digits = 2) => n === null ? '—' : n.toFixed(digits);
 
-export function RailwayCostPanel(): JSX.Element {
+export function RailwayCostPanel(): JSX.Element | null {
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void apiFetch<{allowed: boolean}>('/system/railway-costs/access').then(r => {
+      if (active) setAllowed(r.allowed);
+    }).catch(() => { if (active) setAllowed(false); });
+    return () => { active = false; };
+  }, []);
   const [snapshot, setSnapshot] = useState<RailwayCostStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,10 +73,11 @@ export function RailwayCostPanel(): JSX.Element {
   }
 
   useEffect(() => {
+    if (!allowed) return;
     void load();
     const refreshTimer = window.setInterval(() => void load(), 60_000);
     return () => window.clearInterval(refreshTimer);
-  }, []);
+  }, [allowed]);
 
   async function saveBudget(): Promise<void> {
     const warn = Number(warning);
@@ -101,6 +110,7 @@ export function RailwayCostPanel(): JSX.Element {
   const stateColor = state === 'critical' ? 'text-status-error' :
     state === 'warning' || state === 'stale' ? 'text-amber-500' : 'text-muted-foreground';
 
+  if (!allowed) return null;
   return (
     <section aria-labelledby='railway-cost-heading' className='space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-5'>
       <div className='flex flex-wrap items-start justify-between gap-3'>

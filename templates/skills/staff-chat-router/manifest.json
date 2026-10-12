@@ -1,0 +1,22 @@
+{
+  "id": "staff-chat-router",
+  "name": "Synapse AI Staff Chat Router",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Chat-first delegation to persistent Synapse AI staff: roster, direct chat, team conversations, and truthfully supervised work without navigating the Staff app.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "ai-staff",
+    "chat-first",
+    "employee-roster",
+    "delegation",
+    "coordination",
+    "synapse"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "synapse"
+  ],
+  "optional_capabilities": []
+}

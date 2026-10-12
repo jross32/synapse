@@ -2,7 +2,7 @@
     "id":  "browser-ui-audit",
     "name":  "Synapse Visual QA (Default)",
     "publisher":  "The WhatIf Company",
-    "version":  "0.2.1",
+    "version":  "0.2.2",
     "description":  "Default browser visual QA discipline for every Synapse-connected AI working on web apps or UI. Isolated viewport audits, contrast/overflow evidence, screenshot comparison and separate authorized E2E interaction gates.",
     "entrypoint":  "SKILL.md",
     "tags":  [

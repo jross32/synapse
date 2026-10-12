@@ -8,6 +8,10 @@ from pathlib import Path
 
 import httpx
 import pytest
+@pytest.fixture(autouse=True)
+def use_legacy_openai_provider(monkeypatch):
+    monkeypatch.setenv("SYNAPSE_IMAGE_PROVIDER", "openai")
+
 from synapse_daemon import image_assets
 from synapse_daemon.projects import Project, create
 from synapse_daemon.storage import Storage
@@ -25,7 +29,7 @@ def _fake_response(image_bytes: bytes = b"fake-png-bytes") -> httpx.Response:
 
 def test_status_reports_missing_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("SYNAPSE_IMAGE_PROVIDER", raising=False)
+    monkeypatch.setenv("SYNAPSE_IMAGE_PROVIDER", "openai")
     monkeypatch.delenv("SYNAPSE_OPENAI_IMAGE_MODEL", raising=False)
 
     status = image_assets.image_generation_status()

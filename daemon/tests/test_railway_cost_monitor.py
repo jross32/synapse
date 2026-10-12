@@ -93,7 +93,12 @@ def test_no_token_no_automatic_railway_api_request(tmp_path, monkeypatch):
 def test_api_budget_update_and_read(tmp_path, monkeypatch):
     monkeypatch.delenv("RAILWAY_API_TOKEN", raising=False)
     app = FastAPI()
-    app.include_router(build_watchdogs_router(tmp_path), prefix="/api/v1")
+    from types import SimpleNamespace
+    class FakeProfile:
+        def summary(self, *, refresh_remote=False):
+            return SimpleNamespace(signed_in=True, email_verified=True, user_id="owner-123",
+                                   email="justinwross32@gmail.com")
+    app.include_router(build_watchdogs_router(tmp_path, FakeProfile()), prefix="/api/v1")
     monitor.save_observation(tmp_path, sample())
     client = TestClient(app)
     response = client.get("/api/v1/system/railway-costs")
@@ -105,3 +110,16 @@ def test_api_budget_update_and_read(tmp_path, monkeypatch):
     assert changed.json()["warning_usd"] == 1.5
     assert client.post("/api/v1/system/railway-costs/budget",
                        json={"warning_usd": 5, "critical_usd": 3}).status_code == 422
+
+def test_railway_costs_forbidden_to_other_accounts(tmp_path):
+    from types import SimpleNamespace
+    class OtherProfile:
+        def summary(self, *, refresh_remote=False):
+            return SimpleNamespace(signed_in=True, email_verified=True, user_id="other-123",
+                                   email="another@example.com")
+    app = FastAPI()
+    app.include_router(build_watchdogs_router(tmp_path, OtherProfile()), prefix="/api/v1")
+    client = TestClient(app)
+    assert client.get("/api/v1/system/railway-costs/access").json() == {"allowed": False}
+    assert client.get("/api/v1/system/railway-costs").status_code == 403
+    assert client.post("/api/v1/system/railway-costs/budget", json={"warning_usd": 2, "critical_usd": 5}).status_code == 403

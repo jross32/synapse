@@ -22,7 +22,7 @@ import httpx
 
 from . import image_credentials
 
-DEFAULT_PROVIDER = "openai"
+DEFAULT_PROVIDER = "local"
 DEFAULT_OPENAI_MODEL = "gpt-image-2.5-sunburst"
 OPENAI_GENERATIONS_URL = "https://api.openai.com/v1/images/generations"
 
@@ -65,6 +65,10 @@ def _openai_model() -> str:
 def image_generation_status(storage: Any | None = None) -> dict[str, Any]:
     """Return capability/configuration status without making a network request."""
     provider = _provider()
+    if provider == "local":
+        from . import local_image_engine
+        state = local_image_engine.status()
+        return {"capability": "image_generation", **state, "supported_providers": ["local", "openai"], "supports": {"generation": True, "editing": False, "importing": True, "chunked_upload": True, "formats": sorted(_ALLOWED_FORMATS), "quality": sorted(_ALLOWED_QUALITY), "background": ["auto", "opaque"], "project_scoped_output": True, "asset_manifest": True}}
     if provider != "openai":
         return {
             "capability": "image_generation",
@@ -266,6 +270,27 @@ def generate_image(
     root, target = _resolve_output_path(project_root, relative_path, output_format, overwrite=overwrite)
 
     provider = _provider()
+    if provider == "local":
+        from . import local_image_engine
+        import uuid
+        width, height = (512, 512) if size == "auto" else (int(n) for n in size.split("x"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.parent / (".synapse-pending-" + uuid.uuid4().hex + "." + output_format)
+        try:
+            detail = local_image_engine.generate(clean_prompt, temporary, width=width, height=height, output_format=output_format, quality=quality, background=background)
+            if target.exists() and not overwrite:
+                raise ImageGenerationError("refusing to overwrite existing asset", code="image_asset.conflict", status=409)
+            temporary.replace(target)
+        except ImageGenerationError:
+            raise
+        except Exception as exc:
+            raise ImageGenerationError("local image generation failed: " + str(exc)[:250], code="image_generation.provider_unavailable", status=503) from exc
+        finally:
+            temporary.unlink(missing_ok=True)
+        image_bytes = target.read_bytes()
+        digest = hashlib.sha256(image_bytes).hexdigest()
+        manifest = _append_manifest(root, target=target, prompt=clean_prompt, provider="local", model=detail["model"], size=f"{width}x{height}", quality=quality, output_format=output_format, background=background, sha256=digest, byte_count=len(image_bytes), request_id=detail["request_id"])
+        return {"created": True, "project_relative_path": target.relative_to(root).as_posix(), "absolute_path": str(target), "manifest_path": str(manifest), "provider": "local", "model": detail["model"], "size": f"{width}x{height}", "quality": quality, "format": output_format, "background": background, "bytes": len(image_bytes), "sha256": digest, "request_id": detail["request_id"]}
     if provider != "openai":
         raise ImageGenerationError(
             f"unsupported image provider: {provider}",
@@ -432,6 +457,10 @@ def generate_project_image(
         api_key=api_key,
     )
 
+    # Record each completed image automatically. Provider pricing is not exposed by this endpoint; null is intentional.
+    from .image_usage_costs import record_image_usage
+    record_image_usage(storage.data_dir, provider=result["provider"], model=result["model"], project_id=clean_project_id, request_id=result.get("request_id"), image_count=1, reported_cost_usd=result.get("reported_cost_usd"))
+
     # Never put the prompt or provider credential into the global audit log. The project-
     # local asset manifest carries generation provenance; the audit log only records the
     # action and stable non-secret evidence needed for operator history.
@@ -458,4 +487,3 @@ def generate_project_image(
         )
 
     return {"project_id": clean_project_id, **result}
-

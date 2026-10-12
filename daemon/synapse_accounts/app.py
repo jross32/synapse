@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import secrets
 import urllib.error
@@ -16,7 +17,7 @@ from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import AccountsSettings, load_settings
@@ -72,6 +73,7 @@ class PublicConfigPayload(BaseModel):
 class SyncDocumentPayload(BaseModel):
     document: dict[str, Any]
     updated_at: str
+    revision: str | None = None
 
 
 class SignUpRequest(BaseModel):
@@ -106,6 +108,7 @@ class OAuthExchangeRequest(BaseModel):
 
 class PutSyncDocumentRequest(BaseModel):
     document: dict[str, Any]
+    expected_revision: str | None = None
 
 
 class TokenIssue(BaseModel):
@@ -420,25 +423,40 @@ class AccountsService:
             db.flush()
         return SyncDocumentPayload(
             document=json.loads(document.document_json or "{}"),
+            revision=hashlib.sha256((document.document_json or "{}").encode("utf-8")).hexdigest(),
             updated_at=_iso(document.updated_at) or _iso(document.created_at) or _iso(_now()) or "",
         )
 
-    def put_sync_document(self, db: Session, account: Account, document: dict[str, Any]) -> SyncDocumentPayload:
+    def put_sync_document(
+        self, db: Session, account: Account, document: dict[str, Any],
+        expected_revision: str | None,
+    ) -> SyncDocumentPayload:
+        # Legacy unconditional writes are deliberately rejected: an old client
+        # must never erase fields written by a newer client.
+        if not expected_revision:
+            raise HTTPException(status_code=409, detail="Sync client must refresh and supply a revision.")
         row = db.scalar(select(SyncDocument).where(SyncDocument.account_id == account.id))
-        now = _now()
         if row is None:
-            row = SyncDocument(
-                account_id=account.id,
-                document_json=json.dumps(document),
-                created_at=now,
-                updated_at=now,
-            )
+            row = SyncDocument(account_id=account.id, document_json="{}")
             db.add(row)
-        else:
-            row.document_json = json.dumps(document)
-            row.updated_at = now
+            db.flush()
+        old_json = row.document_json or "{}"
+        if hashlib.sha256(old_json.encode("utf-8")).hexdigest() != expected_revision:
+            raise HTTPException(status_code=409, detail="Sync document changed on another device. Refresh before saving.")
+        now = _now()
+        new_json = json.dumps(document)
+        result = db.execute(
+            update(SyncDocument)
+            .where(SyncDocument.account_id == account.id, SyncDocument.document_json == old_json)
+            .values(document_json=new_json, updated_at=now)
+        )
+        if result.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Concurrent sync update. Refresh before saving.")
         self._log_event(db, account_id=account.id, event_kind="sync.updated", provider=None)
-        return SyncDocumentPayload(document=document, updated_at=_iso(now) or "")
+        return SyncDocumentPayload(
+            document=document, updated_at=_iso(now) or "",
+            revision=hashlib.sha256(new_json.encode("utf-8")).hexdigest(),
+        )
 
     def start_oauth(
         self,
@@ -851,7 +869,7 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
         account: Account = Depends(current_account),
         db: Session = Depends(get_db),
     ) -> SyncDocumentPayload:
-        return service.put_sync_document(db, account, payload.document)
+        return service.put_sync_document(db, account, payload.document, payload.expected_revision)
 
     @app.post("/v1/oauth/start", response_model=OAuthStartResponse)
     def start_oauth(

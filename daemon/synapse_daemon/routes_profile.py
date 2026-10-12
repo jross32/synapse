@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
 from html import escape
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -27,12 +32,100 @@ class ProfileSignUpRequest(BaseModel):
     display_name: str | None = None
 
 
+class McpPreferenceRequest(BaseModel):
+    enabled: bool = True
+
+
+class McpDeviceSelectRequest(BaseModel):
+    device_id: str | None = None
+
+
 class FavoriteRequest(BaseModel):
     favorite: bool | None = None
 
 
 class AuthStartResponse(BaseModel):
     url: str
+
+
+_MCP_PROBE_TIMEOUT_S = 8.0
+
+
+def _probe_mcp(url: str | None) -> dict:
+    """Send an MCP initialize to ``url`` and report reachability.
+
+    Errors are reduced to their type/status so the bearer token embedded in the
+    URL never ends up in a response body or the UI.
+    """
+    if not url:
+        return {"ok": False, "status": None, "ms": None, "server_version": None, "error": "not configured"}
+    body = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "synapse-connection-check", "version": "1"},
+        },
+    }).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+    )
+    started = time.perf_counter()
+    try:
+        with urllib.request.urlopen(req, timeout=_MCP_PROBE_TIMEOUT_S) as res:
+            raw = res.read(64_000).decode("utf-8", "replace")
+            status = res.status
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "status": exc.code, "ms": _elapsed_ms(started), "server_version": None, "error": f"HTTP {exc.code}"}
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        reason = getattr(exc, "reason", exc)
+        kind = "timed out" if isinstance(reason, TimeoutError) or "timed out" in str(reason) else type(reason).__name__
+        return {"ok": False, "status": None, "ms": _elapsed_ms(started), "server_version": None, "error": kind}
+    version = None
+    try:
+        version = json.loads(raw).get("result", {}).get("serverInfo", {}).get("version")
+    except (ValueError, AttributeError):
+        pass
+    ok = status == 200 and version is not None
+    return {"ok": ok, "status": status, "ms": _elapsed_ms(started), "server_version": version, "error": None if ok else "unexpected response"}
+
+
+def _elapsed_ms(started: float) -> int:
+    return int((time.perf_counter() - started) * 1000)
+
+
+def _account_connector(manager: ProfileManager, action: str = "read", device_id: str | None = None) -> dict:
+    """Read (or rotate / re-route) the account-wide MCP URL hosted by Synapse accounts.
+
+    This is the one link Claude.ai and ChatGPT should use: it stays the same on every
+    computer signed in to the account and relays to the selected device. Blocking
+    network I/O -- always call through ``asyncio.to_thread``.
+    """
+    account = manager.summary(refresh_remote=False)
+    this_device = manager._state_row()["current_host_id"] if account.signed_in else None
+    base = {"url": None, "selected_device_id": None, "this_device_id": this_device, "error": None}
+    if not account.signed_in:
+        return {**base, "error": "Sign in to get your account MCP URL."}
+    try:
+        access = manager._ensure_access_token()
+        if action == "select":
+            manager._accounts.select_mcp_device(access_token=access, device_id=device_id or this_device)
+        if action == "rotate":
+            result = manager._accounts.rotate_mcp_connector(access_token=access)
+        else:
+            result = manager._accounts.create_mcp_connector(access_token=access)
+    except Exception as exc:  # noqa: BLE001 -- surfaced to the UI; never echo URLs or tokens
+        envelope = getattr(exc, "envelope", None)
+        status = (getattr(envelope, "details", None) or {}).get("status")
+        code = getattr(envelope, "code", "")
+        detail = f"HTTP {status}" if status else ("unreachable" if code == "profile.remote_unreachable" else type(exc).__name__)
+        return {**base, "error": f"Couldn't reach Synapse accounts ({detail})."}
+    return {**base, "url": result.get("url"), "selected_device_id": result.get("selected_device_id")}
 
 
 def _callback_page(*, ok: bool, title: str, message: str) -> HTMLResponse:
@@ -247,6 +340,26 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
     async def catalog_state() -> dict:
         return manager.catalog_state().model_dump(mode="json")
 
+    @router.get("/device-parity/{source_host_id}", response_model=None, dependencies=[guard])
+    async def device_parity(source_host_id: str) -> dict:
+        """Compare recorded Synapse installs, without claiming a full OS inventory."""
+        state = await asyncio.to_thread(manager.summary, refresh_remote=False)
+        if not state.signed_in or not state.user_id:
+            raise HTTPException(status_code=401, detail="Synapse account sign-in required")
+        hosts = await asyncio.to_thread(manager.list_hosts)
+        if source_host_id == state.current_host.id or not any(host.id == source_host_id for host in hosts):
+            raise HTTPException(status_code=404, detail="Unknown source computer")
+        catalog = await asyncio.to_thread(manager.catalog_state)
+        missing = [
+            {"item_key": item.item_key, "kind": item.kind, "item_id": item.item_id,
+             "status": "needs_verified_installer", "installed_here": False}
+            for item in catalog.items
+            if item.kind in {"tool", "bundle"}
+            and source_host_id in item.installed_host_ids and not item.installed_here
+        ]
+        return {"source_host_id": source_host_id, "destination_host_id": state.current_host.id,
+                "items": missing, "complete_inventory": False, "automatic_install_available": False,
+                "limitations": ["Recorded Synapse catalog installs only", "No secret or project file migration"]}
     @router.post("/favorites/{kind}/{item_id}", response_model=None, dependencies=[guard])
     async def favorite_item(kind: str, item_id: str, payload: FavoriteRequest, request: Request) -> dict:
         if kind not in {"tool", "quick-action"}:
@@ -266,7 +379,7 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/service-connections/{provider}/connect", response_model=None, dependencies=[guard])
     async def connect_service(provider: str, request: Request) -> dict:
-        connection = manager.connect_service(provider=provider)
+        connection = await asyncio.to_thread(manager.connect_service, provider=provider)
         payload = connection.model_dump(mode="json")
         await _publish_service_updated(request, payload, "connected")
         await _publish_profile_updated(request, manager, "service-connected")
@@ -274,7 +387,7 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
 
     @router.post("/service-connections/{provider}/verify", response_model=None, dependencies=[guard])
     async def verify_service(provider: str, request: Request) -> dict:
-        connection = manager.verify_service(provider=provider)
+        connection = await asyncio.to_thread(manager.verify_service, provider=provider)
         payload = connection.model_dump(mode="json")
         await _publish_service_updated(request, payload, "verified")
         await _publish_profile_updated(request, manager, "service-verified")
@@ -285,6 +398,80 @@ def build_profile_router(storage, auth: AuthManager, manager: ProfileManager) ->
         manager.delete_service_connection(connection_id)
         await _publish_service_updated(request, {"id": connection_id}, "deleted")
         await _publish_profile_updated(request, manager, "service-deleted")
+
+    def mcp_connections() -> dict:
+        from . import boot_config
+        from .machine_fleet import ensure_machine_id
+        from .mcp_device_registry import get_device_preference, device_token
+        machine_id = ensure_machine_id(storage.data_dir)
+        enabled = get_device_preference(storage.data_dir, manager.summary(refresh_remote=False).user_id, machine_id)
+        port = 7878
+        token = auth.local_token or ""
+        config = boot_config.load(storage.data_dir)
+        hostname = config.public_hostname
+        path = f"/mcp/{token}"
+        account = manager.summary(refresh_remote=False)
+        per_device_token = device_token(storage.data_dir, account.user_id, machine_id) if account.user_id and enabled else None
+        device_path = f"/mcp/device/{machine_id}/{per_device_token}" if enabled and per_device_token else None
+        return {
+            "primary": {
+                "configured": bool(token) and account.signed_in,
+                "local_url": f"http://127.0.0.1:{port}{path}" if account.signed_in and token else None,
+                "remote_url": f"https://{hostname}{path}" if account.signed_in and hostname and token else None,
+                "remote_hostname": hostname,
+            },
+            "device": {
+                "id": machine_id,
+                "enabled": enabled,
+                "endpoint": f"http://127.0.0.1:{port}{device_path}" if device_path else None,
+                "remote_endpoint": f"https://{hostname}{device_path}" if device_path and hostname else None,
+            },
+        }
+
+    @router.get("/mcp-connections", response_model=None, dependencies=[guard])
+    async def get_mcp_connections() -> dict:
+        return mcp_connections()
+
+    @router.get("/mcp-connections/account", response_model=None, dependencies=[guard])
+    async def get_account_connector() -> dict:
+        return await asyncio.to_thread(_account_connector, manager)
+
+    @router.put("/mcp-connections/account/selection", response_model=None, dependencies=[guard])
+    async def select_account_connector_device(payload: McpDeviceSelectRequest) -> dict:
+        return await asyncio.to_thread(_account_connector, manager, "select", payload.device_id)
+
+    @router.post("/mcp-connections/account/rotate", response_model=None, dependencies=[guard])
+    async def rotate_account_connector() -> dict:
+        return await asyncio.to_thread(_account_connector, manager, "rotate")
+
+    @router.post("/mcp-connections/check", response_model=None, dependencies=[guard])
+    async def check_mcp_connections() -> dict:
+        # Claude.ai and ChatGPT reach Synapse through the account (Railway) URL or the
+        # public tunnel, so a local-only check can look healthy while every hosted
+        # assistant times out. Probe every path end to end.
+        primary = mcp_connections()["primary"]
+        account = await asyncio.to_thread(_account_connector, manager)
+        local, remote, account_probe = await asyncio.gather(
+            asyncio.to_thread(_probe_mcp, primary["local_url"]),
+            asyncio.to_thread(_probe_mcp, primary["remote_url"]),
+            asyncio.to_thread(_probe_mcp, account["url"]),
+        )
+        return {
+            "account": account_probe,
+            "local": local,
+            "remote": remote,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @router.patch("/mcp-connections", response_model=None, dependencies=[guard])
+    async def update_mcp_connections(payload: McpPreferenceRequest) -> dict:
+        from .machine_fleet import ensure_machine_id
+        from .mcp_device_registry import set_device_preference
+        account = manager.summary(refresh_remote=False)
+        if not account.signed_in or not account.user_id:
+            raise invalid("profile", "Sign in before changing MCP provisioning.")
+        set_device_preference(storage.data_dir, account.user_id, ensure_machine_id(storage.data_dir), payload.enabled)
+        return mcp_connections()
 
     @router.get("/hosts", response_model=None, dependencies=[guard])
     async def list_hosts() -> dict:

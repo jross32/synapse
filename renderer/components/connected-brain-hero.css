@@ -65,3 +65,24 @@
   .synapse-brain-hero__actions button { transition: none; }
   .synapse-brain-hero__actions button:hover { transform: none; }
 }
+
+.synapse-brain-hero__art { padding: 0 8px; min-height: 325px; }
+.synapse-brain-hero__art > .synapse-brain-3d { width: 100%; }
+
+/* Give the new anatomical brain more of the hero without crowding the copy. */
+@media (min-width: 861px) {
+  .synapse-brain-hero { grid-template-columns: minmax(0, 1fr) minmax(360px, 1.14fr); min-height: 380px; }
+  .synapse-brain-hero__art { min-height: 380px; padding: 0 4px; }
+}
+@media (min-width: 601px) and (max-width: 860px) {
+  .synapse-brain-hero { grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr); min-height: 350px; }
+  .synapse-brain-hero__art { min-height: 350px; padding: 0 4px; }
+}
+/* Unified luminous neural atmosphere, spanning the full welcome card. */
+.synapse-brain-hero { border-color: color-mix(in srgb, var(--synapse-accent-glow) 45%, var(--synapse-border-subtle)); background: radial-gradient(ellipse 46% 95% at 70% 49%,rgba(0,195,255,.24),transparent 78%),radial-gradient(ellipse 65% 95% at 90% 58%,rgba(110,69,255,.19),transparent 78%),linear-gradient(120deg,#06142c,#08275a 56%,#091538); box-shadow:inset 0 0 60px rgba(24,128,245,.12),0 15px 55px rgba(0,0,0,.21),0 0 26px rgba(23,129,246,.12); }
+.synapse-brain-hero::before {z-index:0;inset:-35%;opacity:.6;mask-image:radial-gradient(ellipse at 60% 55%,#000 10%,transparent 75%);background-image:repeating-radial-gradient(ellipse at 63% 50%,transparent 0 31px,rgba(70,190,255,.2) 32px,transparent 34px,transparent 76px);background-size:auto;animation:synapse-field-breathe 11s ease-in-out infinite alternate;pointer-events:none;}
+.synapse-brain-hero::after {content:'';position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 67% 47%,rgba(52,205,255,.16),transparent 32%),linear-gradient(90deg,rgba(3,12,31,.25),transparent 46%,rgba(3,12,31,.1));}
+.synapse-brain-hero__content,.synapse-brain-hero__art{position:relative;z-index:1}
+.synapse-brain-hero__art{filter:drop-shadow(0 0 22px rgba(0,170,255,.25))}
+@keyframes synapse-field-breathe{from{opacity:.3;transform:scale(.96) rotate(-8deg)}to{opacity:.68;transform:scale(1.06) rotate(-5deg)}}
+@media(prefers-reduced-motion:reduce){.synapse-brain-hero::before{animation:none}}

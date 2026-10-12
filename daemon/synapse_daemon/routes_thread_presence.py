@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 
 from . import thread_presence
+from . import chatgpt_worker_catalog
 from .api_versions import event_name
 from .audit import AuditRecord, audit
 from .projects import get as get_project
@@ -31,9 +32,11 @@ def build_thread_presence_router(storage: Storage, bus: EventBus | None = None) 
     ) -> dict[str, Any]:
         with storage.transaction() as conn:
             observation, tracked = thread_presence.observe_browser_thread(conn, payload)
+            catalog_worker = chatgpt_worker_catalog.import_observation(conn, payload)
         result = {
             "observation": observation.model_dump(mode="json"),
             "tracked_thread": tracked.model_dump(mode="json") if tracked else None,
+            "worker_chat_id": catalog_worker.id if catalog_worker else None,
         }
         await publish("browser_observed", result)
         return result

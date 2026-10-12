@@ -65,7 +65,7 @@ AI_WORKING_AGREEMENT_PROMPT = (
 AI_VISUAL_QA_DEFAULT_PROMPT = (
     "## Default Visual QA for Synapse UI work\n"
     "If the assignment creates, changes, tests, or releases a website or user-facing UI, "
-    "automatically retrieve installed skill browser-ui-audit and follow it with the "
+    "automatically retrieve installed skills universal-quality-gate and browser-ui-audit and follow them with the "
     "existing completion-contract before claiming completion. Run scripts/visual-qa.mjs "
     "for isolated desktop and mobile color, overflow, console, and screenshot checks. "
     "When authorized disposable test credentials and scenarios exist, run "
@@ -153,7 +153,7 @@ def append_work_item_handoff(
     path = ensure_ai_context_file(data_dir, project_id, project_name)
     _rotate_if_needed(path)
 
-    heading = f"### {utc_now().date().isoformat()} · {role_name or 'agent'} · {squad_name}"
+    heading = f"### {utc_now().date().isoformat()} Â· {role_name or 'agent'} Â· {squad_name}"
     lines = [
         "",
         heading,
@@ -183,7 +183,7 @@ def append_capture_note(
     into the project's shared AI memory so the next agent run sees it."""
     path = ensure_ai_context_file(data_dir, project_id, project_name)
     _rotate_if_needed(path)
-    heading = f"### {utc_now().date().isoformat()} · captured ({source})"
+    heading = f"### {utc_now().date().isoformat()} Â· captured ({source})"
     body = note.strip() or "_Empty note._"
     _append_text(path, "\n".join(["", heading, "", body]) + "\n")
     return path
@@ -215,7 +215,7 @@ def write_role_prompt(
 
     prompt = "\n".join(
         [
-            f"# Synapse Squad Prompt · {role_name}",
+            f"# Synapse Squad Prompt Â· {role_name}",
             "",
             f"Project: {project_name}",
             f"Squad: {squad_name}",
@@ -231,7 +231,7 @@ def write_role_prompt(
             (
                 f"You are **{personality_name}**. {personality_preamble_md.strip()}".strip()
                 if personality_name
-                else "_No specific personality assigned — use balanced, professional judgment._"
+                else "_No specific personality assigned â€” use balanced, professional judgment._"
             ),
             "",
             "## Squad goal",

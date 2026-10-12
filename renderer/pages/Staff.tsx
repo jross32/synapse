@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 
 import { StaffChatPanel } from '../components/StaffChatPanel';
+import { StaffHQWorkspace } from '../components/StaffHQWorkspace';
+import { WorkforceOverview } from '../components/WorkforceOverview';
 import { MayaGrowthReviewPanel } from '../components/MayaGrowthReviewPanel';
 import { MayaExecutionPanel } from '../components/MayaExecutionPanel';
 import { launchAgentWorkItem } from '@shared/agent-squads-client';
@@ -1633,6 +1635,10 @@ function ProfilePanel({
 }
 
 export function StaffPage(): JSX.Element {
+  const [workforceMode, setWorkforceMode] = useState(true);
+  const [staffHqOpen, setStaffHqOpen] = useState(
+    () => new URLSearchParams(window.location.search).get('staff_hq') === '1'
+  );
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [assets, setAssets] = useState<StaffAvatarAsset[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -1738,6 +1744,9 @@ export function StaffPage(): JSX.Element {
     );
   }
 
+  if (staffHqOpen) return <StaffHQWorkspace onClassic={() => setStaffHqOpen(false)} />;
+  if (workforceMode) return <WorkforceOverview onOpenClassic={() => setWorkforceMode(false)} />;
+
   return (
     <div className='mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-7'>
       <header className='mb-5 flex flex-col justify-between gap-4 xl:flex-row xl:items-end'>
@@ -1747,11 +1756,16 @@ export function StaffPage(): JSX.Element {
             Your people
           </div>
           <h1 className='mt-2 text-2xl font-semibold tracking-tight text-foreground'>My AI Staff</h1>
+          <button type='button' onClick={() => setWorkforceMode(true)} className='mt-3 rounded-xl border border-blue-400/40 px-3 py-2 text-xs text-blue-300 hover:bg-blue-500/10'>Open AI Workforce</button>
           <p className='mt-1 max-w-3xl text-sm text-muted-foreground'>
             Persistent people with roles, personalities, badges, goals, memory, permissions, KPIs, evidence, and their own work history.
           </p>
         </div>
         <div className='flex flex-wrap gap-2'>
+          <button type='button' onClick={() => setStaffHqOpen(true)}
+            className='inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground hover:brightness-110'>
+            <Sparkles className='h-4 w-4' /> Open Staff HQ
+          </button>
           <button
             type='button'
             onClick={() => void openBriefing()}

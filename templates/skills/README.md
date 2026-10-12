@@ -15,3 +15,7 @@ This is intentionally generic. `super-internet-digger` is the first package, not
 Package versions are immutable. If package bytes change, bump the package version before reinstalling.
 
 Direct MCP servers and native tools remain available after a skill pack is installed. A skill guides routing; it does not replace or disable the underlying tools.
+
+## Universal Quality Gate (implicit/default)
+
+`universal-quality-gate` is a portable default skill for every Synapse-connected UI agent. It is discoverable in the skill catalog and auto-provisioned alongside `browser-ui-audit` and `completion-contract`. See `templates/skills/universal-quality-gate/SKILL.md` and `docs/UNIVERSAL_VISUAL_QUALITY_GATE.md` for tools, API, tests, evidence registration, and scope limitations.

@@ -468,6 +468,9 @@ def edit_project_image(
         api_key=api_key,
     )
 
+    from .image_usage_costs import record_image_usage
+    record_image_usage(storage.data_dir, provider=result["provider"], model=result["model"], project_id=clean_project_id, request_id=result.get("request_id"), image_count=1, reported_cost_usd=result.get("reported_cost_usd"), operation="edit")
+
     # Keep prompts out of the global audit log. Full provenance remains project-local.
     with storage.transaction() as conn:
         audit(

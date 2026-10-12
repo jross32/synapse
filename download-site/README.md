@@ -24,3 +24,17 @@ The optional premium preview is at https://github.com/jross32/synapse/releases/t
 
 Site uptime depends on the localhost:8879 static server and Cloudflare tunnel. If the domain returns 502, verify the local server first; the current static server was restarted manually and is not yet guaranteed to restart on boot. The download-site source should gain an explicit managed startup/service definition. The fallback version in app.js is older than the stable release and should be reconciled. Release documentation should include installer SHA-256, provenance, tested OS versions, backup/rollback and known limitations.
 
+
+
+## Premium v0.2.219 published preview (2026-10-12)
+
+Public release: https://github.com/jross32/synapse/releases/tag/premium-preview-0.2.219-20261012
+
+- The premium preview is now linked first under Downloads, clearly labeled UNSIGNED / PREVIEW.
+- Its primary .exe link uses a permanent GitHub Releases asset (242,652,850 bytes).
+- A checksum-matched local site mirror is available at /releases/Synapse-Premium-Setup-0.2.219-preview.exe when the local download server is online.
+- The 0.1.217 stable release and its GitHub link remain unchanged; the dynamic stable fallback still filters out prereleases.
+- releases.json retains version=0.1.217/channel=stable and documents v0.2.219 under previews with size, SHA-256, source snapshot and verification limitations.
+- v0.2.219 source snapshot: https://github.com/jross32/synapse/tree/release/premium-preview-0.2.219-20261012.
+- Neither 0.2.219 executable is Authenticode-signed; no clean-PC full install/upgrade/rollback or second-device E2E certification. Do not promote to stable automatically.
+- The static server and tunnel are local processes, not durable cloud hosting for the mirror. GitHub is the primary binary host. Do not commit release .exe files into Git.

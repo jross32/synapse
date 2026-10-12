@@ -55,3 +55,7 @@ This example is a schema illustration, not a verified ResellTogether selector in
 5. **Release:** report exact tests, artifact paths, pass/fail/untested matrix and revision. Do not mark complete unless full acceptance and relevant quality gates pass.
 
 The scraper is useful for lightweight structure, asset and route checks, but **real color/layout measurement and screenshots still require a browser engine**. This skill is available to Synapse-connected AIs that retrieve installed skills; it cannot silently change disconnected ChatGPT, Claude, Codex or other sessions.
+
+## Register evidence with Universal Quality Gate
+
+Use the implicit `universal-quality-gate` skill for Quality OS integration. When a Synapse Agent Squad UI work-item ID and authenticated daemon are available, run `python scripts/run_visual_qa_and_register.py APP_URL --synapse-url DAEMON_URL --subject-id WORK_ITEM_ID --output FRESH_OUTPUT_DIR` with `SYNAPSE_TOKEN` set securely. The browser report is validated and imported as scoped browser-proof evidence; failing or incomplete audits cannot unblock completion. See `docs/UNIVERSAL_VISUAL_QUALITY_GATE.md` for current scope and limitations.

@@ -41,3 +41,7 @@ Persist project, branch/worktree, commit, precise acceptance checklist pass/fail
 ## Scope and visibility
 
 This installed skill is discoverable by *Synapse-connected AIs that retrieve Synapse skills/context*. It cannot force unrelated disconnected ChatGPT chats to read it, eliminate platform turn limits, guarantee full autonomy, or override a human authorization requirement. Completion claims must accurately describe what was actually executed.
+
+## Universal Quality Gate discovery
+
+For any UI/frontend task, also load the implicit `universal-quality-gate` skill. It maps the existing Quality OS API, evidence import, blocking Agent Squad completion checks and exact commands to the canonical `docs/UNIVERSAL_VISUAL_QUALITY_GATE.md`. Browser smoke PASS is necessary for scoped work-item completion but not sufficient to claim complete end-to-end UI verification.

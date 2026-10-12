@@ -6,6 +6,7 @@
   let previousStatus = null;
   let generationStartedAt = null;
   let lastSentSignature = '';
+  let lastSentAt = 0;
   let debounceTimer = null;
 
   function visible(el) {
@@ -20,7 +21,7 @@
   }
 
   function cleanTitle() {
-    return (document.title || '').replace(/\s*[-–—]\s*ChatGPT\s*$/i, '').trim().slice(0, 500);
+    return (document.title || '').replace(/\s*[-ï¿½?"ï¿½?"]\s*ChatGPT\s*$/i, '').trim().slice(0, 500);
   }
 
   function latestText(selector, max = 4000) {
@@ -80,10 +81,31 @@
     return payload;
   }
 
+  let lastNoticeState = '';
+  function showWorkerActivity(status) {
+    const project = location.pathname.includes('g-p-6a91003e980c81919b8920cfc9e0941e') && location.pathname.includes('/c/');
+    const old = document.getElementById('synapse-worker-activity-toast');
+    if (!project) { if (old) old.remove(); return; }
+    if (status !== 'active') { if (old) old.remove(); lastNoticeState = status; return; }
+    if (lastNoticeState === 'active') return;
+    lastNoticeState = 'active';
+    const el = document.createElement('div');
+    el.id = 'synapse-worker-activity-toast';
+    el.textContent = 'Synapse is active in this worker group';
+    Object.assign(el.style, {position:'fixed',bottom:'90px',right:'18px',
+      background:'#152a36',color:'#e7fbff',padding:'12px 17px',border:'1px solid #31bad8',
+      borderRadius:'12px',boxShadow:'0 4px 22px #0007',font:'13px system-ui',
+      zIndex:'2147483646',pointerEvents:'none'});
+    document.body.appendChild(el);
+    setTimeout(() => { if (el.isConnected) el.remove(); }, 4800);
+  }
+
   function send(force = false) {
     const payload = snapshot();
+    showWorkerActivity(payload.status);
     const signature = JSON.stringify(payload);
-    if (!force && signature === lastSentSignature && payload.status !== 'active') return;
+    if (!force && signature === lastSentSignature && payload.status !== 'active' && Date.now() - lastSentAt < 30000) return;
+    lastSentAt = Date.now();
     lastSentSignature = signature;
     chrome.runtime.sendMessage({type: 'synapse-chatgpt-observation', payload}).catch(() => {});
   }
@@ -111,6 +133,16 @@
       send(false);
     }
   }, 5000);
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'synapse-worker-can-park') return;
+    const generating = [...document.querySelectorAll(STOP_SELECTOR)].some(visible);
+    const composer = [...document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]')]
+      .find(visible);
+    const draft = composer?.value || composer?.innerText || composer?.textContent || '';
+    const hasDraft = String(draft).trim().length > 0;
+    sendResponse({canPark: !generating && !hasDraft, generating, hasDraft});
+  });
 
   send(true);
 })();

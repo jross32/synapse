@@ -3612,6 +3612,16 @@ def build_mcp_router(
                 raise ValueError("server is required")
             with storage.transaction() as conn:
                 servers = {row.id: row for row in mcp_servers.list_servers(conn)}
+            # Resolve common scraper aliases against THIS Synapse connection's
+            # registered servers; never point a remote client at its own localhost.
+            if server_id.lower().replace("_", "-") in {
+                "webscraper", "web-scraper", "wbscrper", "scraper"
+            }:
+                from .mcp_servers import WEB_SCRAPER_KNOWN_IDS
+                server_id = next(
+                    (candidate for candidate in WEB_SCRAPER_KNOWN_IDS if candidate in servers),
+                    server_id,
+                )
             server = servers.get(server_id)
             if server is None:
                 raise ValueError(
@@ -3755,6 +3765,42 @@ def build_mcp_router(
         if is_notification:
             return None
         return _error(msg_id, -32601, f"Method not found: {method}")
+
+    @router.post("/mcp/device/{device_id}/{token}", response_model=None)
+    async def device_mcp_post(device_id: str, token: str, request: Request) -> Response:
+        """Per-device MCP entrance with separate credentials and normal write policy."""
+        from .machine_fleet import ensure_machine_id
+        from .mcp_device_registry import get_device_preference, device_token
+        import secrets
+        if device_id != ensure_machine_id(storage.data_dir):
+            return JSONResponse(_error(None, -32004, "Device not hosted here"), status_code=404)
+        row = storage.conn.execute("SELECT user_id FROM profile_state WHERE id=1").fetchone()
+        user_id = row["user_id"] if row else None
+        if not user_id:
+            return JSONResponse(_error(None, -32001, "Unauthorized"), status_code=401)
+        if not get_device_preference(storage.data_dir, user_id, device_id):
+            return JSONResponse(_error(None, -32003, "Device MCP disabled"), status_code=403)
+        if not secrets.compare_digest(token, device_token(storage.data_dir, user_id, device_id)):
+            return JSONResponse(_error(None, -32001, "Unauthorized"), status_code=401)
+        try:
+            payload = await request.json()
+        except Exception:
+            return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
+        async def dispatch(message: Any) -> Any:
+            lane, executor = _mcp_dispatch_executor(message)
+            response, _timing = await executor.run(
+                _handle, message, True, label=_mcp_request_label(message)
+            )
+            return response
+        try:
+            if isinstance(payload, list):
+                responses = await asyncio.gather(*(dispatch(m) for m in payload))
+                visible = [r for r in responses if r is not None]
+                return JSONResponse(visible) if visible else Response(status_code=202)
+            response = await dispatch(payload)
+        except McpExecutorBusy as exc:
+            return JSONResponse(_error(None, -32002, str(exc)), status_code=503)
+        return JSONResponse(response) if response is not None else Response(status_code=202)
 
     @router.post("/mcp/{token}", response_model=None)
     async def mcp_post(token: str, request: Request) -> Response:

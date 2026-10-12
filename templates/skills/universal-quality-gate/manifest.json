@@ -1,0 +1,29 @@
+{
+  "id": "universal-quality-gate",
+  "name": "Universal Quality Gate",
+  "publisher": "The WhatIf Company",
+  "version": "0.1.0",
+  "description": "Mandatory shared Synapse Quality OS completion gate for AI UI work. Find browser-proof tooling, automatic evidence registration, fail-closed completion, desktop/mobile contrast and visual audit guidance.",
+  "entrypoint": "SKILL.md",
+  "tags": [
+    "universal-quality-gate",
+    "quality-os",
+    "browser-proof",
+    "ui",
+    "frontend",
+    "visual-qa",
+    "contrast",
+    "mobile",
+    "agent-completion",
+    "screenshot",
+    "release"
+  ],
+  "implicit_invocation": true,
+  "required_capabilities": [],
+  "preferred_capabilities": [
+    "browser",
+    "playwright",
+    "synapse"
+  ],
+  "optional_capabilities": []
+}

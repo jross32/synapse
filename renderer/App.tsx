@@ -40,16 +40,21 @@ import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { reportRendererReady } from '@shared/electron-bridge';
+import { apiFetch } from '@shared/api-client';
 import { CaptureButton } from './components/CaptureButton';
 import { NotificationCenter } from './components/NotificationCenter';
+import { DesktopUpdateNotice } from './components/DesktopUpdateNotice';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { Sidebar } from './components/Sidebar';
 import { SidebarSettings } from './components/SidebarSettings';
-import { HomePage } from './pages/Home';
+import { SynapseDashboard } from './pages/SynapseDashboard';
 
+const UsageCostsPage = lazy(() =>
+  import('./pages/UsageCosts').then((module) => ({ default: module.UsageCostsPage }))
+);
 const StaffPage = lazy(() =>
   import('./pages/Staff').then((module) => ({ default: module.StaffPage }))
 );
@@ -80,6 +85,7 @@ const TracePage = lazy(() =>
 const WatchdogsPage = lazy(() =>
   import('./pages/Watchdogs').then((module) => ({ default: module.WatchdogsPage }))
 );
+const StoragePage = lazy(() => import('./pages/Storage').then(m => ({default:m.StoragePage})));
 const SettingsPage = lazy(() =>
   import('./pages/Settings').then((module) => ({ default: module.SettingsPage }))
 );
@@ -252,7 +258,29 @@ interface ShellProps {
 
 function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const { recentEvents } = useDaemon();
-  const [route, setRoute] = useState<AppRoute>(DEFAULT_ROUTE);
+  // Sync scheduled cost-drift findings into the persistent Synapse bell.
+  // Native desktop popups are best-effort and only used if already permitted.
+  useEffect(() => {
+    let active = true;
+    async function syncCostAlerts(): Promise<void> {
+      try {
+        const result = await apiFetch<{ created: number }>('/ai/usage-alerts/sync', { method: 'POST' });
+        if (!active || result.created <= 0) return;
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try { new Notification('Synapse AI cost alert', { body: `${result.created} measured cost change(s) detected. Open Usage & Costs.` }); }
+          catch { /* OS notifications may be unavailable despite permission */ }
+        }
+      } catch { /* optional server endpoint may be unavailable during upgrades */ }
+    }
+    void syncCostAlerts();
+    const timer = window.setInterval(() => { void syncCostAlerts(); }, 60_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  const [route, setRoute] = useState<AppRoute>(() =>
+    new URLSearchParams(window.location.search).get('staff_hq') === '1'
+      ? { kind: 'core', page: 'staff' }
+      : DEFAULT_ROUTE
+  );
   const [appsSection, setAppsSection] = useState<AppsSection>('projects');
   const [toolsSection, setToolsSection] = useState<ToolsSection>('tools');
   const [toolsTab, setToolsTab] = useState<ToolsTab>('installed');
@@ -264,6 +292,11 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
   const [toolsFocusId, setToolsFocusId] = useState<string | undefined>(undefined);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileInitialView, setProfileInitialView] = useState<'devices' | 'account' | 'apps'>('devices');
+  function openProfile(view: 'devices' | 'account' | 'apps' = 'devices'): void {
+    setProfileInitialView(view);
+    setProfileOpen(true);
+  }
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarSettingsOpen, setSidebarSettingsOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
@@ -331,6 +364,10 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       setRoute({ kind: 'core', page: 'ai-factory' });
       return;
     }
+    if (intent.page === 'usage-costs') {
+      setRoute({ kind: 'core', page: 'usage-costs' });
+      return;
+    }
     if (intent.page === 'trace') {
       setRoute({ kind: 'core', page: 'trace' });
       return;
@@ -343,6 +380,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       setRoute({ kind: 'core', page: 'updates' });
       return;
     }
+    if (intent.page === 'cloud-storage' || intent.page === 'storage-explorer' || intent.page === 'assets-library') { setRoute({kind:'core',page:intent.page}); return; }
     if (intent.page === 'settings') {
       setRoute({ kind: 'core', page: 'settings' });
       return;
@@ -461,6 +499,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       )}
 
       <div className='flex min-w-0 flex-1 flex-col'>
+        {!mobileRoute && <DesktopUpdateNotice />}
         {mobileRoute && (
           <header className='border-b border-border bg-card/95 backdrop-blur'>
             <div className='mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 pb-3 pt-4'>
@@ -497,7 +536,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
                 </button>
                 <button
                   type='button'
-                  onClick={() => setProfileOpen(true)}
+                  onClick={() => openProfile('apps')}
                   className='rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground'
                 >
                   Profile
@@ -526,7 +565,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
           >
             <Suspense fallback={<RouteFallback />}>
               {route.kind === 'core' && route.page === 'home' && (
-                <HomePage onNavigate={navigate} />
+                <SynapseDashboard onNavigate={navigate} />
               )}
             {route.kind === 'core' && route.page === 'apps' && (
               <AppsPage initialSection={appsSection} />
@@ -550,16 +589,18 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
             )}
             {route.kind === 'core' && route.page === 'live' && <LiveViewPage />}
             {route.kind === 'core' && route.page === 'staff' && <StaffPage />}
+            {route.kind === 'core' && route.page === 'usage-costs' && <UsageCostsPage />}
             {route.kind === 'core' && route.page === 'ai-factory' && <AiFactoryPage />}
             {route.kind === 'core' && route.page === 'whatsnew' && <WhatsnewPage />}
             {route.kind === 'core' && route.page === 'updates' && <UpdatesPage />}
             {route.kind === 'core' && route.page === 'trace' && <TracePage />}
             {route.kind === 'core' && route.page === 'watchdogs' && <WatchdogsPage />}
+            {route.kind === 'core' && (route.page === 'cloud-storage' || route.page === 'storage-explorer' || route.page === 'assets-library') && <StoragePage page={route.page} />}
             {route.kind === 'core' && route.page === 'settings' && (
               <SettingsPage
                 mobileRoute={mobileRoute}
                 onForgetDevice={onForgetDevice}
-                onOpenProfile={() => setProfileOpen(true)}
+                onOpenProfile={() => openProfile('apps')}
                 onOpenSidebarSettings={() => setSidebarSettingsOpen(true)}
                 onOpenWhatsNew={() => navigate({ page: 'whatsnew' })}
               />
@@ -645,10 +686,11 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onNavigate={navigate}
-        onOpenProfile={() => setProfileOpen(true)}
+        onOpenProfile={() => openProfile('apps')}
       />
       <ProfileHub
         open={profileOpen}
+        initialView={profileInitialView}
         onClose={() => setProfileOpen(false)}
         mobileRoute={mobileRoute}
       />

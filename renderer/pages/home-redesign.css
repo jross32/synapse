@@ -1,0 +1,1073 @@
+/* Keep the dashboard responsive to the space left by the app's navigation rail. */
+.syn-dash {
+  --syn-dash-cyan: color-mix(in srgb, var(--synapse-text-primary) 55%, var(--synapse-accent-glow));
+  --syn-dash-green: color-mix(in srgb, var(--synapse-text-primary) 55%, var(--synapse-success));
+  --syn-dash-edge: color-mix(in srgb, var(--synapse-border-strong) 75%, var(--synapse-accent-glow) 25%);
+  --syn-dash-violet: oklch(68% 0.16 290);
+  --syn-dash-violet-dim: oklch(68% 0.16 290 / 0.12);
+  container: synapse-dashboard / inline-size;
+  color: var(--synapse-text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--synapse-space-4);
+  min-width: 0;
+  font-family: var(--synapse-font-sans);
+  overflow-wrap: anywhere;
+}
+
+.syn-dash button,
+.syn-dash input {
+  font-family: inherit;
+}
+
+.syn-dash button {
+  max-width: 100%;
+  transition: background-color var(--synapse-duration-fast) var(--synapse-ease-smooth),
+    border-color var(--synapse-duration-fast) var(--synapse-ease-smooth),
+    box-shadow var(--synapse-duration-fast) var(--synapse-ease-smooth),
+    color var(--synapse-duration-fast) var(--synapse-ease-smooth);
+}
+
+.syn-dash button:focus-visible,
+.syn-dash input:focus-visible,
+.syn-dash a:focus-visible,
+.syn-dash [tabindex]:focus-visible,
+.synapse-sidebar button:focus-visible {
+  outline: 2px solid var(--synapse-accent);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--synapse-accent) 18%, transparent),
+    0 0 0 1px oklch(68% 0.16 290 / 0.28) inset,
+    0 0 22px color-mix(in srgb, var(--synapse-accent-glow) 34%, transparent);
+}
+
+.syn-dash button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.syn-dash-command {
+  display: flex;
+  align-items: center;
+  gap: var(--synapse-space-3);
+  min-height: var(--synapse-space-12);
+  min-width: 0;
+  border: 1px solid var(--synapse-border-strong);
+  border-radius: var(--synapse-radius-pill);
+  padding: var(--synapse-space-1) var(--synapse-space-4);
+  background: var(--synapse-bg-surface);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--synapse-bg-nucleus) 20%, transparent);
+}
+
+.syn-dash-command:focus-within {
+  border-color: var(--synapse-accent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--synapse-accent) 18%, transparent),
+    0 0 0 1px oklch(68% 0.16 290 / 0.22) inset,
+    0 0 28px color-mix(in srgb, var(--synapse-accent-glow) 24%, transparent);
+}
+
+.syn-dash-command > svg {
+  flex: none;
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-command input {
+  background: transparent;
+  color: var(--synapse-text-primary);
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font-size: var(--synapse-text-sm);
+  padding-block: var(--synapse-space-2);
+  border-radius: var(--synapse-radius-sm);
+}
+
+.syn-dash-command input::placeholder {
+  color: var(--synapse-text-secondary);
+  opacity: 1;
+}
+
+.syn-dash-command button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--synapse-space-8);
+  height: var(--synapse-space-8);
+  border-radius: var(--synapse-radius-pill);
+  color: var(--syn-dash-cyan);
+  background: color-mix(in srgb, var(--synapse-accent-glow) 8%, var(--synapse-bg-elevated));
+}
+
+.syn-dash-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--synapse-space-2);
+}
+
+.syn-dash-shortcuts button,
+.syn-dash-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--synapse-space-2);
+  min-height: calc(var(--synapse-space-8) + var(--synapse-space-1));
+  min-width: 0;
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-pill);
+  background: var(--synapse-bg-surface);
+  padding: var(--synapse-space-2) var(--synapse-space-3);
+  font-size: var(--synapse-text-xs);
+  line-height: 1.4;
+}
+
+.syn-dash-shortcuts svg {
+  flex: none;
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--synapse-space-3);
+  align-items: center;
+  padding-top: var(--synapse-space-2);
+}
+
+.syn-dash-toolbar > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--synapse-space-2);
+  align-items: center;
+  min-width: 0;
+  font-size: var(--synapse-text-sm);
+  font-weight: 700;
+}
+
+.syn-dash-toolbar small {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  font-weight: 400;
+}
+
+.syn-dash-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) minmax(0, 0.95fr);
+  min-width: 0;
+  border: 1px solid var(--syn-dash-edge);
+  border-radius: var(--synapse-radius-lg);
+  background:
+    radial-gradient(ellipse at 10% 15%, color-mix(in srgb, var(--synapse-accent) 11%, transparent), transparent 38%),
+    radial-gradient(ellipse at 50% 28%, oklch(68% 0.16 290 / 0.09), transparent 46%),
+    radial-gradient(ellipse at 84% 78%, color-mix(in srgb, var(--synapse-accent-glow) 15%, transparent), transparent 52%),
+    radial-gradient(ellipse at 22% 88%, oklch(68% 0.16 290 / 0.06), transparent 34%),
+    var(--synapse-bg-surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--synapse-text-primary) 7%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--synapse-accent-glow) 7%, transparent),
+    0 16px 48px color-mix(in srgb, var(--synapse-bg-nucleus) 22%, transparent);
+  overflow: hidden;
+}
+
+.syn-dash-greeting {
+  align-self: center;
+  min-width: 0;
+  padding: var(--synapse-space-6) 0 var(--synapse-space-6) var(--synapse-space-6);
+}
+
+.syn-dash-greeting > span {
+  font-size: var(--synapse-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.6;
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-greeting h1 {
+  font-weight: 750;
+  font-size: clamp(var(--synapse-text-xl), 2.3vw, var(--synapse-text-2xl));
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  margin: var(--synapse-space-3) 0;
+  color: var(--synapse-text-primary);
+}
+
+.syn-dash-greeting p {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  line-height: 1.75;
+}
+
+.syn-dash-metrics {
+  display: grid;
+  gap: var(--synapse-space-3);
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-md);
+  padding: var(--synapse-space-3);
+  margin-top: var(--synapse-space-4);
+  background: color-mix(in srgb, var(--synapse-bg-nucleus) 40%, transparent);
+}
+
+.syn-dash-metrics div {
+  display: grid;
+  grid-template-columns: var(--synapse-space-6) minmax(0, 1fr);
+  column-gap: var(--synapse-space-2);
+  row-gap: var(--synapse-space-1);
+}
+
+.syn-dash-metrics svg {
+  grid-row: span 2;
+  align-self: center;
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-metrics strong {
+  font-size: var(--synapse-text-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.syn-dash-metrics small {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  line-height: 1.4;
+}
+
+.syn-dash-brain {
+  align-self: center;
+  height: 26rem;
+  min-width: 0;
+}
+
+.syn-dash-ai {
+  align-self: center;
+  min-width: 0;
+  margin: var(--synapse-space-4) var(--synapse-space-4) var(--synapse-space-4) 0;
+  padding: var(--synapse-space-4);
+  border-radius: var(--synapse-radius-md);
+  background: color-mix(in srgb, var(--synapse-bg-elevated) 50%, var(--synapse-bg-surface));
+  border: 1px solid var(--synapse-border-strong);
+}
+
+.syn-dash-ai > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--synapse-space-2);
+  font-size: var(--synapse-text-sm);
+  font-weight: 700;
+}
+
+.syn-dash-ai > div svg {
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-ai > div span {
+  margin-left: auto;
+  font-size: var(--synapse-text-xs);
+  font-weight: 500;
+  color: var(--syn-dash-green);
+}
+
+.syn-dash-ai p {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  line-height: 1.65;
+  margin: var(--synapse-space-3) 0;
+}
+
+.syn-dash-ai button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--synapse-space-2);
+  width: 100%;
+  min-width: 0;
+  min-height: calc(var(--synapse-space-8) + var(--synapse-space-2));
+  text-align: left;
+  background: var(--synapse-bg-surface);
+  padding: var(--synapse-space-2) var(--synapse-space-3);
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-sm);
+  font-size: var(--synapse-text-xs);
+  line-height: 1.4;
+  margin-top: var(--synapse-space-2);
+}
+
+.syn-dash-ai button svg {
+  flex: none;
+  color: var(--synapse-text-secondary);
+}
+
+.syn-dash-panels {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--synapse-space-4);
+  align-items: start;
+}
+
+.syn-dash-panel {
+  grid-column: span 4;
+  min-width: 0;
+  min-height: 10rem;
+  background: linear-gradient(160deg,
+    var(--synapse-bg-surface),
+    color-mix(in srgb, var(--synapse-bg-nucleus) 38%, color-mix(in srgb, oklch(68% 0.16 290) 3%, var(--synapse-bg-surface))));
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-lg);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--synapse-text-primary) 6%, transparent),
+    inset 0 0 0 1px oklch(68% 0.16 290 / 0.06),
+    0 4px 24px color-mix(in srgb, var(--synapse-bg-nucleus) 16%, transparent),
+    0 1px 3px color-mix(in srgb, var(--synapse-bg-nucleus) 28%, transparent);
+  overflow: hidden;
+}
+
+.syn-dash-panel--apps,
+.syn-dash-panel--agents {
+  grid-column: span 6;
+}
+
+/* Panels 4–5 fill the second row evenly for a balanced 7-panel layout */
+.syn-dash-panels > .syn-dash-panel:nth-child(4):not(.syn-dash-panel--apps):not(.syn-dash-panel--agents),
+.syn-dash-panels > .syn-dash-panel:nth-child(5):not(.syn-dash-panel--apps):not(.syn-dash-panel--agents) {
+  grid-column: span 6;
+}
+
+.syn-dash-panel.is-collapsed {
+  min-height: 0;
+}
+
+.syn-dash-panel header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--synapse-space-2);
+  padding: var(--synapse-space-3) var(--synapse-space-4);
+  border-bottom: 1px solid var(--synapse-border-subtle);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--synapse-text-primary) 3%, transparent),
+    transparent);
+}
+
+.syn-dash-panel.is-collapsed header {
+  border-bottom-color: transparent;
+}
+
+.syn-dash-panel h2 {
+  font-size: var(--synapse-text-sm);
+  font-weight: 650;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.syn-dash-panel-collapse {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--synapse-space-8);
+  height: var(--synapse-space-8);
+  border-radius: var(--synapse-radius-sm);
+  color: var(--synapse-text-secondary);
+  transition: color var(--synapse-duration-fast) var(--synapse-ease-smooth),
+    background-color var(--synapse-duration-fast) var(--synapse-ease-smooth);
+}
+
+@media (hover: hover) {
+  .syn-dash-panel-collapse:hover {
+    color: var(--synapse-text-primary);
+    background: color-mix(in srgb, var(--synapse-border-subtle) 55%, transparent);
+  }
+}
+
+.syn-dash-view {
+  display: flex;
+  align-items: center;
+  gap: var(--synapse-space-1);
+  min-height: var(--synapse-space-8);
+  border-radius: var(--synapse-radius-sm);
+  color: var(--syn-dash-cyan);
+  font-size: var(--synapse-text-xs);
+  white-space: nowrap;
+}
+
+.syn-dash-panel-body {
+  padding: var(--synapse-space-4);
+}
+
+.syn-dash-list {
+  display: grid;
+  gap: var(--synapse-space-2);
+  min-width: 0;
+}
+
+.syn-dash-task {
+  display: flex;
+  align-items: center;
+  gap: var(--synapse-space-3);
+  padding: var(--synapse-space-2) 0;
+  border-bottom: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-sm);
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+
+.syn-dash-task:last-child,
+.syn-dash-event:last-child {
+  border-bottom-color: transparent;
+}
+
+.syn-dash-task > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--synapse-space-1);
+}
+
+.syn-dash-task strong {
+  font-size: var(--synapse-text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.syn-dash-task small {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  line-height: 1.5;
+}
+
+.syn-dash-task em {
+  font-size: var(--synapse-text-xs);
+  font-style: normal;
+  color: var(--syn-dash-green);
+}
+
+.syn-dash-task > svg {
+  flex: none;
+  color: var(--synapse-text-secondary);
+}
+
+.syn-dash-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--synapse-space-8) + var(--synapse-space-1));
+  height: calc(var(--synapse-space-8) + var(--synapse-space-1));
+  border: 1px solid color-mix(in srgb, var(--synapse-accent-glow) 30%, var(--synapse-border-subtle));
+  border-radius: var(--synapse-radius-md);
+  color: var(--syn-dash-cyan);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, oklch(68% 0.16 290) 28%, var(--synapse-bg-elevated)),
+    color-mix(in srgb, var(--synapse-accent-glow) 18%, var(--synapse-bg-surface)));
+  box-shadow:
+    0 0 14px oklch(68% 0.16 290 / 0.22),
+    0 0 6px color-mix(in srgb, var(--synapse-accent-glow) 16%, transparent);
+}
+
+.syn-dash-appgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(5.25rem, 100%), 1fr));
+  gap: var(--synapse-space-2);
+}
+
+.syn-dash-app {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--synapse-space-2);
+  padding: var(--synapse-space-3) var(--synapse-space-2);
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-md);
+  background: color-mix(in srgb, var(--synapse-bg-elevated) 50%, var(--synapse-bg-surface));
+}
+
+.syn-dash-appicon {
+  --syn-dash-icon-accent: var(--synapse-accent-glow);
+  width: calc(var(--synapse-space-8) + var(--synapse-space-2));
+  height: calc(var(--synapse-space-8) + var(--synapse-space-2));
+  display: grid;
+  place-items: center;
+  border-radius: var(--synapse-radius-md);
+  background: color-mix(in srgb, var(--syn-dash-icon-accent) 14%, var(--synapse-bg-surface));
+  color: color-mix(in srgb, var(--synapse-text-primary) 55%, var(--syn-dash-icon-accent));
+}
+
+.syn-dash-color-1 { --syn-dash-icon-accent: var(--synapse-success); }
+.syn-dash-color-2 { --syn-dash-icon-accent: var(--synapse-accent); }
+.syn-dash-color-3 { --syn-dash-icon-accent: var(--synapse-accent-glow); }
+.syn-dash-color-4 { --syn-dash-icon-accent: var(--synapse-danger); }
+
+.syn-dash-app strong {
+  font-size: var(--synapse-text-xs);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.syn-dash-app small {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+}
+
+.syn-dash-empty,
+.syn-dash-muted,
+.syn-dash-realm p,
+.syn-dash-health p,
+.syn-dash-health small {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  line-height: 1.7;
+}
+
+.syn-dash-event {
+  display: flex;
+  gap: var(--synapse-space-2);
+  align-items: center;
+  border-bottom: 1px solid var(--synapse-border-subtle);
+  padding: var(--synapse-space-2) 0;
+  font-size: var(--synapse-text-xs);
+}
+
+.syn-dash-event svg {
+  flex: none;
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-event span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.syn-dash-event time {
+  flex: none;
+  color: var(--synapse-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.syn-dash-chips {
+  display: flex;
+  gap: var(--synapse-space-2);
+  flex-wrap: wrap;
+}
+
+.syn-dash-chips span {
+  padding: var(--synapse-space-1) var(--synapse-space-2);
+  border: 1px solid var(--synapse-border-subtle);
+  background: var(--synapse-bg-elevated);
+  border-radius: var(--synapse-radius-sm);
+  font-size: var(--synapse-text-xs);
+}
+
+.syn-dash-realm p,
+.syn-dash-health p {
+  margin: var(--synapse-space-3) 0;
+}
+
+.syn-dash-realm button {
+  display: flex;
+  align-items: center;
+  gap: var(--synapse-space-2);
+  min-height: var(--synapse-space-8);
+  border-radius: var(--synapse-radius-sm);
+  color: var(--syn-dash-cyan);
+  font-size: var(--synapse-text-xs);
+}
+
+.syn-dash-healthstatus {
+  display: flex;
+  gap: var(--synapse-space-2);
+  align-items: center;
+  color: var(--syn-dash-green);
+  font-size: var(--synapse-text-sm);
+}
+
+.syn-dash-healthstatus svg {
+  flex: none;
+}
+
+.syn-dash-healthstats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--synapse-space-2);
+  margin-top: var(--synapse-space-4);
+}
+
+.syn-dash-healthstats span {
+  min-width: 0;
+  text-align: center;
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-md);
+  padding: var(--synapse-space-2) var(--synapse-space-1);
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+}
+
+.syn-dash-healthstats strong {
+  display: block;
+  font-size: var(--synapse-text-xl);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--syn-dash-cyan);
+}
+
+.syn-dash-custom {
+  border: 1px solid var(--syn-dash-edge);
+  background: var(--synapse-bg-surface);
+  border-radius: var(--synapse-radius-lg);
+  padding: var(--synapse-space-4);
+  display: grid;
+  gap: var(--synapse-space-3);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--synapse-text-primary) 5%, transparent);
+}
+
+.syn-dash-custom strong {
+  font-size: var(--synapse-text-sm);
+}
+
+.syn-dash-presets,
+.syn-dash-pick {
+  display: flex;
+  gap: var(--synapse-space-2);
+  flex-wrap: wrap;
+}
+
+.syn-dash-presets button,
+.syn-dash-pick label {
+  display: flex;
+  align-items: center;
+  gap: var(--synapse-space-2);
+  min-height: calc(var(--synapse-space-8) + var(--synapse-space-1));
+  padding: var(--synapse-space-2) var(--synapse-space-3);
+  background: var(--synapse-bg-elevated);
+  border: 1px solid var(--synapse-border-subtle);
+  border-radius: var(--synapse-radius-md);
+  font-size: var(--synapse-text-xs);
+}
+
+.syn-dash-presets button[aria-pressed='true'] {
+  border-color: var(--synapse-accent);
+  background: color-mix(in srgb, var(--synapse-accent) 12%, var(--synapse-bg-surface));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--synapse-accent) 22%, transparent),
+    0 0 14px color-mix(in srgb, var(--synapse-accent-glow) 20%, transparent);
+}
+
+.syn-dash-pick input {
+  accent-color: var(--synapse-accent);
+}
+
+.syn-dash-custom p {
+  font-size: var(--synapse-text-xs);
+  color: var(--synapse-text-secondary);
+  line-height: 1.6;
+}
+
+.syn-dash-warning {
+  padding: var(--synapse-space-3);
+  border: 1px solid color-mix(in srgb, var(--synapse-danger) 50%, var(--synapse-border-strong));
+  background: color-mix(in srgb, var(--synapse-danger) 10%, var(--synapse-bg-surface));
+  border-radius: var(--synapse-radius-md);
+  font-size: var(--synapse-text-xs);
+  line-height: 1.65;
+}
+
+.syn-dash-warning button {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-left: var(--synapse-space-2);
+  min-height: var(--synapse-space-8);
+}
+
+.synapse-sidebar {
+  background: linear-gradient(var(--synapse-bg-surface), var(--synapse-bg-nucleus));
+  border-right-color: var(--synapse-border-subtle);
+}
+
+.synapse-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--synapse-space-2);
+  margin: 0 0 var(--synapse-space-6);
+}
+
+.synapse-sidebar-brand svg {
+  flex: none;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--synapse-accent-glow) 48%, transparent));
+}
+
+.synapse-sidebar-brand > div {
+  display: grid;
+  gap: var(--synapse-space-1);
+  min-width: 0;
+}
+
+.synapse-sidebar-brand strong {
+  letter-spacing: 0.15em;
+  font-size: var(--synapse-text-base);
+}
+
+.synapse-sidebar-brand span {
+  color: var(--synapse-text-secondary);
+  font-size: var(--synapse-text-xs);
+  line-height: 1.4;
+}
+
+.synapse-sidebar [aria-current='page'] {
+  color: var(--synapse-text-primary);
+  background: linear-gradient(100deg,
+    color-mix(in srgb, var(--synapse-accent) 22%, var(--synapse-bg-surface)),
+    color-mix(in srgb, oklch(68% 0.16 290) 7%, var(--synapse-bg-surface)));
+  box-shadow:
+    inset 3px 0 var(--synapse-accent-glow),
+    inset 0 0 28px color-mix(in srgb, var(--synapse-accent-glow) 8%, transparent),
+    inset 0 0 10px oklch(68% 0.16 290 / 0.07);
+}
+
+@media (hover: hover) {
+  .syn-dash-shortcuts button:hover,
+  .syn-dash-toolbar button:hover,
+  .syn-dash-ai button:hover,
+  .syn-dash-panel button:hover,
+  .syn-dash-presets button:hover,
+  .syn-dash-command button:hover {
+    border-color: var(--syn-dash-edge);
+    background-color: var(--synapse-bg-elevated);
+    color: var(--synapse-text-primary);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--synapse-accent-glow) 12%, transparent),
+      0 2px 8px color-mix(in srgb, var(--synapse-bg-nucleus) 20%, transparent);
+  }
+
+  .syn-dash-app:hover {
+    border-color: var(--syn-dash-edge);
+    background: color-mix(in srgb, var(--synapse-bg-elevated) 80%, var(--synapse-bg-surface));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--synapse-accent-glow) 14%, transparent);
+  }
+}
+
+@container synapse-dashboard (max-width: 1000px) {
+  .syn-dash-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+
+  .syn-dash-ai {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--synapse-space-2) var(--synapse-space-3);
+    margin: 0 var(--synapse-space-4) var(--synapse-space-4);
+  }
+
+  .syn-dash-ai > div,
+  .syn-dash-ai p {
+    grid-column: 1 / -1;
+  }
+
+  .syn-dash-ai p {
+    margin: 0 0 var(--synapse-space-1);
+  }
+
+  .syn-dash-ai button {
+    margin-top: 0;
+  }
+
+  .syn-dash-panel {
+    grid-column: span 6;
+  }
+}
+
+@container synapse-dashboard (max-width: 680px) {
+  .syn-dash-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .syn-dash-greeting {
+    padding: var(--synapse-space-6) var(--synapse-space-6) 0;
+  }
+
+  .syn-dash-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .syn-dash-metrics div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .syn-dash-metrics svg {
+    grid-row: auto;
+    margin-bottom: var(--synapse-space-1);
+  }
+
+  .syn-dash-brain {
+    height: 25rem;
+  }
+
+  .syn-dash-panel {
+    grid-column: span 12;
+  }
+}
+
+@container synapse-dashboard (max-width: 420px) {
+  .syn-dash-command {
+    padding-inline: var(--synapse-space-3);
+    gap: var(--synapse-space-2);
+  }
+
+  .syn-dash-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .syn-dash-shortcuts button {
+    justify-content: flex-start;
+    padding-inline: var(--synapse-space-2);
+    text-align: left;
+  }
+
+  .syn-dash-toolbar {
+    align-items: flex-start;
+  }
+
+  .syn-dash-toolbar > span {
+    row-gap: var(--synapse-space-1);
+  }
+
+  .syn-dash-toolbar small {
+    width: 100%;
+  }
+
+  .syn-dash-toolbar button {
+    border-radius: var(--synapse-radius-md);
+  }
+
+  .syn-dash-greeting {
+    padding: var(--synapse-space-4) var(--synapse-space-4) 0;
+  }
+
+  .syn-dash-metrics {
+    gap: var(--synapse-space-2);
+    padding: var(--synapse-space-3) var(--synapse-space-2);
+  }
+
+  .syn-dash-brain {
+    height: 24rem;
+  }
+
+  .syn-dash-ai {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--synapse-space-3);
+  }
+
+  .syn-dash-appgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .syn-dash-panel header,
+  .syn-dash-panel-body {
+    padding: var(--synapse-space-3);
+  }
+
+  .syn-dash-task strong {
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .syn-dash-task,
+  .syn-dash-event {
+    min-height: 44px;
+  }
+}
+
+@container synapse-dashboard (max-width: 260px) {
+  .syn-dash-shortcuts,
+  .syn-dash-metrics,
+  .syn-dash-appgrid,
+  .syn-dash-healthstats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .syn-dash-command {
+    padding-inline: var(--synapse-space-2);
+    gap: var(--synapse-space-1);
+  }
+
+  .syn-dash-command > svg {
+    display: none;
+  }
+
+  .syn-dash-task,
+  .syn-dash-event,
+  .syn-dash-healthstatus,
+  .syn-dash-realm button {
+    flex-wrap: wrap;
+  }
+
+  .syn-dash-task > span:nth-child(2),
+  .syn-dash-event span,
+  .syn-dash-panel h2 {
+    flex-basis: 100%;
+  }
+
+  .syn-dash-task strong {
+    white-space: normal;
+  }
+
+  .syn-dash-panel header,
+  .syn-dash-panel-body,
+  .syn-dash-greeting,
+  .syn-dash-ai {
+    padding-inline: var(--synapse-space-2);
+  }
+
+  .syn-dash-ai {
+    margin-inline: var(--synapse-space-2);
+  }
+}
+
+/* Desktop: fit the dashboard to the viewport; panels scroll internally, not the page. */
+@media (min-width: 1100px) and (min-height: 700px) {
+  .syn-dash {
+    height: 100%;
+    min-height: 0;
+    gap: var(--synapse-space-3);
+  }
+
+  .syn-dash-command,
+  .syn-dash-toolbar {
+    flex: none;
+  }
+
+  .syn-dash-hero {
+    flex: 0 1 auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.7fr) minmax(0, 0.9fr);
+  }
+
+  .syn-dash-greeting {
+    padding-block: var(--synapse-space-4);
+  }
+
+  .syn-dash-metrics {
+    margin-top: var(--synapse-space-3);
+  }
+
+  .syn-dash-brain {
+    height: clamp(20rem, 42vh, 34rem);
+  }
+
+  .syn-dash-ai {
+    max-height: 100%;
+    overflow-y: auto;
+    margin-block: var(--synapse-space-3);
+  }
+
+  .syn-dash-panels {
+    flex: 1 1 0;
+    min-height: 12rem;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: var(--synapse-space-3);
+    align-items: stretch;
+  }
+
+  .syn-dash-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .syn-dash-panel header {
+    flex: none;
+    padding: var(--synapse-space-2) var(--synapse-space-3);
+  }
+
+  .syn-dash-panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--synapse-space-3);
+    scrollbar-width: thin;
+    scrollbar-color: var(--synapse-border-strong) transparent;
+  }
+
+  .syn-dash-panel-body::-webkit-scrollbar {
+    width: var(--synapse-space-2);
+  }
+
+  .syn-dash-panel-body::-webkit-scrollbar-thumb {
+    background: var(--synapse-border-strong);
+    border-radius: var(--synapse-radius-sm);
+  }
+
+  .syn-dash-panel.is-collapsed {
+    align-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syn-dash button,
+  .syn-dash input,
+  .syn-dash-command,
+  .syn-dash-panel-collapse {
+    transition: none;
+  }
+}
+
+/* Dashboard content-first layout: never squeeze expanded cards into the viewport. */
+@media (min-width: 1100px) and (min-height: 700px) {
+  .syn-dash { height: auto; min-height: 100%; overflow: visible; }
+  .syn-dash-hero { flex: none; }
+  .syn-dash-panels { flex: none; min-height: 0; grid-auto-rows: auto; align-items: start; }
+  .syn-dash-panel { min-height: 12rem; }
+  .syn-dash-panel-body { min-height: auto; overflow: visible; }
+}
+
+/* Luminous neural field across the full dashboard welcome panel */
+.syn-dash-hero{position:relative;isolation:isolate;background:radial-gradient(ellipse 45% 95% at 51% 48%,rgba(0,190,255,.27),transparent 79%),radial-gradient(ellipse 60% 90% at 74% 48%,rgba(90,55,250,.18),transparent 80%),linear-gradient(115deg,#071432,#08275e 50%,#071b42);border-color:rgba(72,176,255,.5);box-shadow:inset 0 0 45px rgba(0,147,255,.2),0 0 28px rgba(0,130,255,.15)}
+.syn-dash-hero::before{content:"";position:absolute;inset:-30%;pointer-events:none;z-index:0;background:repeating-radial-gradient(ellipse at 52% 50%,transparent 0 32px,rgba(44,179,255,.17) 33px,transparent 35px,transparent 74px);opacity:.5;animation:syn-neural-breathe 9s ease-in-out infinite alternate}
+.syn-dash-hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(circle at 52% 44%,rgba(49,203,255,.25),transparent 33%),linear-gradient(90deg,rgba(2,12,35,.25),transparent 29%,transparent 70%,rgba(2,12,35,.35))}
+.syn-dash-hero>*{position:relative;z-index:1}.syn-dash-brain{filter:drop-shadow(0 0 24px rgba(0,195,255,.35))}
+@keyframes syn-neural-breathe{from{opacity:.25;transform:scale(.97) rotate(-12deg)}to{opacity:.76;transform:scale(1.07) rotate(-8deg)}}
+@media(prefers-reduced-motion:reduce){.syn-dash-hero::before{animation:none}}
+/* Reference layout: hero + right activity rail, two central work cards, three lower cards.
+   Only apply at wide container widths; preserve the responsive/drag layout elsewhere. */
+@container synapse-dashboard (min-width: 1170px) {
+  .syn-dash:not(:has(.syn-dash-custom)) {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(275px,.7fr);gap:10px;align-content:start;}
+  .syn-dash:not(:has(.syn-dash-custom)) > .syn-dash-command,
+  .syn-dash:not(:has(.syn-dash-custom)) > .syn-dash-shortcuts,
+  .syn-dash:not(:has(.syn-dash-custom)) > .syn-dash-toolbar,
+  .syn-dash:not(:has(.syn-dash-custom)) > .syn-dash-warning {grid-column:1/-1;}
+  .syn-dash:not(:has(.syn-dash-custom)) > .syn-dash-panels {display:contents;}
+  .syn-dash:not(:has(.syn-dash-custom)) > .syn-dash-hero {grid-column:1/3;grid-row:4;min-height:360px;grid-template-columns:minmax(185px,.83fr) minmax(260px,1.4fr) minmax(190px,.88fr);}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel {grid-column:auto;min-height:0;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--working {grid-column:3;grid-row:4;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--apps {grid-column:1;grid-row:5;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--agents {grid-column:2;grid-row:5;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--devices {grid-column:3;grid-row:5;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--activity {grid-column:1;grid-row:6;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--realm {grid-column:2;grid-row:6;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel--health {grid-column:3;grid-row:6;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-brain {height:350px;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-ai {padding:12px;margin:12px 12px 12px 0;backdrop-filter:blur(16px);background:rgba(8,20,55,.77);border-color:rgba(96,141,245,.3);box-shadow:0 8px 30px rgba(0,0,0,.25);}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-greeting {padding:18px 0 18px 18px;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-greeting h1 {font-size:clamp(23px,2.4vw,34px);}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel-body {padding:11px 14px;}
+  .syn-dash:not(:has(.syn-dash-custom)) .syn-dash-panel header {padding:9px 14px;}
+}
+@container synapse-dashboard (min-width:1170px){
+.syn-dash:not(:has(.syn-dash-custom))>.syn-dash-command{grid-row:1}
+.syn-dash:not(:has(.syn-dash-custom))>.syn-dash-shortcuts{grid-row:2}
+.syn-dash:not(:has(.syn-dash-custom))>.syn-dash-toolbar{grid-row:3}
+.syn-dash:not(:has(.syn-dash-custom))>.syn-dash-hero{grid-row:4}
+}
+/* Reference-derived starfield texture, blended behind live 3D brain and interactive cards. */
+.syn-dash-hero::after{background-image:linear-gradient(90deg,rgba(4,12,37,.68),transparent 32%,transparent 75%,rgba(4,12,37,.6)),url('../../assets/reference/neural-field-texture.webp');background-size:100% 100%,cover;background-position:center;opacity:.35;mix-blend-mode:screen}
+.syn-dash-hero>.syn-dash-greeting,.syn-dash-hero>.syn-dash-brain,.syn-dash-hero>.syn-dash-ai{position:relative;z-index:1}

@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <filter id="glow-soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-hard" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="brainStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <radialGradient id="auraGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.25"/>
+      <stop offset="55%" stop-color="#06b6d4" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#0a0f1e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brainFill" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#0d1229" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Aura background -->
+  <ellipse cx="100" cy="100" rx="88" ry="88" fill="url(#auraGrad)"/>
+
+  <!-- Left hemisphere body -->
+  <path d="M100,45
+    C84,41 68,46 60,56
+    C51,67 49,81 52,92
+    C49,99 45,108 48,117
+    C51,126 60,133 69,136
+    C78,139 87,136 93,131
+    C96,129 98,131 100,133"
+    fill="url(#brainFill)"
+    stroke="url(#brainStroke)" stroke-width="2"
+    filter="url(#glow-soft)"/>
+
+  <!-- Left gyri folds -->
+  <path d="M62,62 C68,58 75,60 77,66" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+  <path d="M51,84 C57,80 65,82 67,88" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+  <path d="M50,104 C57,100 65,102 67,108" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+  <path d="M59,122 C66,118 73,119 75,124" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+
+  <!-- Right hemisphere body -->
+  <path d="M100,45
+    C116,41 132,46 140,56
+    C149,67 151,81 148,92
+    C151,99 155,108 152,117
+    C149,126 140,133 131,136
+    C122,139 113,136 107,131
+    C104,129 102,131 100,133"
+    fill="url(#brainFill)"
+    stroke="url(#brainStroke)" stroke-width="2"
+    filter="url(#glow-soft)"/>
+
+  <!-- Right gyri folds -->
+  <path d="M138,62 C132,58 125,60 123,66" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+  <path d="M149,84 C143,80 135,82 133,88" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+  <path d="M150,104 C143,100 135,102 133,108" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+  <path d="M141,122 C134,118 127,119 125,124" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-opacity="0.75" filter="url(#glow-hard)"/>
+
+  <!-- Corpus callosum -->
+  <line x1="100" y1="47" x2="100" y2="133" stroke="#22d3ee" stroke-width="1" stroke-opacity="0.3" stroke-dasharray="4,4"/>
+
+  <!-- Neural nodes -->
+  <circle cx="100" cy="68" r="5.5" fill="#22d3ee" filter="url(#glow-hard)"/>
+  <circle cx="77" cy="80" r="3.5" fill="#8b5cf6" filter="url(#glow-hard)"/>
+  <circle cx="123" cy="80" r="3.5" fill="#8b5cf6" filter="url(#glow-hard)"/>
+  <circle cx="68" cy="100" r="3" fill="#22d3ee" filter="url(#glow-hard)"/>
+  <circle cx="132" cy="100" r="3" fill="#22d3ee" filter="url(#glow-hard)"/>
+  <circle cx="80" cy="118" r="3" fill="#67e8f9" filter="url(#glow-hard)"/>
+  <circle cx="120" cy="118" r="3" fill="#67e8f9" filter="url(#glow-hard)"/>
+  <circle cx="100" cy="108" r="4.5" fill="#a78bfa" filter="url(#glow-hard)"/>
+
+  <!-- Neural connections -->
+  <g opacity="0.65" filter="url(#glow-hard)">
+    <line x1="100" y1="68" x2="77" y2="80" stroke="#22d3ee" stroke-width="1.2"/>
+    <line x1="100" y1="68" x2="123" y2="80" stroke="#22d3ee" stroke-width="1.2"/>
+    <line x1="77" y1="80" x2="68" y2="100" stroke="#8b5cf6" stroke-width="1.2"/>
+    <line x1="123" y1="80" x2="132" y2="100" stroke="#8b5cf6" stroke-width="1.2"/>
+    <line x1="68" y1="100" x2="80" y2="118" stroke="#22d3ee" stroke-width="1.2"/>
+    <line x1="132" y1="100" x2="120" y2="118" stroke="#22d3ee" stroke-width="1.2"/>
+    <line x1="80" y1="118" x2="100" y2="108" stroke="#67e8f9" stroke-width="1.2"/>
+    <line x1="120" y1="118" x2="100" y2="108" stroke="#67e8f9" stroke-width="1.2"/>
+    <line x1="77" y1="80" x2="100" y2="108" stroke="#8b5cf6" stroke-width="0.6" stroke-opacity="0.5"/>
+    <line x1="123" y1="80" x2="100" y2="108" stroke="#8b5cf6" stroke-width="0.6" stroke-opacity="0.5"/>
+  </g>
+
+  <!-- Outbound signal spikes -->
+  <g opacity="0.45">
+    <line x1="100" y1="45" x2="100" y2="26" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3,5"/>
+    <line x1="60" y1="56" x2="44" y2="40" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3,5"/>
+    <line x1="140" y1="56" x2="156" y2="40" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3,5"/>
+    <line x1="49" y1="92" x2="28" y2="92" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3,5"/>
+    <line x1="151" y1="92" x2="172" y2="92" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3,5"/>
+    <line x1="69" y1="136" x2="53" y2="152" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3,5"/>
+    <line x1="131" y1="136" x2="147" y2="152" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3,5"/>
+  </g>
+  <!-- Spike endpoints -->
+  <circle cx="100" cy="24" r="2.5" fill="#22d3ee" opacity="0.7" filter="url(#glow-hard)"/>
+  <circle cx="42" cy="38" r="2.5" fill="#8b5cf6" opacity="0.7" filter="url(#glow-hard)"/>
+  <circle cx="158" cy="38" r="2.5" fill="#8b5cf6" opacity="0.7" filter="url(#glow-hard)"/>
+  <circle cx="26" cy="92" r="2.5" fill="#22d3ee" opacity="0.7" filter="url(#glow-hard)"/>
+  <circle cx="174" cy="92" r="2.5" fill="#22d3ee" opacity="0.7" filter="url(#glow-hard)"/>
+  <circle cx="51" cy="154" r="2.5" fill="#8b5cf6" opacity="0.7" filter="url(#glow-hard)"/>
+  <circle cx="149" cy="154" r="2.5" fill="#8b5cf6" opacity="0.7" filter="url(#glow-hard)"/>
+</svg>

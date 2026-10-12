@@ -12,6 +12,7 @@ def test_visual_qa_default_skill_and_completion_contract():
     source = json.loads((SKILLS / "browser-ui-audit" / "manifest.json").read_text(encoding="utf-8"))
     assert source["implicit_invocation"] is True
     assert source["entrypoint"] == "SKILL.md"
+    skill_packs.ensure_default_ui_skills(ROOT / "data")
     installed = skill_packs.get_installed(ROOT / "data", "browser-ui-audit")
     assert installed.manifest.version == source["version"]
     assert installed.manifest.implicit_invocation is True
@@ -45,6 +46,7 @@ def test_visual_qa_injected_into_new_squad_prompts(tmp_path):
     ).read_text(encoding='utf-8')
     assert 'Default Visual QA for Synapse UI work' in prompt
     assert 'browser-ui-audit' in prompt
+    assert 'universal-quality-gate' in prompt
     assert 'scripts/visual-qa-suite.mjs' in prompt
     assert 'For tasks without a graphical UI, skip' in prompt
 
@@ -55,6 +57,7 @@ def test_fresh_install_bootstraps_default_visual_qa(tmp_path):
     results = skill_packs.ensure_default_ui_skills(data_dir)
     assert results['browser-ui-audit'].startswith('installed:'), results
     assert results['completion-contract'].startswith('installed:'), results
+    assert results['universal-quality-gate'].startswith('installed:'), results
     assert all(skill_packs.get_installed(data_dir, x).manifest.implicit_invocation
                for x in skill_packs.DEFAULT_UI_SKILL_IDS)
     assert all(x == 'current' for x in skill_packs.ensure_default_ui_skills(data_dir).values())
@@ -67,7 +70,7 @@ def test_fresh_install_bootstraps_default_visual_qa(tmp_path):
     marker.write_text(json.dumps(current), encoding='utf-8')
     repaired = skill_packs.ensure_default_ui_skills(data_dir)
     assert repaired['browser-ui-audit'].startswith('installed:'), repaired
-    assert skill_packs.get_installed(data_dir, 'browser-ui-audit').manifest.version == '0.2.1'
+    assert skill_packs.get_installed(data_dir, 'browser-ui-audit').manifest.version == '0.2.2'
 
 
 def test_windows_installer_contains_visual_qa_dependencies():
@@ -78,7 +81,22 @@ def test_windows_installer_contains_visual_qa_dependencies():
     expected = ('templates', 'scripts/visual-qa.mjs',
                 'scripts/visual-qa-suite.mjs', 'scripts/visual-qa-e2e-worker.mjs',
                 'node_modules/playwright', 'node_modules/playwright-core',
-                'tools/ui_lab_reference_compare.py')
+                'tools/ui_lab_reference_compare.py',
+                'scripts/run_visual_qa_and_register.py')
     for target in expected:
         assert target in packaged, target
         assert (root / packaged[target]).exists(), target
+
+
+def test_universal_gate_is_packaged_and_documented():
+    from synapse_daemon import skill_packs
+    root = Path(__file__).resolve().parents[2]
+    manifest = json.loads((root / 'templates/skills/universal-quality-gate/manifest.json').read_text(encoding='utf-8'))
+    assert manifest['implicit_invocation'] is True
+    assert 'universal-quality-gate' in skill_packs.DEFAULT_UI_SKILL_IDS
+    package = json.loads((root / 'package.json').read_text(encoding='utf-8'))
+    resources = {x['to']: x for x in package['build']['extraResources']}
+    assert 'templates' in resources
+    assert 'scripts/run_visual_qa_and_register.py' in resources
+    assert 'UNIVERSAL_VISUAL_QUALITY_GATE.md' in resources['docs']['filter']
+    assert (root / 'docs/UNIVERSAL_VISUAL_QUALITY_GATE.md').exists()

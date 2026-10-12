@@ -21,9 +21,12 @@ const assert = require('node:assert/strict');
         overflow: document.documentElement.scrollWidth > innerWidth,
         heading: document.querySelector('h1')?.innerText,
         download: document.getElementById('download-windows')?.getAttribute('href'),
+        premiumPreview: document.getElementById('download-premium')?.getAttribute('href'),
+        unsignedWarning: document.body.textContent.includes('Preview build - unsigned.'),
         cards: document.querySelectorAll('.platform').length
       }));
       console.log(label, JSON.stringify(result));
+      if (result.premiumPreview !== 'https://github.com/jross32/synapse/releases/download/premium-preview-0.2.219-20261012/Synapse.Premium.Setup.0.2.219.exe' || !result.unsignedWarning) failures++;
       if (result.overflow || result.cards !== 3 ||
         !/^https:\/\/github\.com\/jross32\/synapse\/releases\/download\/v(\d+\.\d+\.\d+)\/Synapse\.Setup\.\1\.exe$/.test(result.download ?? '')) {
         failures++;
@@ -34,7 +37,7 @@ const assert = require('node:assert/strict');
         const visible = await page.locator('#primary-nav').isVisible();
         console.log('iphone-menu', expanded, visible);
         if (expanded !== 'true' || !visible) failures++;
-        await page.locator('#primary-nav a[href="#downloads"]').click();
+        await page.locator('#primary-nav a[href="/releases"]').click();
         if (await page.locator('#menu-toggle').getAttribute('aria-expanded') !== 'false') failures++;
       }
       await page.close();

@@ -199,8 +199,6 @@ function LogPanel({ item }: { item: WatchdogItem }): JSX.Element {
       </div>
       {open && (
         <div className='mt-3'>
-          <RailwayCostPanel />
-
       {error && (
             <div className='rounded-xl border border-status-error/30 bg-status-error/10 p-3 text-xs text-status-error'>
               {error}

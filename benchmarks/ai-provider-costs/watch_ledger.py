@@ -1,10 +1,11 @@
-﻿"""Read Synapse's existing runtime ledger and emit a safe cost-drift report.
+"""Read Synapse's existing runtime ledger and emit a safe cost-drift report.
 
 Read-only against the live ledger. Optional image records are supplied as JSONL
 with provider, model, operation, image_count and provider-reported total cost.
 """
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -85,6 +86,15 @@ def main():
     report = {'generated_at': datetime.now(timezone.utc).isoformat(), 'ledger': str(args.ledger), 'runtimes': current, 'images': images, 'alerts': alerts, 'caveat': 'Aggregate cumulative totals, not per-task billing. Unknown calls excluded from reported cost; image prices require explicit provider-reported image entries.'}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+    # Publish to the daemon's persistent profile data directory as well as the repo.
+    # Packaged Synapse must not rely on a source-code-relative report path.
+    appdata = os.getenv('APPDATA')
+    if appdata:
+        profile_data = Path(appdata) / 'Synapse' / 'data'
+        if profile_data.is_dir():
+            (profile_data / 'ai-usage-cost-report.json').write_text(
+                json.dumps(report, indent=2) + '\n', encoding='utf-8'
+            )
     print(json.dumps({'runtimes': len(current), 'image_models': len(images), 'alerts': alerts, 'output': str(args.output)}))
 
 if __name__ == '__main__':

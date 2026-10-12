@@ -1,0 +1,1 @@
+import React from 'react';import{createRoot}from'react-dom/client';import{DeviceSyncOnboarding}from'./components/DeviceSyncOnboarding';import{setDaemonBase}from'./lib/api-client';setDaemonBase(location.origin);createRoot(document.getElementById('root')!).render(<DeviceSyncOnboarding signedIn accountId="qa-user" currentHostId="qa-desktop"/>);

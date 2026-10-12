@@ -1,6 +1,7 @@
-import { ArrowUpRight, Bot, Boxes, Download, Monitor, Sparkles } from 'lucide-react';
+﻿import { ArrowUpRight, Bot, Boxes, Download, Monitor, Sparkles } from 'lucide-react';
 import type { NavigationIntent } from '@shared/nav';
 import './connected-brain-hero.css';
+import { Brain3D } from './Brain3D';
 
 type ConnectedBrainHeroProps = {
   projectCount: number;
@@ -54,33 +55,10 @@ export function ConnectedBrainHero({ projectCount, activeCount, onNavigate }: Co
           <button type='button' onClick={() => onNavigate({ page: 'settings' })}><Monitor size={16} aria-hidden='true' /> My machines</button>
         </div>
       </div>
-      <div className='synapse-brain-hero__art' aria-hidden='true'>
-        <div className='synapse-brain-hero__art-halo' />
-        <svg className='synapse-brain-hero__neural-svg' viewBox='0 0 380 335' fill='none' role='presentation'>
-          <defs>
-            <linearGradient id='synapse-neural-line' x1='70' y1='70' x2='300' y2='265' gradientUnits='userSpaceOnUse'>
-              <stop stopColor='var(--synapse-accent-glow)' />
-              <stop offset='.52' stopColor='var(--synapse-accent)' />
-              <stop offset='1' stopColor='var(--synapse-hero-pink)' />
-            </linearGradient>
-            <radialGradient id='synapse-neural-core'><stop stopColor='var(--synapse-accent-glow)' stopOpacity='.38' /><stop offset='1' stopColor='var(--synapse-accent)' stopOpacity='0' /></radialGradient>
-          </defs>
-          <circle cx='190' cy='164' r='149' fill='url(#synapse-neural-core)' />
-          <path d='M136 261 C68 243 57 202 69 162 C53 118 82 76 122 70 C136 34 181 39 198 59 C242 30 276 55 283 89 C318 99 325 134 310 161 C332 199 295 241 252 246 C224 272 188 282 168 249' stroke='url(#synapse-neural-line)' strokeWidth='3' strokeLinecap='round' opacity='.92' />
-          <path d='M191 60 Q176 103 195 144 Q211 172 190 214 Q183 239 217 261' stroke='url(#synapse-neural-line)' strokeWidth='2' opacity='.88' />
-          <path d='M77 166 Q145 112 197 138 Q249 120 313 163 M86 204 Q155 181 198 201 Q260 179 296 210' stroke='url(#synapse-neural-line)' strokeWidth='1.3' opacity='.48' />
-          {strands.map((d) => <path key={d} d={d} stroke='url(#synapse-neural-line)' strokeWidth='1.65' strokeLinecap='round' opacity='.66' />)}
-          {nodes.map(([x,y,r],i) => (
-            <g key={i}>
-              <circle cx={x} cy={y} r={r+5} fill='var(--synapse-accent-glow)' opacity='.12' />
-              <circle cx={x} cy={y} r={r} fill={i % 3 === 0 ? 'var(--synapse-hero-pink)' : 'var(--synapse-accent-glow)'} stroke='var(--synapse-bg-nucleus)' strokeWidth='1' />
-            </g>
-          ))}
-          <path d='M76 180 C34 178 30 122 2 112 M298 132 C334 112 354 65 378 77 M251 224 C297 261 321 278 373 273 M133 261 C106 284 86 301 22 304' stroke='url(#synapse-neural-line)' strokeWidth='2' strokeLinecap='round' opacity='.48' />
-        </svg>
-        <div className='synapse-brain-hero__art-caption'>ONE WORKSPACE. ALL YOUR AI.</div>
-        <div className='synapse-brain-hero__metric'><strong>{activeCount}</strong> running <span aria-hidden='true'>/</span> <strong>{projectCount}</strong> projects</div>
+      <div className='synapse-brain-hero__art'>
+        <Brain3D activeCount={activeCount} onNavigate={onNavigate} />
       </div>
     </section>
   );
 }
+

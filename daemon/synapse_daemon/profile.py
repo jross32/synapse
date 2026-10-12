@@ -46,7 +46,7 @@ _PUBLIC_CONFIG_CACHE_TTL_SECONDS = 300
 # trying it again. Without this, a down accounts server makes every /profile read
 # block the async event loop on a synchronous urllib call, wedging the whole app.
 _REMOTE_FAILURE_COOLDOWN_SECONDS = 60
-# Local CLI/service detection shells out (`where claude`, `gh auth status`, …) and
+# Local CLI/service detection shells out (`where claude`, `gh auth status`, â€¦) and
 # costs ~1-1.5s per profile read. Cache the per-provider result briefly; an explicit
 # connect/verify bypasses the cache for a fresh probe.
 _LOCAL_DETECT_CACHE_TTL_SECONDS = 45
@@ -129,6 +129,7 @@ class CatalogPreferenceState(BaseModel):
 class ProfilePreferences(BaseModel):
     theme: str | None = None
     sidebar_layout: dict[str, Any] | None = None
+    dashboard_layout: dict[str, Any] | None = None
     sessions_quick_actions_collapsed: bool | None = None
     discover_recent_keys: list[str] = Field(default_factory=list)
     build_mode: str = "review"
@@ -181,6 +182,7 @@ BUILD_MODES = ("assist", "review", "auto")
 class ProfilePreferencesUpdate(BaseModel):
     theme: str | None = None
     sidebar_layout: dict[str, Any] | None = None
+    dashboard_layout: dict[str, Any] | None = None
     sessions_quick_actions_collapsed: bool | None = None
     discover_recent_keys: list[str] | None = None
     build_mode: str | None = None
@@ -242,7 +244,7 @@ class ProfileManager:
         # -> (monotonic_stamp, ServiceConnection). See _LOCAL_DETECT_CACHE_TTL_SECONDS.
         self._local_detect_cache: dict[str, tuple[float, ServiceConnection]] = {}
 
-    # ── public summary / preferences ───────────────────────────────────
+    # ---- public summary / preferences ----
 
     def summary(self, *, refresh_remote: bool = True) -> ProfileSummary:
         current_host = self.ensure_current_host()
@@ -320,6 +322,8 @@ class ProfileManager:
         current = self.preferences().model_dump()
         if payload.theme is not None:
             current["theme"] = payload.theme
+        if payload.dashboard_layout is not None:
+            current['dashboard_layout'] = payload.dashboard_layout
         if payload.sidebar_layout is not None:
             current["sidebar_layout"] = payload.sidebar_layout
         if payload.sessions_quick_actions_collapsed is not None:
@@ -343,7 +347,7 @@ class ProfileManager:
         self._sync_to_remote(best_effort=True)
         return self.preferences()
 
-    # ── auth lifecycle ─────────────────────────────────────────────────
+    # ---- auth lifecycle ----
 
     def sign_up_password(
         self,
@@ -592,7 +596,7 @@ class ProfileManager:
     def record_tool_uninstall(self, *, tool_id: str) -> None:
         self.record_catalog_uninstall(kind="tool", item_id=tool_id)
 
-    # ── services / hosts ───────────────────────────────────────────────
+    # ---- services / hosts ----
 
     def list_hosts(self) -> list[HostPresence]:
         self.ensure_current_host()
@@ -799,7 +803,7 @@ class ProfileManager:
             updated_at=refreshed["updated_at"],
         )
 
-    # ── remote sync ─────────────────────────────────────────────────────
+    # ---- remote sync ----
 
     def _refresh_from_remote(self, *, best_effort: bool) -> None:
         row = self._state_row()
@@ -833,8 +837,43 @@ class ProfileManager:
             return
         try:
             access_token = self._ensure_access_token()
+            remote = self._accounts.get_sync_document(access_token=access_token)
+            if not remote.revision:
+                raise invalid("profile", "Account service does not support safe revision-based sync.")
+            # Pull remote changes before composing the next snapshot, and
+            # retain keys unknown to this older client.
+            if not isinstance(remote.document, dict):
+                raise invalid("profile", "Account service returned an invalid sync document.")
+            schema = remote.document.get("schema", 1)
+            if not isinstance(schema, int) or schema > 2 or schema < 1:
+                raise invalid("profile", "Remote profile schema is newer than this Synapse version.")
+            self._merge_remote_payload(remote.document)
             document = self._build_remote_payload()
-            self._accounts.put_sync_document(access_token=access_token, document=document)
+            for key, value in remote.document.items():
+                if key not in document:
+                    document[key] = value
+            for collection, identity in (("catalog_preferences", "item_key"), ("service_connections", "id"), ("hosts", "id")):
+                local_rows = document.get(collection, [])
+                remote_rows = remote.document.get(collection, [])
+                if not isinstance(remote_rows, list):
+                    continue
+                by_id = {item[identity]: item for item in local_rows if isinstance(item, dict) and item.get(identity)}
+                for item in remote_rows:
+                    if not isinstance(item, dict) or not item.get(identity):
+                        continue
+                    key = item[identity]
+                    if key not in by_id:
+                        local_rows.append(item)
+                    else:
+                        # Keep newer-client fields even when this client's known
+                        # columns have a more recent timestamp.
+                        for i, row in enumerate(local_rows):
+                            if isinstance(row, dict) and row.get(identity) == key:
+                                local_rows[i] = {**item, **row}
+                                break
+            self._accounts.put_sync_document(
+                access_token=access_token, document=document, expected_revision=remote.revision,
+            )
             self._set_sync_status(error=None)
             self._remote_cooldown_until = 0.0
         except Exception as exc:
@@ -919,6 +958,10 @@ class ProfileManager:
     def _merge_remote_payload(self, document: dict[str, Any]) -> None:
         if not isinstance(document, dict):
             return
+        # Preserve local state when a future client publishes an incompatible schema.
+        schema = document.get("schema", 1)
+        if not isinstance(schema, int) or schema > 2 or schema < 1:
+            return
         preferences_payload = document.get("preferences")
         with self._storage.transaction() as conn:
             if isinstance(preferences_payload, dict):
@@ -934,8 +977,8 @@ class ProfileManager:
                         (json.dumps(preferences_payload), remote_updated, _now_iso()),
                     )
 
-            for item in document.get("catalog_preferences", []):
-                if not isinstance(item, dict):
+            for item in (document.get("catalog_preferences") if isinstance(document.get("catalog_preferences"), list) else []):
+                if not isinstance(item, dict) or not isinstance(item.get("item_key"), str) or not item.get("item_key"):
                     continue
                 existing = conn.execute(
                     "SELECT updated_at FROM catalog_preferences WHERE item_key = ?",
@@ -973,8 +1016,8 @@ class ProfileManager:
                     ),
                 )
 
-            for connection in document.get("service_connections", []):
-                if not isinstance(connection, dict):
+            for connection in (document.get("service_connections") if isinstance(document.get("service_connections"), list) else []):
+                if not isinstance(connection, dict) or not isinstance(connection.get("id"), str) or not connection.get("id"):
                     continue
                 existing = conn.execute(
                     "SELECT updated_at FROM service_connections WHERE id = ?",
@@ -1015,8 +1058,8 @@ class ProfileManager:
                     ),
                 )
 
-            for host in document.get("hosts", []):
-                if not isinstance(host, dict):
+            for host in (document.get("hosts") if isinstance(document.get("hosts"), list) else []):
+                if not isinstance(host, dict) or not isinstance(host.get("id"), str) or not host.get("id"):
                     continue
                 conn.execute(
                     """
@@ -1039,7 +1082,7 @@ class ProfileManager:
                     ),
                 )
 
-    # ── account transport helpers ──────────────────────────────────────
+    # ---- account transport helpers ----
 
     def _ensure_access_token(self) -> str:
         row = self._state_row()
@@ -1154,7 +1197,7 @@ class ProfileManager:
                 return self._cached_auth_providers
             raise
 
-    # ── internal helpers ───────────────────────────────────────────────
+    # ---- internal helpers ----
 
     def _state_row(self):
         row = self._storage.conn.execute("SELECT * FROM profile_state WHERE id = 1").fetchone()
@@ -1299,6 +1342,28 @@ class ProfileManager:
             details["message"] = "Local sign-in cache was found, but the CLI is not on PATH here."
         else:
             details["message"] = "No local sign-in cache or CLI was detected on this host."
+
+        if provider == "claude-code":
+            # The existence of ~/.claude is not proof of a valid OAuth session.
+            status = ServiceConnectionStatus.NEEDS_ATTENTION if binary_path else ServiceConnectionStatus.DISCONNECTED
+            details["auth_verified"] = False
+            if binary_path:
+                try:
+                    auth_result = subprocess.run(
+                        [binary_path, "auth", "status"], capture_output=True, text=True,
+                        timeout=12, check=False, creationflags=headless_creationflags(),
+                    )
+                    # Never persist raw CLI output, which may contain account metadata.
+                    details["auth_verified"] = auth_result.returncode == 0
+                    status = (ServiceConnectionStatus.READY if auth_result.returncode == 0
+                              else ServiceConnectionStatus.NEEDS_ATTENTION)
+                    details["message"] = ("Claude Code authentication verified on this desktop."
+                                          if auth_result.returncode == 0
+                                          else "Claude Code is installed but needs sign-in. Choose Connect Claude.")
+                except (subprocess.TimeoutExpired, OSError):
+                    details["message"] = "Could not verify Claude Code sign-in. Retry or reconnect."
+            else:
+                details["message"] = "Claude Code CLI is not installed on this desktop."
 
         if provider == "github-copilot":
             gh_path = resolve_command("gh")
