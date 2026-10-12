@@ -414,6 +414,8 @@ $env:SYNAPSE_MCP_ALLOW_WRITES = '1'
 }
 
 if ($DaemonOnly) {
+  & (Join-Path $PSScriptRoot 'dev-daemon-preflight.ps1') -RepoRoot $root
+  if ($LASTEXITCODE -ne 0) { throw 'Development daemon preflight blocked unsafe startup; existing services preserved.' }
   Start-DaemonOnly
 }
 
@@ -428,7 +430,10 @@ do {
 
   try {
     if (-not $AppOnly) {
-      Clear-StalePort -Port 7878 -Match 'synapse_daemon' -Label 'daemon'
+      # Never forcibly kill an existing development/installed daemon: it may
+      # own remote AI calls, account sessions or the stable user MCP endpoint.
+      & (Join-Path $PSScriptRoot 'dev-daemon-preflight.ps1') -RepoRoot $root
+      if ($LASTEXITCODE -ne 0) { throw 'Development daemon preflight blocked unsafe startup; existing services preserved.' }
       $daemonCommand = '"' + $pythonExe + '" -m synapse_daemon --port 7878 --data-dir data'
       if ($BindLan) {
         $daemonCommand += ' --bind-lan'
