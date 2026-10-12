@@ -1,9 +1,14 @@
-# Progress — Synapse
+# Progress â€” Synapse
 
 **Always read this file first** if you're an AI coding session resuming work. It's the single source of truth for "where are we right now."
 
 ---
 
+## ChatGPT Worker Catalog and companion v0.4.0 — feature branch (2026-10-12)
+
+Implemented `renderer/pages/WorkerCatalog.tsx` under AI Coding → ChatGPT. The existing daemon registry now automatically indexes Chrome-observed Synapse2GPT Workers conversations and exposes a searchable presence-aware catalog plus handoff API. A closed tab parks rather than archives the worker. Chrome companion v0.4.0 adds safe Park context-menu action, persisted URL on close and idle heartbeat. Documentation is in `docs/CHATGPT_WORKER_CATALOG.md`, `docs/CHATGPT_CHROME_WORKER_RUNBOOK.md`, and `docs/api-finds.md`; all-agent discovery in `AGENTS.md`.
+
+Verification: primary-source TypeScript typecheck and 18 targeted daemon tests passed; Node mock suites passed for grouping, active/idle presence, safe park, saved URL, and content notice. **Not yet installed/live verified** in Chrome, and the running old daemon is not upgraded; do not claim shipping until those gates pass. This milestone bumps the Chrome extension manifest to **0.4.0** only, not the currently drifted global Synapse package/daemon versions. Keep unrelated concurrent work untouched.
 ## Current version
 
 `0.1.205`
@@ -63,7 +68,7 @@
 > launches now reserve a durable SQLite execution before PTY startup, finalize provider
 > capacity and provenance-tagged usage once, preserve unknown rather than fake zero, and
 > expose typed `/api/v1/ai/runtimes` + execution receipt endpoints. Real Windows PTY proof
-> passed through HTTP → ConPTY → event subscriber → REST/squad rollup without provider
+> passed through HTTP â†’ ConPTY â†’ event subscriber â†’ REST/squad rollup without provider
 > credits. Copilot quota evidence survives restart, Codex ANSI usage parses, relaunch/spawn
 > failure/timeout races are covered, and worker reads are project/work-item scoped. This is
 > intentionally the first unit: Coder Workspace, Blueprints, Cases, quick actions, local AI,
@@ -86,7 +91,7 @@
 
 > **Sync offline reads as offline, not broken (2026-08-01):** signed in with the accounts service down,
 > Profile showed a red ERROR badge and a raw `[WinError 10061]` alert -- alarming, but nothing was wrong.
-> Now a neutral "sync offline" badge, Status "Offline — local-first", and a plain explanation, with the
+> Now a neutral "sync offline" badge, Status "Offline â€” local-first", and a plain explanation, with the
 > raw error kept as muted detail. A genuine failure while the service IS reachable stays destructive.
 > Verified live in exactly that state. Closes inbox proposal `3ad9aac5d55c`.
 
@@ -192,8 +197,8 @@
 > an actionable secret-safe blocker, and operator text strips terminal controls. Deep Live View now shows
 > session-scoped **Now / Why this step** context plus a collapsed editable Goals inspector. Real Synapse
 > acceptance has passed automatic prompt delivery plus live isolated Reflex v2.6.0/101-tool calls across
-> Claude, Codex, and Copilot; renderer/Electron typechecks, **783 passed / 14 skipped**, and 1280×800 +
-> 375×812 no-body-scroll browser proof are green. The Synapse-hosted post-work council closed its
+> Claude, Codex, and Copilot; renderer/Electron typechecks, **783 passed / 14 skipped**, and 1280Ã—800 +
+> 375Ã—812 no-body-scroll browser proof are green. The Synapse-hosted post-work council closed its
 > security/lifecycle findings, and the final
 > Codex re-review returned **RELEASE UNBLOCKED** after independently checking protected caller/MCP environment
 > precedence and timeout-task exception ownership. A real release restart first reproduced `SYN-BOOT-202`,
@@ -216,10 +221,10 @@
 > session, refreshes heartbeats/releases live, explains yellow connection health separately from blocked work,
 > keeps only five recent sessions in the rail, and collapses empty inspectors. A real squad opens an in-page
 > topology whose worker profiles show role, personality, runtime, status duration, task, PTY/live session,
-> MCP scope, and token evidence. Enabled stdio MCPs now read **Auto-attached · starts per AI** and worker
+> MCP scope, and token evidence. Enabled stdio MCPs now read **Auto-attached Â· starts per AI** and worker
 > launch events carry their exact MCP ids; Reflex remains isolated per worker. Final proof is green: **750
 > passed / 14 skipped**, renderer + Electron typecheck, real Deep/Summary/status/squad/worker click-through,
-> no document/main/horizontal overflow at 375/1024/1280/2560, and refreshed 1280×800 + 375×812 screenshots.
+> no document/main/horizontal overflow at 375/1024/1280/2560, and refreshed 1280Ã—800 + 375Ã—812 screenshots.
 > Dogfood session #025 used Synapse search, a real five-worker linked squad, and Reflex v2.6.0's named
 > takeover, Pause/Resume, Release, visible cursor/overlay, and physical-only Escape safety. A real whole-app
 > restart finished all five measured stages green; the replacement daemon exposed v0.1.93/28 contracts and
@@ -261,10 +266,10 @@
 > Final proof: **730 passed, 14 skipped**, production renderer build + typecheck green, and real Windows
 > install and browser checks green at 1280 px and 375 px with no console errors or horizontal overflow.
 
-> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`–`0.1.88`
-> landed a large UI/UX + reliability wave — an 8-fix UI/UX audit (`0.1.52`–`0.1.59`), a run of verified
+> **Doc-sync note (2026-07-29):** the milestone wall below is detailed through `0.1.43`. `0.1.44`â€“`0.1.88`
+> landed a large UI/UX + reliability wave â€” an 8-fix UI/UX audit (`0.1.52`â€“`0.1.59`), a run of verified
 > daemon bug-fixes (bug-hunt scoring under-count, benchmark efficiency-frontier zero-value Pareto
-> inversion, a quality-gate PASS clobbering a human waiver — each with regression tests), several
+> inversion, a quality-gate PASS clobbering a human waiver â€” each with regression tests), several
 > Contract #13/#23 renderer fixes (Review inbox error+Retry, Coder Workspace loading states + icon/select
 > aria-labels + error-banner `role="alert"`, Apps mobile header wrap), **WAN auto-start (`0.1.71`,
 > ADR-0026)**, **API discovery (`0.1.72`, ADR-0027)**, and the first **AI operator experience**
@@ -276,10 +281,10 @@
 > removed the desktop shell's remaining startup gate on trusted-local token bootstrap (Home/Apps no
 > longer sit in a global loading state while `/auth/local-token` warms up), `0.1.80` fixed a
 > `profile_state` singleton UNIQUE-constraint race, and `0.1.81` added a **docs-sync CI gate** plus
-> **ADR-0028** — the AI Activity (connections, notification center, Live View) plan + the one-window UI
-> standard, now durable in-repo so any AI codes to the same plan. **`0.1.82`–`0.1.88` shipped the whole
-> AI Activity feature (ADR-0028, Phases 1–6):** connection grading (green/yellow/red + explained codes),
-> session numbers (#001…), a persisted activity feed + `/activity` API driven by an event→notification
+> **ADR-0028** â€” the AI Activity (connections, notification center, Live View) plan + the one-window UI
+> standard, now durable in-repo so any AI codes to the same plan. **`0.1.82`â€“`0.1.88` shipped the whole
+> AI Activity feature (ADR-0028, Phases 1â€“6):** connection grading (green/yellow/red + explained codes),
+> session numbers (#001â€¦), a persisted activity feed + `/activity` API driven by an eventâ†’notification
 > projector, the global **Notification Center**, the **Live View** tab (the one-window reference
 > implementation), a **live app preview** (+ a CSP `frame-src` fix found only by live verification), and
 > AI-facing access (`ai_activity` in `/ai/context` + read-only MCP tools). A fuller reconciliation of this
@@ -287,102 +292,102 @@
 
 ## Current milestone
 
-**v0.1.36 Phase A polish wave shipped + phone parity / WAN reliability follow-up verified + first-party accounts landed + the AI Factory / AI OS advanced case engine is live.** Milestones A–I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. v0.1.35–0.1.36 ship a wave of UX wins: status simplification, port clarification, disk-size badge, editable sidebar, GitHub Copilot quick-launch, collapsible AI Quick-actions, clickable project + tool detail modals, WAN exposure via Cloudtap, color themes (hacker green + surfer blue), dark native dropdowns, Phase B preview card, plus the new daemon route `GET /projects/{id}/disk-usage`. Follow-up on 2026-06-19..20: `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), supports paired-device auth in-browser, recovers cleanly from stale mobile tokens, and carries the same phone session from LAN -> Cloudtap WAN via durable paired-device identity, short-lived handoff claims, and the new daemon-owned `GET /api/v1/remote-access` aggregate. Settings now hosts a merged `Phone Access` hub with LAN, pairing, paired-device reconnect, WAN verification, and diagnostics in one place. Mobile nav is now a 2-row touch grid so all tabs stay visible on a 390px-wide phone. `scripts/remote-recovery.ps1` now gives Codex/local automation a rescue path: start or reuse the daemon, open Cloudtap on `7878`, wait for the WAN `/mobile` URL, and print a fresh pairing code. `synapse.cmd` / `scripts/dev.ps1` now clear `ELECTRON_RUN_AS_NODE` before launching Electron, avoid `EPIPE` main-process popups, launch Vite/Electron through directly owned child processes, and honor in-app restart by cycling the full daemon + Vite + Electron dev stack instead of only relaunching Electron. The daemon also installs a Windows-only asyncio accept-reset workaround so transient WinError 64 socket drops do not silently kill new LAN/WAN accepts on port 7878. Desktop auth now self-heals after daemon/token drift: renderer REST calls retry once after refreshing `/auth/local-token`, the desktop WS client retries after a 1008 auth close, the Tools page clears stale 401 banners after a later success, and Electron main-process tray requests bootstrap the token from the daemon instead of reading `data/auth-token` directly. On 2026-06-20 the remaining WAN reconnect bug was traced to the WS hub's 0.5 s resume-frame timeout, which caused false `1008` closes over Cloudflare and made the phone shell wipe its token a few seconds after a successful handoff; the timeout is now widened, remote/mobile shells no longer attempt desktop-only local-token bootstrap, and live Playwright retesting confirmed the phone stays inside the full shell over both LAN and Cloudtap WAN after a full Synapse restart. Packaging bootstrap is also now wired end to end: `installer/build-daemon.ps1` produces `installer/daemon-dist/synapse-daemon.exe`, Electron knows how to spawn the bundled daemon, and the daemon resolves bundled tools/templates/docs/mobile assets from packaged resources instead of source-tree-only paths. Sessions now also has a first-pass **Agent Squads** mode: durable role templates (`planner`, `implementer`, `reviewer`, `researcher`), daemon-owned squad/work-item tables via migration `008_agent_squads.sql`, explicit handoff capture that appends to `.synapse-ai-context.md`, PTY launches tagged with `SYNAPSE_SQUAD_ID` / `SYNAPSE_WORK_ITEM_ID` / `SYNAPSE_ROLE_PROMPT_FILE`, and a three-pane Sessions cockpit that keeps helper workers as real reopenable PTY sessions instead of hidden background jobs. On 2026-06-21 the daemon also gained a local-first **Profile hub** surface, then replaced the Supabase dependency with a new in-repo **Synapse Accounts** service (`daemon/synapse_accounts`) backed by native username/email/password auth, Google OAuth plumbing, rotating refresh tokens, synced portable preferences, and local encrypted session storage. The renderer now routes signed-out users into a polished native auth flow, signed-in users into the full Profile hub, and no longer blocks account creation behind slow connected-service probes. Live Playwright retesting confirmed browser signup now completes end to end and lands directly in the signed-in Profile hub. On 2026-06-22 the Profile sign-in became reachability-aware (an honest "sync is optional / not configured" panel when no Synapse Accounts service is reachable, via `ProfileSummary.account_backend_reachable`), Agent Squads gained a guided **Team Builder wizard** (goal -> preset team -> roster -> review), a `boss` / `supervisor` / `worker` role hierarchy (migration `011_squad_hierarchy.sql`, 11 seeded roles), and a **kill switch** (`POST /api/v1/agent-squads/{id}/stop`); the PTY launch path was also hardened so a missing project cwd returns a clean 422 instead of crashing the daemon. On 2026-06-22..23: shipped per-project **decision records** (ADRs + backlog + version history with a quick-idea -> promote-to-numbered lifecycle; migration `012_project_records.sql`, ADR-0011) in the project detail modal and AI-callable; a Sessions/Squads UX pass (cockpit gated on a selected squad, delegate/handoff gated on a selected work item, work-item form behind a disclosure, single Set-status control, larger labeled mode toggle) plus an app-wide fix for white native `<select>` dropdowns in dark mode; **Synapse as a claude.ai connector** -- a read-only MCP server at `/mcp/{token}` exposed over Cloudtap (ADR-0012); and the **autonomous AI boss** as a launchable `autonomous-boss` quick-action that plans, staffs, and runs a squad with full autonomy bounded by the kill switch (ADR-0013). 448 tests pass + 11 skipped. 15 bundled marketplace tools. ADRs 0011/0012/0013 shipped; 0009 (launcher splash) + 0010 (squad hierarchy/autonomy) authored; still gated on user "go": 0004 OAuth, 0005 wbscrper tab, 0006 project objectives, 0008 marketplace reorg + sidebar promotion. On 2026-06-24..25 the **Marketplace & Workforce** wave landed: a visual **Marketplace hub** (ADR-0017 MW1); an **MCP-server pillar** that installs/launches MCP servers and auto-wires enabled ones into spawned Claude sessions via `--mcp-config` (ADR-0017 MW2, hardened for secret redaction + process-tree kill + zombie reaping); an in-app **What's New + Roadmap** path fed by `CHANGELOG.md` + `docs/roadmap.json` (ADR-0019 MW8); animated **synapse launch artwork** (MW9); and **AI personalities** — a worker = role + personality, so two same-role workers differ and collaborate/debate (ADR-0018 MW3, migration `015_personalities.sql`, REST `/personalities`, layered into the worker prompt). On 2026-06-27 the first-pass **AI Factory + AI Operating System** foundation landed: new daemon-backed AI Factory catalogs (components / recipes / sources), structured AI cases with `intent` / `targets` / `directives` / `policies`, mission profiles, richer case modes, case-owned jobs, AI-case lineage/graph support, isolated worktrees/branches, a native `AI Factory` page in the main shell, project-tile `Open in AI OS`, and a separate packaged AI OS board for live case execution. Later on 2026-06-27 the system grew a first Marketplace-grade **AI Bundles** layer (migration `017_ai_bundles.sql`, ADR-0021): installable AI-first packs of roles, personalities, quick actions, recipes, sources, and policy references published by **The WhatIf Company**; bundle-aware Marketplace + AI Factory views; bundle-owned quick-action installs; catalog install tracking in the profile layer; and installer-time bundle preselection via a bootstrap file consumed on first launch. The case runner also now applies a first real specialization pass for `benchmark`, `harvest`, `portfolio`, `challenge`, `repair`, `migrate`, and `audit`: benchmark candidate children, portfolio slices, minority-path challenge children, harvest source promotion scaffolding, and bundle-aware role/personality selection during squad synthesis. On 2026-06-28 those bundled AI packs were pressure-tested against isolated live AI-case installs and then tightened: role/personality/quick-action wording now avoids repeating labels the worker prompt already carries, trimming prompt overhead without changing the specialist squad coverage. Live verification on an isolated daemon + browser/API pair confirmed bundle install still works, updated bundle-owned quick actions reload, and a fresh `challenge` case still spawns its minority-path child with the expected contradiction-first council roles. On 2026-06-29 Fast Money shipped as a built-in launcher plus bundled AI pack: `tools/fast-money/manifest.json`, `synapse_daemon/tools/fast_money.py`, bundled marketplace + AI bundle catalog entries, focused daemon tests, and a first-run proof app registered at `data/projects/fast-money-client-ops`. Live verification confirmed the proof app serves its landing page, customer portal shell, and operator console shell on port `8740`. Packaging now produces a working installed app (frozen daemon bundles migrations + uvicorn; all catalogs shipped). 528 tests pass + 12 skipped. On 2026-07-03 (`0.1.36.5`, docs-only) the **README was rewritten extensively** (AI-first framing, non-technical + developer explainers, drift/memory comparison, Web Scraper MCP usage guide, "how any AI connects" section) and a **real benchmark** was added at `benchmarks/makeup-business-demo/` comparing a real Synapse-built app against a memory-less single-shot baseline across tokens, time, and six independently-judged quality dimensions (with-Synapse won 4/6 dimensions — UI/UX, design, code quality, accessibility — but lost backend-correctness and bug-hunt to two real, live-reproduced bugs in an unreviewed single pass; see the benchmark's `results/quality/summary.md` for the honest breakdown). Dogfooding that benchmark also surfaced a **real, still-open bug**: Agent Squads' `claude` work-item launch fails on Windows whenever any MCP server is enabled, because a multi-element `argv` (the auto-appended `--mcp-config` flag) isn't reaching the spawned `.CMD` child correctly (see `benchmarks/makeup-business-demo/methodology.md`). Next: fix that PTY multi-arg spawn bug, then deepen browser/scraper-backed intake, bundle authoring/publishing, and the case-native headless job runner. (See the 2026-07-04 decision-coverage audit below.) Current working tree follow-up on 2026-07-05: first-pass **Synapse self-improvement + design harvest** landed inside the existing shell -- bundled `synapse-self`, `improve-synapse`, guarded `ai/health-report` + `synapse-dev/test/*`, a dedicated Web Scraper harvest workspace with provenance/save-back, targeted UX/QA/token-efficiency/judge review presets, `quality-loop-v1` benchmark seeding, and the new `Synapse UX Lab` AI bundle. Working tree verification for that wave is currently green at **540 passed + 12 skipped** (plus frontend/electron typecheck) with live browser proof for the harvest page and the Synapse Self cockpit. On 2026-07-05 (`0.1.36.13`) that concurrent multi-AI session was landed to green and committed: Codex hit its usage limit mid-wave, so Claude verified the full tree (renderer + electron typecheck + **564 passed / 12 skipped**), finished the wiring, and added a new **native multi-AI coordination** substrate (ADR-0024, migration `020_coordination.sql`) — a daemon-owned presence registry (`agent_sessions`) + advisory file-lane claims (`file_lanes`) with automatic overlap detection, a git-working-tree collision detector, disk-truth migration/ADR numbering at `/api/v1/coordination/*`, and an enforceable pre-commit gate (`scripts/coordination-preflight.ps1`) — so multiple AI coders on one repo see who's editing what and stop clobbering each other instead of hand-parsing markdown. On 2026-07-06 (`0.1.37`) Synapse added an experimental **ChatGPT Companion** inside AI Coding: browser-managed sign-in, a desktop live bridge, prompt/revise/save controls, and project-targeted workspace snapshots/captures. The same release also hardened the **Web Scraper MCP** into a first-party install + bootstrap + autorun path: Synapse can detect a trusted local checkout for the owner, or download the official GitHub repo into `data/vendor/web-scraper` for fresh installs and auto-start it on later boots. Release verification is green at **589 passed + 12 skipped**, frontend/electron typecheck, and live browser proof for the ChatGPT companion surface plus refreshed desktop/mobile screenshots. On 2026-07-07 (`0.1.38`) a concurrent **Copilot** wave was finished + landed by Claude after Copilot hit its usage limit mid-wave: the built-in launcher pivoted from **Fast Money** (client-ops SaaS starter) to **Listing Multiplier** (listing-operations SaaS — renamed constants, `APP_BRIEF.md`/`app.config.json`, `SYNAPSE_STARTER_*` env vars, and all scaffold + seed content; internal bundle id `fast-money` preserved), the **ChatGPT Companion** was rebuilt into a full project-file-aware workspace with a desktop live bridge + reusable `ChatWorkspaceTemplate` shell, a UX/onboarding pass added `HelpIcon`/`Tooltip` help + friendlier labels across AI Factory / Agent Squads / AI Coding (and a `PageHeader.helpText` prop), and AI Coding gained an inline **Squads** tab while Apps gained a **Memory** section. Claude's finishing pass fixed the `HelpIcon` click-hijack (a "?" inside a `<label>` no longer steals focus) and removed the dead code the wave left behind (unused `EmptyState` + `Tooltip` imports), then landed it as one release verified green (frontend/electron typecheck + full daemon suite). On 2026-07-08 (`0.1.39`) Synapse's first-party **Web Scraper MCP** boot path was hardened for real boots, not just tests: the daemon entrypoint now actually runs the app startup hooks, the MCP/UI split is pinned to `12000` / `12345`, stale `wbscrper` project paths rehome to the active checkout before launch, and live verification proved a clean daemon boot now auto-registers the first-party `web-scraper` server as `connected`. The same release also hardened **tray restart** semantics: the Electron bridge now waits until the restart path clears its first failure points before reporting success, and a failed relaunch recovers the desktop window instead of hard-exiting the app. Release verification is green at **663 passed + 14 skipped**, frontend/electron typecheck, and a live browser/API proof pass against a clean temporary daemon + renderer stack. On 2026-07-08..09 (`0.1.40`–`0.1.43`) a reliability + cross-AI wave landed, driven by two real user-hit bugs: (a) `synapse.cmd` "crashed on start / stopping a daemon" because a crashed run orphaned its Vite (5173) / daemon (7878) child, wedging the next launch — `scripts/dev.ps1` now runs a pre-flight `Clear-StalePort` (Synapse-owned only) before starting, twin to the daemon's own 7878 self-eviction (`0.1.40`); and (b) **every panel stuck on "Loading..."** — root-caused with a py-spy dump to a *synchronous* `urllib` accounts-server call (`127.0.0.1:8788`) running on the asyncio event loop in `profile._refresh_from_remote` / `_available_auth_providers`, which froze the loop for the whole request timeout so the daemon could serve no request at all. Fixed with a circuit breaker (serve local state for a 60s cooldown after a remote failure) + `asyncio.to_thread` on the two hot GET profile routes (`0.1.41`/`0.1.42`); proven live: `/health` 5ms, `/profile` 2.3s→7ms after the breaker trips. `0.1.43` then baked in the **AI Working Agreement** so the multi-AI coordination + idea-filing habits actually get used: a canonical section in `AGENTS.md` (+ thin `CLAUDE.md` and `.github/copilot-instructions.md` entry files, + a `docs/MULTI-AI-WORKFLOW.md` pointer) telling every AI — in every session, even from a terminal outside Synapse — to (1) **check in** via the coordination API so agents don't collide and (2) **file improvement ideas** to the review inbox (`POST /review/proposals`) instead of dropping them; the same two habits are injected into every squad worker's prompt (`ai_context_memory.write_role_prompt`) and were already advertised via `GET /api/v1/ai/context`. Six real improvement ideas were filed to the inbox to seed it. Profile route + personalities + port-eviction tests green.
+**v0.1.36 Phase A polish wave shipped + phone parity / WAN reliability follow-up verified + first-party accounts landed + the AI Factory / AI OS advanced case engine is live.** Milestones Aâ€“I done; ADR-0002 (workbench) shipped through v0.1.29; ADR-0003 (workbench expansion) shipped through v0.1.34. v0.1.35â€“0.1.36 ship a wave of UX wins: status simplification, port clarification, disk-size badge, editable sidebar, GitHub Copilot quick-launch, collapsible AI Quick-actions, clickable project + tool detail modals, WAN exposure via Cloudtap, color themes (hacker green + surfer blue), dark native dropdowns, Phase B preview card, plus the new daemon route `GET /projects/{id}/disk-usage`. Follow-up on 2026-06-19..20: `/mobile` now serves the full React shell (Home / Apps / Tools / Sessions / Processes / Settings), supports paired-device auth in-browser, recovers cleanly from stale mobile tokens, and carries the same phone session from LAN -> Cloudtap WAN via durable paired-device identity, short-lived handoff claims, and the new daemon-owned `GET /api/v1/remote-access` aggregate. Settings now hosts a merged `Phone Access` hub with LAN, pairing, paired-device reconnect, WAN verification, and diagnostics in one place. Mobile nav is now a 2-row touch grid so all tabs stay visible on a 390px-wide phone. `scripts/remote-recovery.ps1` now gives Codex/local automation a rescue path: start or reuse the daemon, open Cloudtap on `7878`, wait for the WAN `/mobile` URL, and print a fresh pairing code. `synapse.cmd` / `scripts/dev.ps1` now clear `ELECTRON_RUN_AS_NODE` before launching Electron, avoid `EPIPE` main-process popups, launch Vite/Electron through directly owned child processes, and honor in-app restart by cycling the full daemon + Vite + Electron dev stack instead of only relaunching Electron. The daemon also installs a Windows-only asyncio accept-reset workaround so transient WinError 64 socket drops do not silently kill new LAN/WAN accepts on port 7878. Desktop auth now self-heals after daemon/token drift: renderer REST calls retry once after refreshing `/auth/local-token`, the desktop WS client retries after a 1008 auth close, the Tools page clears stale 401 banners after a later success, and Electron main-process tray requests bootstrap the token from the daemon instead of reading `data/auth-token` directly. On 2026-06-20 the remaining WAN reconnect bug was traced to the WS hub's 0.5 s resume-frame timeout, which caused false `1008` closes over Cloudflare and made the phone shell wipe its token a few seconds after a successful handoff; the timeout is now widened, remote/mobile shells no longer attempt desktop-only local-token bootstrap, and live Playwright retesting confirmed the phone stays inside the full shell over both LAN and Cloudtap WAN after a full Synapse restart. Packaging bootstrap is also now wired end to end: `installer/build-daemon.ps1` produces `installer/daemon-dist/synapse-daemon.exe`, Electron knows how to spawn the bundled daemon, and the daemon resolves bundled tools/templates/docs/mobile assets from packaged resources instead of source-tree-only paths. Sessions now also has a first-pass **Agent Squads** mode: durable role templates (`planner`, `implementer`, `reviewer`, `researcher`), daemon-owned squad/work-item tables via migration `008_agent_squads.sql`, explicit handoff capture that appends to `.synapse-ai-context.md`, PTY launches tagged with `SYNAPSE_SQUAD_ID` / `SYNAPSE_WORK_ITEM_ID` / `SYNAPSE_ROLE_PROMPT_FILE`, and a three-pane Sessions cockpit that keeps helper workers as real reopenable PTY sessions instead of hidden background jobs. On 2026-06-21 the daemon also gained a local-first **Profile hub** surface, then replaced the Supabase dependency with a new in-repo **Synapse Accounts** service (`daemon/synapse_accounts`) backed by native username/email/password auth, Google OAuth plumbing, rotating refresh tokens, synced portable preferences, and local encrypted session storage. The renderer now routes signed-out users into a polished native auth flow, signed-in users into the full Profile hub, and no longer blocks account creation behind slow connected-service probes. Live Playwright retesting confirmed browser signup now completes end to end and lands directly in the signed-in Profile hub. On 2026-06-22 the Profile sign-in became reachability-aware (an honest "sync is optional / not configured" panel when no Synapse Accounts service is reachable, via `ProfileSummary.account_backend_reachable`), Agent Squads gained a guided **Team Builder wizard** (goal -> preset team -> roster -> review), a `boss` / `supervisor` / `worker` role hierarchy (migration `011_squad_hierarchy.sql`, 11 seeded roles), and a **kill switch** (`POST /api/v1/agent-squads/{id}/stop`); the PTY launch path was also hardened so a missing project cwd returns a clean 422 instead of crashing the daemon. On 2026-06-22..23: shipped per-project **decision records** (ADRs + backlog + version history with a quick-idea -> promote-to-numbered lifecycle; migration `012_project_records.sql`, ADR-0011) in the project detail modal and AI-callable; a Sessions/Squads UX pass (cockpit gated on a selected squad, delegate/handoff gated on a selected work item, work-item form behind a disclosure, single Set-status control, larger labeled mode toggle) plus an app-wide fix for white native `<select>` dropdowns in dark mode; **Synapse as a claude.ai connector** -- a read-only MCP server at `/mcp/{token}` exposed over Cloudtap (ADR-0012); and the **autonomous AI boss** as a launchable `autonomous-boss` quick-action that plans, staffs, and runs a squad with full autonomy bounded by the kill switch (ADR-0013). 448 tests pass + 11 skipped. 15 bundled marketplace tools. ADRs 0011/0012/0013 shipped; 0009 (launcher splash) + 0010 (squad hierarchy/autonomy) authored; still gated on user "go": 0004 OAuth, 0005 wbscrper tab, 0006 project objectives, 0008 marketplace reorg + sidebar promotion. On 2026-06-24..25 the **Marketplace & Workforce** wave landed: a visual **Marketplace hub** (ADR-0017 MW1); an **MCP-server pillar** that installs/launches MCP servers and auto-wires enabled ones into spawned Claude sessions via `--mcp-config` (ADR-0017 MW2, hardened for secret redaction + process-tree kill + zombie reaping); an in-app **What's New + Roadmap** path fed by `CHANGELOG.md` + `docs/roadmap.json` (ADR-0019 MW8); animated **synapse launch artwork** (MW9); and **AI personalities** â€” a worker = role + personality, so two same-role workers differ and collaborate/debate (ADR-0018 MW3, migration `015_personalities.sql`, REST `/personalities`, layered into the worker prompt). On 2026-06-27 the first-pass **AI Factory + AI Operating System** foundation landed: new daemon-backed AI Factory catalogs (components / recipes / sources), structured AI cases with `intent` / `targets` / `directives` / `policies`, mission profiles, richer case modes, case-owned jobs, AI-case lineage/graph support, isolated worktrees/branches, a native `AI Factory` page in the main shell, project-tile `Open in AI OS`, and a separate packaged AI OS board for live case execution. Later on 2026-06-27 the system grew a first Marketplace-grade **AI Bundles** layer (migration `017_ai_bundles.sql`, ADR-0021): installable AI-first packs of roles, personalities, quick actions, recipes, sources, and policy references published by **The WhatIf Company**; bundle-aware Marketplace + AI Factory views; bundle-owned quick-action installs; catalog install tracking in the profile layer; and installer-time bundle preselection via a bootstrap file consumed on first launch. The case runner also now applies a first real specialization pass for `benchmark`, `harvest`, `portfolio`, `challenge`, `repair`, `migrate`, and `audit`: benchmark candidate children, portfolio slices, minority-path challenge children, harvest source promotion scaffolding, and bundle-aware role/personality selection during squad synthesis. On 2026-06-28 those bundled AI packs were pressure-tested against isolated live AI-case installs and then tightened: role/personality/quick-action wording now avoids repeating labels the worker prompt already carries, trimming prompt overhead without changing the specialist squad coverage. Live verification on an isolated daemon + browser/API pair confirmed bundle install still works, updated bundle-owned quick actions reload, and a fresh `challenge` case still spawns its minority-path child with the expected contradiction-first council roles. On 2026-06-29 Fast Money shipped as a built-in launcher plus bundled AI pack: `tools/fast-money/manifest.json`, `synapse_daemon/tools/fast_money.py`, bundled marketplace + AI bundle catalog entries, focused daemon tests, and a first-run proof app registered at `data/projects/fast-money-client-ops`. Live verification confirmed the proof app serves its landing page, customer portal shell, and operator console shell on port `8740`. Packaging now produces a working installed app (frozen daemon bundles migrations + uvicorn; all catalogs shipped). 528 tests pass + 12 skipped. On 2026-07-03 (`0.1.36.5`, docs-only) the **README was rewritten extensively** (AI-first framing, non-technical + developer explainers, drift/memory comparison, Web Scraper MCP usage guide, "how any AI connects" section) and a **real benchmark** was added at `benchmarks/makeup-business-demo/` comparing a real Synapse-built app against a memory-less single-shot baseline across tokens, time, and six independently-judged quality dimensions (with-Synapse won 4/6 dimensions â€” UI/UX, design, code quality, accessibility â€” but lost backend-correctness and bug-hunt to two real, live-reproduced bugs in an unreviewed single pass; see the benchmark's `results/quality/summary.md` for the honest breakdown). Dogfooding that benchmark also surfaced a **real, still-open bug**: Agent Squads' `claude` work-item launch fails on Windows whenever any MCP server is enabled, because a multi-element `argv` (the auto-appended `--mcp-config` flag) isn't reaching the spawned `.CMD` child correctly (see `benchmarks/makeup-business-demo/methodology.md`). Next: fix that PTY multi-arg spawn bug, then deepen browser/scraper-backed intake, bundle authoring/publishing, and the case-native headless job runner. (See the 2026-07-04 decision-coverage audit below.) Current working tree follow-up on 2026-07-05: first-pass **Synapse self-improvement + design harvest** landed inside the existing shell -- bundled `synapse-self`, `improve-synapse`, guarded `ai/health-report` + `synapse-dev/test/*`, a dedicated Web Scraper harvest workspace with provenance/save-back, targeted UX/QA/token-efficiency/judge review presets, `quality-loop-v1` benchmark seeding, and the new `Synapse UX Lab` AI bundle. Working tree verification for that wave is currently green at **540 passed + 12 skipped** (plus frontend/electron typecheck) with live browser proof for the harvest page and the Synapse Self cockpit. On 2026-07-05 (`0.1.36.13`) that concurrent multi-AI session was landed to green and committed: Codex hit its usage limit mid-wave, so Claude verified the full tree (renderer + electron typecheck + **564 passed / 12 skipped**), finished the wiring, and added a new **native multi-AI coordination** substrate (ADR-0024, migration `020_coordination.sql`) â€” a daemon-owned presence registry (`agent_sessions`) + advisory file-lane claims (`file_lanes`) with automatic overlap detection, a git-working-tree collision detector, disk-truth migration/ADR numbering at `/api/v1/coordination/*`, and an enforceable pre-commit gate (`scripts/coordination-preflight.ps1`) â€” so multiple AI coders on one repo see who's editing what and stop clobbering each other instead of hand-parsing markdown. On 2026-07-06 (`0.1.37`) Synapse added an experimental **ChatGPT Companion** inside AI Coding: browser-managed sign-in, a desktop live bridge, prompt/revise/save controls, and project-targeted workspace snapshots/captures. The same release also hardened the **Web Scraper MCP** into a first-party install + bootstrap + autorun path: Synapse can detect a trusted local checkout for the owner, or download the official GitHub repo into `data/vendor/web-scraper` for fresh installs and auto-start it on later boots. Release verification is green at **589 passed + 12 skipped**, frontend/electron typecheck, and live browser proof for the ChatGPT companion surface plus refreshed desktop/mobile screenshots. On 2026-07-07 (`0.1.38`) a concurrent **Copilot** wave was finished + landed by Claude after Copilot hit its usage limit mid-wave: the built-in launcher pivoted from **Fast Money** (client-ops SaaS starter) to **Listing Multiplier** (listing-operations SaaS â€” renamed constants, `APP_BRIEF.md`/`app.config.json`, `SYNAPSE_STARTER_*` env vars, and all scaffold + seed content; internal bundle id `fast-money` preserved), the **ChatGPT Companion** was rebuilt into a full project-file-aware workspace with a desktop live bridge + reusable `ChatWorkspaceTemplate` shell, a UX/onboarding pass added `HelpIcon`/`Tooltip` help + friendlier labels across AI Factory / Agent Squads / AI Coding (and a `PageHeader.helpText` prop), and AI Coding gained an inline **Squads** tab while Apps gained a **Memory** section. Claude's finishing pass fixed the `HelpIcon` click-hijack (a "?" inside a `<label>` no longer steals focus) and removed the dead code the wave left behind (unused `EmptyState` + `Tooltip` imports), then landed it as one release verified green (frontend/electron typecheck + full daemon suite). On 2026-07-08 (`0.1.39`) Synapse's first-party **Web Scraper MCP** boot path was hardened for real boots, not just tests: the daemon entrypoint now actually runs the app startup hooks, the MCP/UI split is pinned to `12000` / `12345`, stale `wbscrper` project paths rehome to the active checkout before launch, and live verification proved a clean daemon boot now auto-registers the first-party `web-scraper` server as `connected`. The same release also hardened **tray restart** semantics: the Electron bridge now waits until the restart path clears its first failure points before reporting success, and a failed relaunch recovers the desktop window instead of hard-exiting the app. Release verification is green at **663 passed + 14 skipped**, frontend/electron typecheck, and a live browser/API proof pass against a clean temporary daemon + renderer stack. On 2026-07-08..09 (`0.1.40`â€“`0.1.43`) a reliability + cross-AI wave landed, driven by two real user-hit bugs: (a) `synapse.cmd` "crashed on start / stopping a daemon" because a crashed run orphaned its Vite (5173) / daemon (7878) child, wedging the next launch â€” `scripts/dev.ps1` now runs a pre-flight `Clear-StalePort` (Synapse-owned only) before starting, twin to the daemon's own 7878 self-eviction (`0.1.40`); and (b) **every panel stuck on "Loading..."** â€” root-caused with a py-spy dump to a *synchronous* `urllib` accounts-server call (`127.0.0.1:8788`) running on the asyncio event loop in `profile._refresh_from_remote` / `_available_auth_providers`, which froze the loop for the whole request timeout so the daemon could serve no request at all. Fixed with a circuit breaker (serve local state for a 60s cooldown after a remote failure) + `asyncio.to_thread` on the two hot GET profile routes (`0.1.41`/`0.1.42`); proven live: `/health` 5ms, `/profile` 2.3sâ†’7ms after the breaker trips. `0.1.43` then baked in the **AI Working Agreement** so the multi-AI coordination + idea-filing habits actually get used: a canonical section in `AGENTS.md` (+ thin `CLAUDE.md` and `.github/copilot-instructions.md` entry files, + a `docs/MULTI-AI-WORKFLOW.md` pointer) telling every AI â€” in every session, even from a terminal outside Synapse â€” to (1) **check in** via the coordination API so agents don't collide and (2) **file improvement ideas** to the review inbox (`POST /review/proposals`) instead of dropping them; the same two habits are injected into every squad worker's prompt (`ai_context_memory.write_role_prompt`) and were already advertised via `GET /api/v1/ai/context`. Six real improvement ideas were filed to the inbox to seed it. Profile route + personalities + port-eviction tests green.
 
-## 2026-07-04 — decision-coverage audit (point-in-time; not a source of truth)
+## 2026-07-04 â€” decision-coverage audit (point-in-time; not a source of truth)
 
-A one-time audit checked whether any product decision from the **origin build session** (the 21.7k-line thread where Synapse was named + scoped) was ever made verbally but never written into the durable docs. Method: extracted the 237 real user turns + all 7 AskUserQuestion picks, ran a product-noun recall sweep, read the decision-dense regions, did a bare-approval pass over the upper (14k–21k) region, and reverse-cross-checked 11 highest-signal + negative + foundational decisions against `AGENTS.md` / `PROGRESS.md` / `CHANGELOG.md` / `README.md` / `docs/roadmap.json` / `docs/adr/*`.
+A one-time audit checked whether any product decision from the **origin build session** (the 21.7k-line thread where Synapse was named + scoped) was ever made verbally but never written into the durable docs. Method: extracted the 237 real user turns + all 7 AskUserQuestion picks, ran a product-noun recall sweep, read the decision-dense regions, did a bare-approval pass over the upper (14kâ€“21k) region, and reverse-cross-checked 11 highest-signal + negative + foundational decisions against `AGENTS.md` / `PROGRESS.md` / `CHANGELOG.md` / `README.md` / `docs/roadmap.json` / `docs/adr/*`.
 
-**Result: no gaps, no reversals at the time of that audit.** Every material decision — including the then-current negative/foundational ones (projects-stay-local, ONE-Synapse/retire-`ai_os`, built-for-AI, run-via-clickable-`.exe`) — was already captured. The origin session ended with a clean handoff ("everything committed + pushed; nothing half-saved; resume Z2 — fold `ai_os` into the cockpit"), so no work was left dangling. This is a **point-in-time recall sample as of 2026-07-04**, not a permanent guarantee; later rounds may intentionally reopen or replace earlier decisions. The detailed evidence (extracted turns, AskUserQuestion map, cross-check) lives in the session plan file `~/.claude/plans/okay-i-did-the-floofy-sketch.md` (Phase 0 record).
+**Result: no gaps, no reversals at the time of that audit.** Every material decision â€” including the then-current negative/foundational ones (projects-stay-local, ONE-Synapse/retire-`ai_os`, built-for-AI, run-via-clickable-`.exe`) â€” was already captured. The origin session ended with a clean handoff ("everything committed + pushed; nothing half-saved; resume Z2 â€” fold `ai_os` into the cockpit"), so no work was left dangling. This is a **point-in-time recall sample as of 2026-07-04**, not a permanent guarantee; later rounds may intentionally reopen or replace earlier decisions. The detailed evidence (extracted turns, AskUserQuestion map, cross-check) lives in the session plan file `~/.claude/plans/okay-i-did-the-floofy-sketch.md` (Phase 0 record).
 
 | Version | Phase | Status |
 |---|---|---|
-| `0.1.0-alpha.1` | Milestone A — scaffolding | ✅ done |
-| `0.1.0.5` | Design contracts round 1 (docs) | ✅ done |
-| `0.1.1` | Round 1 contract scaffolding (code) | ✅ done |
-| `0.1.1.5` | Design contracts round 2 (docs) | ✅ done |
-| `0.1.2` | Round 2 contract scaffolding (code) | ✅ done |
-| `0.1.2.5` | README + docs sync; commit-rule hardening | ✅ done |
-| `0.1.3` | Milestone B — daemon skeleton (FastAPI + WS + migrations + reconciler) | ✅ done |
-| `0.1.4` | Milestone C — Electron skeleton (window, tray, daemon spawn, WS connect) | ✅ done |
-| `0.1.5` | Milestone D — Project registry + launcher (CRUD + tiles + click-to-launch) | ✅ done |
-| `0.1.5.5` | Hotfix: ASCII-only `.ps1` scripts + daemon log strings (PS 5.1 cp1252 parse fix) | ✅ done |
-| `0.1.6` | Clickable `synapse.cmd` launcher + desktop shortcut + Electron CDP inspector + CSP/orphan fixes | ✅ done |
-| `0.1.7` | Milestone E — Live process monitor (watcher + heartbeat + auto-restart + logs + "+ Add Project") | ✅ done |
-| `0.1.8` | Milestone F (shell) — shadcn/ui sidebar + 5 pages + daemon context + log viewer | ✅ done |
-| `0.1.8.1` | Hotfix: Vite IPv4 bind so synapse.cmd's health poll matches | ✅ done |
-| `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | ✅ done |
-| `0.1.8.6` | UI/UX audit fixes — WS replay-envelope bug, responsive overflow, version/path polish | ✅ done |
-| `0.1.9` | Milestone F — tool plugin system (manifest + curated handlers) + Cloudtap | ✅ done |
-| `0.1.9.5` | Milestone F — multi-instance tool model + multi-tunnel Cloudtap + app labeling | ✅ done |
-| `0.1.10` | Milestone F — Home featured slideshow + page restructure | ✅ done |
-| `0.1.10.5` | Milestone F — snapshot / restore (Contract #28) wired to Settings | ✅ done |
-| `0.1.11` | Milestone H — device auth + pairing foundation (token on every request) | ✅ done |
-| `0.1.12` | Milestone H — mobile Web UI (responsive `/mobile`, pair screen, full control) | ✅ done |
-| `0.1.13` | Milestone I — auto-start on login + tray polish + daemon attach-or-spawn | ✅ done |
-| `0.1.14` | Polish — universal `Ctrl+K` command palette (Contract #21) | ✅ done |
-| `0.1.15` | Polish — Apps page filter (name / path / tags / group / launch_cmd) | ✅ done |
-| `0.1.16` | Polish — Open-in-VS Code tile quick-action | ✅ done |
-| `0.1.17` | Polish — Audit log viewer in Settings (Contract #11 surfaced) | ✅ done |
-| `0.1.18` | Polish — Light / Dark / System theme (Contract #14) | ✅ done |
-| `0.1.19` | Project kinds + Apps filter chips + MCP-server auto-detect; ADR-0001 tool marketplace | ✅ done |
-| `0.1.20` | Open-in-Terminal tile button + responsive sidebar (collapses to 56px at < 640px) | ✅ done |
-| `0.1.21` | Hot tool-manifest reload via watchdog (ADR-0001 step 1, Contract #26) | ✅ done |
-| `0.1.22` | Declarative tool primitives — `url.open` + `process.spawn` (ADR-0001 step 2) | ✅ done |
-| `0.1.23` | Tools → Browse page (read-only marketplace catalogue) (ADR-0001 step 3) | ✅ done |
-| `0.1.24` | Marketplace Install / Uninstall — loop closed via hot reload + primitives (ADR-0001 step 4) | ✅ done |
-| `0.1.25` | ADR-0002 + PTY session foundation (`pty.spawn` primitive + REST control plane) | ✅ done |
-| `0.1.26` | xterm.js + Sessions tab — live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2) | ✅ done |
-| `0.1.27` | Marketplace ships Claude + Codex + Tools → Sessions deep link (ADR-0002 Phase A complete) | ✅ done |
-| `0.1.28` | Sessions install dialog + Help panel + `/pty/probe` | ✅ done |
-| `0.1.29` | Apps tile "Open in workbench" + `/ai/context` digest + "Built for AI" Home callout (ADR-0002 Phase B) | ✅ done |
-| `0.1.30` | Project files REST surface + migration 006 (ADR-0003 Phase A) | ✅ done |
-| `0.1.30.5` | Workbench transcripts + `/ai/context` files inline (ADR-0003 Phase D + step 6) | ✅ done |
-| `0.1.31` | Renderer `<FilesPanel>` + `files-client` (ADR-0003 Phase A complete) | ✅ done |
-| `0.1.31.5` | Pre-upload inspection dialog with magic-byte detection (ADR-0003 Phase B) | ✅ done |
-| `0.1.32` | Always-on AV scanning via Defender (Windows) / ClamAV (POSIX) (ADR-0003 Phase C) | ✅ done |
-| `0.1.33` | ChatGPT export.zip importer + auto-created `imported-chatgpt` project (ADR-0003 Phase E) | ✅ done |
-| `0.1.34` | AI quick-action templates + Sessions rail (ADR-0003 Phase F) | ✅ done |
-| `0.1.35` | Polish + LAN exposure: status legend, port doc, sidebar editable, tray Exit/Restart, mobile QR, file preview, terminal search, PTY default cwd → ~, Modal/StatusLegend focus traps, Stop-all on Processes, NetworkPanel | ✅ done |
-| `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped -> not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, full mobile shell parity + LAN/WAN handoff, Sessions-centric Agent Squads mode, ADRs 0006/0007/0008 drafted | ⏳ in progress |
-| `0.1.36.5` | Docs-only: README rewrite (AI-first framing, drift/memory, Web Scraper MCP guide), `benchmarks/makeup-business-demo/` real Synapse-vs-baseline benchmark, AGENTS.md doc-sync rule for benchmarks + any-AI note | ✅ done |
-| `0.1.36.6` | Docs-only: README squad worked example (Skeptic vs. Pragmatist reviewer) + autonomous "AI boss" self-improvement bullet | ✅ done |
-| `0.1.36.7` | Docs/config: AGENTS.md commit-before-limit rule + commit-rule #11 (commit+push per logical change) + gitignore daemon/auth-token | ✅ done |
-| `0.1.36.8` | Docs: `docs/screenshots/` UI gallery (Home + cockpit, live-captured) + AGENTS.md screenshot-refresh rule; verified cockpit is project-scoped-only (no project-free New chat) | ✅ done |
-| `0.1.36.9` | AI Council Review workflow (ADR-0023): `ai-council-review` quick-action + MULTI-AI-WORKFLOW/AGENTS/roadmap docs — pre/post multi-reviewer gate, adaptive 2–10, prompt-pass mechanism (no squad-workers on Windows yet) | ✅ done |
-| `0.1.36.10` | **Fix:** Windows PTY multi-arg `.cmd`/`.bat` squad-launch bug (`claude.CMD --mcp-config` dropped args → every squad claude worker silently failed) — PowerShell-`&` wrap + 6 tests incl. hostile-path E2E + live repro. **Squad launch now works on Windows.** | ✅ done |
-| `0.1.36.11` | Benchmark reviewer pass: fixed the 2 bugs that lost backend/bug-hunt (form validation + mobile-nav overlap), verified live in a browser | ✅ done |
-| `0.1.36.12` | Benchmark re-score: reviewer pass wins all 6 dimensions (backend 100 vs 88, bug-hunt 98 vs 70; avg 86.0 vs 64.8) at fewer tokens — **Phase 3 complete** | ✅ done |
-| `0.1.36.13` | **Concurrent multi-AI session landed to green.** Codex hit its usage limit mid-wave; Claude verified + committed the combined tree — Codex's Synapse self-improvement + design-harvest + Quality OS wave, **plus** a new native multi-AI coordination substrate (ADR-0024, migration `020_coordination.sql`: presence + advisory file-lanes + collision detector + disk-truth numbering + pre-commit gate) | ✅ done |
-| `0.1.37` | Experimental ChatGPT companion in AI Coding + first-party Web Scraper MCP bootstrap/install/autorun + refreshed screenshot gallery and release docs | ✅ done |
+| `0.1.0-alpha.1` | Milestone A â€” scaffolding | âœ… done |
+| `0.1.0.5` | Design contracts round 1 (docs) | âœ… done |
+| `0.1.1` | Round 1 contract scaffolding (code) | âœ… done |
+| `0.1.1.5` | Design contracts round 2 (docs) | âœ… done |
+| `0.1.2` | Round 2 contract scaffolding (code) | âœ… done |
+| `0.1.2.5` | README + docs sync; commit-rule hardening | âœ… done |
+| `0.1.3` | Milestone B â€” daemon skeleton (FastAPI + WS + migrations + reconciler) | âœ… done |
+| `0.1.4` | Milestone C â€” Electron skeleton (window, tray, daemon spawn, WS connect) | âœ… done |
+| `0.1.5` | Milestone D â€” Project registry + launcher (CRUD + tiles + click-to-launch) | âœ… done |
+| `0.1.5.5` | Hotfix: ASCII-only `.ps1` scripts + daemon log strings (PS 5.1 cp1252 parse fix) | âœ… done |
+| `0.1.6` | Clickable `synapse.cmd` launcher + desktop shortcut + Electron CDP inspector + CSP/orphan fixes | âœ… done |
+| `0.1.7` | Milestone E â€” Live process monitor (watcher + heartbeat + auto-restart + logs + "+ Add Project") | âœ… done |
+| `0.1.8` | Milestone F (shell) â€” shadcn/ui sidebar + 5 pages + daemon context + log viewer | âœ… done |
+| `0.1.8.1` | Hotfix: Vite IPv4 bind so synapse.cmd's health poll matches | âœ… done |
+| `0.1.8.5` | Project auto-discovery (multi-stack detector) + migration 003 (tags/pinned) + groups | âœ… done |
+| `0.1.8.6` | UI/UX audit fixes â€” WS replay-envelope bug, responsive overflow, version/path polish | âœ… done |
+| `0.1.9` | Milestone F â€” tool plugin system (manifest + curated handlers) + Cloudtap | âœ… done |
+| `0.1.9.5` | Milestone F â€” multi-instance tool model + multi-tunnel Cloudtap + app labeling | âœ… done |
+| `0.1.10` | Milestone F â€” Home featured slideshow + page restructure | âœ… done |
+| `0.1.10.5` | Milestone F â€” snapshot / restore (Contract #28) wired to Settings | âœ… done |
+| `0.1.11` | Milestone H â€” device auth + pairing foundation (token on every request) | âœ… done |
+| `0.1.12` | Milestone H â€” mobile Web UI (responsive `/mobile`, pair screen, full control) | âœ… done |
+| `0.1.13` | Milestone I â€” auto-start on login + tray polish + daemon attach-or-spawn | âœ… done |
+| `0.1.14` | Polish â€” universal `Ctrl+K` command palette (Contract #21) | âœ… done |
+| `0.1.15` | Polish â€” Apps page filter (name / path / tags / group / launch_cmd) | âœ… done |
+| `0.1.16` | Polish â€” Open-in-VS Code tile quick-action | âœ… done |
+| `0.1.17` | Polish â€” Audit log viewer in Settings (Contract #11 surfaced) | âœ… done |
+| `0.1.18` | Polish â€” Light / Dark / System theme (Contract #14) | âœ… done |
+| `0.1.19` | Project kinds + Apps filter chips + MCP-server auto-detect; ADR-0001 tool marketplace | âœ… done |
+| `0.1.20` | Open-in-Terminal tile button + responsive sidebar (collapses to 56px at < 640px) | âœ… done |
+| `0.1.21` | Hot tool-manifest reload via watchdog (ADR-0001 step 1, Contract #26) | âœ… done |
+| `0.1.22` | Declarative tool primitives â€” `url.open` + `process.spawn` (ADR-0001 step 2) | âœ… done |
+| `0.1.23` | Tools â†’ Browse page (read-only marketplace catalogue) (ADR-0001 step 3) | âœ… done |
+| `0.1.24` | Marketplace Install / Uninstall â€” loop closed via hot reload + primitives (ADR-0001 step 4) | âœ… done |
+| `0.1.25` | ADR-0002 + PTY session foundation (`pty.spawn` primitive + REST control plane) | âœ… done |
+| `0.1.26` | xterm.js + Sessions tab â€” live AI / shell sessions in the dashboard (ADR-0002 Phase A step 2) | âœ… done |
+| `0.1.27` | Marketplace ships Claude + Codex + Tools â†’ Sessions deep link (ADR-0002 Phase A complete) | âœ… done |
+| `0.1.28` | Sessions install dialog + Help panel + `/pty/probe` | âœ… done |
+| `0.1.29` | Apps tile "Open in workbench" + `/ai/context` digest + "Built for AI" Home callout (ADR-0002 Phase B) | âœ… done |
+| `0.1.30` | Project files REST surface + migration 006 (ADR-0003 Phase A) | âœ… done |
+| `0.1.30.5` | Workbench transcripts + `/ai/context` files inline (ADR-0003 Phase D + step 6) | âœ… done |
+| `0.1.31` | Renderer `<FilesPanel>` + `files-client` (ADR-0003 Phase A complete) | âœ… done |
+| `0.1.31.5` | Pre-upload inspection dialog with magic-byte detection (ADR-0003 Phase B) | âœ… done |
+| `0.1.32` | Always-on AV scanning via Defender (Windows) / ClamAV (POSIX) (ADR-0003 Phase C) | âœ… done |
+| `0.1.33` | ChatGPT export.zip importer + auto-created `imported-chatgpt` project (ADR-0003 Phase E) | âœ… done |
+| `0.1.34` | AI quick-action templates + Sessions rail (ADR-0003 Phase F) | âœ… done |
+| `0.1.35` | Polish + LAN exposure: status legend, port doc, sidebar editable, tray Exit/Restart, mobile QR, file preview, terminal search, PTY default cwd â†’ ~, Modal/StatusLegend focus traps, Stop-all on Processes, NetworkPanel | âœ… done |
+| `0.1.36-dev` | UX wishlist: collapsible AI Quick-actions, Copilot quick-launch, status UI merge (idle+stopped -> not running), disk-size badge, editable sidebar (reorder + hide/show), tile detail modals (Project + Tool), WAN via Cloudtap, color themes (hacker green, surfer blue), dark native dropdowns, full mobile shell parity + LAN/WAN handoff, Sessions-centric Agent Squads mode, ADRs 0006/0007/0008 drafted | â³ in progress |
+| `0.1.36.5` | Docs-only: README rewrite (AI-first framing, drift/memory, Web Scraper MCP guide), `benchmarks/makeup-business-demo/` real Synapse-vs-baseline benchmark, AGENTS.md doc-sync rule for benchmarks + any-AI note | âœ… done |
+| `0.1.36.6` | Docs-only: README squad worked example (Skeptic vs. Pragmatist reviewer) + autonomous "AI boss" self-improvement bullet | âœ… done |
+| `0.1.36.7` | Docs/config: AGENTS.md commit-before-limit rule + commit-rule #11 (commit+push per logical change) + gitignore daemon/auth-token | âœ… done |
+| `0.1.36.8` | Docs: `docs/screenshots/` UI gallery (Home + cockpit, live-captured) + AGENTS.md screenshot-refresh rule; verified cockpit is project-scoped-only (no project-free New chat) | âœ… done |
+| `0.1.36.9` | AI Council Review workflow (ADR-0023): `ai-council-review` quick-action + MULTI-AI-WORKFLOW/AGENTS/roadmap docs â€” pre/post multi-reviewer gate, adaptive 2â€“10, prompt-pass mechanism (no squad-workers on Windows yet) | âœ… done |
+| `0.1.36.10` | **Fix:** Windows PTY multi-arg `.cmd`/`.bat` squad-launch bug (`claude.CMD --mcp-config` dropped args â†’ every squad claude worker silently failed) â€” PowerShell-`&` wrap + 6 tests incl. hostile-path E2E + live repro. **Squad launch now works on Windows.** | âœ… done |
+| `0.1.36.11` | Benchmark reviewer pass: fixed the 2 bugs that lost backend/bug-hunt (form validation + mobile-nav overlap), verified live in a browser | âœ… done |
+| `0.1.36.12` | Benchmark re-score: reviewer pass wins all 6 dimensions (backend 100 vs 88, bug-hunt 98 vs 70; avg 86.0 vs 64.8) at fewer tokens â€” **Phase 3 complete** | âœ… done |
+| `0.1.36.13` | **Concurrent multi-AI session landed to green.** Codex hit its usage limit mid-wave; Claude verified + committed the combined tree â€” Codex's Synapse self-improvement + design-harvest + Quality OS wave, **plus** a new native multi-AI coordination substrate (ADR-0024, migration `020_coordination.sql`: presence + advisory file-lanes + collision detector + disk-truth numbering + pre-commit gate) | âœ… done |
+| `0.1.37` | Experimental ChatGPT companion in AI Coding + first-party Web Scraper MCP bootstrap/install/autorun + refreshed screenshot gallery and release docs | âœ… done |
 
 ## What's done
 
-### v0.1.0-alpha.1 — Milestone A scaffolding
+### v0.1.0-alpha.1 â€” Milestone A scaffolding
 - Folder structure, all config files, CI workflow, docs, placeholder code, first plugin manifest
 
-### v0.1.0.5 — Round 1 contracts (docs)
+### v0.1.0.5 â€” Round 1 contracts (docs)
 - All 16 design contracts written into `AGENTS.md`
 
-### v0.1.1 — Round 1 contracts (scaffolding)
+### v0.1.1 â€” Round 1 contracts (scaffolding)
 - Daemon: `api_versions.py`, `errors.py`, `models.py` (`BaseEntity` + status enums), `migrations/001_initial.sql`, `audit.py`, `process_log.py`, `security.py`
 - Renderer: `error-types.ts`, `api-client.ts`, `ws-client.ts` (with reconnect + replay), `theme-tokens.css`, `generated-types.ts`
 - Tests: 6 new test files covering Contracts #2, #3, #4, #7, #8, #9, #10, #11, #16
 - Docs: `api-changes.md`, `security.md`, `adr/README.md`
 - `version-bump.ps1` now supports `-Kind design` + updates `__init__.py`
 
-### v0.1.1.5 — Round 2 contracts (docs)
-- AGENTS.md expanded from 16 → 28 contracts (#17 health, #18 restart, #19 resources, #20 deps, #21 search, #22 notifications, #23 a11y, #24 utc/local, #25 secrets, #26 hot reload, #27 CLI, #28 snapshot)
+### v0.1.1.5 â€” Round 2 contracts (docs)
+- AGENTS.md expanded from 16 â†’ 28 contracts (#17 health, #18 restart, #19 resources, #20 deps, #21 search, #22 notifications, #23 a11y, #24 utc/local, #25 secrets, #26 hot reload, #27 CLI, #28 snapshot)
 
-### v0.1.2 — Round 2 contracts (scaffolding)
+### v0.1.2 â€” Round 2 contracts (scaffolding)
 - Daemon modules: `time_utils.py`, `health.py`, `restart_policy.py`, `resources.py`, `dependencies.py`, `search.py`, `notifications.py`, `secrets.py` (DPAPI + Fernet), `manifest_watcher.py` (watchdog), `cli.py`, `snapshot.py`
 - Migration `002_round2_schema.sql`: project_dependencies, search_index, notification_preferences, project_secrets + extended projects columns
 - Renderer: `format-time.ts`, `search-client.ts`, full Round 2 types in `generated-types.ts`
-- 10 new test files; HealthResponse now reports contracts 1–28
+- 10 new test files; HealthResponse now reports contracts 1â€“28
 - pyproject: added `watchdog` + `cryptography` deps, registered `synapse` console script
 - **85 tests passing, 1 platform-conditional skip**
 
-### v0.1.3 — Milestone B (daemon skeleton)
+### v0.1.3 â€” Milestone B (daemon skeleton)
 - `storage.py` (single SQLite connection, WAL + FK, autocommit, `transaction()` ctx mgr, `migrate()`)
 - `migrations/_runner.py` (atomic per-migration apply, `BEGIN IMMEDIATE` + `COMMIT`, idempotent)
 - `ws.py` (`EventBus` with monotonic IDs + 1 000-event ring buffer + async-locked subscribe/publish; `WsHub` with resume + ping + replay-window-exceeded protocol)
@@ -390,20 +395,20 @@ A one-time audit checked whether any product decision from the **origin build se
 - `app.py` (FastAPI factory, CORS, error envelope handler, `/api/v1/health`, `WS /api/v1/ws`, lifespan that runs reconciler + publishes boot events)
 - `__main__.py` rewritten (argparse, refuse-admin, migrate, build app, uvicorn boot)
 - `scripts/dev.ps1` actually orchestrates daemon + Vite + Electron with health polling
-- 32 new tests across `test_storage.py`, `test_ws.py`, `test_orphan_reconciler.py`, `test_app.py` — total 117 passing
+- 32 new tests across `test_storage.py`, `test_ws.py`, `test_orphan_reconciler.py`, `test_app.py` â€” total 117 passing
 - **Smoke-tested:** real boot, `curl /api/v1/health` returns contract shape, WS replay handshake delivers `v1.daemon.started`, ping/pong works
 
-### v0.1.4 — Milestone C (Electron skeleton)
-- `scripts/gen-icon.py` (pure-stdlib PNG generator, no Pillow) → checked-in `synapse.png` (32×32) + `synapse-256.png` (256×256)
-- `electron/main.ts` rewritten — single-instance lock, spawns daemon child, polls `/api/v1/health` for up to 15 s, opens window only when daemon is ready, tray with Show / health-page / Quit, hide-to-tray on window close, kills daemon on `will-quit`
+### v0.1.4 â€” Milestone C (Electron skeleton)
+- `scripts/gen-icon.py` (pure-stdlib PNG generator, no Pillow) â†’ checked-in `synapse.png` (32Ã—32) + `synapse-256.png` (256Ã—256)
+- `electron/main.ts` rewritten â€” single-instance lock, spawns daemon child, polls `/api/v1/health` for up to 15 s, opens window only when daemon is ready, tray with Show / health-page / Quit, hide-to-tray on window close, kills daemon on `will-quit`
 - `electron/preload.ts` exposes typed `window.synapse.*` (version, daemonBase, daemonWsBase, platform)
-- `renderer/App.tsx` rewritten — calls `setDaemonBase`, fetches `/api/v1/health`, renders daemon + WS cards with conn-state badge using `--synapse-status-*` tokens, shows last 5 events via `formatLocal()` (Contract #24)
-- Compiles cleanly (`npm run build:electron` → `dist-electron/main.js` + `preload.js`)
+- `renderer/App.tsx` rewritten â€” calls `setDaemonBase`, fetches `/api/v1/health`, renders daemon + WS cards with conn-state badge using `--synapse-status-*` tokens, shows last 5 events via `formatLocal()` (Contract #24)
+- Compiles cleanly (`npm run build:electron` â†’ `dist-electron/main.js` + `preload.js`)
 - All 117 daemon tests still pass
 
-### v0.1.5 — Milestone D (Project registry + launcher)
+### v0.1.5 â€” Milestone D (Project registry + launcher)
 - daemon `projects.py` (Project + ProjectUpdate Pydantic, kebab-case validator, full CRUD with monotonic timestamps, secret redaction)
-- daemon `process_manager.py` (detached spawn, log capture, terminate→kill, audit + WS events for every transition)
+- daemon `process_manager.py` (detached spawn, log capture, terminateâ†’kill, audit + WS events for every transition)
 - daemon `seed.py` (idempotent first-run wbscrper insert, preserves user edits)
 - daemon `routes_projects.py` (GET/POST/PATCH/DELETE /api/v1/projects + launch/stop)
 - daemon `app.py` mounts the projects router; `__main__.py` calls seed before lifespan + instantiates the PM
@@ -411,24 +416,24 @@ A one-time audit checked whether any product decision from the **origin build se
 - renderer components: `StatusBadge` (pulse animation during transitions, aria-live), `ProjectTile` (live status + cmd/port metadata + Launch/Stop/Edit/Delete + error banner), `ProjectEditDialog` (modal form, focus trap, Esc to close)
 - renderer page `Apps.tsx` (tile grid, WS-driven refresh, empty state, confirm-before-destructive delete)
 - renderer `styles.css` keyframes for badge pulse
-- 32 new tests across `test_projects.py`, `test_process_manager.py`, `test_seed.py`, `test_routes_projects.py` — total 149 passing
-- **Smoke path:** `.\scripts\dev.ps1` → daemon seeds wbscrper → window shows wbscrper tile → click Launch → npm start runs → click Stop → tile returns to stopped
+- 32 new tests across `test_projects.py`, `test_process_manager.py`, `test_seed.py`, `test_routes_projects.py` â€” total 149 passing
+- **Smoke path:** `.\scripts\dev.ps1` â†’ daemon seeds wbscrper â†’ window shows wbscrper tile â†’ click Launch â†’ npm start runs â†’ click Stop â†’ tile returns to stopped
 
-### v0.1.6 — Clickable launcher + Electron inspection
+### v0.1.6 â€” Clickable launcher + Electron inspection
 - `synapse.cmd` (cmd-only launcher, no PowerShell) + `install-shortcut.cmd` (Desktop `.lnk` via cscript)
-- `scripts/inspect-electron.js` — generic Electron CDP inspector (screenshot/console/snapshot/html/click/eval/title)
+- `scripts/inspect-electron.js` â€” generic Electron CDP inspector (screenshot/console/snapshot/html/click/eval/title)
 - `electron/main.ts` `--inspect-renderer` flag exposes a CDP port
 - `playwright` devDependency added
 - `gen-icon.py` now emits multi-res `synapse.ico` + `renderer/public/favicon.ico`
 - AGENTS.md Rule #6: E2E pass required on every code version bump
 - Fixes: CSP/preload host mismatch (Electron "Failed to fetch"), orphan process tree on Stop, React shorthand-style warning, favicon 404, Base URL fallback
 
-### v0.1.7 — Milestone E (live process monitor)
+### v0.1.7 â€” Milestone E (live process monitor)
 - daemon: background watcher (crash detection), ~2s heartbeat broadcaster (CPU% + RSS, tree-summed), auto-restart per `RestartPolicy`, `GET /projects/{id}/logs`
 - renderer: `ProcessMonitor` live table, `ProjectFormDialog` (create + edit), "+ Add Project" button, per-tile CPU/RAM
 - fixes: `DETACHED_PROCESS` killed all log capture (now `CREATE_NO_WINDOW`); `update()` corrupted nested Pydantic models (now re-validates)
 
-### v0.1.8 — Milestone F (shell)
+### v0.1.8 â€” Milestone F (shell)
 - shadcn/ui + Tailwind wired (`components.json`, `cn()`, HSL colour vars, `tailwindcss-animate`)
 - hand-vendored UI kit in `renderer/components/ui/` (button, card, badge, input, separator, modal)
 - `Sidebar` icon rail + `nav.ts` + `DaemonProvider` context (one shared WS)
@@ -437,66 +442,66 @@ A one-time audit checked whether any product decision from the **origin build se
 - every renderer component rebuilt on shadcn/Tailwind
 - 158 tests still passing; E2E verified browser + Electron
 
-### v0.1.8.5 — Project auto-discovery + groups/pinning
-- `daemon/synapse_daemon/discovery.py` — multi-stack project detector (Node / Python / Rust / Go / .NET / Java / Ruby / PHP / Docker / static / Makefile / git), confidence + alternative candidates
-- `scan_directory(root)` — walks a workspace root, skips junk (node_modules, venv, hidden, system dirs)
-- `migration 003_discovery_groups.sql` — `discovered`, `pinned`, `group_name`, `tags_json` columns on `projects`
+### v0.1.8.5 â€” Project auto-discovery + groups/pinning
+- `daemon/synapse_daemon/discovery.py` â€” multi-stack project detector (Node / Python / Rust / Go / .NET / Java / Ruby / PHP / Docker / static / Makefile / git), confidence + alternative candidates
+- `scan_directory(root)` â€” walks a workspace root, skips junk (node_modules, venv, hidden, system dirs)
+- `migration 003_discovery_groups.sql` â€” `discovered`, `pinned`, `group_name`, `tags_json` columns on `projects`
 - REST: `GET /api/v1/discovery/scan`, `POST /api/v1/discovery/import`
 - UI: `DiscoveryDialog` "Scan for projects" flow on Apps; tile pinning + groups
 - 183 tests passing
 
-### v0.1.8.6 — UI/UX audit fixes
-- Full audit: Playwright browser walk + Electron CDP inspector + os-bridge native capture, every page × every viewport
-- **Fixed** WS replay-envelope bug — `ws-client.ts` `parse()` dropped the daemon's `{type:"replay",events:[...]}` frame, so events before connect / during reconnect never reached the UI (Recent activity stayed empty). Now unwraps the envelope.
-- **Fixed** responsive overflow below ~700px — `Apps.tsx` tile grid `minmax(320px,1fr)` → `minmax(min(100%,320px),1fr)`
+### v0.1.8.6 â€” UI/UX audit fixes
+- Full audit: Playwright browser walk + Electron CDP inspector + os-bridge native capture, every page Ã— every viewport
+- **Fixed** WS replay-envelope bug â€” `ws-client.ts` `parse()` dropped the daemon's `{type:"replay",events:[...]}` frame, so events before connect / during reconnect never reached the UI (Recent activity stayed empty). Now unwraps the envelope.
+- **Fixed** responsive overflow below ~700px â€” `Apps.tsx` tile grid `minmax(320px,1fr)` â†’ `minmax(min(100%,320px),1fr)`
 - Polish: responsive shell padding, `break-words` paths, daemon-derived UI version, human-readable connection label
 - 183 tests passing; typecheck green
 
-### v0.1.9 — Tool plugin system + Cloudtap
-- **Plugin model (hybrid):** a tool = a folder under `tools/` with a `manifest.json` (pure data). The daemon NEVER imports code from a tool folder — actions run via *curated built-in handlers* compiled into the daemon. New built-in tool = drop a manifest folder + one entry in `_BUILTIN_HANDLER_FACTORIES`.
-- Daemon: `tools_registry.py` (`ToolRegistry` — scan/validate/bind), `tools/` package (`ToolHandler` base + `cloudtap.py`), `routes_tools.py` (list / get / run-action, all audited), `Tool*` Pydantic models, `--tools-dir` flag
+### v0.1.9 â€” Tool plugin system + Cloudtap
+- **Plugin model (hybrid):** a tool = a folder under `tools/` with a `manifest.json` (pure data). The daemon NEVER imports code from a tool folder â€” actions run via *curated built-in handlers* compiled into the daemon. New built-in tool = drop a manifest folder + one entry in `_BUILTIN_HANDLER_FACTORIES`.
+- Daemon: `tools_registry.py` (`ToolRegistry` â€” scan/validate/bind), `tools/` package (`ToolHandler` base + `cloudtap.py`), `routes_tools.py` (list / get / run-action, all audited), `Tool*` Pydantic models, `--tools-dir` flag
 - Cloudtap: spawns `cloudflared` quick tunnel, parses the `*.trycloudflare.com` URL, one tunnel at a time, killed on daemon shutdown; honest error states (bad port / not installed / no-URL timeout / early exit / dropped)
-- Renderer: `tools-client.ts`, `ToolCard.tsx` (one generic manifest-driven card — no tool-specific UI), `Tools.tsx` page; `Tool*` types
+- Renderer: `tools-client.ts`, `ToolCard.tsx` (one generic manifest-driven card â€” no tool-specific UI), `Tools.tsx` page; `Tool*` types
 - Audit fixes: state-aware action buttons (manifest `available_in`); Tools page refetches on `v1.tool.*` WS events
 - 206 tests passing (+23); typecheck green; E2E verified a real tunnel served traffic over the public internet
 
-### v0.1.9.5 — Multi-tunnel Cloudtap + multi-instance tool model
+### v0.1.9.5 â€” Multi-tunnel Cloudtap + multi-instance tool model
 - **Generic multi-instance model:** `ToolState.items` (list of `ToolItem`) + `ToolAction.scope` (`tool` vs `item`). Any tool can now own multiple live instances, each with its own row + per-instance action buttons. Reusable by future tools (terminal sessions, etc.).
-- Cloudtap rewritten around a `dict` of `_Tunnel`s — open many tunnels, `close` (item-scoped) terminates exactly one and leaves the rest running. No more misleading global "Close tunnel" button.
+- Cloudtap rewritten around a `dict` of `_Tunnel`s â€” open many tunnels, `close` (item-scoped) terminates exactly one and leaves the rest running. No more misleading global "Close tunnel" button.
 - Cloudtap auto-labels each tunnel with the registered project whose `expected_port` matches (handler gets `storage`); falls back to `localhost:<port>`.
 - Renderer: `ToolCard` renders an "Active (N)" instance list; `runToolAction` takes an optional `itemId`.
 - 210 tests passing (+4); typecheck green; E2E opened two real tunnels at once, closed one, the other kept serving.
 
-### v0.1.10 — Home featured slideshow
-- `components/FeaturedSlideshow.tsx` — Microsoft-Store-style hero: rotates featured projects (pinned first, then most-recently-active), auto-advances + pauses on hover, prev/next arrows + dot nav, **Launch straight from the hero**.
-- `pages/Home.tsx` restructured — hero, heartbeat HUD, then "Recent activity" beside "Jump in". Fixes the top-heavy empty space the audits flagged. Welcome empty state when no projects.
+### v0.1.10 â€” Home featured slideshow
+- `components/FeaturedSlideshow.tsx` â€” Microsoft-Store-style hero: rotates featured projects (pinned first, then most-recently-active), auto-advances + pauses on hover, prev/next arrows + dot nav, **Launch straight from the hero**.
+- `pages/Home.tsx` restructured â€” hero, heartbeat HUD, then "Recent activity" beside "Jump in". Fixes the top-heavy empty space the audits flagged. Welcome empty state when no projects.
 - 210 tests pass; typecheck green; E2E verified in browser + Electron, no overflow at 400px.
 
-### v0.1.10.5 — Snapshot / restore (Contract #28)
-- `snapshot.py` — `build_snapshot()` (registry → `SnapshotPayload`) + `restore_snapshot()` (merge by id; create new, update existing, never delete; restored projects come back idle with secret values blanked).
-- `routes_snapshot.py` — `GET /api/v1/snapshot`, `POST /api/v1/restore` (compatibility-checked + audited).
-- Renderer: `snapshot-client.ts`, `components/SnapshotPanel.tsx` (Settings "Backup & restore" card — download a snapshot, restore one from file, see the report).
-- 216 tests pass (+6); typecheck green; E2E downloaded a 21-project snapshot and restored it → "0 created, 21 updated".
+### v0.1.10.5 â€” Snapshot / restore (Contract #28)
+- `snapshot.py` â€” `build_snapshot()` (registry â†’ `SnapshotPayload`) + `restore_snapshot()` (merge by id; create new, update existing, never delete; restored projects come back idle with secret values blanked).
+- `routes_snapshot.py` â€” `GET /api/v1/snapshot`, `POST /api/v1/restore` (compatibility-checked + audited).
+- Renderer: `snapshot-client.ts`, `components/SnapshotPanel.tsx` (Settings "Backup & restore" card â€” download a snapshot, restore one from file, see the report).
+- 216 tests pass (+6); typecheck green; E2E downloaded a 21-project snapshot and restored it â†’ "0 created, 21 updated".
 
-### v0.1.11 — Device auth + pairing foundation (Milestone H, part 1)
-- **Token on every request.** `migration 004` (`paired_devices`), `auth.py` (`AuthManager` — local token in `data/auth-token`, device tokens via 6-digit pairing codes, `is_trusted_local()`, `require_token()` dependency), `routes_auth.py` (`/auth/local-token`, `/pair/code`, `/pair`, `/pair/devices`).
-- Why not "trust localhost": a Cloudflare tunnel makes tunnelled requests look loopback — so nothing is trusted by IP; only the one bootstrap endpoint uses the trusted-local check (loopback + no proxy headers).
+### v0.1.11 â€” Device auth + pairing foundation (Milestone H, part 1)
+- **Token on every request.** `migration 004` (`paired_devices`), `auth.py` (`AuthManager` â€” local token in `data/auth-token`, device tokens via 6-digit pairing codes, `is_trusted_local()`, `require_token()` dependency), `routes_auth.py` (`/auth/local-token`, `/pair/code`, `/pair`, `/pair/devices`).
+- Why not "trust localhost": a Cloudflare tunnel makes tunnelled requests look loopback â€” so nothing is trusted by IP; only the one bootstrap endpoint uses the trusted-local check (loopback + no proxy headers).
 - `app.py` guards projects/discovery/tools/snapshot routers with `X-Synapse-Token`; `ws.py` accepts a token in the resume frame. CORS allows the header.
 - Renderer: `bootstrapLocalToken()` at startup; `api-client`/`ws-client` send the token; `PairedDevicesPanel` in Settings (generate code with countdown, list/revoke devices).
 - 230 tests pass (+14); typecheck green; E2E verified token bootstrap, 401 without token, pairing-code generation.
 
-### v0.1.12 — Mobile Web UI (Milestone H complete)
-- `mobile/index.html` — a self-contained responsive Web UI (HTML + CSS + vanilla JS, one file, no external resources). Pair screen (6-digit code → device token in `localStorage`) → dashboard: every project as a card with live status + Launch/Stop, `:port` links, a Cloudtap section (open/close tunnels), live WebSocket updates, "Unpair this device".
-- `app.py` — mounts `mobile/` as static files at `/mobile` (open, so a phone can load the page before pairing).
-- 231 tests pass (+1); typecheck green; E2E at a 390×844 phone viewport — paired, listed 21 projects, opened + closed a real Cloudflare tunnel from the phone, 0 console errors.
+### v0.1.12 â€” Mobile Web UI (Milestone H complete)
+- `mobile/index.html` â€” a self-contained responsive Web UI (HTML + CSS + vanilla JS, one file, no external resources). Pair screen (6-digit code â†’ device token in `localStorage`) â†’ dashboard: every project as a card with live status + Launch/Stop, `:port` links, a Cloudtap section (open/close tunnels), live WebSocket updates, "Unpair this device".
+- `app.py` â€” mounts `mobile/` as static files at `/mobile` (open, so a phone can load the page before pairing).
+- 231 tests pass (+1); typecheck green; E2E at a 390Ã—844 phone viewport â€” paired, listed 21 projects, opened + closed a real Cloudflare tunnel from the phone, 0 console errors.
 
-### v0.1.13 — Auto-start + tray polish (Milestone I)
-- `electron/main.ts` — `synapse:get-autostart` / `synapse:set-autostart` IPC over `setLoginItemSettings`; richer tray menu (Projects submenu with launch + running checkmarks, Open-mobile-UI, Start-with-Windows checkbox), refreshed every 20s via authenticated daemon calls (main process reads the local token off disk).
-- **Probe-before-spawn:** Electron checks `/health` on launch — attaches to an already-running daemon instead of spawning a second one; only kills a daemon it spawned itself.
+### v0.1.13 â€” Auto-start + tray polish (Milestone I)
+- `electron/main.ts` â€” `synapse:get-autostart` / `synapse:set-autostart` IPC over `setLoginItemSettings`; richer tray menu (Projects submenu with launch + running checkmarks, Open-mobile-UI, Start-with-Windows checkbox), refreshed every 20s via authenticated daemon calls (main process reads the local token off disk).
+- **Probe-before-spawn:** Electron checks `/health` on launch â€” attaches to an already-running daemon instead of spawning a second one; only kills a daemon it spawned itself.
 - Renderer: `StartupPanel` in Settings (start-with-Windows toggle; degrades to "Desktop app only" in a browser).
-- 231 tests pass; typecheck green; E2E — Electron rebooted clean, attached to the running daemon (one `:7878` holder), Startup toggle present, 0 console errors.
+- 231 tests pass; typecheck green; E2E â€” Electron rebooted clean, attached to the running daemon (one `:7878` holder), Startup toggle present, 0 console errors.
 
-### v0.1.30 → v0.1.34 — ADR-0003 (workbench expansion)
+### v0.1.30 â†’ v0.1.34 â€” ADR-0003 (workbench expansion)
 
 A single coherent arc. The `project_files` table generalises: file uploads, transcripts, ChatGPT-import conversations, and quick-action prompt records all share one storage / audit / download surface.
 
@@ -509,7 +514,7 @@ A single coherent arc. The `project_files` table generalises: file uploads, tran
 - **v0.1.34** -- Phase F AI quick-actions. `quick_actions.py` loads `templates/quick-actions/*.json`; `routes_quick_actions.py` lazy-creates the `scratch` project, writes the templated prompt to `PROMPT.md` + `PROMPT-<id>.md` inside its cwd, spawns the workbench PTY with `SYNAPSE_QUICK_ACTION_{ID,PROMPT,PROMPT_FILE}` injected so the Claude / Codex session sees the prompt on prompt 1. Two bundled templates ship: `new-mcp-server`, `new-synapse-tool`. The button ships the shortcut; the AI does the work.
 - **368 tests pass + 9 skipped.** Suite hygiene during v0.1.33: fixed `_BUNDLED_SAMPLE` + mobile-UI cwd-relative paths and the `BaseEntity` `default_factory` timestamp drift.
 
-### v0.1.36-dev — Mobile parity + WAN handoff follow-up
+### v0.1.36-dev â€” Mobile parity + WAN handoff follow-up
 - `/mobile` now prefers the built React renderer instead of the older standalone HTML page, while still falling back to `mobile/index.html` if `dist/` is absent.
 - New renderer runtime bootstrap path:
   - paired-device token in `localStorage` for phone/browser sessions
@@ -547,12 +552,12 @@ A single coherent arc. The `project_files` table generalises: file uploads, tran
   - attached to the real Electron window via `scripts/inspect-electron.js`
   - triggered `window.synapse.restart()` from the live app
   - confirmed the wrapper stopped and restarted Vite + daemon, relaunched Electron, and came back on the real Synapse page instead of a dead renderer
-- `npm run build` ✅
-- `npm run typecheck` ✅
-- `npm run build:daemon` ✅
+- `npm run build` âœ…
+- `npm run typecheck` âœ…
+- `npm run build:daemon` âœ…
 - `pytest` -> **437 passed, 11 skipped**
 
-### v0.1.36-dev — AI Factory + AI Operating System foundation
+### v0.1.36-dev â€” AI Factory + AI Operating System foundation
 - Daemon:
   - new advanced AI case substrate with structured `intent`, `targets`,
     `directives`, and `policies`
@@ -574,10 +579,10 @@ A single coherent arc. The `project_files` table generalises: file uploads, tran
   - isolated daemon on `7981` + Vite on `5174`
   - AI Factory page loaded cleanly in the browser
   - created a real case, launched it, confirmed isolated worktree allocation, then stopped it and verified the UI updated from daemon events without a manual refresh
-- `npm run typecheck` ✅
+- `npm run typecheck` âœ…
 - `pytest` -> **504 passed, 12 skipped**
 
-### v0.1.36-dev — Fast Money launcher + proof app
+### v0.1.36-dev â€” Fast Money launcher + proof app
 - Daemon:
   - new built-in `FastMoneyTool` registered in `tools_registry.py`
   - launcher auto-installs the `fast-money` AI bundle on first use
@@ -592,7 +597,7 @@ A single coherent arc. The `project_files` table generalises: file uploads, tran
   - launched Fast Money once into the real repo `data/` folder; the proof app is now registered as project `fast-money-client-ops`
   - confirmed `data/projects/fast-money-client-ops` exists with the scaffolded files
   - started the generated app locally and verified `/health`, `/`, `/portal`, and `/ops` all returned `200`
-- `npm run typecheck` ✅
+- `npm run typecheck` âœ…
 - `pytest` -> **528 passed, 12 skipped**
 
 ## What's next (immediate)
@@ -606,19 +611,19 @@ mode-specific behaviors still need follow-through:
 
 **ADR-0003 closed.** ADR-0003 Phase G is OAuth (Sign in with Apple / Google), which has always lived in its own ADR-0004 -- deferred until the user gives the go (real OAuth client provisioning, redirect URIs, JWKS, device-migration plan).
 
-**Milestone J — packaging.** Milestones A–I are done, and packaging remains the release gate after the current AI Factory / AI OS foundation hardens.
+**Milestone J â€” packaging.** Milestones Aâ€“I are done, and packaging remains the release gate after the current AI Factory / AI OS foundation hardens.
 - PyInstaller bundled-daemon bootstrap is now wired (`installer/daemon-dist/synapse-daemon.exe`)
-- electron-builder + an NSIS installer → one double-click install
+- electron-builder + an NSIS installer â†’ one double-click install
 - First-run wizard creates a desktop shortcut
-- Then Milestone K — `v0.1.0` release (tag, GitHub release, screenshots)
+- Then Milestone K â€” `v0.1.0` release (tag, GitHub release, screenshots)
 
 ## Known issues / broken state
 
-None — toolchain is green:
-- `npm install` ✅
-- `pip install -e ".[dev]"` ✅
-- `npm run typecheck` ✅
-- `pytest` (all suites) ✅
+None â€” toolchain is green:
+- `npm install` âœ…
+- `pip install -e ".[dev]"` âœ…
+- `npm run typecheck` âœ…
+- `pytest` (all suites) âœ…
 
 ## How to verify the current state
 
@@ -638,7 +643,7 @@ python -m pytest -q    # should pass 528 tests, 12 skipped
 - **Detached spawn** for managed processes (so they outlive Synapse UI).
 - **Two version files** must stay in sync: `package.json` and `pyproject.toml`. `scripts/version-bump.ps1` handles both.
 
-## Design contracts (28 total — full spec in AGENTS.md)
+## Design contracts (28 total â€” full spec in AGENTS.md)
 
 Every milestone must honour all 28. Quick list:
 
@@ -650,7 +655,7 @@ Every milestone must honour all 28. Quick list:
 5. WebSocket reconnect protocol (event IDs + ring buffer)
 6. Daemon orphan reconciliation on startup
 7. Versioned API (`/api/v1/...`, `v1.entity.event`)
-8. Single schema source of truth (Pydantic → TS)
+8. Single schema source of truth (Pydantic â†’ TS)
 9. DB migrations from day 1
 10. Naming conventions (kebab/snake/camel/noun.verb)
 11. Audit log
@@ -676,4 +681,4 @@ Every milestone must honour all 28. Quick list:
 
 ---
 
-_Last updated by v0.1.92 — benchmarked portable AI skill packs and Super Internet Digger v2 (ADR-0032)._
+_Last updated by v0.1.92 â€” benchmarked portable AI skill packs and Super Internet Digger v2 (ADR-0032)._

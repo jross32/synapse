@@ -1,34 +1,35 @@
 {
-  "manifest_version": 3,
-  "name": "Synapse ChatGPT Presence",
-  "version": "0.3.0",
-  "description": "Automatically groups ChatGPT Synapse workers, counts open and active workers, and shows an in-tab activity notice.",
-  "permissions": [
-    "tabs",
-    "tabGroups",
-    "storage"
-  ],
-  "host_permissions": [
-    "https://chatgpt.com/*",
-    "http://127.0.0.1:7878/*",
-    "http://localhost:7878/*"
-  ],
-  "background": {
-    "service_worker": "service-worker.js",
-    "type": "module"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://chatgpt.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
-  "action": {
-    "default_title": "Synapse Workers — open/active count"
-  }
+    "manifest_version":  3,
+    "name":  "Synapse ChatGPT Presence",
+    "version":  "0.4.0",
+    "description":  "Synapse ChatGPT workers: one Chrome tab group, live worker count, safe Park action, and durable Worker Catalog integration.",
+    "permissions":  [
+                        "tabs",
+                        "tabGroups",
+                        "storage",
+                        "contextMenus"
+                    ],
+    "host_permissions":  [
+                             "https://chatgpt.com/*",
+                             "http://127.0.0.1:7878/*",
+                             "http://localhost:7878/*"
+                         ],
+    "background":  {
+                       "service_worker":  "service-worker.js",
+                       "type":  "module"
+                   },
+    "content_scripts":  [
+                            {
+                                "matches":  [
+                                                "https://chatgpt.com/*"
+                                            ],
+                                "js":  [
+                                           "content.js"
+                                       ],
+                                "run_at":  "document_idle"
+                            }
+                        ],
+    "action":  {
+                   "default_title":  "Synapse Workers â€” open/active count"
+               }
 }

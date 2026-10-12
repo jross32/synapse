@@ -1,4 +1,4 @@
-# ChatGPT Chrome worker runbook (Synapse / Reflex)
+﻿# ChatGPT Chrome worker runbook (Synapse / Reflex)
 
 Last live verification: 2026-10-12. Project: Synapse Self. This is an **observed, partially automated workflow**, not yet an autonomous five-worker system.
 
@@ -10,7 +10,7 @@ Last live verification: 2026-10-12. Project: Synapse Self. This is an **observed
 - Worker 1 (connector smoke): `https://chatgpt.com/g/g-p-6a91003e980c81919b8920cfc9e0941e-synapse2gpt-workers/c/6acd53ef-fde0-83e9-a7f4-471a9257fa2c`.
 - Worker 2 (read-only inspection): `https://chatgpt.com/g/g-p-6a91003e980c81919b8920cfc9e0941e-synapse2gpt-workers/c/6acd5519-c1cc-83e9-94da-d28c4c01edbd`.
 - Existing Chrome tab group label seen: `Synapseworkers Ch...`. **Reuse this one group**, don't make a group for every worker.
-- Chrome companion extension: `browser-extensions/chatgpt-presence-companion`; source v0.3.0 (installed Chrome version requires reload/verification).
+- Chrome companion extension: `browser-extensions/chatgpt-presence-companion`; source v0.4.0 (installed Chrome version requires reload/verification).
 - Reflex MCP through Synapse: `synapse_list_mcp_tools(server="reflex")` for schemas, `synapse_call_mcp_tool(server="reflex",tool=...,arguments=...)`.
 
 ## Proven browser flow
@@ -31,7 +31,7 @@ Last live verification: 2026-10-12. Project: Synapse Self. This is an **observed
 - Worker 2 chat visibly reported `Synapse connector invoked successfully` and showed Synapse backend v0.1.209, Synapse Self source path. Full response still requires inspection for tool details.
 - Worker 2 was created in a **new Chrome tab** from the correct ChatGPT Project and **manually joined to the existing Chrome group** using right-click tab > Add tab to group > `Synapseworkers ChatGPT automation setup`. The cyan group outline was visually verified. Extension auto-grouping is not yet live-verified.
 - The second chat had duplicate prompt text in a preliminary attempt due to `@Synapse` mention handling and clipboard paste; final submitted prompt also showed duplicated segment. Improve this by first selecting the plugin, then clear composer, then paste only body once and inspect.
-- Manual Chrome grouping was verified. Extension v0.3.0 source passed Chrome-API mock tests, but requires Chrome reload and live verification. Five concurrent workers, source-write capability, independent agent execution, worker URL registration and recovery **remain unverified**. No credentials or cookies should be extracted.
+- Manual Chrome grouping was verified. Extension v0.4.0 source passed Chrome-API mock tests, but requires Chrome reload and live verification. Five concurrent workers, source-write capability, independent agent execution, live Chrome reloading and end-to-end close/reopen **remain unverified**. No credentials or cookies should be extracted.
 
 ## Worker prompt template
 
@@ -55,17 +55,31 @@ Use a read-only version for smoke tests. Use separate bounded scopes for concurr
 When a user asks for `AI worker`, `sub-worker`, `subagent`, `ChatGPT UI worker`, `ChatGPT browser worker`, `ChatGPT in Synapse`, or `open another AI to help` **and the context is ChatGPT UI**, default to this exact workflow, not Codex, Work mode, or an unrelated child browser profile. Use Reflex for desktop-control operations by default; assume it should be available but still check its real control state and release control afterward.
 
 1. Prefer the existing signed-in Chrome profile/session (never copy cookies, tokens or passwords). Chrome may be minimized/behind other apps. Use Reflex `get_active_window`, `list_windows_detailed`, `get_screen_size`, `take_screenshot` to identify it, then restore/focus without closing other windows. Beware Windows DPI scaling and user concurrent input; do not click from unverified rescaled screenshot coordinates.
-2. Find or create the ONE existing **Synapse Workers** group. With extension source v0.3.0 loaded, opening a worker ChatGPT conversation should **automatically add it**. The extension toolbar click can also create an empty group and collect saved worker URLs. If the extension is not installed/reloaded, use right-click worker tab > Add tab to group > existing **Synapseworkers ChatGPT automation setup**. Do **not** add a duplicate group.
+2. Find or create the ONE existing **Synapse Workers** group. With extension source v0.4.0 loaded, opening a worker ChatGPT conversation should **automatically add it**. The extension toolbar click prepares/reuses a group but never reopens parked chats; reopen individual workers from the catalog. If the extension is not installed/reloaded, use right-click worker tab > Add tab to group > existing **Synapseworkers ChatGPT automation setup**. Do **not** add a duplicate group.
 3. Open a new **Chrome tab inside the group** when possible. Navigate directly to the exact project URL above; don't use the similarly named non-worker Synapse2GPT project.
 4. Confirm the **Chat** segment is selected (not Work). Select actual **@Synapse** plugin via autocomplete/chip first, then paste *one* scoped prompt through Reflex clipboard and send.
 5. Wait for completion; inspect full response, verify actual Synapse connector activity and source/test evidence where warranted. Record worker conversation URL, assignment, status, tests, errors, tool calls and owner context in Synapse. Reuse that chat for continuing the same worker.
 6. Confirm the Chrome group and toolbar badge are consistent. **Badge counts open chat tabs, not autonomous jobs.** Green indicates observed active generation, and group label includes number active. Active in-tab toast is informative; not proof a source-code operation succeeded.
 7. Call Reflex `release_control`. Always return a short truthful handoff. Avoid altering other Chrome tabs or windows.
 
-### Extension v0.3.0 verification status and quality gates
+### Extension v0.4.0 verification status and quality gates
 
 - Source: `browser-extensions/chatgpt-presence-companion/{manifest.json,group-workers.js,service-worker.js,content.js}`.
 - Regression tests: `node browser-extensions/chatgpt-presence-companion/test-group-workers.mjs`, `node browser-extensions/chatgpt-presence-companion/test-service-worker.mjs`.
 - Tests cover canonical URL with `-synapse2gpt-workers` slug, one-group reuse, no duplicates, empty registry, auto group, badge count=2, active=1, idle=0, button group collapse. Mock tests passed on 2026-10-12.
-- Live Chrome still requires confirming **v0.3.0** appears in `chrome://extensions`, service worker has no errors, two real workers show badge `2`, opening a third chat automatically joins the existing group, active notice appears while working, and click collapses without closing anything.
+- Live Chrome still requires confirming **v0.4.0** appears in `chrome://extensions`, service worker has no errors, two real workers show badge `2`, opening a third chat automatically joins the existing group, active notice appears while working, and click collapses without closing anything.
 - When the desktop isn't in a stable state (another application foreground, user using the PC, Reflex mouse/DPI issues), do not claim live verification or click into unrelated apps. Use programmatic tests and report the explicit blocker.
+
+## Park and resume (Worker Catalog)
+
+Closing a worker Chrome tab parks it: preserve its canonical conversation URL, assignment, work-item links and handoff in the durable Synapse worker registry. Closing does NOT mean archive or task completion. Future AI should search the registry first and reopen the same URL on demand, not start duplicate conversations. The Chrome extension badge counts only open tabs and toolbar click must never automatically reopen every saved worker. See docs/CHATGPT_WORKER_CATALOG.md for lifecycle, UI and verification gates.
+
+
+## Source v0.4.0 Worker Catalog and safe park workflow
+
+- Synapse UI: AI Coding → ChatGPT → Worker Catalog (search, Current/Open/Working/Parked/Failed/Archived, Resume saved URL, handoff and next step, Archive/Restore). Backend REST: GET /api/v1/chatgpt-workers/catalog, POST /api/v1/chatgpt-workers/{id}/handoff, /archive and /unarchive.
+- Chrome companion v0.4.0 has a page context-menu command **Park Synapse worker (close tab, keep saved chat)**; it refuses to close when active generation, unsent draft or safety state unknown. Otherwise it closes the selected worker tab and preserves its canonical URL via session storage and Synapse observation API. The toolbar badge counts open worker tabs, not the durable catalog inventory.
+- Automatically observed browser-created worker conversations in the exact Synapse2GPT Workers project are idempotently registered to Synapse's existing worker registry. Work-item-managed and archived records are protected against lifecycle clobbering.
+- The worker's actual source-code outcome, tests and next step must be recorded using the Handoff API/work-item journal. Never imply that an observed green badge means a coding task succeeded.
+- Regression: npm run typecheck; daemon/tests/test_chatgpt_worker_catalog.py and test_chatgpt_worker_chats.py; three browser-extensions/chatgpt-presence-companion Node mock suites. Source tests are not live Chrome visual proof.
+- Installation: chrome://extensions must show v0.4.0 after reloading the correct unpacked folder. Refresh existing ChatGPT pages to apply the new content script. The active Synapse daemon may still be v0.1.209 and require a separate safe upgrade before the newly added catalog API can work in the live application.

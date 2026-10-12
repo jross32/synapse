@@ -1,4 +1,4 @@
-"""AI-facing context endpoint (v0.1.29 · ADR-0002 Phase B).
+"""AI-facing context endpoint (v0.1.29 Â· ADR-0002 Phase B).
 
   GET /api/v1/ai/context
       Returns a compact, AI-readable digest of the running Synapse instance:
@@ -821,9 +821,9 @@ def build_ai_router(
                     "path": "/api/v1/projects/{id}/records | /api/v1/projects/{id}/records/canonical-chat-url",
                 },
                 {
-                    "purpose": "inspect durable ChatGPT UI workers, check one-time setup readiness, open the dedicated account-owner login browser, and archive/unarchive worker conversations without deleting them",
+                    "purpose": "list searchable durable ChatGPT UI workers and presence, preserve browser-created worker chats, save AI handoffs and next steps, resume canonical URLs, and archive/unarchive without deleting conversations",
                     "method": "GET | POST",
-                    "path": "/api/v1/chatgpt-workers | /api/v1/chatgpt-workers/readiness | /api/v1/chatgpt-workers/setup-browser | /api/v1/chatgpt-workers/{id} | /archive | /unarchive",
+                    "path": "/api/v1/chatgpt-workers | /api/v1/chatgpt-workers/catalog | /api/v1/chatgpt-workers/readiness | /api/v1/chatgpt-workers/setup-browser | /api/v1/chatgpt-workers/{id} | /handoff | /archive | /unarchive",
                 },
                 {
                     "purpose": "bootstrap durable AI thread identity, observe browser tabs, track active/idle/error state, heartbeat long turns, finish timed work, and inspect work-group totals",

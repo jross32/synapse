@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
+from . import chatgpt_worker_catalog
 from . import chatgpt_child_agents
 from . import chatgpt_worker_chats as workers
 from .audit import AuditRecord, audit
@@ -16,6 +17,11 @@ from .storage import Storage
 class WorkerArchiveRequest(BaseModel):
     reason: str = Field(default="", max_length=1000)
 
+
+
+class WorkerHandoffUpdate(BaseModel):
+    handoff_md: str = Field(default="", max_length=6000)
+    next_step: str = Field(default="", max_length=2000)
 
 class ProjectHomeReconcileRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=200)
@@ -50,6 +56,10 @@ def build_chatgpt_workers_router(storage: Storage) -> APIRouter:
             ],
         }
 
+    @router.get("/catalog", response_model=None)
+    async def worker_catalog(include_archived: bool = Query(default=True)) -> dict[str, Any]:
+        return chatgpt_worker_catalog.catalog(storage.conn, include_archived=include_archived)
+
     @router.get("/project-home/status", response_model=None)
     async def project_home_status(project_id: str = Query(min_length=1)) -> dict[str, Any]:
         return workers.project_home_report(storage.conn, project_id.strip())
@@ -80,6 +90,21 @@ def build_chatgpt_workers_router(storage: Storage) -> APIRouter:
     async def get_worker_chat(worker_chat_id: str) -> workers.ChatGPTWorkerChat:
         return workers.get_chat(storage.conn, worker_chat_id)
 
+    @router.post("/{worker_chat_id}/handoff", response_model=workers.ChatGPTWorkerChat)
+    async def update_worker_handoff(
+        worker_chat_id: str, payload: WorkerHandoffUpdate
+    ) -> workers.ChatGPTWorkerChat:
+        with storage.transaction() as conn:
+            item = chatgpt_worker_catalog.save_handoff(
+                conn, worker_chat_id, handoff_md=payload.handoff_md,
+                next_step=payload.next_step,
+            )
+            audit(
+                conn,
+                AuditRecord(entity_type="chatgpt_worker_chat", entity_id=worker_chat_id,
+                            action="handoff_updated"),
+            )
+        return item
     @router.post("/{worker_chat_id}/archive", response_model=workers.ChatGPTWorkerChat)
     async def archive_worker_chat(
         worker_chat_id: str, payload: WorkerArchiveRequest

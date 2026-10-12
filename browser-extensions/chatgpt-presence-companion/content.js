@@ -6,6 +6,7 @@
   let previousStatus = null;
   let generationStartedAt = null;
   let lastSentSignature = '';
+  let lastSentAt = 0;
   let debounceTimer = null;
 
   function visible(el) {
@@ -20,7 +21,7 @@
   }
 
   function cleanTitle() {
-    return (document.title || '').replace(/\s*[-�?"�?"]\s*ChatGPT\s*$/i, '').trim().slice(0, 500);
+    return (document.title || '').replace(/\s*[-ï¿½?"ï¿½?"]\s*ChatGPT\s*$/i, '').trim().slice(0, 500);
   }
 
   function latestText(selector, max = 4000) {
@@ -103,7 +104,8 @@
     const payload = snapshot();
     showWorkerActivity(payload.status);
     const signature = JSON.stringify(payload);
-    if (!force && signature === lastSentSignature && payload.status !== 'active') return;
+    if (!force && signature === lastSentSignature && payload.status !== 'active' && Date.now() - lastSentAt < 30000) return;
+    lastSentAt = Date.now();
     lastSentSignature = signature;
     chrome.runtime.sendMessage({type: 'synapse-chatgpt-observation', payload}).catch(() => {});
   }
@@ -131,6 +133,16 @@
       send(false);
     }
   }, 5000);
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'synapse-worker-can-park') return;
+    const generating = [...document.querySelectorAll(STOP_SELECTOR)].some(visible);
+    const composer = [...document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]')]
+      .find(visible);
+    const draft = composer?.value || composer?.innerText || composer?.textContent || '';
+    const hasDraft = String(draft).trim().length > 0;
+    sendResponse({canPark: !generating && !hasDraft, generating, hasDraft});
+  });
 
   send(true);
 })();
