@@ -39,6 +39,7 @@ from .audit import AuditRecord, audit
 from .errors import conflict, not_found
 from .models import AuditSource
 from .storage import Storage
+from .maintenance_coordinator import MaintenanceCoordinator, MaintenanceError
 from .time_utils import to_iso, utc_now
 
 log = logging.getLogger(__name__)
@@ -110,6 +111,21 @@ class RestartRequest(BaseModel):
         pattern=r"^[A-Za-z0-9._-]{6,80}$",
     )
     source: AuditSource = AuditSource.AUTO
+
+
+class MaintenancePrepareRequest(BaseModel):
+    workers: list[dict[str, str]] = Field(default_factory=list, max_length=1000)
+    grace_seconds: int = Field(default=120, ge=5, le=900)
+
+
+class MaintenanceAckRequest(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=180)
+    status: Literal["paused", "drained", "unsafe"]
+    checkpoint: str | None = Field(default=None, max_length=1000)
+
+
+class MaintenanceRestartRequest(RestartRequest):
+    maintenance_id: str = Field(min_length=12, max_length=80)
 
 
 class RestartStageUpdate(BaseModel):
@@ -480,6 +496,61 @@ def create_restart_operation(storage: Storage, payload: RestartRequest) -> dict[
 
 def build_system_router(storage: Storage, data_dir: Path) -> APIRouter:
     router = APIRouter(tags=["system"])
+    maintenance = MaintenanceCoordinator(data_dir)
+
+    @router.get("/system/restart/maintenance", response_model=None)
+    async def inspect_maintenance() -> dict[str, Any]:
+        return {"maintenance": maintenance.inspect()}
+
+    @router.post("/system/restart/maintenance", response_model=None, status_code=202)
+    async def prepare_maintenance(payload: MaintenancePrepareRequest, request: Request) -> dict[str, Any]:
+        try:
+            operation = maintenance.prepare(payload.workers, payload.grace_seconds)
+        except MaintenanceError as exc:
+            raise conflict("system_restart", str(exc)) from exc
+        await request.app.state.bus.publish(
+            event_name("system", "maintenance_requested"), {"maintenance": operation}
+        )
+        return {"maintenance": operation}
+
+    @router.post("/system/restart/maintenance/{operation_id}/ack", response_model=None)
+    async def ack_maintenance(operation_id: str, payload: MaintenanceAckRequest, request: Request) -> dict[str, Any]:
+        try:
+            operation = maintenance.acknowledge(
+                operation_id, payload.worker_id, payload.status, payload.checkpoint
+            )
+        except MaintenanceError as exc:
+            raise conflict("system_restart", str(exc)) from exc
+        await request.app.state.bus.publish(
+            event_name("system", "maintenance_progress"), {"maintenance": operation}
+        )
+        return {"maintenance": operation}
+
+    @router.post("/system/restart/maintenance/{operation_id}/cancel", response_model=None)
+    async def cancel_maintenance(operation_id: str, request: Request) -> dict[str, Any]:
+        try:
+            operation = maintenance.cancel(operation_id)
+        except MaintenanceError as exc:
+            raise conflict("system_restart", str(exc)) from exc
+        await request.app.state.bus.publish(
+            event_name("system", "maintenance_cancelled"), {"maintenance": operation}
+        )
+        return {"maintenance": operation}
+
+    @router.post("/system/restart/maintenance/{operation_id}/commit", response_model=None, status_code=202)
+    async def commit_maintenance_restart(operation_id: str, payload: RestartRequest, request: Request) -> dict[str, Any]:
+        try:
+            maintenance.require_ready(operation_id)
+        except MaintenanceError as exc:
+            raise conflict("system_restart", str(exc)) from exc
+        # Only this explicitly coordinated route gates restart against the ACK roster.
+        operation = create_restart_operation(storage, payload)
+        await request.app.state.bus.publish(
+            event_name("system", "restart_requested"),
+            {"operation_id": operation["operation_id"], "source": payload.source.value, "maintenance_id": operation_id},
+        )
+        return {"operation": operation, "maintenance": maintenance.inspect(), "error_catalog": RESTART_ERROR_CODES}
+
 
     @router.get("/system/network", response_model=None)
     async def get_network(request: Request) -> dict[str, Any]:
