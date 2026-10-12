@@ -1,1 +1,29 @@
-{"version":"0.1.217","channel":"stable","artifacts":[{"platform":"windows","arch":"x64","url":"https://github.com/jross32/synapse/releases/download/v0.1.217/Synapse.Setup.0.1.217.exe"}]}
+{
+  "version": "0.1.217",
+  "channel": "stable",
+  "artifacts": [
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "url": "https://github.com/jross32/synapse/releases/download/v0.1.217/Synapse.Setup.0.1.217.exe"
+    }
+  ],
+  "previews": [
+    {
+      "version": "0.2.219",
+      "channel": "preview",
+      "platform": "windows",
+      "arch": "x64",
+      "signed": false,
+      "full_install_e2e_verified": false,
+      "status": "available-unsigned-preview",
+      "url": "https://github.com/jross32/synapse/releases/download/premium-preview-0.2.219-20261012/Synapse.Premium.Setup.0.2.219.exe",
+      "sha256": "74035cd9b5960a50515b8639026f895682c4b7a0201d09686dbe0a701e07fc6d",
+      "size_bytes": 242652850,
+      "source_commit": "2fc212dba0c76d025e99dbb1d3e7aad2fe9af68d",
+      "source_branch": "release/premium-preview-0.2.219-20261012",
+      "mirror_url": "/releases/Synapse-Premium-Setup-0.2.219-preview.exe",
+      "release_notes_url": "https://github.com/jross32/synapse/releases/tag/premium-preview-0.2.219-20261012"
+    }
+  ]
+}
