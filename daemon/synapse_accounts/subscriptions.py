@@ -85,6 +85,7 @@ def get_account_plan(db: Session, account: Account) -> dict[str, Any]:
         "features": {"account_sync": True, "device_inventory": True, "preview_actions": True},
         "limits": PLAN_RULES[plan].copy(),
         "billing_configured": False,
+        "limits_finalized": False,
     }
 
 
