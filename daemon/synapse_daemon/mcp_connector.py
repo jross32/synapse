@@ -346,6 +346,7 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_get_context": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_mcp_executor_status": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_projects": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_register_project": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True},
     "synapse_get_project_records": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_project_design_references": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_project_doctor": {"readOnlyHint": True, "idempotentHint": True},
@@ -496,6 +497,28 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "name": "synapse_list_projects",
             "description": "List the projects (apps) registered in Synapse, with status, kind, path, and port.",
             "inputSchema": empty,
+        },
+        {
+            "name": "synapse_register_project",
+            "description": (
+                "Register an existing absolute project directory for AI memory, image "
+                "generation and project tools. Never creates or modifies the directory. "
+                "Returns existing project when id and canonical path match; refuses collisions. "
+                "After registering, call synapse_get_project_ai_context before work and "
+                "synapse_capture_note afterward."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Unique kebab-case project identifier."},
+                    "name": {"type": "string", "description": "Human-readable project name."},
+                    "path": {"type": "string", "description": "Absolute existing project directory on this machine."},
+                    "kind": {"type": "string", "enum": ["app","ui","service","mcp-server","library","script","other"]},
+                    "launch_cmd": {"type": "string", "description": "Optional launch command, blank if not launchable."}
+                },
+                "required": ["project_id","name","path"],
+                "additionalProperties": False,
+            },
         },
         {
             "name": "synapse_get_project_records",
@@ -2444,6 +2467,39 @@ def build_mcp_router(
 
         if name == "synapse_list_projects":
             return [p.model_dump(mode="json") for p in projects_module.list_projects(storage.conn)]
+        if name == "synapse_register_project":
+            _require_writes()
+            from pathlib import Path as _Path
+            from .projects import Project, ProjectKind
+            project_id = str(args.get("project_id", "")).strip()
+            display_name = str(args.get("name", "")).strip()
+            raw_path = str(args.get("path", "")).strip()
+            if not project_id or not display_name or not raw_path:
+                raise ValueError("project_id, name and absolute path are required")
+            project_path = _Path(raw_path).expanduser()
+            if not project_path.is_absolute() or not project_path.is_dir():
+                raise ValueError("path must be an existing absolute directory on this machine")
+            resolved = project_path.resolve(strict=True)
+            if resolved == _Path(resolved.anchor):
+                raise ValueError("Refusing to register a filesystem root")
+            kind = ProjectKind(str(args.get("kind") or "app"))
+            current = projects_module.get_or_none(storage.conn, project_id)
+            if current is not None:
+                if _Path(current.path).resolve() != resolved:
+                    raise ValueError("project_id already belongs to a different path")
+                return {"project": current.model_dump(mode="json"), "created": False,
+                        "ai_context_tool": "synapse_get_project_ai_context",
+                        "image_tool": "synapse_generate_image"}
+            for other in projects_module.list_projects(storage.conn):
+                if _Path(other.path).resolve() == resolved:
+                    raise ValueError(f"Directory already registered as project '{other.id}'")
+            project = Project(id=project_id, name=display_name, path=str(resolved),
+                              launch_cmd=str(args.get("launch_cmd") or ""), kind=kind)
+            with storage.transaction() as conn:
+                created = projects_module.create(conn, project)
+            return {"project": created.model_dump(mode="json"), "created": True,
+                    "ai_context_tool": "synapse_get_project_ai_context",
+                    "image_tool": "synapse_generate_image"}
         if name == "synapse_list_tools":
             out = []
             for manifest in registry.list_manifests():
