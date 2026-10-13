@@ -1,4 +1,4 @@
-// Synapse app shell -- grouped hubs, installed pages, and responsive desktop/mobile nav.
+﻿// Synapse app shell -- grouped hubs, installed pages, and responsive desktop/mobile nav.
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp } from 'lucide-react';
@@ -39,7 +39,9 @@ import {
 import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
-import { reportRendererReady } from '@shared/electron-bridge';
+import { hasElectronBridge, reportRendererReady } from '@shared/electron-bridge';
+import { readProgress } from './lib/first-launch-state';
+import { FirstLaunchOnboarding } from './components/FirstLaunchOnboarding';
 import { CaptureButton } from './components/CaptureButton';
 import { NotificationCenter } from './components/NotificationCenter';
 import { CommandPalette } from './components/CommandPalette';
@@ -94,6 +96,12 @@ export default function App(): JSX.Element {
   const mobileRoute = isMobileRoute();
   const [authMode, setAuthMode] = useState<RuntimeAuthMode | 'booting'>('booting');
   const handlingUnauthorized = useRef(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(() => !hasElectronBridge() || readProgress(window.localStorage).completed);
+  useEffect(() => {
+    const restart = () => setOnboardingComplete(false);
+    window.addEventListener('synapse:restart-onboarding', restart);
+    return () => window.removeEventListener('synapse:restart-onboarding', restart);
+  }, []);
 
   // Report a real renderer milestone: React completed its first commit.
   // Browser/Playwright runs have no Electron preload bridge, so this is a no-op there.
@@ -157,6 +165,8 @@ export default function App(): JSX.Element {
       />
     );
   }
+
+  if (!onboardingComplete && !mobileRoute) return <FirstLaunchOnboarding onComplete={() => setOnboardingComplete(true)} />;
 
   return (
     <DaemonProvider>
@@ -664,3 +674,5 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
     </div>
   );
 }
+
+
