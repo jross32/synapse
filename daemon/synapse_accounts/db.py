@@ -230,6 +230,8 @@ def build_session_factory(database_url: str) -> sessionmaker[Session]:
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
     engine = create_engine(database_url, future=True, connect_args=connect_args)
+    # Register optional subscription tables before creating the schema.
+    from . import subscriptions as _subscriptions  # noqa: F401
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, class_=Session)
 

@@ -1113,6 +1113,9 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
     from .workspace import install_workspace_routes
     install_workspace_routes(app, current_account, get_db)
 
+    from .subscriptions import install_subscription_routes
+    install_subscription_routes(app, current_account, get_db)
+
     app.state.accounts_service = service
     app.state.accounts_settings = active_settings
     return app
