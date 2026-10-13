@@ -8,6 +8,11 @@ Every commit must append an entry under the in-progress version header.
 
 ---
 
+## [0.2.218] - 2026-10-12
+
+- Source snapshot reconciliation: align Electron and daemon version metadata and document the current integrated source state.
+- Work-in-progress features remain subject to integration tests and browser verification; this entry is not a production release claim.
+
 ## [Unreleased]
 
 ## [0.1.209] -- 2026-08-30

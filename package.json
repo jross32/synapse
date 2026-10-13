@@ -2,7 +2,7 @@
     "name":  "synapse",
     "productName":  "Synapse",
     "version":  "0.2.218",
-    "description":  "Synapse Ã¢â‚¬â€ a modular developer command center. By The WhatIf Company.",
+    "description":  "Synapse is a desktop command center for coordinating AI workers, projects, browser automation, and connected development tools.",
     "author":  {
                    "name":  "The WhatIf Company",
                    "email":  "justinwross32@gmail.com"
