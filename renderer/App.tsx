@@ -40,7 +40,7 @@ import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
 import { hasElectronBridge, reportRendererReady } from '@shared/electron-bridge';
-import { readProgress } from './lib/first-launch-state';
+import { readProgress, freshProgress, saveProgress } from './lib/first-launch-state';
 import { FirstLaunchOnboarding } from './components/FirstLaunchOnboarding';
 import { CaptureButton } from './components/CaptureButton';
 import { NotificationCenter } from './components/NotificationCenter';
@@ -98,7 +98,7 @@ export default function App(): JSX.Element {
   const handlingUnauthorized = useRef(false);
   const [onboardingComplete, setOnboardingComplete] = useState(() => !hasElectronBridge() || readProgress(window.localStorage).completed);
   useEffect(() => {
-    const restart = () => setOnboardingComplete(false);
+    const restart = () => { saveProgress(window.localStorage, freshProgress()); setOnboardingComplete(false); };
     window.addEventListener('synapse:restart-onboarding', restart);
     return () => window.removeEventListener('synapse:restart-onboarding', restart);
   }, []);

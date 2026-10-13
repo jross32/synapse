@@ -55,3 +55,10 @@ Run isolated typecheck and state tests; do not launch installer or active deskto
 - Isolated headless Playwright against Vite port 5198: PASS; reference loaded at natural width 1536; no page errors; 5 screenshots saved in `artifacts/` (welcome desktop, account desktop, computer desktop, computer mobile, resumed computer mobile). This is browser visual rendering evidence, not a subjective pixel-diff approval.
 - Created Synapse squad `8fbcfe85b7ca` and review work item `9c36c99f38cf`; REST worker launch endpoint unavailable at guessed port 8765, so not claiming worker launched. Claude CLI review job 46a8df8c9a45 was started; result pending at checkpoint.
 - No main worktree, installer, active Chrome, Reflex, or daemon changes.
+
+## Iteration 4 — actual browser end-to-end checks
+- Guest E2E Playwright test: PASS; account Next disabled until explicit decision, guest flow through computer, MCP, companion Ninja, ready, finish; saved state completed=true, mode=guest, companion=ninja, zero browser errors.
+- Offline E2E Playwright test: PASS; aborted /health, displayed daemon unavailable, retry action and interrupted reload resume on computer step; zero browser errors.
+- Fixed previously corrupted UTF-8 labels and companion previews. Sign-in now requires returned profile.signed_in=true before advancing.
+- Isolated test scripts: tests/first-launch-guest-e2e.cjs and tests/first-launch-failure-e2e.cjs.
+- Production readiness still blocked on real backend contracts, secure first-install marker, Settings reset and companion persistence, multi-device reachability verification, and installer E2E. Do not merge without integration review.

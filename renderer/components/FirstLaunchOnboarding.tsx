@@ -9,9 +9,9 @@ import './first-launch-onboarding.css';
 
 type Status = 'checking' | 'online' | 'offline';
 const companions = [
-  { id: 'nova', emoji: 'ðŸ¤–', name: 'Nova', description: 'Bright and curious' },
-  { id: 'ninja', emoji: 'ðŸ¥·', name: 'Ninja', description: 'Fast and focused' },
-  { id: 'orbit', emoji: 'ðŸ›¸', name: 'Orbit', description: 'Calm and analytical' },
+  { id: 'nova', emoji: '\u{1F916}', name: 'Nova', description: 'Bright and curious' },
+  { id: 'ninja', emoji: '\u{1F977}', name: 'Ninja', description: 'Fast and focused' },
+  { id: 'orbit', emoji: '\u{1F6F8}', name: 'Orbit', description: 'Calm and analytical' },
 ];
 export function FirstLaunchOnboarding({ onComplete }: { onComplete: () => void }): JSX.Element {
   const [progress, setProgress] = useState<FirstLaunchProgress>(() => readProgress(window.localStorage));
@@ -50,7 +50,7 @@ export function FirstLaunchOnboarding({ onComplete }: { onComplete: () => void }
     try {
       if (authView === 'signin') {
         const result = await signInProfile({ login, password });
-        setProfile(result); setProgress(p => advanceProgress({ ...p, mode: 'account' }));
+        setProfile(result); if (!result.signed_in) throw new Error('Sign-in was not confirmed. Please retry.'); setProgress(p => advanceProgress({ ...p, mode: 'account' }));
       } else {
         const result = await signUpProfile({ username, email, password });
         setProfile(result.profile);
@@ -96,7 +96,7 @@ export function FirstLaunchOnboarding({ onComplete }: { onComplete: () => void }
       <aside className="fl-sidebar" aria-label="Setup progress">
         <p>YOUR JOURNEY</p>
         {ONBOARDING_STEPS.map((step, i) => <div className={'fl-step ' + (i === index ? 'active' : '')} key={step} aria-current={i === index ? 'step' : undefined}>
-          <span className="fl-step-number">{i < index ? 'âœ“' : i + 1}</span><span>{['Welcome', 'Your account', 'This computer', 'AI & MCP', 'Companion', 'Ready'][i]}</span>
+          <span className="fl-step-number">{i < index ? '✓' : i + 1}</span><span>{['Welcome', 'Your account', 'This computer', 'AI & MCP', 'Companion', 'Ready'][i]}</span>
         </div>)}
         <div className="fl-sidebar-bottom">Each computer has its own private daemon and local token. Your Synapse account can link multiple devices.</div>
       </aside>
@@ -113,28 +113,28 @@ export function FirstLaunchOnboarding({ onComplete }: { onComplete: () => void }
             {authView === 'signup' && <><label htmlFor="fl-user">Username</label><input id="fl-user" required value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" /><label htmlFor="fl-email">Email</label><input id="fl-email" required type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></>}
             {authView === 'signin' && <><label htmlFor="fl-login">Email or username</label><input id="fl-login" required value={login} onChange={e => setLogin(e.target.value)} autoComplete="username" /></>}
             <label htmlFor="fl-password">Password</label><input id="fl-password" required type="password" minLength={8} value={password} onChange={e => setPassword(e.target.value)} autoComplete={authView === 'signup' ? 'new-password' : 'current-password'} />
-            <button className="fl-primary fl-full" type="submit" disabled={busy}>{busy ? 'Please waitâ€¦' : authView === 'signin' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></button>
+            <button className="fl-primary fl-full" type="submit" disabled={busy}>{busy ? 'Please wait...' : authView === 'signin' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></button>
           </form>}
           <div className="fl-social"><button onClick={() => void provider('google')} disabled={providerPending}>Continue with Google</button><button onClick={() => void provider('github')} disabled={providerPending}>Continue with GitHub</button></div>
           <button className="fl-link" onClick={() => void refreshSignIn()} disabled={busy}>Check browser sign-in</button>
           <button className="fl-guest" onClick={() => { setProgress(p => advanceProgress({ ...p, mode: 'guest' })); }}>Continue locally without an account <ArrowRight size={16}/></button>
         </div>}
-        {progress.step === 'computer' && <div className="fl-form fl-wide"><div className="fl-icon"><Laptop /></div><h1>This computer</h1><p>Synapse runs a private daemon on every computer. Its local authentication token stays on that computer â€” it is never copied from another device.</p>
-          <div className="fl-detail"><Monitor /><div><strong>{profile?.current_host?.name || 'This computer'}</strong><small>{profile?.current_host?.platform || 'Local installation'} Â· Device identity supplied by Synapse</small></div></div>
-          <div className={'fl-status ' + (daemon === 'online' ? 'good' : daemon === 'offline' ? 'bad' : '')}>{daemon === 'checking' ? <LoaderCircle /> : daemon === 'online' ? <CheckCircle2 /> : <WifiOff />}{daemon === 'checking' ? 'Checking local daemonâ€¦' : daemon === 'online' ? 'Local daemon responded to health check' : 'Local daemon not reachable'}</div>
-          <div className={'fl-status ' + (account ? 'good' : '')}>{account ? <CheckCircle2 /> : <Link2 />}{account ? 'Account session present â€” device cloud link not independently verified' : 'Local-only mode â€” you can link an account later'}</div>
+        {progress.step === 'computer' && <div className="fl-form fl-wide"><div className="fl-icon"><Laptop /></div><h1>This computer</h1><p>Synapse runs a private daemon on every computer. Its local authentication token stays on that computer — it is never copied from another device.</p>
+          <div className="fl-detail"><Monitor /><div><strong>{profile?.current_host?.name || 'This computer'}</strong><small>{profile?.current_host?.platform || 'Local installation'} · Device identity supplied by Synapse</small></div></div>
+          <div className={'fl-status ' + (daemon === 'online' ? 'good' : daemon === 'offline' ? 'bad' : '')}>{daemon === 'checking' ? <LoaderCircle /> : daemon === 'online' ? <CheckCircle2 /> : <WifiOff />}{daemon === 'checking' ? 'Checking local daemon...' : daemon === 'online' ? 'Local daemon responded to health check' : 'Local daemon not reachable'}</div>
+          <div className={'fl-status ' + (account ? 'good' : '')}>{account ? <CheckCircle2 /> : <Link2 />}{account ? 'Account session present — device cloud link not independently verified' : 'Local-only mode — you can link an account later'}</div>
           <button className="fl-secondary" onClick={() => void checkConnections()}><RefreshCw size={16}/> Retry checks</button>
         </div>}
         {progress.step === 'connections' && <div className="fl-form fl-wide"><div className="fl-icon"><Cpu /></div><h1>AI and MCP connections</h1><p>Connect ChatGPT and supported AI clients to this installation. A healthy local daemon does not by itself prove an external MCP client is authenticated.</p>
           <div className="fl-detail"><Bot /><div><strong>ChatGPT and other MCP clients</strong><small>Configure a supported authenticated client after entering Synapse. Never paste your private daemon token.</small></div><span className="fl-tag">Not verified</span></div>
           <div className="fl-detail"><Cloud /><div><strong>Other account devices</strong><small>{account ? hosts.length + ' registered host record(s) returned' : 'Sign in to discover your other devices'}</small></div><span className="fl-tag">{account ? 'Registry only' : 'Not linked'}</span></div>
-          {account && hosts.map(host => <div className="fl-host" key={host.id}><Monitor size={15}/>{host.name} <small>{host.platform} Â· {host.current_host ? 'This device' : 'Remote status not verified'}</small></div>)}
+          {account && hosts.map(host => <div className="fl-host" key={host.id}><Monitor size={15}/>{host.name} <small>{host.platform} · {host.current_host ? 'This device' : 'Remote status not verified'}</small></div>)}
           <button className="fl-secondary" onClick={() => void checkConnections()}><RefreshCw size={16}/> Refresh connection status</button>
         </div>}
         {progress.step === 'companion' && <div className="fl-form fl-wide"><div className="fl-icon"><Bot /></div><h1>Choose your companion</h1><p>Pick a friendly face for Synapse. This is a visual preference, not an AI connection. You can change it later.</p><div className="fl-companions">{companions.map(c => <button key={c.id} className={progress.companion === c.id ? 'selected' : ''} onClick={() => setProgress(p => ({ ...p, companion: c.id }))} aria-pressed={progress.companion === c.id}><span>{c.emoji}</span><strong>{c.name}</strong><small>{c.description}</small></button>)}</div><button className="fl-link" onClick={() => { setProgress(p => advanceProgress({ ...p, companion: null })); }}>Skip for now</button></div>}
         {progress.step === 'ready' && <div className="fl-form fl-wide"><div className="fl-icon"><CheckCircle2 /></div><h1>Ready to launch</h1><p>Your workspace is ready to open. Optional connections can be completed later in Settings.</p>
           <div className={'fl-status ' + (daemon === 'online' ? 'good' : 'bad')}>{daemon === 'online' ? <CheckCircle2/> : <WifiOff/>}Local daemon: {daemon === 'online' ? 'responding' : 'not verified'}</div>
-          <div className="fl-status">{account ? 'Account session present' : 'Local guest mode'} Â· Remote device routing not verified</div>
+          <div className="fl-status">{account ? 'Account session present' : 'Local guest mode'} · Remote device routing not verified</div>
           <div className="fl-status">MCP client authentication: not verified</div><div className="fl-status">Companion: {progress.companion || 'not selected'}</div>
           <button className="fl-primary fl-full" onClick={finish}>Open Synapse <ArrowRight size={17}/></button>
         </div>}
