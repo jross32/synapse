@@ -381,6 +381,8 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_read_file": {"readOnlyHint": True, "idempotentHint": True},
     # Looks up a work item and returns the REST call that starts it - it does not spawn
     # anything itself (see the handler), so it genuinely is read-only despite the name.
+    "synapse_start_work_item": {"readOnlyHint": False, "destructiveHint": False,
+                                "idempotentHint": False},
     "synapse_launch_work_item": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_active_tasks": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_playbooks": {"readOnlyHint": True, "idempotentHint": True},
@@ -1278,6 +1280,21 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                     },
                 },
                 {
+                    "name": "synapse_start_work_item",
+                    "description": (
+                        "Launch an existing queued Synapse squad work item on the selected "
+                        "local daemon through the existing authenticated REST handler. "
+                        "The tool never reveals the daemon token. Requires write permission; "
+                        "no daemon restart. Use only with the owner's approval."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"work_item_id": {"type": "string"}},
+                        "required": ["work_item_id"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
                     "name": "synapse_launch_work_item",
                     "description": "Look up a squad work item and return the exact REST call that starts a real AI worker for it on this machine.",
                     "inputSchema": {
@@ -2101,6 +2118,7 @@ _NETWORK_MCP_TOOLS = frozenset(
     {
         "synapse_http",
         "synapse_web_search",
+        "synapse_start_work_item",
     }
 )
 
@@ -2414,6 +2432,9 @@ def build_mcp_router(
 ) -> APIRouter:
     router = APIRouter(tags=["mcp"])
     event_loop: asyncio.AbstractEventLoop | None = None
+    # Captured from the authenticated incoming request, not from Storage
+    # (Storage does not track the daemon's bound listening port).
+    local_bound_port = 7878
 
     def _emit_collaboration_event(verb: str, payload: dict[str, Any]) -> None:
         """Best-effort bridge from the connector worker thread to the daemon event loop."""
@@ -3222,6 +3243,17 @@ def build_mcp_router(
                 "source": result.source,
             }
 
+        if name == "synapse_start_work_item":
+            _require_writes()
+            from .mcp_worker_launch import launch_existing_work_item
+            work_item_id = str(args.get("work_item_id", "")).strip()
+            # AuthManager is already instantiated by the local daemon. No token
+            # is accepted from the caller and none is returned in the receipt.
+            return launch_existing_work_item(
+                work_item_id, local_token=auth.local_token,
+                port=local_bound_port,
+            )
+
         if name == "synapse_launch_work_item":
             _require_writes()
             work_item_id = str(args.get("work_item_id", "")).strip()
@@ -3680,7 +3712,7 @@ def build_mcp_router(
                         "Synapse connector. Call synapse_get_context first. "
                         + (
                             "Drive tools (create squad / add work item / capture note) are ENABLED; "
-                            "launch a work item via REST POST /agent-work-items/{id}/launch."
+                            "launch an approved work item with synapse_start_work_item."
                             if writes_allowed()
                             else "Read-only (set SYNAPSE_MCP_ALLOW_WRITES=1 to enable drive tools)."
                         )
@@ -3758,12 +3790,13 @@ def build_mcp_router(
 
     @router.post("/mcp/{token}", response_model=None)
     async def mcp_post(token: str, request: Request) -> Response:
-        nonlocal event_loop
+        nonlocal event_loop, local_bound_port
         event_loop = asyncio.get_running_loop()
         if not auth.local_token or token != auth.local_token:
             return JSONResponse(
                 _error(None, -32001, "Unauthorized"), status_code=401
             )
+        local_bound_port = int(getattr(request.app.state, "bound_port", 7878) or 7878)
         try:
             payload = await request.json()
         except Exception:  # noqa: BLE001

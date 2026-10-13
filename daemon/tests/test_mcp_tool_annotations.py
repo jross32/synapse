@@ -58,6 +58,7 @@ EXPECTED_NOT_READ_ONLY = {
     "synapse_set_project_chat_url",
     "synapse_create_squad",
     "synapse_add_work_item",
+    "synapse_start_work_item",
     "synapse_create_collaboration_room",
     "synapse_join_collaboration_room",
     "synapse_post_collaboration_message",
