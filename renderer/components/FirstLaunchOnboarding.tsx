@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/api-client';
 import { getProfile, getProfileHosts, signInProfile, signUpProfile, startProfileAuth } from '../lib/profile-client';
 import { openExternal } from '../lib/electron-bridge';
 import type { ProfileSummary, HostPresence } from '../lib/generated-types';
-import { advanceProgress, retreatProgress, readProgress, saveProgress, canAdvanceWithNext, type FirstLaunchProgress, ONBOARDING_STEPS } from '../lib/first-launch-state';
+import { advanceProgress, retreatProgress, readProgress, saveProgress, saveCompanion, canAdvanceWithNext, type FirstLaunchProgress, ONBOARDING_STEPS } from '../lib/first-launch-state';
 import './first-launch-onboarding.css';
 
 type Status = 'checking' | 'online' | 'offline';
@@ -86,7 +86,7 @@ export function FirstLaunchOnboarding({ onComplete }: { onComplete: () => void }
     if (!saveProgress(window.localStorage, completed)) {
       setError('Unable to save setup progress. Check your local storage and retry.'); return;
     }
-    setProgress(completed); onComplete();
+    saveCompanion(window.localStorage, completed.companion); setProgress(completed); onComplete();
   }
   const account = progress.mode === 'account' && !!profile?.signed_in;
   return <main className="fl-root">

@@ -46,3 +46,16 @@ export function canAdvanceWithNext(progress: FirstLaunchProgress, daemonChecking
   if (progress.step === 'computer' && daemonChecking) return false;
   return true;
 }
+
+/** Companion preference is a non-sensitive, local visual setting. */
+export const COMPANION_KEY = 'synapse:companion:v1';
+export const COMPANION_IDS = ['nova', 'ninja', 'orbit'] as const;
+export type CompanionId = typeof COMPANION_IDS[number];
+export function readCompanion(storage: Pick<Storage, 'getItem'>): CompanionId | null {
+  try { const value = storage.getItem(COMPANION_KEY); return COMPANION_IDS.includes(value as CompanionId) ? value as CompanionId : null; }
+  catch { return null; }
+}
+export function saveCompanion(storage: Pick<Storage, 'setItem'>, companion: string | null): boolean {
+  if (companion !== null && !COMPANION_IDS.includes(companion as CompanionId)) return false;
+  try { storage.setItem(COMPANION_KEY, companion ?? ''); return true; } catch { return false; }
+}

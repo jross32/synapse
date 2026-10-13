@@ -46,3 +46,22 @@ test('account selection cannot be bypassed with Next', () => {
   assert.equal(canAdvanceWithNext({ ...freshProgress(), step: 'computer' }, false), true);
   assert.equal(canAdvanceWithNext({ ...freshProgress(), step: 'ready' }, false), false);
 });
+
+test('companion setting persists only allowed IDs', () => {
+  const { readCompanion, saveCompanion, COMPANION_KEY } = moduleExports;
+  const values = new Map();
+  const store = { getItem(key) { return values.get(key) ?? null; }, setItem(key, value) { values.set(key, value); } };
+  assert.equal(readCompanion(store), null);
+  assert.equal(saveCompanion(store, 'ninja'), true);
+  assert.equal(values.get(COMPANION_KEY), 'ninja');
+  assert.equal(readCompanion(store), 'ninja');
+  assert.equal(saveCompanion(store, 'untrusted'), false);
+  assert.equal(readCompanion(store), 'ninja');
+  assert.equal(saveCompanion(store, null), true);
+  assert.equal(readCompanion(store), null);
+});
+test('companion storage unavailable is handled safely', () => {
+  const { readCompanion, saveCompanion } = moduleExports;
+  assert.equal(readCompanion({getItem() { throw Error('blocked'); }}), null);
+  assert.equal(saveCompanion({setItem() { throw Error('blocked'); }}, 'nova'), false);
+});

@@ -3,6 +3,8 @@
 // as their backing daemon settings are wired.
 
 import { PanelLeft, Rocket, UserRound } from 'lucide-react';
+import { useState } from 'react';
+import { readCompanion, saveCompanion, type CompanionId } from '../lib/first-launch-state';
 
 import { useDaemon } from '@shared/daemon-context';
 import { formatLocal, formatUptime } from '@shared/format-time';
@@ -46,11 +48,28 @@ export function SettingsPage({
   onOpenWhatsNew,
 }: SettingsPageProps): JSX.Element {
   const { health, healthError, connState, uiVersion, platform, daemonBaseUrl } = useDaemon();
+  const [companion, setCompanion] = useState<CompanionId | null>(() => readCompanion(window.localStorage));
+  const [companionError, setCompanionError] = useState('');
+  function chooseCompanion(value: CompanionId | null) {
+    if (!saveCompanion(window.localStorage, value)) { setCompanionError('Could not save companion preference on this computer.'); return; }
+    setCompanion(value); setCompanionError('');
+  }
 
   return (
     <div className='flex flex-col gap-6'>
       <PageHeader title='Settings' subtitle='Daemon diagnostics, connection, and about.' />
       <SetupReadinessPanel connected={connState === 'open'} />
+      {!mobileRoute && <Card className='flex flex-col gap-3 p-6'>
+        <h2 className='text-lg font-semibold'>Synapse companion</h2>
+        <p className='text-sm text-muted-foreground'>Change the companion you chose during first launch. This setting stays on this computer.</p>
+        <div className='flex flex-wrap gap-2'>
+          {(['nova', 'ninja', 'orbit'] as const).map(id => <Button key={id} variant={companion === id ? 'default' : 'outline'} aria-pressed={companion === id} onClick={() => chooseCompanion(id)}>{id === 'nova' ? 'Nova' : id === 'ninja' ? 'Ninja' : 'Orbit'}</Button>)}
+          <Button variant={companion === null ? 'default' : 'outline'} aria-pressed={companion === null} onClick={() => chooseCompanion(null)}>None</Button>
+        </div>
+        {companionError && <p role='alert' className='text-sm text-destructive'>{companionError}</p>}
+        <Button variant='outline' className='self-start' onClick={() => window.dispatchEvent(new Event('synapse:restart-onboarding'))}>Run first-launch setup again</Button>
+        <p className='text-xs text-muted-foreground'>Restarting setup clears onboarding progress only; it does not remove local projects, credentials, or account sessions.</p>
+      </Card>}
 
       {mobileRoute && onForgetDevice && (
         <Card className='flex flex-col gap-4 p-6'>
