@@ -39,7 +39,7 @@ import {
 import { updateProfilePreferences } from '@shared/profile-client';
 import { applyTheme, getStoredTheme, watchOsTheme } from '@shared/theme';
 import { cn } from '@shared/utils';
-import { hasElectronBridge, reportRendererReady } from '@shared/electron-bridge';
+import { hasElectronBridge, reportRendererReady, getFirstLaunchDisposition } from '@shared/electron-bridge';
 import { readProgress, freshProgress, saveProgress } from './lib/first-launch-state';
 import { FirstLaunchOnboarding } from './components/FirstLaunchOnboarding';
 import { CaptureButton } from './components/CaptureButton';
@@ -96,7 +96,15 @@ export default function App(): JSX.Element {
   const mobileRoute = isMobileRoute();
   const [authMode, setAuthMode] = useState<RuntimeAuthMode | 'booting'>('booting');
   const handlingUnauthorized = useRef(false);
-  const [onboardingComplete, setOnboardingComplete] = useState(() => !hasElectronBridge() || readProgress(window.localStorage).completed);
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(() => hasElectronBridge() ? null : true);
+  useEffect(() => {
+    if (!hasElectronBridge()) return;
+    let cancelled = false;
+    void getFirstLaunchDisposition().then(disposition => {
+      if (!cancelled) setOnboardingComplete(disposition !== 'new' || readProgress(window.localStorage).completed);
+    });
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     const restart = () => { saveProgress(window.localStorage, freshProgress()); setOnboardingComplete(false); };
     window.addEventListener('synapse:restart-onboarding', restart);
@@ -166,7 +174,8 @@ export default function App(): JSX.Element {
     );
   }
 
-  if (!onboardingComplete && !mobileRoute) return <FirstLaunchOnboarding onComplete={() => setOnboardingComplete(true)} />;
+  if (onboardingComplete === null && !mobileRoute) return <div role='status' aria-label='Preparing Synapse' />;
+  if (onboardingComplete === false && !mobileRoute) return <FirstLaunchOnboarding onComplete={() => setOnboardingComplete(true)} />;
 
   return (
     <DaemonProvider>

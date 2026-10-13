@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('synapse', {
   /** Tell the main process React completed its first renderer commit. */
   reportRendererReady: (): void => ipcRenderer.send('synapse:renderer-ready'),
 
+  firstLaunchDisposition: (): Promise<'new' | 'existing' | 'unknown'> => ipcRenderer.invoke('synapse:first-launch-disposition'),
+
   /** UI version string baked into the Electron bundle. */
   version: (): string => process.env.npm_package_version ?? '',
 
@@ -60,6 +62,7 @@ declare global {
   interface Window {
     synapse: {
       reportRendererReady: () => void;
+      firstLaunchDisposition: () => Promise<'new' | 'existing' | 'unknown'>;
       version: () => string;
       daemonBase: () => string;
       daemonWsBase: () => string;

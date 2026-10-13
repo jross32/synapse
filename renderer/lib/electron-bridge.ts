@@ -5,6 +5,7 @@
 
 interface SynapseBridge {
   reportRendererReady?: () => void;
+  firstLaunchDisposition?: () => Promise<'new' | 'existing' | 'unknown'>;
   version: () => string;
   daemonBase: () => string;
   daemonWsBase: () => string;
@@ -20,6 +21,11 @@ interface SynapseBridge {
 
 function bridge(): SynapseBridge | null {
   return (window as unknown as { synapse?: SynapseBridge }).synapse ?? null;
+}
+
+export async function getFirstLaunchDisposition(): Promise<'new' | 'existing' | 'unknown'> {
+  try { return await bridge()?.firstLaunchDisposition?.() ?? 'unknown'; }
+  catch { return 'unknown'; }
 }
 
 export function reportRendererReady(): void {

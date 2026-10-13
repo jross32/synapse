@@ -14,6 +14,7 @@ import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { readInstallDisposition, installMarkerPath } from './first-launch-install';
 import {
   RestartProgress,
   RestartStageKey,
@@ -24,6 +25,14 @@ import {
 } from './restart-progress';
 
 const isDev = !app.isPackaged;
+const firstLaunchDisposition = readInstallDisposition(app.getPath('userData'), app.isPackaged);
+try {
+  const marker = installMarkerPath(app.getPath('userData'));
+  if (!fs.existsSync(marker)) {
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, JSON.stringify({ version: 1, disposition: firstLaunchDisposition }), { flag: 'wx' });
+  }
+} catch { /* no existing installation data is modified */ }
 const daemonHost = '127.0.0.1';
 const daemonPort = 7878;
 const daemonUrl = `http://${daemonHost}:${daemonPort}`;
@@ -1249,6 +1258,7 @@ ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
 });
 
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
+ipcMain.handle('synapse:first-launch-disposition', () => firstLaunchDisposition);
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('synapse:restart', () => restartApp('desktop'));
 ipcMain.handle('synapse:exit', () => {
