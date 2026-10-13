@@ -381,6 +381,14 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_read_file": {"readOnlyHint": True, "idempotentHint": True},
     # Looks up a work item and returns the REST call that starts it - it does not spawn
     # anything itself (see the handler), so it genuinely is read-only despite the name.
+    "synapse_transfer_identity": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_trust_peer": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_revoke_peer": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_begin": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_packet": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_receive_manifest": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_receive_packet": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_transfer_finalize": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
     "synapse_start_work_item": {"readOnlyHint": False, "destructiveHint": False,
                                 "idempotentHint": False},
     "synapse_launch_work_item": {"readOnlyHint": True, "idempotentHint": True},
@@ -1279,6 +1287,14 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
                         "additionalProperties": False,
                     },
                 },
+                {'name': 'synapse_transfer_identity', 'description': "Read the current machine's persistent X25519 transfer public key.", 'inputSchema': {'type': 'object', 'properties': {}, 'required': [], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_trust_peer', 'description': "Explicitly authorize a peer's public key for encrypted file transfers.", 'inputSchema': {'type': 'object', 'properties': {'peer_id': {'type': 'string'}, 'public_key': {'type': 'string'}}, 'required': ['peer_id', 'public_key'], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_revoke_peer', 'description': 'Revoke a previously trusted transfer peer.', 'inputSchema': {'type': 'object', 'properties': {'peer_id': {'type': 'string'}}, 'required': ['peer_id'], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_begin', 'description': 'Encrypt and stage a project file for transfer to an authorized device.', 'inputSchema': {'type': 'object', 'properties': {'project_id': {'type': 'string'}, 'relative_path': {'type': 'string'}, 'recipient_id': {'type': 'string'}}, 'required': ['project_id', 'relative_path', 'recipient_id'], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_packet', 'description': 'Read one encrypted relay-sized packet of a staged transfer.', 'inputSchema': {'type': 'object', 'properties': {'transfer_id': {'type': 'string'}, 'index': {'type': 'integer'}}, 'required': ['transfer_id', 'index'], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_receive_manifest', 'description': 'Start or resume an encrypted transfer on this device.', 'inputSchema': {'type': 'object', 'properties': {'manifest': {'type': 'object'}}, 'required': ['manifest'], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_receive_packet', 'description': 'Receive and verify one encrypted transfer packet.', 'inputSchema': {'type': 'object', 'properties': {'transfer_id': {'type': 'string'}, 'index': {'type': 'integer'}, 'packet': {'type': 'object'}}, 'required': ['transfer_id', 'index', 'packet'], 'additionalProperties': False}},
+                {'name': 'synapse_transfer_finalize', 'description': 'Verify and promote a complete transfer to its destination project.', 'inputSchema': {'type': 'object', 'properties': {'transfer_id': {'type': 'string'}, 'project_id': {'type': 'string'}, 'expected_local_digest': {'type': 'string'}}, 'required': ['transfer_id', 'project_id'], 'additionalProperties': False}},
                 {
                     "name": "synapse_start_work_item",
                     "description": (
@@ -3242,6 +3258,39 @@ def build_mcp_router(
                 "exhausted": result.exhausted,
                 "source": result.source,
             }
+
+        if name.startswith("synapse_transfer_"):
+            _require_writes()
+            from .device_transfer_service import TransferService
+            row = storage.conn.execute(
+                "SELECT user_id FROM profile_state WHERE id=1").fetchone()
+            account_id = str(row["user_id"]) if row and row["user_id"] else ""
+            if not account_id:
+                raise ValueError("Sign in before transferring files between devices.")
+            service = TransferService(storage.data_dir)
+            project_id = str(args.get("project_id") or "").strip()
+            if name == "synapse_transfer_identity":
+                return service.identity()
+            if name == "synapse_transfer_trust_peer":
+                return service.authorize_peer(str(args["peer_id"]), str(args["public_key"]))
+            if name == "synapse_transfer_revoke_peer":
+                return service.revoke_peer(str(args["peer_id"]))
+            if name == "synapse_transfer_begin":
+                project = projects_module.get(storage.conn, project_id)
+                return service.begin_send(account_id, project_id, Path(project.path),
+                                          str(args["relative_path"]), str(args["recipient_id"]))
+            if name == "synapse_transfer_packet":
+                return service.packet(account_id, str(args["transfer_id"]), int(args["index"]))
+            if name == "synapse_transfer_receive_manifest":
+                return service.receive_manifest(account_id, args["manifest"])
+            if name == "synapse_transfer_receive_packet":
+                return service.receive_packet(account_id, str(args["transfer_id"]),
+                                              int(args["index"]), args["packet"])
+            if name == "synapse_transfer_finalize":
+                project = projects_module.get(storage.conn, project_id)
+                return service.finalize(account_id, str(args["transfer_id"]), project_id,
+                                        Path(project.path), args.get("expected_local_digest"))
+            raise ValueError("Unknown transfer tool")
 
         if name == "synapse_start_work_item":
             _require_writes()
