@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .config import AccountsSettings, load_settings
 from .rate_limits import AuthRateLimiter
 from .device_access import list_device_access, change_device_access, check_device_write
+from .device_mcp import ACCOUNT_MCP_TOOLS, execute_account_tool, plan_explicit_device_call, rpc_tool_success
 from .relay import issue_connector, require_connector_account, enroll_device, verify_device, choose_device, create_job, claim_job, submit_result, await_result, select_connector_device
 from .sync_merge import merge_documents
 from .db import (
@@ -989,13 +990,60 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
         with session_scope(service.session_factory) as db:
             account = require_connector_account(db, connector_token)
             connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
-            # External MCP clients cannot select arbitrary machines using query parameters.
-            preferred_device = connector.selected_device_id if connector else None
-            device_id = choose_device(db, account.id, preferred_device)
+            # Cloud account tools are handled before choosing a host, so device
+            # discovery still works if all computers are offline. Never expose
+            # local daemon credentials or route selection via URL query args.
             mode = "read" if request.query_params.get("mode") == "read" else "full"
-            job_id = create_job(db, account.id, device_id, payload, mode=mode)
+            if isinstance(payload, dict) and payload.get("method") == "tools/call":
+                params = payload.get("params") or {}
+                name = params.get("name") if isinstance(params, dict) else None
+                if name in {"synapse_account_list_devices", "synapse_account_select_device"}:
+                    value = execute_account_tool(db, account.id, name, params.get("arguments") or {},
+                                                 read_only=mode == "read")
+                    return JSONResponse(rpc_tool_success(payload.get("id"), value))
+            # An explicit device call does not mutate the default selection,
+            # and cannot reach a device outside the authenticated account.
+            explicit_device_call = False
+            if isinstance(payload, dict) and payload.get("method") == "tools/call":
+                params = payload.get("params") or {}
+                if isinstance(params, dict) and params.get("name") == "synapse_account_call_device":
+                    device_id, tool, tool_args = plan_explicit_device_call(
+                        db, account.id, params.get("arguments") or {})
+                    nested = {"jsonrpc": "2.0", "id": payload.get("id"),
+                              "method": "tools/call",
+                              "params": {"name": tool, "arguments": tool_args}}
+                    job_id = create_job(db, account.id, device_id, nested, mode=mode)
+                    explicit_device_call = True
+            if not explicit_device_call:
+                # External clients cannot choose hosts using query parameters.
+                preferred_device = connector.selected_device_id if connector else None
+                try:
+                    device_id = choose_device(db, account.id, preferred_device)
+                except HTTPException as unavailable:
+                    # Account discovery must remain usable when every local
+                    # daemon is offline or no device has enrolled yet.
+                    if (unavailable.status_code not in (404, 503)
+                            or not isinstance(payload, dict)
+                            or payload.get("method") != "tools/list"):
+                        raise
+                    visible = [tool for tool in ACCOUNT_MCP_TOOLS
+                               if mode != "read" or tool.get("annotations", {}).get("readOnlyHint")]
+                    return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                                         "result": {"tools": visible}})
+                job_id = create_job(db, account.id, device_id, payload, mode=mode)
             account_id = account.id
         response = await await_result(service.session_factory, account_id, job_id)
+        if (isinstance(payload, dict) and payload.get("method") == "tools/list"
+                and isinstance(response, dict)
+                and isinstance(response.get("result"), dict)
+                and isinstance(response["result"].get("tools"), list)
+                and all(isinstance(tool, dict) for tool in response["result"]["tools"])):
+            current = {tool.get("name") for tool in response["result"]["tools"] if isinstance(tool, dict)}
+            response["result"]["tools"].extend(
+                tool for tool in ACCOUNT_MCP_TOOLS
+                if tool["name"] not in current
+                and (mode != "read" or tool.get("annotations", {}).get("readOnlyHint"))
+            )
         return JSONResponse(response, status_code=202 if response is None else 200)
 
     @app.get("/mcp/{connector_token}")
