@@ -147,3 +147,46 @@ def test_account_tool_discovery_when_all_devices_offline(tmp_path, monkeypatch):
             "jsonrpc": "2.0", "id": 5, "method": "tools/list"})
         assert readonly.status_code == 200
         assert [t["name"] for t in readonly.json()["result"]["tools"]] == ["synapse_account_list_devices"]
+
+
+def test_one_connector_independently_dispatches_to_two_devices(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        owner = _owner(client, "owner")
+        _hosts(client, owner, "laptop", "desktop")
+        path = _connector(client, owner)
+        creds = {"laptop": _enroll(client, owner, "laptop"),
+                 "desktop": _enroll(client, owner, "desktop")}
+        from test_unified_mcp_relay import _select
+        _select(client, owner, "laptop")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            checkins = [pool.submit(client.get,
+                f"/v1/relay/devices/{device}/jobs/next", headers=creds[device])
+                for device in ("laptop", "desktop")]
+            for checkin in checkins:
+                assert checkin.result(timeout=25).status_code == 200
+        requests = {
+            device: {"jsonrpc": "2.0", "id": i,
+                     "method": "tools/call", "params": {
+                         "name": "synapse_account_call_device",
+                         "arguments": {"device_id": device, "tool": "synapse_get_context"}}}
+            for i, device in enumerate(("laptop", "desktop"), 1)
+        }
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = {device: pool.submit(client.post, path, json=requests[device])
+                       for device in ("laptop", "desktop")}
+            for device in ("desktop", "laptop"):
+                polled = client.get(f"/v1/relay/devices/{device}/jobs/next", headers=creds[device])
+                assert polled.status_code == 200
+                job = polled.json()
+                assert job["job_id"] and job["request"]["params"]["name"] == "synapse_get_context"
+                assert job["mode"] == "full"
+                response = {"jsonrpc": "2.0", "id": requests[device]["id"],
+                            "result": {"content": [{"type": "text", "text": device}]}}
+                done = client.post(f"/v1/relay/devices/{device}/jobs/result", headers=creds[device],
+                                   json={"job_id": job["job_id"], "response": response})
+                assert done.status_code == 200
+            for device in ("laptop", "desktop"):
+                result = pending[device].result(timeout=15)
+                assert result.status_code == 200, result.text
+                assert result.json()["result"]["content"][0]["text"] == device
+        assert client.get("/v1/relay/connector", headers=owner).json()["selected_device_id"] == "laptop"
