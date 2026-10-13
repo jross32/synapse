@@ -83,10 +83,13 @@ export function FirstLaunchOnboarding({ onComplete }: { onComplete: () => void }
   }
   function finish() {
     const completed: FirstLaunchProgress = { ...progress, completed: true };
+    if (!saveCompanion(window.localStorage, completed.companion)) {
+      setError('Could not save your companion preference. Check storage permissions and retry.'); return;
+    }
     if (!saveProgress(window.localStorage, completed)) {
       setError('Unable to save setup progress. Check your local storage and retry.'); return;
     }
-    saveCompanion(window.localStorage, completed.companion); setProgress(completed); onComplete();
+    setProgress(completed); onComplete();
   }
   const account = progress.mode === 'account' && !!profile?.signed_in;
   return <main className="fl-root">
