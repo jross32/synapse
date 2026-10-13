@@ -1,4 +1,4 @@
-﻿"""Account-scoped, fail-closed target planning for Synapse multi-device jobs.
+"""Account-scoped, fail-closed target planning for Synapse multi-device jobs.
 
 This module makes *decisions*, not remote calls. Only the authenticated cloud
 relay may execute an approved plan; a hostname is never an authority.
@@ -82,11 +82,12 @@ def plan_devices(
         and _alive(d, now, max_age_seconds)
     }
     if selector == "both":
-        if not allow_multiple:
-            raise DeviceRouteError("Multi-device execution requires explicit authorization")
-        chosen = tuple(sorted(available))
-        if len(chosen) < 2:
-            raise DeviceRouteError("At least two reachable, authorized devices required")
+        if not allow_multiple or approved_device_ids is None:
+            raise DeviceRouteError("Multi-device execution requires approved device IDs")
+        approved_targets = frozenset(approved_device_ids)
+        if len(approved_targets) != 2 or not approved_targets.issubset(available):
+            raise DeviceRouteError("Approve exactly two reachable devices")
+        chosen = tuple(sorted(approved_targets))
     elif selector == "auto":
         if not available:
             raise DeviceRouteError("No eligible online device for this account")

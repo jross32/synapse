@@ -1,4 +1,4 @@
-﻿"""Safety contracts for account-scoped multi-device target selection."""
+"""Safety contracts for account-scoped multi-device target selection."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -65,6 +65,8 @@ def test_both_needs_opt_in_and_approval_for_every_device():
     with pytest.raises(DeviceRouteError):
         route("both", fleet)
     with pytest.raises(DeviceRouteError):
+        route("both", fleet, allow_multiple=True)
+    with pytest.raises(DeviceRouteError):
         route("both", fleet, allow_multiple=True, approved_device_ids=["laptop"])
     result = route("both", fleet, allow_multiple=True, approved_device_ids=["laptop", "desktop"])
     assert result.device_ids == ("desktop", "laptop")
@@ -94,3 +96,11 @@ def test_empty_operation_and_account_fail_closed():
     with pytest.raises(DeviceRouteError):
         plan_devices(account_id="alice", selector="auto", devices=[device("laptop")],
                      operation="", now=NOW)
+
+
+def test_both_never_fans_out_to_a_third_device():
+    fleet = [device('laptop'), device('desktop'), device('workstation')]
+    result = route('both', fleet, allow_multiple=True, approved_device_ids=['laptop', 'desktop'])
+    assert result.device_ids == ('desktop', 'laptop')
+    with pytest.raises(DeviceRouteError):
+        route('both', fleet, allow_multiple=True, approved_device_ids=['laptop', 'desktop', 'workstation'])
