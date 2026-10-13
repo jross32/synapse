@@ -53,8 +53,14 @@ class TransferService:
     @staticmethod
     def _file_in_project(root: Path, relative: str) -> Path:
         safe_relative_path(relative)
-        base = Path(root).resolve()
-        file = (base / relative).resolve()
+        base = Path(root).resolve(strict=True)
+        candidate = base / relative
+        current = candidate
+        while current != base:
+            if current.is_symlink():
+                raise ValueError("Symlinks are not valid transfer sources")
+            current = current.parent
+        file = candidate.resolve(strict=False)
         if not file.is_relative_to(base):
             raise ValueError("Path escapes project root")
         return file

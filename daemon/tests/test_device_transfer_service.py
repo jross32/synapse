@@ -40,3 +40,17 @@ def test_peer_binding_and_reuse_key_refusal(tmp_path):
     a.revoke_peer(other["device_id"])
     with pytest.raises(ValueError):
         a.begin_send("owner", "project", tmp_path, "file.bin", other["device_id"])
+
+
+def test_transfer_rejects_symlink_source_even_when_inside_project(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "real.txt").write_text("private")
+    link = source / "alias.txt"
+    try:
+        link.symlink_to(source / "real.txt")
+    except (NotImplementedError, OSError):
+        pytest.skip("Symlink creation unavailable in this environment")
+    service = TransferService(tmp_path / "laptop")
+    with pytest.raises(ValueError, match="Symlinks"):
+        service._file_in_project(source, "alias.txt")
