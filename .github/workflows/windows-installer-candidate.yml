@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 1
 
       - name: Reject ambiguous source revisions
@@ -98,6 +99,24 @@ jobs:
         run: |
           npx electron-builder --win nsis --publish never --config.directories.output=release-candidate-ci --config.win.signAndEditExecutable=false
           if ($LASTEXITCODE -ne 0) { throw "Installer packaging failed" }
+
+      - name: Inspect unpacked package contents before installer approval
+        shell: pwsh
+        run: |
+          $unpacked = Join-Path (Get-Location) 'release-candidate-ci/win-unpacked'
+          $daemon = Join-Path $unpacked 'resources/daemon/synapse-daemon.exe'
+          if (!(Test-Path $daemon)) { throw "Packaged Python daemon executable missing" }
+          if ((Get-Item $daemon).Length -lt 1000000) { throw "Packaged daemon is unexpectedly small" }
+          $archive = Join-Path $unpacked 'resources/app.asar'
+          if (Test-Path $archive) {
+            $asar = node -e "const asar=require('@electron/asar');console.log(asar.listPackage(process.argv[1]).join('\n'))" $archive
+            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect packaged Electron archive" }
+            if ($asar -notmatch 'dist-electron/main.js') { throw "Electron main bundle absent from app.asar" }
+          } else {
+            $main = Join-Path $unpacked 'resources/app/dist-electron/main.js'
+            if (!(Test-Path $main)) { throw "Electron main bundle missing from unpacked application" }
+          }
+          Write-Host "Isolated unpacked application contains Electron main and bundled daemon."
 
       - name: Record checksums and source identity
         shell: pwsh
