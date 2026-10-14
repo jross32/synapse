@@ -53,6 +53,42 @@ jobs:
           file "$APP/Contents/Resources/daemon/synapse-daemon"
           find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' \) -print
           test "$(find release -maxdepth 1 -name '*.dmg' | wc -l | tr -d ' ')" -ge 1
+      - name: Smoke test packaged daemon startup
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, subprocess, tempfile, time, urllib.error, urllib.request
+          app = next(pathlib.Path('release').glob('mac*/Synapse.app'), None)
+          assert app is not None, 'No packaged Synapse.app found'
+          daemon = app / 'Contents/Resources/daemon/synapse-daemon'
+          with tempfile.TemporaryDirectory(prefix='synapse-mac-smoke-') as tmp:
+              logpath = pathlib.Path(tmp) / 'daemon.log'
+              with logpath.open('wb') as log:
+                  proc = subprocess.Popen([str(daemon.resolve()), '--port', '7878', '--data-dir', str(pathlib.Path(tmp) / 'data'), '--tools-dir', str(app.resolve() / 'Contents/Resources/tools')], stdout=log, stderr=subprocess.STDOUT, env={**os.environ, 'PYTHONUNBUFFERED': '1'})
+                  try:
+                      deadline = time.monotonic() + 90
+                      while time.monotonic() < deadline:
+                          if proc.poll() is not None:
+                              raise RuntimeError(f'packaged daemon exited early: {proc.returncode}')
+                          try:
+                              with urllib.request.urlopen('http://127.0.0.1:7878/api/v1/health', timeout=2) as response:
+                                  assert response.status == 200
+                                  print('Packaged daemon health check passed:', response.read(2048).decode(errors='replace'))
+                                  break
+                          except (urllib.error.URLError, TimeoutError):
+                              time.sleep(1)
+                      else:
+                          raise RuntimeError('packaged daemon health check timed out')
+                  except Exception:
+                      print(logpath.read_text(errors='replace')[-10000:])
+                      raise
+                  finally:
+                      proc.terminate()
+                      try:
+                          proc.wait(timeout=10)
+                      except subprocess.TimeoutExpired:
+                          proc.kill()
+                          proc.wait(timeout=5)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: synapse-macos-${{ matrix.arch }}-unsigned
