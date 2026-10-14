@@ -63,6 +63,18 @@ jobs:
           $sentinelBytes = [Text.Encoding]::UTF8.GetBytes('preserve-existing-data-' + $env:EXPECTED_SHA)
           [IO.File]::WriteAllBytes($sentinel, $sentinelBytes)
           $originalHash = (Get-FileHash $sentinel -Algorithm SHA256).Hash
+          # Real NSIS bootstrap filenames were previously overwritten during
+          # upgrades. Seed distinct owner-selected choices and verify both.
+          $preferences = @{
+            'bootstrap-ai-bundles.json' = '{"bundle_ids":["owner-existing-bundle"]}'
+            'bootstrap-optional-tools.json' = '{"install_tool_ids":[],"uninstall_tool_ids":["owner-existing-tool"]}'
+          }
+          $preferenceHashes = @{}
+          foreach ($name in $preferences.Keys) {
+            $prefPath = Join-Path $existingData $name
+            [IO.File]::WriteAllText($prefPath, $preferences[$name])
+            $preferenceHashes[$name] = (Get-FileHash $prefPath -Algorithm SHA256).Hash
+          }
           $installRoot = Join-Path $env:RUNNER_TEMP 'SynapseCleanInstallSmoke'
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S',('/D='+$installRoot)) -PassThru -Wait
@@ -74,6 +86,12 @@ jobs:
           }
           if (-not $installed) { throw 'Synapse.exe not found after silent installation' }
           if (!(Test-Path $sentinel)) { throw 'Existing Synapse user data was removed by installer' }
+          foreach ($name in $preferences.Keys) {
+            $prefPath = Join-Path $existingData $name
+            if (!(Test-Path $prefPath) -or (Get-FileHash $prefPath -Algorithm SHA256).Hash -ne $preferenceHashes[$name]) {
+              throw "Installer overwrote existing Synapse bootstrap preference: $name"
+            }
+          }
           if ((Get-FileHash $sentinel -Algorithm SHA256).Hash -ne $originalHash) {
             throw 'Existing Synapse user data changed during installer'
           }
@@ -86,6 +104,12 @@ jobs:
           if (!(Test-Path $sentinel) -or (Get-FileHash $sentinel -Algorithm SHA256).Hash -ne $originalHash) {
             throw 'Same-build reinstall changed existing Synapse user data'
           }
+          foreach ($name in $preferences.Keys) {
+            $prefPath = Join-Path $existingData $name
+            if (!(Test-Path $prefPath) -or (Get-FileHash $prefPath -Algorithm SHA256).Hash -ne $preferenceHashes[$name]) {
+              throw "Same-build reinstall overwrote Synapse bootstrap preference: $name"
+            }
+          }
           if (!(Test-Path (Join-Path $installed 'Synapse.exe')) -or !(Test-Path $daemon)) {
             throw 'Same-build reinstall removed Synapse executable or daemon'
           }
@@ -96,6 +120,7 @@ jobs:
             installed_daemon = $true
             synthetic_userdata_sentinel_preserved = $true
             same_build_reinstall_sentinel_preserved = $true
+            existing_bootstrap_preferences_preserved = $true
             interactive_ui_verified = $false
             account_preserved_verified = $false
             device_identity_preserved_verified = $false
