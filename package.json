@@ -107,10 +107,6 @@
         "to": "node_modules/playwright-core"
       },
       {
-        "from": "tools/ui_lab_reference_compare.py",
-        "to": "tools/ui_lab_reference_compare.py"
-      },
-      {
         "from": "docs",
         "to": "docs",
         "filter": [
