@@ -10,6 +10,13 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.2.218] -- 2026-10-13
+
+- Align the documented source release number across the Electron package, Python daemon, README, and Python package manifest.
+- This documentation gate records the existing `0.2.218` source version; it does not certify a new installer or a deployed desktop build. Multi-device activation still requires independent release and live-device verification.
+
+
+
 ## [0.1.209] -- 2026-08-30
 
 ### Fixed
