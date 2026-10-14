@@ -1,0 +1,100 @@
+name: Publish Verified Unsigned Windows Preview
+
+on:
+  workflow_run:
+    workflows:
+      - Windows Installer Isolated Install Smoke
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-preview:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download isolated installation receipt
+        uses: actions/download-artifact@v4
+        with:
+          name: synapse-windows-clean-install-smoke-evidence
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: smoke
+
+      - name: Verify real smoke receipt and identify pinned candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          s=json.loads(Path('smoke/install-smoke.json').read_text(encoding='utf-8-sig'))
+          assert s['status']=='CI_SILENT_FILE_INSTALL_VERIFIED_ONLY'
+          for field in ('installed_electron','installed_daemon','synthetic_userdata_sentinel_preserved','same_build_reinstall_sentinel_preserved','existing_bootstrap_preferences_preserved'):
+              assert s.get(field) is True,field
+          for field in ('stable_release_approved','interactive_ui_verified','account_preserved_verified','device_identity_preserved_verified','mcp_url_preserved_verified','upgrade_rollback_verified'):
+              assert s.get(field) is False,field
+          sha=s['source_commit']; run=str(s['source_candidate_run_id'])
+          assert re.fullmatch('[0-9a-f]{40}',sha)
+          assert re.fullmatch('[0-9]{8,20}',run)
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('SOURCE_SHA='+sha+'\nSOURCE_RUN_ID='+run+'\n')
+          PY
+
+      - name: Download exact CI candidate from verified source run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name synapse-unsigned-windows-test-candidate --dir candidate
+
+      - name: Match installer bytes to build and smoke receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          record=json.loads(Path('candidate/verification.json').read_text(encoding='utf-8-sig'))
+          assert record.get('status')=='UNSIGNED_TEST_CANDIDATE_ONLY'
+          assert record['source_commit']==os.environ['SOURCE_SHA']
+          assert record['version']=='0.2.220'
+          assert record['windows_authenticode_signed'] is False
+          assert record['install_e2e_verified'] is False
+          file=Path('candidate')/record['filename']
+          assert file.is_file() and file.suffix.lower()=='.exe'
+          assert file.stat().st_size==record['size_bytes'] and file.stat().st_size>1_000_000
+          h=hashlib.sha256()
+          with file.open('rb') as stream:
+              for part in iter(lambda:stream.read(1024*1024),b''):h.update(part)
+          assert h.hexdigest()==record['sha256']
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('INSTALLER_PATH='+str(file)+'\nINSTALLER_SHA256='+h.hexdigest()+'\n')
+          print('Validated source, unsigned status, size, SHA256, and independent clean-install smoke.')
+          PY
+
+      - name: Publish only explicitly labeled GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="unsigned-preview-v0.2.220-${SOURCE_SHA:0:8}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Preview already exists; leaving it untouched."
+            exit 0
+          fi
+          printf '%s\n'             'UNSIGNED WINDOWS PREVIEW — TESTING ONLY'             ''             'Passed hosted Windows NSIS clean-install and same-build reinstall file checks.'             'Does not have Windows Authenticode signing, interactive UI proof, real account/device/MCP preservation proof, or cross-version rollback proof.'             'Not the stable release. Installer may show Windows SmartScreen warnings.'             ''             "Source commit: $SOURCE_SHA"             "Installer SHA256: $INSTALLER_SHA256"             > preview-notes.txt
+          gh release create "$TAG" "$INSTALLER_PATH" \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" \
+            --prerelease --latest=false \
+            --title 'Synapse 0.2.220 — Unsigned Verified-Install Preview' \
+            --notes-file preview-notes.txt
