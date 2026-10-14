@@ -130,11 +130,21 @@ export function registerDesktopUpdater(): void {
     if (!cachedManifest || !app.isPackaged || process.platform !== 'win32') return { ok: false, error: 'No verified desktop update available.' };
     installing = true;
     try {
-      const file = await downloadVerified(cachedManifest);
-      const child = spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: false });
-      child.unref();
-      // An installer is now running. It owns the update; preserve all Synapse
-      // services until its own prerequisites have been checked and user agrees.
+      // Re-read the feed immediately before install rather than trusting a
+      // possibly stale manifest from the last UI check.
+      const fresh = trustedManifest(await getJson(feedUrl));
+      if (!versionIsNewer(fresh.version, app.getVersion()))
+        return { ok: false, error: 'The advertised update is no longer newer.' };
+      if (cachedManifest.version !== fresh.version || cachedManifest.signature !== fresh.signature)
+        return { ok: false, error: 'Update offer changed. Check for updates again.' };
+      const file = await downloadVerified(fresh);
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: false });
+        child.once('error', reject);
+        child.once('spawn', () => { child.unref(); resolve(); });
+      });
+      // The installer process has actually started, but installation is not
+      // confirmed. Keep the live Synapse services running until user consent.
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
