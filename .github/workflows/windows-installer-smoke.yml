@@ -79,12 +79,23 @@ jobs:
           }
           $daemon = Join-Path $installed 'resources/daemon/synapse-daemon.exe'
           if (!(Test-Path $daemon) -or (Get-Item $daemon).Length -lt 1000000) { throw 'Bundled daemon absent from installed files' }
+          # Reinstall the SAME preview build as a limited idempotence check.
+          # Do not confuse this with a tested cross-version upgrade/rollback.
+          $reinstall = Start-Process -FilePath $installer.FullName -ArgumentList @('/S',('/D='+$installRoot)) -PassThru -Wait
+          if ($reinstall.ExitCode -ne 0) { throw ('Same-build reinstall exited '+$reinstall.ExitCode) }
+          if (!(Test-Path $sentinel) -or (Get-FileHash $sentinel -Algorithm SHA256).Hash -ne $originalHash) {
+            throw 'Same-build reinstall changed existing Synapse user data'
+          }
+          if (!(Test-Path (Join-Path $installed 'Synapse.exe')) -or !(Test-Path $daemon)) {
+            throw 'Same-build reinstall removed Synapse executable or daemon'
+          }
           @{
             status = 'CI_SILENT_FILE_INSTALL_VERIFIED_ONLY'
             source_commit = $env:EXPECTED_SHA
             installed_electron = $true
             installed_daemon = $true
             synthetic_userdata_sentinel_preserved = $true
+            same_build_reinstall_sentinel_preserved = $true
             interactive_ui_verified = $false
             account_preserved_verified = $false
             device_identity_preserved_verified = $false
