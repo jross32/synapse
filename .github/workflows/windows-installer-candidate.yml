@@ -1,0 +1,132 @@
+name: Windows Installer Candidate (verification only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Full 40-character source commit to build (must be current checkout HEAD)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 75
+    steps:
+      - name: Checkout requested source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Reject ambiguous source revisions
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}$') { throw "Full 40-character commit required." }
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_SHA) { throw "Dispatch SHA does not match checked out source." }
+          if ((git status --porcelain).Length -gt 0) { throw "Checkout is not clean." }
+
+      - name: Require committed updater and public trust configuration
+        shell: pwsh
+        run: |
+          $required = @(
+            'electron/desktop-updater.ts',
+            'electron/update-publisher.ts',
+            'renderer/components/DesktopUpdateNotice.tsx',
+            'scripts/preflight-desktop-updater.cjs'
+          )
+          foreach ($file in $required) {
+            if (!(Test-Path $file)) { throw "Integrated updater source not committed: $file" }
+          }
+          $main = Get-Content electron/main.ts -Raw
+          if ($main -notmatch 'registerDesktopUpdater') { throw "Electron updater is not wired in committed main source" }
+          $ui = Get-Content renderer/App.tsx -Raw
+          if ($ui -notmatch 'DesktopUpdateNotice') { throw "Updater UI is not wired in committed renderer source" }
+          if (!(Test-Path electron/update-publisher.ts)) { throw "Bundled publisher validation missing" }
+          # This runner may not have publisher keys. It must NOT generate
+          # production signing keys or publish a production update feed.
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts=false
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" pyinstaller
+
+      - name: Enforce source and release gates
+        shell: pwsh
+        run: |
+          python -m pytest daemon/tests/test_version_consistency.py daemon/tests/test_release_compatibility.py daemon/tests/test_release_artifact_gate.py daemon/tests/test_desktop_update_publisher.py daemon/tests/test_signed_desktop_update.py daemon/tests/test_production_installer_preflight.py -q
+          if ($LASTEXITCODE -ne 0) { throw "Release tests failed" }
+
+      - name: Build renderer and Electron
+        shell: pwsh
+        run: |
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+
+      - name: Build embedded daemon in CI only
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-daemon.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Bundled daemon build failed" }
+
+      - name: Create unsigned diagnostic candidate
+        shell: pwsh
+        run: |
+          npx electron-builder --win nsis --publish never --config.directories.output=release-candidate-ci --config.win.signAndEditExecutable=false
+          if ($LASTEXITCODE -ne 0) { throw "Installer packaging failed" }
+
+      - name: Record checksums and source identity
+        shell: pwsh
+        run: |
+          $artifact = Get-ChildItem release-candidate-ci -File -Filter '*.exe' |
+            Where-Object { $_.Name -like '*Setup*' } | Select-Object -First 1
+          if (-not $artifact -or $artifact.Length -lt 1000000) { throw "No viable NSIS artifact" }
+          $record = @{
+            status = 'UNSIGNED_TEST_CANDIDATE_ONLY'
+            source_commit = (git rev-parse HEAD).Trim()
+            version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            filename = $artifact.Name
+            size_bytes = $artifact.Length
+            sha256 = (Get-FileHash $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            install_e2e_verified = $false
+            upgrade_e2e_verified = $false
+            account_preserved_verified = $false
+            device_identity_preserved_verified = $false
+            mcp_url_preserved_verified = $false
+            windows_authenticode_signed = $false
+          }
+          $record | ConvertTo-Json -Depth 4 | Set-Content release-candidate-ci/verification.json -Encoding utf8
+
+      - name: Retain internal candidate for independent testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-unsigned-windows-test-candidate
+          path: |
+            release-candidate-ci/*.exe
+            release-candidate-ci/verification.json
+          if-no-files-found: error
+          retention-days: 7
