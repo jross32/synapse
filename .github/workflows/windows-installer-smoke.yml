@@ -50,7 +50,9 @@ jobs:
             # checkout SHA, not github.event.workflow_run.head_sha (main branch).
             $env:EXPECTED_SHA = [string]$receipt.source_commit
           }
-          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}          if ($receipt.status -ne 'UNSIGNED_TEST_CANDIDATE_ONLY') { throw 'Not an unsigned test candidate' }
+          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}$') { throw 'Full SHA required' }
+          "EXPECTED_SHA=$env:EXPECTED_SHA" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($receipt.status -ne 'UNSIGNED_TEST_CANDIDATE_ONLY') { throw 'Not an unsigned test candidate' }
           if ($receipt.source_commit -ne $env:EXPECTED_SHA) { throw 'Unexpected source commit' }
           if ($receipt.install_e2e_verified -ne $false -or $receipt.windows_authenticode_signed -ne $false) { throw 'Misleading release claims' }
           $installer = Get-ChildItem test-installer -File -Filter '*.exe' | Select-Object -First 1
