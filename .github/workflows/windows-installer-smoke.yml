@@ -1,0 +1,89 @@
+name: Windows Installer Isolated Install Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful Windows candidate workflow run ID
+        required: true
+        type: string
+      source_commit:
+        description: Exact 40-character candidate source commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  install-smoke:
+    runs-on: windows-2022
+    timeout-minutes: 18
+    steps:
+      - name: Download candidate from specific Actions run
+        uses: actions/download-artifact@v4
+        with:
+          name: synapse-unsigned-windows-test-candidate
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: test-installer
+
+      - name: Check source identity, integrity, and preview-only metadata
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ inputs.source_commit }}
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true') { throw 'CI runner required' }
+          if ($env:EXPECTED_SHA -notmatch '^[0-9a-f]{40}$') { throw 'Full SHA required' }
+          $receipt = Get-Content test-installer/verification.json -Raw | ConvertFrom-Json
+          if ($receipt.status -ne 'UNSIGNED_TEST_CANDIDATE_ONLY') { throw 'Not an unsigned test candidate' }
+          if ($receipt.source_commit -ne $env:EXPECTED_SHA) { throw 'Unexpected source commit' }
+          if ($receipt.install_e2e_verified -ne $false -or $receipt.windows_authenticode_signed -ne $false) { throw 'Misleading release claims' }
+          $installer = Get-ChildItem test-installer -File -Filter '*.exe' | Select-Object -First 1
+          if (-not $installer -or $installer.Name -ne $receipt.filename) { throw 'Installer artifact missing' }
+          if ($installer.Length -ne $receipt.size_bytes) { throw 'Installer size mismatch' }
+          $sha = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne $receipt.sha256) { throw 'Installer checksum mismatch' }
+          Write-Output ('verified unsigned installer bytes='+$installer.Length)
+
+      - name: Silent clean-install file smoke on disposable Windows runner
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ inputs.source_commit }}
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP) { throw 'Disposable CI runner required' }
+          $installer = Get-ChildItem test-installer -File -Filter '*.exe' | Select-Object -First 1
+          $installRoot = Join-Path $env:RUNNER_TEMP 'SynapseCleanInstallSmoke'
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S',('/D='+$installRoot)) -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw ('Silent NSIS installation exited '+$process.ExitCode) }
+          $paths = @($installRoot, (Join-Path $env:LOCALAPPDATA 'Programs/Synapse'))
+          $installed = $null
+          foreach ($root in $paths) {
+            if (Test-Path (Join-Path $root 'Synapse.exe')) { $installed = $root; break }
+          }
+          if (-not $installed) { throw 'Synapse.exe not found after silent installation' }
+          $daemon = Join-Path $installed 'resources/daemon/synapse-daemon.exe'
+          if (!(Test-Path $daemon) -or (Get-Item $daemon).Length -lt 1000000) { throw 'Bundled daemon absent from installed files' }
+          @{
+            status = 'CI_SILENT_FILE_INSTALL_VERIFIED_ONLY'
+            source_commit = $env:EXPECTED_SHA
+            installed_electron = $true
+            installed_daemon = $true
+            interactive_ui_verified = $false
+            account_preserved_verified = $false
+            device_identity_preserved_verified = $false
+            mcp_url_preserved_verified = $false
+            upgrade_rollback_verified = $false
+            stable_release_approved = $false
+          } | ConvertTo-Json | Set-Content test-installer/install-smoke.json -Encoding utf8
+
+      - name: Publish only isolated smoke evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synapse-windows-clean-install-smoke-evidence
+          path: test-installer/install-smoke.json
+          if-no-files-found: ignore
+          retention-days: 7
