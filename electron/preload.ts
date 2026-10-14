@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('synapse', {
     ipcRenderer.invoke('synapse:open-in-terminal', target),
 
   /** Whether Synapse is registered to start at Windows login (Milestone I). */
+  checkUpdate: (): Promise<unknown> => ipcRenderer.invoke('synapse:update-check'),
+  installUpdate: (): Promise<{ok: boolean; error?: string}> => ipcRenderer.invoke('synapse:update-install'),
   getAutostart: (): Promise<boolean> => ipcRenderer.invoke('synapse:get-autostart'),
 
   /** Enable/disable start-at-login; resolves to the resulting state. */
@@ -67,6 +69,8 @@ declare global {
       openExternal: (target: string) => Promise<{ ok: boolean; error?: string }>;
       openInVscode: (target: string) => Promise<{ ok: boolean; error?: string }>;
       openInTerminal: (target: string) => Promise<{ ok: boolean; error?: string }>;
+      checkUpdate: () => Promise<unknown>;
+      installUpdate: () => Promise<{ok: boolean; error?: string}>;
       getAutostart: () => Promise<boolean>;
       setAutostart: (enabled: boolean) => Promise<boolean>;
       restart: () => Promise<boolean>;

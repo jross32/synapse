@@ -42,6 +42,7 @@ import { cn } from '@shared/utils';
 import { reportRendererReady } from '@shared/electron-bridge';
 import { CaptureButton } from './components/CaptureButton';
 import { NotificationCenter } from './components/NotificationCenter';
+import { DesktopUpdateNotice } from './components/DesktopUpdateNotice';
 import { CommandPalette } from './components/CommandPalette';
 import { MobilePairingScreen } from './components/MobilePairingScreen';
 import { ProfileHub } from './components/ProfileHub';
@@ -461,6 +462,7 @@ function Shell({ mobileRoute, onForgetDevice }: ShellProps): JSX.Element {
       )}
 
       <div className='flex min-w-0 flex-1 flex-col'>
+        {!mobileRoute && <DesktopUpdateNotice />}
         {mobileRoute && (
           <header className='border-b border-border bg-card/95 backdrop-blur'>
             <div className='mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 pb-3 pt-4'>

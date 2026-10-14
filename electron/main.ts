@@ -11,6 +11,7 @@
 
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron';
 import { ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { registerDesktopUpdater } from './desktop-updater';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -1249,6 +1250,7 @@ ipcMain.handle('synapse:open-in-terminal', async (_event, target: unknown) => {
 });
 
 // ── IPC: auto-start on Windows login (Milestone I) ────────────────────────
+registerDesktopUpdater();
 ipcMain.handle('synapse:get-autostart', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('synapse:restart', () => restartApp('desktop'));
 ipcMain.handle('synapse:exit', () => {
