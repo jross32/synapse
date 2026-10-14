@@ -15,8 +15,27 @@ $specDir = Join-Path $root 'installer'
 $specFile = Join-Path $specDir 'synapse-daemon.spec'
 $entrypoint = Join-Path $root 'daemon\packaged_daemon_main.py'
 $pythonPath = Join-Path $root 'daemon'
-$venvPython = Join-Path $root '.venv\\Scripts\\python.exe'
-$pythonExe = if (Test-Path $venvPython) { $venvPython } else { 'python' }
+# Prefer an explicitly selected build interpreter; otherwise choose one with PyInstaller.
+# Validate by running PyInstaller itself, rather than relying on the default PATH Python.
+$venvPython = Join-Path $root '.venv\Scripts\python.exe'
+$candidates = @()
+if ($env:SYNAPSE_BUILD_PYTHON) { $candidates += $env:SYNAPSE_BUILD_PYTHON }
+if (Test-Path $venvPython) { $candidates += $venvPython }
+foreach ($version in @('Python312','Python313','Python311')) {
+  $installed = Join-Path $env:USERPROFILE "AppData\Local\Programs\Python\$version\python.exe"
+  if (Test-Path $installed) { $candidates += $installed }
+}
+foreach ($command in @(Get-Command python -All -ErrorAction SilentlyContinue)) { $candidates += $command.Source }
+$pythonExe = $null
+foreach ($candidate in ($candidates | Select-Object -Unique)) {
+  if (-not (Test-Path $candidate)) { continue }
+  try {
+    $versionOutput = & $candidate -m PyInstaller --version 2>&1
+    if ($LASTEXITCODE -eq 0) { $pythonExe = $candidate; break }
+  } catch { continue }
+}
+if (-not $pythonExe) { throw 'PyInstaller is unavailable. Set SYNAPSE_BUILD_PYTHON to an interpreter with PyInstaller installed.' }
+Write-Host "-> Using Python with PyInstaller: $pythonExe"
 
 Remove-Item -LiteralPath $distDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
