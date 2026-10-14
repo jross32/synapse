@@ -119,10 +119,8 @@ jobs:
           if ((Get-Item $daemon).Length -lt 1000000) { throw "Packaged daemon is unexpectedly small" }
           $archive = Join-Path $unpacked 'resources/app.asar'
           if (Test-Path $archive) {
-            $asar = node -e "const asar=require('@electron/asar');console.log(asar.listPackage(process.argv[1]).join('\n'))" $archive
-            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect packaged Electron archive" }
-            if ($asar -notmatch 'dist-electron[\\/]main[.]js') { throw "Electron main bundle absent from app.asar" }
-            if ($asar -notmatch 'dist-electron[\\/]update-publisher[.]json') { throw "Publisher trust missing from app.asar" }
+            node -e "const asar=require('@electron/asar');for(const p of ['dist-electron/main.js','dist-electron/update-publisher.json']){try{if(!asar.statFile(process.argv[1],p))throw Error('missing')}catch(error){console.error('Packaged Electron file missing: '+p);process.exit(1)}}console.log('ASAR application files verified')" $archive
+            if ($LASTEXITCODE -ne 0) { throw "Packaged Electron archive missing required application or publisher" }
           } else {
             $main = Join-Path $unpacked 'resources/app/dist-electron/main.js'
             if (!(Test-Path $main)) { throw "Electron main bundle missing from unpacked application" }
