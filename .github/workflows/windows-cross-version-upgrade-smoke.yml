@@ -1,0 +1,97 @@
+name: Windows Cross-Version Upgrade File Smoke
+
+on:
+  workflow_run:
+    workflows:
+      - Windows Installer Candidate (verification only)
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  old-stable-to-preview:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STABLE_SHA256: b238e1167cb754e86c855315c5abcfd848756fa6142892cfcb2693ca85ab54bc
+      PREVIEW_SHA256: 4883581643e3c39f29ef6d5c3b12bd433cad790c06b18f28e2912fab8e28ed47
+    steps:
+      - name: Download both pinned GitHub release installers
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force stable,preview | Out-Null
+          gh release download v0.1.217 --repo $env:GITHUB_REPOSITORY -p 'Synapse.Setup.0.1.217.exe' -D stable
+          if ($LASTEXITCODE -ne 0) { throw 'Stable installer download failed' }
+          gh release download unsigned-preview-v0.2.220-a2c6c334 --repo $env:GITHUB_REPOSITORY -p 'Synapse.Setup.0.2.220.exe' -D preview
+          if ($LASTEXITCODE -ne 0) { throw 'Preview installer download failed' }
+          $stable = 'stable/Synapse.Setup.0.1.217.exe'
+          $preview = 'preview/Synapse.Setup.0.2.220.exe'
+          if ((Get-FileHash $stable -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:STABLE_SHA256) { throw 'Stable SHA256 mismatch' }
+          if ((Get-FileHash $preview -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PREVIEW_SHA256) { throw 'Preview SHA256 mismatch' }
+
+      - name: Install stable then upgrade in place to unsigned preview
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP 'SynapseVersionUpgradeSmoke'
+          New-Item -ItemType Directory -Force $installRoot | Out-Null
+          $stable = (Resolve-Path 'stable/Synapse.Setup.0.1.217.exe').Path
+          $preview = (Resolve-Path 'preview/Synapse.Setup.0.2.220.exe').Path
+          $first = Start-Process -FilePath $stable -ArgumentList @('/S',('/D='+$installRoot)) -PassThru -Wait
+          if ($first.ExitCode -ne 0) { throw ('Stable installation failed: '+$first.ExitCode) }
+          $app = Join-Path $installRoot 'Synapse.exe'
+          if (!(Test-Path $app)) { throw 'Old stable Synapse.exe not installed' }
+          $userRoot = Join-Path $env:APPDATA 'Synapse'
+          New-Item -ItemType Directory -Force $userRoot | Out-Null
+          $paths = @{
+            'ci-cross-version-sentinel.txt' = 'existing owner data must survive'
+            'bootstrap-ai-bundles.json' = '{"bundle_ids":["persist-selected-bundle"]}'
+            'bootstrap-optional-tools.json' = '{"install_tool_ids":[],"uninstall_tool_ids":["persist-disabled-tool"]}'
+          }
+          $hashes = @{}
+          foreach ($name in $paths.Keys) {
+            $file = Join-Path $userRoot $name
+            [IO.File]::WriteAllText($file,$paths[$name])
+            $hashes[$name] = (Get-FileHash $file -Algorithm SHA256).Hash
+          }
+          $upgraded = Start-Process -FilePath $preview -ArgumentList @('/S',('/D='+$installRoot)) -PassThru -Wait
+          if ($upgraded.ExitCode -ne 0) { throw ('Upgrade installer failed: '+$upgraded.ExitCode) }
+          if (!(Test-Path $app)) { throw 'Synapse.exe missing after upgrade' }
+          $daemon = Join-Path $installRoot 'resources/daemon/synapse-daemon.exe'
+          if (!(Test-Path $daemon) -or (Get-Item $daemon).Length -lt 1000000) { throw 'Daemon missing after upgrade' }
+          foreach ($name in $paths.Keys) {
+            $file = Join-Path $userRoot $name
+            if (!(Test-Path $file) -or (Get-FileHash $file -Algorithm SHA256).Hash -ne $hashes[$name]) {
+              throw "Upgrade changed existing Synapse user file: $name"
+            }
+          }
+          @{
+            status = 'CI_CROSS_VERSION_FILE_PRESERVATION_VERIFIED_ONLY'
+            stable_version = '0.1.217'
+            preview_version = '0.2.220'
+            source_commit = 'a2c6c334a1233d413c8097443c58c23d48538845'
+            synthetic_files_preserved = $true
+            both_bootstrap_preferences_preserved = $true
+            installed_electron = $true
+            installed_daemon = $true
+            real_account_preserved_verified = $false
+            real_device_identity_verified = $false
+            real_mcp_connection_verified = $false
+            interactive_ui_verified = $false
+            rollback_verified = $false
+            stable_release_approved = $false
+          } | ConvertTo-Json | Set-Content 'upgrade-smoke.json' -Encoding utf8
+
+      - name: Upload evidence without changing stable release
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-cross-version-upgrade-smoke-evidence
+          path: upgrade-smoke.json
+          if-no-files-found: ignore
+          retention-days: 7
