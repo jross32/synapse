@@ -85,6 +85,13 @@ async function downloadVerified(manifest: Manifest): Promise<string> {
   const artifact = manifest.windows!;
   const targetDir = path.join(app.getPath('userData'), 'updates', manifest.version);
   fs.mkdirSync(targetDir, { recursive: true });
+  // Keep space for the live daemon/database and the NSIS extraction footprint.
+  // Refuse to stage an installer when the disk is critically low rather than
+  // filling the user's system drive and destabilizing the running application.
+  const disk = fs.statfsSync(targetDir, { bigint: true });
+  const available = disk.bavail * disk.bsize;
+  const needed = BigInt(artifact.size) * 2n + 1024n * 1024n * 1024n;
+  if (available < needed) throw new Error('Not enough free disk space to stage this Synapse update safely.');
   const destination = path.join(targetDir, 'Synapse-verified-update.exe');
   const temporary = destination + '.partial';
   try {
