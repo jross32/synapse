@@ -79,7 +79,7 @@ jobs:
       - name: Enforce source and release gates
         shell: pwsh
         run: |
-          python -m pytest daemon/tests/test_version_consistency.py daemon/tests/test_release_compatibility.py daemon/tests/test_release_artifact_gate.py daemon/tests/test_desktop_update_publisher.py daemon/tests/test_signed_desktop_update.py daemon/tests/test_production_installer_preflight.py -q
+          python -m pytest daemon/tests/test_version_consistency.py daemon/tests/test_release_manifest.py daemon/tests/test_release_artifact_gate.py daemon/tests/test_desktop_update_publisher.py daemon/tests/test_signed_desktop_update.py daemon/tests/test_production_installer_preflight.py -q
           if ($LASTEXITCODE -ne 0) { throw "Release tests failed" }
 
       - name: Build renderer and Electron
@@ -87,6 +87,16 @@ jobs:
         run: |
           npm run build
           if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+
+      - name: Enforce embedded publisher trust
+        shell: pwsh
+        run: |
+          $configPath = 'dist-electron/update-publisher.json'
+          if (!(Test-Path $configPath)) { throw "Packaged public publisher metadata not generated" }
+          $publisher = Get-Content $configPath -Raw | ConvertFrom-Json
+          if ($publisher.schema -ne 1) { throw "Invalid publisher schema" }
+          if ($publisher.feed_url -ne 'https://download.whatapc.com/updates/stable.json') { throw "Wrong pinned update feed" }
+          if (-not $publisher.public_key.StartsWith('-----BEGIN PUBLIC KEY-----')) { throw "Missing pinned publisher key" }
 
       - name: Build embedded daemon in CI only
         shell: pwsh
@@ -112,9 +122,11 @@ jobs:
             $asar = node -e "const asar=require('@electron/asar');console.log(asar.listPackage(process.argv[1]).join('\n'))" $archive
             if ($LASTEXITCODE -ne 0) { throw "Cannot inspect packaged Electron archive" }
             if ($asar -notmatch 'dist-electron/main.js') { throw "Electron main bundle absent from app.asar" }
+            if ($asar -notmatch 'dist-electron/update-publisher.json') { throw "Publisher trust missing from app.asar" }
           } else {
             $main = Join-Path $unpacked 'resources/app/dist-electron/main.js'
             if (!(Test-Path $main)) { throw "Electron main bundle missing from unpacked application" }
+            if (!(Test-Path (Join-Path $unpacked 'resources/app/dist-electron/update-publisher.json'))) { throw "Unpacked public trust missing" }
           }
           Write-Host "Isolated unpacked application contains Electron main and bundled daemon."
 
