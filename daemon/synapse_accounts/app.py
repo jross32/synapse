@@ -25,7 +25,7 @@ from .config import AccountsSettings, load_settings
 from .rate_limits import AuthRateLimiter
 from .device_access import list_device_access, change_device_access, check_device_write
 from .device_mcp import ACCOUNT_MCP_TOOLS, execute_account_tool, plan_explicit_device_call, rpc_tool_success
-from .relay import issue_connector, require_connector_account, enroll_device, verify_device, choose_device, create_job, claim_job, submit_result, await_result, select_connector_device
+from .relay import read_connector, issue_connector, require_connector_account, enroll_device, verify_device, choose_device, create_job, claim_job, submit_result, await_result, select_connector_device
 from .sync_merge import merge_documents
 from .db import (
     Account,
@@ -906,6 +906,8 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
                            details={"device_id": device_id, "enabled": payload.remote_write_enabled})
         return result
     @app.get("/v1/relay/connector")
+    def relay_connector_read(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        return read_connector(db, account, active_settings.public_base_url)
     @app.post("/v1/relay/connector")
     def relay_connector_create(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
         result = issue_connector(db, account, active_settings.public_base_url)

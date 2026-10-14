@@ -43,7 +43,7 @@ def _hosts(client, owner, *names):
 
 
 def _connector(client, owner):
-    response = client.get("/v1/relay/connector", headers=owner)
+    response = client.post("/v1/relay/connector", headers=owner)
     assert response.status_code == 200, response.text
     return urlsplit(response.json()["url"]).path
 
@@ -75,6 +75,19 @@ def _rpc(client, path, device, token_header, mode="full"):
         assert result.json() == response
         return job
 
+
+def test_connector_get_does_not_create_or_mutate(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        owner = _owner(client, "readonlyowner")
+        absent = client.get("/v1/relay/connector", headers=owner)
+        assert absent.status_code == 404
+        created = client.post("/v1/relay/connector", headers=owner)
+        assert created.status_code == 200
+        first = created.json()["url"]
+        read = client.get("/v1/relay/connector", headers=owner)
+        assert read.status_code == 200
+        assert read.json()["url"] == first
+        assert read.json()["rotated"] is False
 
 def test_stable_link_two_machines_default_full_and_switch_off(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
@@ -142,4 +155,5 @@ def test_absent_account_secret_disables_public_connector(tmp_path, monkeypatch):
     )
     with TestClient(create_app(settings)) as client:
         owner = _owner(client, "no-key")
-        assert client.get("/v1/relay/connector", headers=owner).status_code == 503
+        assert client.get("/v1/relay/connector", headers=owner).status_code == 404
+        assert client.post("/v1/relay/connector", headers=owner).status_code == 503
