@@ -54,6 +54,15 @@ jobs:
         run: |
           if ($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP) { throw 'Disposable CI runner required' }
           $installer = Get-ChildItem test-installer -File -Filter '*.exe' | Select-Object -First 1
+          # Install into a disposable runner with a synthetic pre-existing
+          # Synapse preference file. Only file persistence is asserted; this
+          # is NOT an actual account/device/MCP credential migration test.
+          $existingData = Join-Path $env:APPDATA 'Synapse'
+          New-Item -ItemType Directory -Force -Path $existingData | Out-Null
+          $sentinel = Join-Path $existingData 'ci-preservation-sentinel.txt'
+          $sentinelBytes = [Text.Encoding]::UTF8.GetBytes('preserve-existing-data-' + $env:EXPECTED_SHA)
+          [IO.File]::WriteAllBytes($sentinel, $sentinelBytes)
+          $originalHash = (Get-FileHash $sentinel -Algorithm SHA256).Hash
           $installRoot = Join-Path $env:RUNNER_TEMP 'SynapseCleanInstallSmoke'
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S',('/D='+$installRoot)) -PassThru -Wait
@@ -64,6 +73,10 @@ jobs:
             if (Test-Path (Join-Path $root 'Synapse.exe')) { $installed = $root; break }
           }
           if (-not $installed) { throw 'Synapse.exe not found after silent installation' }
+          if (!(Test-Path $sentinel)) { throw 'Existing Synapse user data was removed by installer' }
+          if ((Get-FileHash $sentinel -Algorithm SHA256).Hash -ne $originalHash) {
+            throw 'Existing Synapse user data changed during installer'
+          }
           $daemon = Join-Path $installed 'resources/daemon/synapse-daemon.exe'
           if (!(Test-Path $daemon) -or (Get-Item $daemon).Length -lt 1000000) { throw 'Bundled daemon absent from installed files' }
           @{
@@ -71,6 +84,7 @@ jobs:
             source_commit = $env:EXPECTED_SHA
             installed_electron = $true
             installed_daemon = $true
+            synthetic_userdata_sentinel_preserved = $true
             interactive_ui_verified = $false
             account_preserved_verified = $false
             device_identity_preserved_verified = $false
