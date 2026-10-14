@@ -77,17 +77,26 @@ def _rpc(client, path, device, token_header, mode="full"):
 
 
 def test_connector_get_does_not_create_or_mutate(tmp_path, monkeypatch):
+    import sqlite3
+    db_path = tmp_path / "relay-test.sqlite"
+    def snapshot():
+        with sqlite3.connect(db_path) as conn:
+            return conn.execute("SELECT account_id, nonce, token_hash, updated_at FROM relay_connectors ORDER BY account_id").fetchall()
     with _client(tmp_path, monkeypatch) as client:
         owner = _owner(client, "readonlyowner")
         absent = client.get("/v1/relay/connector", headers=owner)
         assert absent.status_code == 404
+        assert snapshot() == []
         created = client.post("/v1/relay/connector", headers=owner)
         assert created.status_code == 200
         first = created.json()["url"]
+        before_read = snapshot()
+        assert len(before_read) == 1
         read = client.get("/v1/relay/connector", headers=owner)
         assert read.status_code == 200
         assert read.json()["url"] == first
         assert read.json()["rotated"] is False
+        assert snapshot() == before_read
 
 def test_stable_link_two_machines_default_full_and_switch_off(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
