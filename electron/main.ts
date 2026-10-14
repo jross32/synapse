@@ -315,6 +315,7 @@ function refuseAdminIfNeeded(): void {
 // ── daemon spawn + health wait ────────────────────────────────────────────
 function resolvePackagedDaemonPath(): string {
   const candidates = [
+    path.join(process.resourcesPath, 'daemon', process.platform === 'win32' ? 'synapse-daemon.exe' : 'synapse-daemon'),
     path.join(process.resourcesPath, 'daemon', 'synapse-daemon.exe'),
     path.join(process.resourcesPath, 'daemon', 'synapsed.exe'),
   ];
@@ -335,7 +336,7 @@ function resolveDevPythonExecutable(): string {
   // this was the only daemon-spawn call site never updated when dev.ps1 and
   // daemon-watchdog-v2.ps1 got the same fix. Two live daemons on one port is
   // wrong regardless of which one wins the bind race.
-  const venvPython = path.join(repoRoot, '.venv', 'Scripts', 'python.exe');
+  const venvPython = path.join(repoRoot, '.venv', ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
   if (fs.existsSync(venvPython)) return venvPython;
   return 'python';
 }
