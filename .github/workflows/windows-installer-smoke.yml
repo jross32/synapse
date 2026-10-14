@@ -29,6 +29,8 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: windows-2022
     timeout-minutes: 18
+    env:
+      SOURCE_CANDIDATE_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.source_run_id }}
     steps:
       - name: Download candidate from specific Actions run
         uses: actions/download-artifact@v4
@@ -129,6 +131,7 @@ jobs:
           @{
             status = 'CI_SILENT_FILE_INSTALL_VERIFIED_ONLY'
             source_commit = $env:EXPECTED_SHA
+            source_candidate_run_id = $env:SOURCE_CANDIDATE_RUN_ID
             installed_electron = $true
             installed_daemon = $true
             synthetic_userdata_sentinel_preserved = $true
