@@ -135,3 +135,38 @@ export async function getProfileHosts(): Promise<HostPresence[]> {
   const res = await apiFetch<HostsResponse>('/profile/hosts', { method: 'GET' });
   return res.hosts;
 }
+
+export interface DeviceAccessPolicy {
+  device_id: string;
+  remote_write_enabled: boolean;
+  enrolled: boolean;
+}
+
+export async function getDeviceAccessPolicies(): Promise<DeviceAccessPolicy[]> {
+  const response = await apiFetch<{ devices: DeviceAccessPolicy[] }>('/profile/devices/access');
+  return response.devices;
+}
+
+export async function setDeviceRemoteWrite(deviceId: string, enabled: boolean): Promise<DeviceAccessPolicy> {
+  return apiFetch<DeviceAccessPolicy>(`/profile/devices/${encodeURIComponent(deviceId)}/access`, {
+    method: 'PUT', body: { remote_write_enabled: enabled },
+  });
+}
+export interface AccountMcpLink {
+  url: string;
+  rotated: boolean;
+  selected_device_id: string | null;
+  note: string;
+}
+
+export async function getAccountMcpLink(): Promise<AccountMcpLink> {
+  return apiFetch<AccountMcpLink>('/profile/mcp-link');
+}
+
+export async function rotateAccountMcpLink(): Promise<AccountMcpLink> {
+  return apiFetch<AccountMcpLink>('/profile/mcp-link/rotate', { method: 'POST' });
+}
+
+export async function selectAccountMcpDevice(deviceId: string): Promise<void> {
+  await apiFetch('/profile/mcp-link/device', { method: 'PUT', body: { device_id: deviceId } });
+}

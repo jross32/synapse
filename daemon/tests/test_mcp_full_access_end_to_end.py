@@ -225,3 +225,17 @@ def test_project_doctor_runs_through_read_only_mcp(tmp_path, clean_env):
     assert payload["project"]["id"] == "demo-project"
     assert payload["doctor"]["exists"] is True
     assert payload["doctor"]["git"]["is_repo"] in {True, False}
+
+def test_read_only_connector_rejects_legacy_write_tools_even_with_server_writes_enabled(
+    tmp_path, clean_env,
+):
+    """A disabled device must not mutate state via unadvertised tool names."""
+    client, token = _harness(tmp_path, writes_enabled=True)
+    for name in (
+        "synapse_set_project_chat_url", "synapse_add_project_idea",
+        "synapse_create_active_task", "synapse_update_active_task",
+        "synapse_capture_note", "synapse_create_squad", "synapse_add_work_item",
+    ):
+        result = _call(client, token, name, {}, url_suffix="?mode=read")
+        assert result.get("isError") is True, (name, result)
+        assert "read-only" in str(result).lower(), (name, result)

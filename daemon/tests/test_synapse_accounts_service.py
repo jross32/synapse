@@ -223,3 +223,39 @@ def test_reserved_password_reset_tokens_can_be_issued_and_consumed(tmp_path: Pat
     with session_scope(service.session_factory) as db:
         consumed_account = consume_reserved_token(db, PasswordResetToken, token=token)
     assert consumed_account == "account-native"
+
+
+def test_revisioned_profile_sync_rejects_stale_updates(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+    from synapse_accounts.app import create_app
+    from synapse_accounts.config import AccountsSettings
+    cfg = AccountsSettings(database_url=f"sqlite:///{(tmp_path / 'sync-revision.sqlite').as_posix()}",
+        public_base_url="https://accounts.example.test",
+        access_token_ttl_seconds=900, refresh_token_ttl_seconds=3600,
+        oauth_state_ttl_seconds=900, oauth_handoff_ttl_seconds=300,
+        request_timeout_seconds=8, google_client_id=None, google_client_secret=None,
+        github_client_id=None, github_client_secret=None)
+    with TestClient(create_app(cfg)) as client:
+        signup = client.post("/v1/auth/signup", json={
+            "username": "revisiontest", "email": "revision@example.test",
+            "password": "long-fixture-passcode"})
+        assert signup.status_code == 200
+        h = {"Authorization": "Bearer " + signup.json()["access_token"]}
+        original = client.get("/v1/sync/document", headers=h).json()
+        assert len(original["revision"]) == 64
+        first = client.put("/v1/sync/document", headers=h, json={
+            "document": {"schema": 2, "hosts": [{"id": "laptop"}]},
+            "expected_revision": original["revision"]})
+        assert first.status_code == 200, first.text
+        assert first.json()["revision"] != original["revision"]
+        stale = client.put("/v1/sync/document", headers=h, json={
+            "document": {"schema": 2, "hosts": [{"id": "desktop"}]},
+            "expected_revision": original["revision"]})
+        assert stale.status_code == 409
+        current = client.get("/v1/sync/document", headers=h).json()
+        assert {x["id"] for x in current["document"]["hosts"]} == {"laptop"}
+        fresh = client.put("/v1/sync/document", headers=h, json={
+            "document": {"schema": 2, "hosts": [{"id": "desktop"}]},
+            "expected_revision": current["revision"]})
+        assert fresh.status_code == 200, fresh.text
+        assert {x["id"] for x in fresh.json()["document"]["hosts"]} == {"laptop", "desktop"}

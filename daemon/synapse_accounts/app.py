@@ -1,6 +1,9 @@
 from __future__ import annotations
+import asyncio
+import hashlib
 
 import json
+import os
 import re
 import secrets
 import urllib.error
@@ -13,13 +16,19 @@ from typing import Any, Literal
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import AccountsSettings, load_settings
+from .rate_limits import AuthRateLimiter
+from .device_access import list_device_access, change_device_access, check_device_write
+from .device_mcp import ACCOUNT_MCP_TOOLS, execute_account_tool, plan_explicit_device_call, rpc_tool_success
+from .relay import issue_connector, require_connector_account, enroll_device, verify_device, choose_device, create_job, claim_job, submit_result, await_result, select_connector_device
+from .sync_merge import merge_documents
 from .db import (
     Account,
     AuthAuditEvent,
@@ -30,6 +39,7 @@ from .db import (
     PasswordResetToken,
     RefreshSession,
     SyncDocument,
+    RelayConnector,
     build_session_factory,
     session_scope,
     utc_now,
@@ -72,6 +82,7 @@ class PublicConfigPayload(BaseModel):
 class SyncDocumentPayload(BaseModel):
     document: dict[str, Any]
     updated_at: str
+    revision: str | None = None
 
 
 class SignUpRequest(BaseModel):
@@ -106,7 +117,16 @@ class OAuthExchangeRequest(BaseModel):
 
 class PutSyncDocumentRequest(BaseModel):
     document: dict[str, Any]
+    expected_revision: str | None = None
 
+
+class RelayDeviceSelect(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+class RelayDeviceResult(BaseModel):
+    job_id: str
+    response: Any
+class DevicePolicyUpdate(BaseModel):
+    remote_write_enabled: bool
 
 class TokenIssue(BaseModel):
     access_token: str
@@ -412,6 +432,12 @@ class AccountsService:
         if not revoked_any:
             raise HTTPException(status_code=404, detail="No active session to sign out.")
 
+    @staticmethod
+    def _sync_revision(document: SyncDocument) -> str:
+        # Content-based optimistic lock: stable across SQLite datetime rounding
+        # and independent of database migrations.
+        return hashlib.sha256((document.document_json or "{}").encode("utf-8")).hexdigest()
+
     def get_sync_document(self, db: Session, account: Account) -> SyncDocumentPayload:
         document = db.scalar(select(SyncDocument).where(SyncDocument.account_id == account.id))
         if document is None:
@@ -421,11 +447,17 @@ class AccountsService:
         return SyncDocumentPayload(
             document=json.loads(document.document_json or "{}"),
             updated_at=_iso(document.updated_at) or _iso(document.created_at) or _iso(_now()) or "",
+            revision=self._sync_revision(document),
         )
 
-    def put_sync_document(self, db: Session, account: Account, document: dict[str, Any]) -> SyncDocumentPayload:
+    def put_sync_document(self, db: Session, account: Account, document: dict[str, Any],
+                          expected_revision: str | None = None) -> SyncDocumentPayload:
         row = db.scalar(select(SyncDocument).where(SyncDocument.account_id == account.id))
         now = _now()
+        if expected_revision is not None:
+            if row is None or self._sync_revision(row) != expected_revision:
+                raise HTTPException(status_code=409, detail="Synapse profile changed; refresh and retry.")
+        document = merge_documents({}, document)
         if row is None:
             row = SyncDocument(
                 account_id=account.id,
@@ -435,10 +467,13 @@ class AccountsService:
             )
             db.add(row)
         else:
+            document = merge_documents(json.loads(row.document_json or "{}"), document)
             row.document_json = json.dumps(document)
             row.updated_at = now
         self._log_event(db, account_id=account.id, event_kind="sync.updated", provider=None)
-        return SyncDocumentPayload(document=document, updated_at=_iso(now) or "")
+        db.flush()
+        return SyncDocumentPayload(document=document, updated_at=_iso(now) or "",
+                                   revision=self._sync_revision(row))
 
     def start_oauth(
         self,
@@ -449,6 +484,14 @@ class AccountsService:
         mode: Literal["signin", "link"],
         current_account: Account | None,
     ) -> OAuthStartResponse:
+        # Only hand off OAuth codes to a local Synapse daemon or an explicitly
+        # allowlisted HTTPS Synapse host, never arbitrary caller-controlled URLs.
+        callback = urllib.parse.urlsplit(callback_url)
+        trusted_https_hosts = {host.strip().lower() for host in os.getenv("SYNAPSE_ACCOUNTS_CALLBACK_HOSTS", "").split(",") if host.strip()}
+        loopback = callback.scheme == "http" and callback.hostname in {"localhost", "127.0.0.1"} and callback.port == 7878
+        trusted = callback.scheme == "https" and callback.hostname in trusted_https_hosts and callback.port in {None, 443}
+        if not (loopback or trusted) or callback.path != "/api/v1/profile/auth/callback" or callback.query or callback.fragment or callback.username or callback.password:
+            raise HTTPException(status_code=400, detail="Unrecognized Synapse OAuth callback URL.")
         if provider != "google":
             raise HTTPException(status_code=400, detail=f"Unsupported provider '{provider}'.")
         if not (self.settings.google_client_id and self.settings.google_client_secret):
@@ -788,6 +831,30 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
     active_settings = settings or load_settings()
     service = AccountsService(active_settings)
     app = FastAPI(title="Synapse Accounts", version="0.1.36-dev", docs_url=None, redoc_url=None)
+    # Only the official download site may use cross-origin account registration.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["https://download.whatapc.com"],
+        allow_credentials=False,
+        allow_methods=["POST"],
+        allow_headers=["Content-Type"],
+    )
+
+    auth_limiter = AuthRateLimiter()
+
+    @app.middleware("http")
+    async def throttle_public_auth(request: Request, call_next):
+        limits = {
+            "/v1/auth/signup": (5, 600),
+            "/v1/auth/signin": (20, 300),
+            "/v1/auth/refresh": (60, 300),
+            "/v1/oauth/start": (20, 300),
+        }
+        rule = limits.get(request.url.path) if request.method == "POST" else None
+        if rule and not auth_limiter.allow(request.client.host if request.client else "unknown", request.url.path,
+                                            limit=rule[0], window_seconds=rule[1]):
+            return JSONResponse(status_code=429, content={"detail": "Too many sign-in attempts. Try again later."})
+        return await call_next(request)
 
     def get_db() -> Any:
         with session_scope(service.session_factory) as session:
@@ -851,8 +918,181 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
         account: Account = Depends(current_account),
         db: Session = Depends(get_db),
     ) -> SyncDocumentPayload:
-        return service.put_sync_document(db, account, payload.document)
+        return service.put_sync_document(db, account, payload.document, payload.expected_revision)
 
+    @app.get("/v1/devices/access")
+    def device_access_list(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        return {"devices": list_device_access(db, account.id)}
+
+    @app.put("/v1/devices/{device_id}/access")
+    def device_access_update(device_id: str, payload: DevicePolicyUpdate,
+                             account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = change_device_access(db, account.id, device_id, payload.remote_write_enabled)
+        service._log_event(db, account_id=account.id, event_kind="device.remote_write.toggle", provider=None,
+                           details={"device_id": device_id, "enabled": payload.remote_write_enabled})
+        return result
+    @app.get("/v1/relay/connector")
+    @app.post("/v1/relay/connector")
+    def relay_connector_create(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = issue_connector(db, account, active_settings.public_base_url)
+        service._log_event(db, account_id=account.id, event_kind="relay.connector.created_or_read", provider=None)
+        return result
+
+    @app.post("/v1/relay/connector/rotate")
+    def relay_connector_rotate(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = issue_connector(db, account, active_settings.public_base_url, rotate=True)
+        service._log_event(db, account_id=account.id, event_kind="relay.connector.rotate", provider=None)
+        return result
+    @app.put("/v1/relay/connector/selection")
+    def relay_connector_select(payload: RelayDeviceSelect,
+                               account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
+        result = select_connector_device(db, account.id, payload.device_id)
+        service._log_event(db, account_id=account.id, event_kind="relay.connector.select", provider=None,
+                           details={"device_id": payload.device_id})
+        return result
+    @app.post("/v1/relay/devices/{device_id}/enroll")
+    def relay_enroll_device(device_id: str, account: Account = Depends(current_account),
+                            db: Session = Depends(get_db)) -> dict:
+        result = enroll_device(db, account, device_id)
+        service._log_event(db, account_id=account.id, event_kind="relay.device.enroll", provider=None,
+                           details={"device_id": device_id})
+        return result
+
+    @app.post("/v1/relay/devices/{device_id}/revoke")
+    def relay_revoke_device(device_id: str, account: Account = Depends(current_account),
+                            db: Session = Depends(get_db)) -> dict:
+        from sqlalchemy import select
+        from .db import RelayDevice
+        device = db.scalar(select(RelayDevice).where(
+            RelayDevice.account_id == account.id, RelayDevice.device_id == device_id))
+        if device is None:
+            raise HTTPException(status_code=404, detail="Device not enrolled in this account.")
+        device.revoked_at = datetime.now(UTC)
+        service._log_event(db, account_id=account.id, event_kind="relay.device.revoke", provider=None,
+                           details={"device_id": device_id})
+        return {"revoked": True, "device_id": device_id}
+    @app.get("/v1/relay/devices/{device_id}/access")
+    def relay_device_access_status(device_id: str, authorization: str | None = Header(default=None),
+                                   db: Session = Depends(get_db)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Device credential required.")
+        device = verify_device(db, device_id, authorization.split(" ", 1)[1].strip())
+        return {"device_id": device_id,
+                "remote_write_enabled": check_device_write(db, device.account_id, device_id)}
+    @app.get("/v1/relay/devices/{device_id}/jobs/next")
+    async def relay_poll(device_id: str, authorization: str | None = Header(default=None)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Device credential required.")
+        credential = authorization.split(" ", 1)[1].strip()
+        for _ in range(32):
+            with session_scope(service.session_factory) as db:
+                device = verify_device(db, device_id, credential)
+                job = claim_job(db, device)
+                if job is not None:
+                    return job
+            await asyncio.sleep(0.5)
+        return {"job_id": None}
+
+    @app.post("/v1/relay/devices/{device_id}/jobs/result")
+    def relay_finish(device_id: str, payload: RelayDeviceResult,
+                     authorization: str | None = Header(default=None),
+                     db: Session = Depends(get_db)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Device credential required.")
+        device = verify_device(db, device_id, authorization.split(" ", 1)[1].strip())
+        submit_result(db, device, payload.job_id, payload.response)
+        return {"accepted": True}
+
+    @app.post("/mcp/{connector_token}")
+    async def unified_mcp(connector_token: str, request: Request) -> Any:
+        # Cloud holds no daemon auth tokens and performs no local code execution.
+        body = await request.body()
+        if len(body) > 131072:
+            raise HTTPException(status_code=413, detail="MCP request too large.")
+        try:
+            payload = json.loads(body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON-RPC request.") from exc
+        with session_scope(service.session_factory) as db:
+            account = require_connector_account(db, connector_token)
+            connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
+            # Cloud account tools are handled before choosing a host, so device
+            # discovery still works if all computers are offline. Never expose
+            # local daemon credentials or route selection via URL query args.
+            mode = "read" if request.query_params.get("mode") == "read" else "full"
+            if isinstance(payload, dict) and payload.get("method") == "tools/call":
+                params = payload.get("params") or {}
+                name = params.get("name") if isinstance(params, dict) else None
+                if name in {"synapse_account_list_devices", "synapse_account_select_device"}:
+                    value = execute_account_tool(db, account.id, name, params.get("arguments") or {},
+                                                 read_only=mode == "read")
+                    return JSONResponse(rpc_tool_success(payload.get("id"), value))
+            # MCP initialization is gateway-owned: connecting ChatGPT must not
+            # depend on which of the account's computers happens to be online.
+            if isinstance(payload, dict) and payload.get("method") == "initialize":
+                return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                    "result": {"protocolVersion": "2025-03-26",
+                               "capabilities": {"tools": {"listChanged": False}},
+                               "serverInfo": {"name": "Synapse Account Gateway", "version": "1.0"}}})
+            # Tool discovery stays stable as devices connect/disconnect. Individual
+            # device tools can be invoked through synapse_account_call_device.
+            if isinstance(payload, dict) and payload.get("method") == "tools/list":
+                visible = [tool for tool in ACCOUNT_MCP_TOOLS
+                           if mode != "read" or tool.get("annotations", {}).get("readOnlyHint")]
+                return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                                     "result": {"tools": visible}})
+            # MCP notifications do not expect a response and must not enqueue
+            # a job on an offline device.
+            if isinstance(payload, dict) and payload.get("method") == "notifications/initialized":
+                return Response(status_code=202)
+            # An explicit device call does not mutate the default selection,
+            # and cannot reach a device outside the authenticated account.
+            explicit_device_call = False
+            if isinstance(payload, dict) and payload.get("method") == "tools/call":
+                params = payload.get("params") or {}
+                if isinstance(params, dict) and params.get("name") == "synapse_account_call_device":
+                    device_id, tool, tool_args = plan_explicit_device_call(
+                        db, account.id, params.get("arguments") or {})
+                    nested = {"jsonrpc": "2.0", "id": payload.get("id"),
+                              "method": "tools/call",
+                              "params": {"name": tool, "arguments": tool_args}}
+                    job_id = create_job(db, account.id, device_id, nested, mode=mode)
+                    explicit_device_call = True
+            if not explicit_device_call:
+                # External clients cannot choose hosts using query parameters.
+                preferred_device = connector.selected_device_id if connector else None
+                try:
+                    device_id = choose_device(db, account.id, preferred_device)
+                except HTTPException as unavailable:
+                    # Account discovery must remain usable when every local
+                    # daemon is offline or no device has enrolled yet.
+                    if (unavailable.status_code not in (404, 503)
+                            or not isinstance(payload, dict)
+                            or payload.get("method") != "tools/list"):
+                        raise
+                    visible = [tool for tool in ACCOUNT_MCP_TOOLS
+                               if mode != "read" or tool.get("annotations", {}).get("readOnlyHint")]
+                    return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                                         "result": {"tools": visible}})
+                job_id = create_job(db, account.id, device_id, payload, mode=mode)
+            account_id = account.id
+        response = await await_result(service.session_factory, account_id, job_id)
+        if (isinstance(payload, dict) and payload.get("method") == "tools/list"
+                and isinstance(response, dict)
+                and isinstance(response.get("result"), dict)
+                and isinstance(response["result"].get("tools"), list)
+                and all(isinstance(tool, dict) for tool in response["result"]["tools"])):
+            current = {tool.get("name") for tool in response["result"]["tools"] if isinstance(tool, dict)}
+            response["result"]["tools"].extend(
+                tool for tool in ACCOUNT_MCP_TOOLS
+                if tool["name"] not in current
+                and (mode != "read" or tool.get("annotations", {}).get("readOnlyHint"))
+            )
+        return JSONResponse(response, status_code=202 if response is None else 200)
+
+    @app.get("/mcp/{connector_token}")
+    def unified_mcp_get(connector_token: str) -> Any:
+        return JSONResponse({"error": "SSE is not supported; use MCP Streamable HTTP POST."}, status_code=405)
     @app.post("/v1/oauth/start", response_model=OAuthStartResponse)
     def start_oauth(
         payload: OAuthStartRequest,
@@ -913,6 +1153,9 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
                 message=str(exc.detail),
             )
         return RedirectResponse(url=redirect_url, status_code=302)
+
+    from .workspace import install_workspace_routes
+    install_workspace_routes(app, current_account, get_db)
 
     app.state.accounts_service = service
     app.state.accounts_settings = active_settings
