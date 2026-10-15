@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from stripe_payments import checkout_session, verified_webhook, StripeConfigurationError
 from offer_catalog import OFFERS
+from followup_planner import plan_actions
 
 from local_auth import (
     CSRF_HEADER_NAME,
@@ -689,6 +690,11 @@ def ops_page() -> str:
       <div id="client-hunter-board" aria-live="polite">Loading Client Hunter readiness...</div>
       <div id="sales-pipeline-board" aria-live="polite">Loading company pipeline...</div>
     </section>
+    <section class="panel">
+      <p class="card-label">Booking and follow-up drafts</p>
+      <div id="follow-up-drafts" aria-live="polite">Loading approval-required drafts...</div>
+      <p class="muted">Preview only. No customer messages are sent automatically.</p>
+    </section>
     <script src="/static/sales_dashboard.js" defer></script>
     <section class="grid two-up">
       <article class="panel">
@@ -791,6 +797,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "Client Hunter readiness unavailable"},
                            status=HTTPStatus.INTERNAL_SERVER_ERROR, cache_control="no-store")
             return
+        if path == "/api/follow-up/drafts":
+            session = self._require_session("operator")
+            if session is None:
+                return
+            try:
+                actions = plan_actions(WORKFLOW_STORE.load())
+                self._json({"ok": True, "actions": actions, "outbound_enabled": False},
+                           cache_control="no-store")
+            except (OSError, ValueError, json.JSONDecodeError):
+                self._json({"ok": False, "error": "Draft queue unavailable."},
+                           status=HTTPStatus.INTERNAL_SERVER_ERROR, cache_control="no-store")
+            return
+
         if path == "/api/stripe/status":
             session = self._require_session("operator")
             if session is None:

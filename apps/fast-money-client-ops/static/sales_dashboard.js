@@ -54,3 +54,31 @@
 
 
 
+(async function () {
+  const root = document.getElementById("follow-up-drafts");
+  if (!root) return;
+  try {
+    const response = await fetch("/api/follow-up/drafts", {credentials:"same-origin",cache:"no-store"});
+    if (!response.ok) throw new Error("Draft queue unavailable");
+    const payload = await response.json();
+    root.replaceChildren();
+    const actions = payload.actions || [];
+    const summary = document.createElement("p");
+    summary.textContent = actions.length + " approval-required draft(s); automatic sending disabled.";
+    root.append(summary);
+    for (const action of actions) {
+      const article = document.createElement("article");
+      article.className = "tile";
+      const title = document.createElement("strong");
+      title.textContent = action.title;
+      const draft = document.createElement("p");
+      draft.textContent = action.draft;
+      const status = document.createElement("small");
+      status.textContent = "Draft only - operator review required";
+      article.append(title, draft, status);
+      root.append(article);
+    }
+  } catch (error) {
+    root.textContent = "Follow-up drafts unavailable: " + error.message;
+  }
+})();
