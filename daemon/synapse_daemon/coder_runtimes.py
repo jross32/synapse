@@ -52,8 +52,8 @@ class CoderRuntime(str, Enum):
 
 
 DEFAULT_LADDER: tuple[CoderRuntime, ...] = (
-    CoderRuntime.CLAUDE,
     CoderRuntime.CODEX,
+    CoderRuntime.CLAUDE,
     CoderRuntime.COPILOT,
     CoderRuntime.GEMINI,
     CoderRuntime.LOCAL,
@@ -668,3 +668,18 @@ class LadderDecision(BaseModel):
         return (f"built with {self.chosen}, after "
                 + ", ".join(f"{r} ({self.reasons.get(r, 'unavailable')})"
                             for r in self.skipped))
+
+
+def select_worker_runtime(preferred: list[str], capacity: dict[str, bool],
+                          installed: dict[str, bool]) -> str | None:
+    """Pick an eligible installed provider, with local Ollama strictly last.
+
+    Explicitly requested runtimes are handled by the caller and never silently replaced.
+    Unknown legacy runtimes are excluded; interactive shells are not coding fallbacks.
+    """
+    candidates = list(dict.fromkeys([*preferred, *(r.value for r in DEFAULT_LADDER)]))
+    candidates = [name for name in candidates if name != CoderRuntime.LOCAL.value]
+    candidates.append(CoderRuntime.LOCAL.value)
+    supported = {r.value for r in DEFAULT_LADDER}
+    return next((name for name in candidates if name in supported
+                 and installed.get(name, False) and capacity.get(name, False)), None)

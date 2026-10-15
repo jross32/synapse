@@ -929,16 +929,28 @@ def build_agent_squads_router(
                 item.runtime_id: item
                 for item in ai_executions.list_capacity(conn)
             }
-            if explicitly_requested is None and not chatgpt_parent:
+            if explicitly_requested is None and not chatgpt_parent and execution_mode == squads.AgentExecutionMode.AUTOMATIC:
+                # Prefer capable CLIs; only use local Ollama when no remote coding
+                # provider is installed and eligible. Do not replace explicit choices.
+                preferred = list(role.preferred_runtimes or [])
+                chosen = coder_runtimes.select_worker_runtime(
+                    preferred,
+                    {runtime.value: (capacity[runtime.value].eligible_for_attempt
+                                     if runtime.value in capacity else True)
+                     for runtime in coder_runtimes.DEFAULT_LADDER},
+                    {runtime.value: coder_runtimes.available(runtime)
+                     for runtime in coder_runtimes.DEFAULT_LADDER},
+                )
+                if chosen is None:
+                    raise conflict("agent_runtime", "No eligible coding provider is available")
+                chosen_runtime = chosen
+            elif explicitly_requested is None and not chatgpt_parent:
                 candidates = role.preferred_runtimes or [chosen_runtime]
                 chosen_runtime = next(
-                    (
-                        candidate
-                        for candidate in candidates
-                        if candidate in {runtime.value for runtime in coder_runtimes.CoderRuntime}
-                        and capacity.get(candidate) is not None
-                        and capacity[candidate].eligible_for_attempt
-                    ),
+                    (candidate for candidate in candidates
+                     if candidate in {runtime.value for runtime in coder_runtimes.CoderRuntime}
+                     and capacity.get(candidate) is not None
+                     and capacity[candidate].eligible_for_attempt),
                     chosen_runtime,
                 )
             selected_capacity = capacity.get(chosen_runtime)
