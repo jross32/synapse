@@ -1,0 +1,58 @@
+name: Publish unsigned macOS engineering preview
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Fetch both previously verified macOS artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 38673885786 -R jross32/synapse -n synapse-macos-arm64-unsigned -D arm64
+          gh run download 38673885786 -R jross32/synapse -n synapse-macos-x64-unsigned -D x64
+      - name: Validate and name unsigned DMG assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find arm64 x64 -type f -maxdepth 3 -print
+          arm=$(find arm64 -type f -name '*.dmg' -print -quit)
+          intel=$(find x64 -type f -name '*.dmg' -print -quit)
+          test -n "$arm" && test -n "$intel"
+          test "$(stat -c%s "$arm")" -gt 100000000
+          test "$(stat -c%s "$intel")" -gt 100000000
+          cp "$arm" dist/Synapse-macOS-arm64-unsigned.dmg
+          cp "$intel" dist/Synapse-macOS-x64-unsigned.dmg
+          sha256sum dist/*.dmg | tee dist/SHA256SUMS.txt
+      - name: Publish clearly labeled unsigned prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          # Synapse macOS engineering preview (unsigned)
+
+          **For trusted engineering testers only. Not a signed, notarized, or stable release.**
+
+          Source commit: `734e87d4b0f8b07b589b358699f4b7f44d5bfc9a`.
+          Verified GitHub Actions run: https://github.com/jross32/synapse/actions/runs/38673885786
+
+          Apple Silicon (M1/M2/M3/M4): `Synapse-macOS-arm64-unsigned.dmg`.
+          Intel Macs: `Synapse-macOS-x64-unsigned.dmg`.
+
+          The packaged Python daemon and Electron desktop startup checks passed on hosted macOS runners for both architectures. A full interactive onboarding, sign-in, MCP connection, and clean physical-Mac install has **not** been certified.
+
+          ## Install
+          1. Download the matching DMG and compare its SHA-256 with `SHA256SUMS.txt`.
+          2. Open the DMG, drag Synapse into Applications, then eject the disk image.
+          3. Because this preview is unsigned and not notarized, macOS Gatekeeper may block first launch. Attempt to open Synapse normally, then use **System Settings → Privacy & Security → Open Anyway** if macOS offers that option.
+          4. Do not disable Gatekeeper globally or run terminal commands to remove quarantine.
+          5. Use a test account and back up existing Synapse data. Report your macOS version, CPU type, any warnings, and whether login and MCP connectivity work.
+
+          This is a testing build; do not replace an existing stable Synapse installation with it.
+          EOF
+          gh release create macos-engineering-preview-734e87d dist/*.dmg dist/SHA256SUMS.txt --repo jross32/synapse --target 734e87d4b0f8b07b589b358699f4b7f44d5bfc9a --prerelease --title 'Synapse macOS engineering preview (unsigned)' --notes-file notes.md
+          gh release view macos-engineering-preview-734e87d --repo jross32/synapse --json assets,url
