@@ -89,6 +89,56 @@ jobs:
                           proc.kill()
                           proc.wait(timeout=5)
           PY
+      - name: Smoke test packaged Electron desktop launch
+        env:
+          SYNAPSE_INSPECT: '1'
+          SYNAPSE_INSPECT_PORT: '19222'
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, subprocess, tempfile, time, urllib.request, urllib.error
+          app = next(pathlib.Path('release').glob('mac*/Synapse.app'), None)
+          assert app is not None
+          binary = app / 'Contents/MacOS/Synapse'
+          assert binary.is_file(), f'Electron binary missing: {binary}'
+          with tempfile.TemporaryDirectory(prefix='synapse-electron-smoke-') as tmp:
+              logpath = pathlib.Path(tmp) / 'electron.log'
+              with logpath.open('wb') as log:
+                  proc = subprocess.Popen([str(binary.resolve()), '--no-sandbox'], stdout=log, stderr=subprocess.STDOUT, env={**os.environ, 'HOME': tmp})
+                  try:
+                      deadline = time.monotonic() + 100
+                      healthy = False
+                      renderer = False
+                      while time.monotonic() < deadline:
+                          if proc.poll() is not None:
+                              raise RuntimeError(f'Electron exited early: {proc.returncode}')
+                          try:
+                              with urllib.request.urlopen('http://127.0.0.1:7878/api/v1/health', timeout=2) as r:
+                                  healthy = r.status == 200
+                          except (urllib.error.URLError, TimeoutError):
+                              pass
+                          try:
+                              with urllib.request.urlopen('http://127.0.0.1:19222/json', timeout=2) as r:
+                                  pages = json.load(r)
+                                  renderer = any(page.get('type') == 'page' and page.get('url', '').startswith(('file:', 'http:')) for page in pages)
+                          except (urllib.error.URLError, TimeoutError, ValueError):
+                              pass
+                          if healthy and renderer:
+                              print('Packaged Electron launched; daemon healthy and renderer page detected')
+                              break
+                          time.sleep(2)
+                      else:
+                          raise RuntimeError(f'Electron startup timeout: daemon={healthy}, renderer={renderer}')
+                  except Exception:
+                      print(logpath.read_text(errors='replace')[-12000:])
+                      raise
+                  finally:
+                      proc.terminate()
+                      try:
+                          proc.wait(timeout=10)
+                      except subprocess.TimeoutExpired:
+                          proc.kill()
+                          proc.wait(timeout=5)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: synapse-macos-${{ matrix.arch }}-unsigned
