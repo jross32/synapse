@@ -13,7 +13,7 @@ This project is managed through Synapse. Every AI working here must:
 3. Use an isolated branch/worktree for simultaneous changes whenever possible.
 4. Make small, reversible changes with focused tests and broader regression checks.
 5. Stage only owned files; never use blind `git add -A`, reset, force-push, or overwrite another agent's work.
-6. Before committing, verify tests, diff, and concurrent changes. Record evidence, update README/CHANGELOG/version when applicable.
+6. After each verified milestone, automatically invoke scripts/synapse_git_checkpoint.py with the repository root, explicit owned --path values, --commit and a descriptive --message. Run its preview first; if it reports unrelated staged changes, stop. Record tests, evidence, and README/CHANGELOG/version when applicable.
 7. Push only to a verified authorized GitHub remote after checking ahead/behind and resolving conflicts safely; do not create public repos automatically.
 8. Save a durable Synapse handoff containing files touched, checks, blockers, and next actions.
 9. If coordination or verification is unavailable, stop the risky Git operation and report the blocker.
