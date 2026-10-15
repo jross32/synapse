@@ -470,10 +470,6 @@ def write_module(
 
     result.ok = True
     result.source = source
-    # Shared opt-in checkpoint for Claude, Codex, Copilot and Gemini.
-    # Verification and scoped paths are mandatory; the hook never pushes.
-    from .worker_git_checkpoint import checkpoint_after_verified_run
-    checkpoint_after_verified_run(Path(workspace), completed=True)
     return result
 
 
