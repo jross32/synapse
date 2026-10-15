@@ -18,11 +18,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-<<<<<<< HEAD
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
-=======
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, JSONResponse
->>>>>>> 396a710 (fix(mcp): cloud handshake and failover to online account device)
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
