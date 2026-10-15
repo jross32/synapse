@@ -671,12 +671,14 @@ class LadderDecision(BaseModel):
 
 
 def select_worker_runtime(preferred: list[str], capacity: dict[str, bool],
-                          installed: dict[str, bool]) -> str | None:
+                          installed: dict[str, bool], *, chatgpt_ui_ready: bool = False) -> str | None:
     """Pick an eligible installed provider, with local Ollama strictly last.
 
     Explicitly requested runtimes are handled by the caller and never silently replaced.
     Unknown legacy runtimes are excluded; interactive shells are not coding fallbacks.
     """
+    if chatgpt_ui_ready and capacity.get("chatgpt_web", True):
+        return "chatgpt_web"
     candidates = list(dict.fromkeys([*preferred, *(r.value for r in DEFAULT_LADDER)]))
     candidates = [name for name in candidates if name != CoderRuntime.LOCAL.value]
     candidates.append(CoderRuntime.LOCAL.value)

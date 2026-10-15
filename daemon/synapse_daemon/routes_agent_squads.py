@@ -940,6 +940,9 @@ def build_agent_squads_router(
                      for runtime in coder_runtimes.DEFAULT_LADDER},
                     {runtime.value: coder_runtimes.available(runtime)
                      for runtime in coder_runtimes.DEFAULT_LADDER},
+                    chatgpt_ui_ready=bool(
+                        chatgpt_child_agents.readiness(storage.data_dir)["setup_complete"]
+                    ),
                 )
                 if chosen is None:
                     raise conflict("agent_runtime", "No eligible coding provider is available")
@@ -1155,9 +1158,9 @@ def build_agent_squads_router(
             child_prompt = (
                 role_prompt
                 + "\n\n## ChatGPT UI child-agent rules\n"
-                + "You are a child agent of a parent ChatGPT session. Work only in this real "
+                + "You are a Synapse coding worker operating in this real "
                 "chatgpt.com conversation. Use the attached Synapse connector for project/tool "
-                "actions when needed. Do not delegate work to Claude, Codex, Copilot, Gemini, "
+                "actions when needed. Complete your assigned task in ChatGPT UI; do not silently switch to Claude, Codex, Copilot, Gemini, "
                 "local models, APIs, or CLI coding runtimes. Return a concise, evidence-backed "
                 "handoff in your final reply; Synapse will durably attach that reply to your "
                 "work item.\n"
