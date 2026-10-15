@@ -1,4 +1,4 @@
-﻿"""Read-only GitHub source publishing evidence for worker completion gates."""
+"""Read-only GitHub source publishing evidence for worker completion gates."""
 from __future__ import annotations
 
 import re
@@ -85,3 +85,14 @@ def snapshot_code_workspace(workspace: Path) -> tuple[str, str] | None:
         return (_git(root, "rev-parse", "HEAD"), _git(root, "status", "--porcelain", "--untracked-files=all"))
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
+
+CODE_EXTENSIONS = frozenset({".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java", ".cs", ".cpp", ".c", ".sh", ".ps1"})
+
+
+def assess_provider_handoff(repo: Path, *, files_touched: list[str], tests_passed: bool,
+                            expected_sha: str | None) -> CodeWorkCompletion:
+    """Provider-independent completion gate for explicitly reported source edits."""
+    code_changed = bool(expected_sha) or any(Path(path).suffix.lower() in CODE_EXTENSIONS for path in files_touched)
+    return assess_code_work_completion(repo, code_changed=code_changed,
+                                       tests_passed=tests_passed if code_changed else True,
+                                       expected_sha=expected_sha)

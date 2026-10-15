@@ -49,7 +49,15 @@ def main() -> int:
     mode = {"observe": PermissionMode.PLAN, "workspace": PermissionMode.ACCEPT_EDITS,
             "full": PermissionMode.AUTO}[args.authority]
     try:
-        with urllib.request.urlopen("http://127.0.0.1:11434/api/version", timeout=4) as response:
+        primary_url = os.environ.get("SYNAPSE_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+        fallback_url = os.environ.get("SYNAPSE_OLLAMA_FALLBACK_URL", "").rstrip("/")
+        try:
+            health = urllib.request.urlopen(primary_url + "/api/version", timeout=4)
+        except (OSError, TimeoutError):
+            if not fallback_url:
+                raise
+            health = urllib.request.urlopen(fallback_url + "/api/version", timeout=4)
+        with health as response:
             if response.status != 200:
                 raise RuntimeError("Ollama health check failed")
         before = snapshot_code_workspace(workspace)

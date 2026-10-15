@@ -16,6 +16,7 @@ from . import activity as activity_module
 from . import agent_squads as squads
 from . import (
     ai_executions,
+    github_publish_gate,
     chatgpt_child_agents,
     chatgpt_worker_chats,
     coder_runtimes,
@@ -1470,6 +1471,13 @@ def build_agent_squads_router(
                     update={"status": squads.AgentWorkItemStatus.HANDOFF}
                 )
             if adjusted_payload.status == squads.AgentWorkItemStatus.COMPLETED:
+                publication = github_publish_gate.assess_provider_handoff(
+                    Path(project.path), files_touched=adjusted_payload.files_touched,
+                    tests_passed=adjusted_payload.code_tests_passed,
+                    expected_sha=adjusted_payload.code_commit_sha,
+                )
+                if publication.status != "complete":
+                    raise conflict("agent_work_item", "Code publication verification required before completion", reason=publication.status)
                 quality_os.assert_subject_can_complete(conn, "agent_work_item", work_item_id)
             item = squads.handoff_work_item(conn, work_item_id, adjusted_payload)
             gate = None

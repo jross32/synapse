@@ -23,6 +23,7 @@ opt-in per run and refuses obviously destructive commands.
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import re
 import time
@@ -37,7 +38,7 @@ from pydantic import BaseModel, Field
 
 from .subprocess_utils import headless_creationflags
 
-OLLAMA_URL = "http://127.0.0.1:11434"
+OLLAMA_URL = os.environ.get("SYNAPSE_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 
 # Tool output is truncated to this many characters before going back into context. A 7B at
 # 4k tokens is roughly 16k characters of budget for the *entire* conversation.
@@ -436,15 +437,25 @@ async def _chat(model: str, messages: list[dict], tools: list[dict],
         "options": {"temperature": 0, "num_ctx": num_ctx},
     }
 
-    def _do() -> dict[str, Any]:
+    def _do(url: str, request_timeout: float) -> dict[str, Any]:
         req = urllib.request.Request(
-            f"{OLLAMA_URL}/api/chat",
+            f"{url}/api/chat",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=request_timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
-    return await asyncio.to_thread(_do)
+    fallback = os.environ.get("SYNAPSE_OLLAMA_FALLBACK_URL", "").rstrip("/")
+    primary_timeout = min(timeout, 20.0) if fallback and fallback != OLLAMA_URL else timeout
+    try:
+        return await asyncio.to_thread(_do, OLLAMA_URL, primary_timeout)
+    except (TimeoutError, OSError) as primary_error:
+        if not fallback or fallback == OLLAMA_URL:
+            raise
+        try:
+            return await asyncio.to_thread(_do, fallback, timeout)
+        except (TimeoutError, OSError) as fallback_error:
+            raise RuntimeError(f"Ollama primary and CPU fallback unavailable: {primary_error}; {fallback_error}") from fallback_error
 
 
 def _coerce_args(raw: Any) -> dict[str, Any]:

@@ -229,6 +229,8 @@ class AgentWorkItemHandoffRequest(BaseModel):
     summary_md: str
     blockers_md: str | None = None
     files_touched: list[str] = Field(default_factory=list)
+    code_tests_passed: bool = False
+    code_commit_sha: str | None = None
     suggested_next_role: str | None = None
     verdict: ReviewVerdict = Field(default_factory=ReviewVerdict)
     # Optional self-reported token usage recorded to the ledger on handoff (ADR-0025)
