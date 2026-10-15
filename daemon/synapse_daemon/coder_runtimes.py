@@ -470,6 +470,10 @@ def write_module(
 
     result.ok = True
     result.source = source
+    # Shared opt-in checkpoint for Claude, Codex, Copilot and Gemini.
+    # Verification and scoped paths are mandatory; the hook never pushes.
+    from .worker_git_checkpoint import checkpoint_after_verified_run
+    checkpoint_after_verified_run(Path(workspace), completed=True)
     return result
 
 
@@ -497,6 +501,9 @@ def record_call(result: RuntimeResult, *, path: Path | None = None) -> None:
                 cost_usd=float(usage.get("cost_usd", 0.0) or 0.0),
                 credits=float(usage.get("credits", 0.0) or 0.0),
                 requests=int(usage.get("requests", 0) or 0),
+                usage_source=("provider_reported" if usage else "untracked"),
+                quota_remaining=runtime_ledger._opt_float(usage.get("quota_remaining")),
+                quota_reset_at=runtime_ledger._opt_str(usage.get("quota_reset_at")),
                 exhausted=result.exhausted,
             ),
             path=path or default_ledger_path(),
@@ -519,7 +526,31 @@ class RungStatus(BaseModel):
     tokens_today: int = 0
     requests_today: int = 0
     last_exhausted_at: str = ""
+    usage_source: str = "none"
+    """"ledger" = only Synapse-routed calls are counted; "none" = no recorded calls."""
+    usage_coverage: str = "none"
+    """"partial" always when anything was recorded: calls made outside Synapse (e.g. a CLI
+    run by hand) never reach the ledger, so today's totals are a lower bound, not a total."""
+    tracked_calls_today: int = 0
+    untracked_calls_today: int = 0
+    last_invocation_at: str | None = None
+    last_invocation_ok: bool | None = None
+    last_invocation_model: str | None = None
+    quota_remaining: float | None = None
+    quota_reset_at: str | None = None
+    quota_as_of: str | None = None
     note: str = ""
+
+
+def _claude_oauth_has_refresh() -> bool:
+    """True when a refresh token is cached (presence only; the value is never read out)."""
+    credentials = Path.home() / ".claude" / ".credentials.json"
+    try:
+        payload = json.loads(credentials.read_text(encoding="utf-8"))
+        token = payload.get("claudeAiOauth", {}).get("refreshToken")
+        return isinstance(token, str) and bool(token)
+    except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError):
+        return False
 
 
 def _claude_oauth_expiry() -> datetime | None:
@@ -559,11 +590,16 @@ def preflight(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER,
         totals = runtime_ledger.rollup(ledger_path, since=today)
     except Exception:  # noqa: BLE001
         totals = {}
+    try:
+        history = runtime_ledger.rollup(ledger_path)
+    except Exception:  # noqa: BLE001
+        history = {}
 
     out: list[RungStatus] = []
     for runtime in ladder:
         cooldown = cooling_down(runtime)
         spent = totals.get(runtime.value)
+        ever = history.get(runtime.value)
         installed = runtime is CoderRuntime.LOCAL or bool(resolve_command(runtime.value))
         status = RungStatus(
             runtime=runtime.value,
@@ -575,6 +611,17 @@ def preflight(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER,
             tokens_today=spent.total_tokens if spent else 0,
             requests_today=spent.requests if spent else 0,
             last_exhausted_at=spent.last_exhausted_at if spent else "",
+            usage_source="ledger" if ever else "none",
+            usage_coverage="partial" if ever else "none",
+            tracked_calls_today=spent.provider_reported_calls if spent else 0,
+            untracked_calls_today=spent.untracked_calls if spent else 0,
+            last_invocation_at=(ever.last_at or None) if ever else None,
+            last_invocation_ok=ever.last_ok if ever else None,
+            last_invocation_model=(ever.last_model or None) if ever else None,
+            quota_remaining=ever.quota_remaining if ever else None,
+            quota_reset_at=ever.quota_reset_at if ever else None,
+            quota_as_of=(ever.quota_at or None) if ever and (
+                ever.quota_remaining is not None or ever.quota_reset_at) else None,
         )
         if not installed:
             status.note = "not installed on this host"
@@ -583,11 +630,23 @@ def preflight(ladder: tuple[CoderRuntime, ...] = DEFAULT_LADDER,
         elif runtime is CoderRuntime.CLAUDE:
             expiry = _claude_oauth_expiry()
             if expiry is not None and expiry <= datetime.now(timezone.utc):
-                status.usable_now = False
-                status.note = (
-                    f"cached Claude OAuth access expired {expiry.isoformat()}; "
-                    "refresh or re-authentication is required before routing work here"
+                expiry_iso = expiry.strftime("%Y-%m-%dT%H:%M:%SZ")
+                worked_since = bool(
+                    ever and ever.last_ok and ever.last_at and ever.last_at >= expiry_iso
                 )
+                if worked_since:
+                    status.note = "cached OAuth timestamp is stale, but the CLI succeeded since; it refreshes itself"
+                elif _claude_oauth_has_refresh():
+                    status.note = (
+                        f"cached access token expired {expiry.isoformat()}; "
+                        "the CLI holds a refresh credential and renews on first use"
+                    )
+                else:
+                    status.usable_now = False
+                    status.note = (
+                        f"cached Claude OAuth access expired {expiry.isoformat()} and no refresh "
+                        "credential is cached; re-authentication is required before routing work here"
+                    )
         elif runtime is CoderRuntime.GEMINI:
             # Stated because the number is small and the failure is silent: the free tier is
             # per-model and Flash is the generous one.

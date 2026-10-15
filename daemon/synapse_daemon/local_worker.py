@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 
 from .local_agent import PermissionMode, run_agent
+from .worker_git_checkpoint import checkpoint_after_verified_run
 
 DEFAULT_MODEL = "qwen2.5:1.5b"
 
@@ -53,6 +54,9 @@ def main() -> int:
             timeout=min(max(args.timeout, 30), 3600),
         ))
         summary = run.answer or run.stop_reason or "Local worker returned no summary."
+        checkpoint_result = checkpoint_after_verified_run(workspace, completed=run.completed)
+        if checkpoint_result.get("error"):
+            summary += "\n\nGit checkpoint blocked: " + checkpoint_result["error"]
         payload = {
             "status": "handoff" if run.completed else "blocked",
             "summary_md": summary[:15000],
