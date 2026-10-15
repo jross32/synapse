@@ -57,16 +57,17 @@ def main() -> int:
         checkpoint_result = checkpoint_after_verified_run(workspace, completed=run.completed)
         if checkpoint_result.get("error"):
             summary += "\n\nGit checkpoint blocked: " + checkpoint_result["error"]
+        git_blocker = checkpoint_result.get("error") or (checkpoint_result.get("publish") or {}).get("error")
         payload = {
-            "status": "handoff" if run.completed else "blocked",
+            "status": "handoff" if run.completed and not git_blocker else "blocked",
             "summary_md": summary[:15000],
-            "blockers_md": None if run.completed else run.stop_reason[:4000],
+            "blockers_md": git_blocker or (None if run.completed else run.stop_reason[:4000]),
             "source": "auto",
         }
         handoff(payload)
         print(json.dumps({"completed": run.completed, "status": payload["status"],
                           "steps": len(run.steps), "reason": run.stop_reason}))
-        return 0 if run.completed else 2
+        return 0 if payload["status"] == "handoff" else 2
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
         print(json.dumps({"completed": False, "error": reason}))
