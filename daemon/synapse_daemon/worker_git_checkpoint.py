@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import shlex
 from pathlib import Path
 
 
@@ -13,8 +14,17 @@ def checkpoint_after_verified_run(workspace: Path, *, completed: bool, environ=N
         return {"skipped": "worker incomplete"}
     if env.get("SYNAPSE_GIT_CHECKPOINT") != "1":
         return {"skipped": "not enabled"}
-    if env.get("SYNAPSE_TESTS_VERIFIED") != "1":
-        return {"error": "Tests not verified; checkpoint refused"}
+    test_command = env.get("SYNAPSE_GIT_TEST_COMMAND", "").strip()
+    if not test_command:
+        return {"error": "A real test command is required before checkpointing"}
+    try:
+        tests = subprocess.run(shlex.split(test_command, posix=os.name != "nt"),
+                               cwd=str(workspace), capture_output=True, text=True,
+                               timeout=180, check=False)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+        return {"error": "Test execution failed: " + type(exc).__name__}
+    if tests.returncode:
+        return {"error": "Verification tests failed; checkpoint refused"}
     paths = [p.strip() for p in env.get("SYNAPSE_GIT_OWNED_PATHS", "").split(",") if p.strip()]
     message = env.get("SYNAPSE_GIT_CHECKPOINT_MESSAGE", "")
     if not paths or not message:
@@ -28,6 +38,15 @@ def checkpoint_after_verified_run(workspace: Path, *, completed: bool, environ=N
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=45, check=False)
         if result.returncode:
             return {"error": (result.stderr or "Checkpoint rejected")[:300]}
-        return json.loads(result.stdout)
+        receipt = json.loads(result.stdout)
+        if receipt.get("committed") and env.get("SYNAPSE_GIT_AUTO_PUSH") == "1":
+            from .worker_git_publish import publish_verified_branch
+            try:
+                receipt["publish"] = publish_verified_branch(
+                    Path(workspace), owner=env.get("SYNAPSE_GITHUB_OWNER", ""),
+                    branch=env.get("SYNAPSE_GIT_PUSH_BRANCH", ""))
+            except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
+                receipt["publish"] = {"pushed": False, "error": str(exc)[:200]}
+        return receipt
     except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
         return {"error": type(exc).__name__}
