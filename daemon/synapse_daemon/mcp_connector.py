@@ -3373,23 +3373,13 @@ def build_mcp_router(
             shell_argv = (["powershell", "-NoProfile", "-NonInteractive", "-Command", command]
                           if _sys.platform == "win32" else ["bash", "-lc", command])
             job_id = uuid.uuid4().hex[:12]
-            _command_jobs[job_id] = {
-                "status": "running",
-                "command": command,
-                "cwd": cwd,
-                "started_at": to_iso(utc_now()),
-            }
-            _prune_old_command_jobs()
-            threading.Thread(
-                target=_run_command_job_thread,
-                args=(job_id, shell_argv, cwd, timeout, storage.data_dir),
-                daemon=True,
-            ).start()
+            from .durable_command_worker import launch as launch_durable_command
+            launched = launch_durable_command(storage.data_dir, job_id, shell_argv, cwd, timeout)
             return {
                 "job_id": job_id,
-                "status": "running",
-                "note": "Poll synapse_get_command_result with this job_id. This call itself always "
-                        "returns immediately regardless of how long the command takes.",
+                "status": launched["status"],
+                "note": "Detached supervisor owns this job. Poll synapse_get_command_result; "
+                        "completion receipts persist across daemon restarts.",
             }
 
         if name == "synapse_get_command_result":
