@@ -42,3 +42,12 @@ def test_unapproved_remote_fails_closed():
         return "https://github.com/other/repo.git" if args[0] == "remote" else fake_git(repo, *args)
     with patch("synapse_daemon.github_publish_gate._git", side_effect=bad_remote):
         assert check_github_publish(Path(".")).reason == "unexpected_remote"
+
+
+def test_code_work_requires_remote_evidence():
+    from synapse_daemon.github_publish_gate import assess_code_work_completion
+    assert assess_code_work_completion(Path("."), code_changed=True, tests_passed=True).status == "verified_not_published"
+    assert assess_code_work_completion(Path("."), code_changed=True, tests_passed=False).status == "verification_failed"
+    assert assess_code_work_completion(Path("."), code_changed=False, tests_passed=True).status == "complete"
+    with patch("synapse_daemon.github_publish_gate._git", side_effect=fake_git):
+        assert assess_code_work_completion(Path("."), code_changed=True, tests_passed=True, expected_sha=SHA).status == "complete"

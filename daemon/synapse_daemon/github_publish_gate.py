@@ -52,3 +52,25 @@ def check_github_publish(repo: Path, *, expected_sha: str | None = None) -> Publ
         return PublishEvidence(True, "verified", sha, remote_sha, branch)
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return PublishEvidence(False, "git_unavailable")
+
+@dataclass(frozen=True)
+class CodeWorkCompletion:
+    status: str
+    publish: PublishEvidence | None
+
+
+def assess_code_work_completion(
+    repo: Path, *, code_changed: bool, tests_passed: bool,
+    expected_sha: str | None = None,
+) -> CodeWorkCompletion:
+    """Gate code-work completion; non-code turns do not require a GitHub commit."""
+    if not tests_passed:
+        return CodeWorkCompletion("verification_failed", None)
+    if not code_changed:
+        return CodeWorkCompletion("complete", None)
+    if not expected_sha:
+        return CodeWorkCompletion("verified_not_published", None)
+    evidence = check_github_publish(repo, expected_sha=expected_sha)
+    return CodeWorkCompletion(
+        "complete" if evidence.ready else "verified_not_published", evidence,
+    )
