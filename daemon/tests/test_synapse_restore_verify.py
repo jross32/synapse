@@ -34,3 +34,18 @@ def test_detects_corrupt_bundle(tmp_path):
             out.writestr(name,b"changed" if name=="payload/file.txt" else z.read(name))
     with pytest.raises(ValueError):validate_and_restore(corrupt,tmp_path/"restored")
 
+
+def test_member_size_limit(tmp_path,monkeypatch):
+    import synapse_restore_verify as m
+    archive=make_test_bundle({"big":b"x"*100},tmp_path/"big.zip")
+    monkeypatch.setattr(m,"MAX_FILE_BYTES",50)
+    with pytest.raises(ValueError,match="size limit"):
+        validate_and_restore(archive,tmp_path/"out")
+
+def test_unexpected_entry(tmp_path):
+    import zipfile
+    archive=make_test_bundle({"ok":b"data"},tmp_path/"extra.zip")
+    with zipfile.ZipFile(archive,"a") as z:z.writestr("payload/extra",b"hello")
+    with pytest.raises(ValueError,match="Unexpected"):
+        validate_and_restore(archive,tmp_path/"out")
+
