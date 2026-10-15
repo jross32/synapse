@@ -23,7 +23,7 @@ form.addEventListener("submit",async event=>{
    return;
   }
   // Do not store or log bearer tokens in browser storage, URLs, or analytics.
-  form.reset();form.hidden=true;
+  form.reset();form.querySelectorAll("label,button").forEach(el=>{el.hidden=true;el.style.display="none"});
   status.textContent="Account created. Download Synapse, open it, and sign in with your new account.";
   const link=document.createElement("a");link.href="/start";link.textContent="Continue to installation";link.className="btn btn-primary";status.append(" ",link);
  }catch(e){status.textContent="Cannot reach the account service. Please try again later or create your account inside the desktop app."}

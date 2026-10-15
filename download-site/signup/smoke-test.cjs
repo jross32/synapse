@@ -1,4 +1,4 @@
-﻿const {chromium}=require('playwright');
+const {chromium}=require('playwright');
 (async()=>{
  const browser=await chromium.launch({headless:true});
  try{
@@ -20,6 +20,8 @@
    await page.locator('[name=confirm]').fill('test-password-123');
    await page.locator('#submit-signup').click();
    await page.getByText('Account created.',{exact:false}).waitFor({timeout:5000});
+   if(await page.locator('label').first().isVisible())throw Error('Fields remain visible');
+   if(await page.locator('#submit-signup').isVisible())throw Error('Submit control remains visible');
    const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
    const stored=await page.evaluate(()=>JSON.stringify(localStorage)+JSON.stringify(sessionStorage));
    if(!posted||posted.username!=='testuser'||overflow||stored.includes('TEST-DO-NOT-STORE')||errors.length)throw Error(JSON.stringify({viewport,posted,overflow,errors}));
