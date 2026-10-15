@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import hashlib
 
 import json
 import os
@@ -81,6 +82,7 @@ class PublicConfigPayload(BaseModel):
 class SyncDocumentPayload(BaseModel):
     document: dict[str, Any]
     updated_at: str
+    revision: str | None = None
 
 
 class SignUpRequest(BaseModel):
@@ -115,6 +117,7 @@ class OAuthExchangeRequest(BaseModel):
 
 class PutSyncDocumentRequest(BaseModel):
     document: dict[str, Any]
+    expected_revision: str | None = None
 
 
 class RelayDeviceSelect(BaseModel):
@@ -429,6 +432,12 @@ class AccountsService:
         if not revoked_any:
             raise HTTPException(status_code=404, detail="No active session to sign out.")
 
+    @staticmethod
+    def _sync_revision(document: SyncDocument) -> str:
+        # Content-based optimistic lock: stable across SQLite datetime rounding
+        # and independent of database migrations.
+        return hashlib.sha256((document.document_json or "{}").encode("utf-8")).hexdigest()
+
     def get_sync_document(self, db: Session, account: Account) -> SyncDocumentPayload:
         document = db.scalar(select(SyncDocument).where(SyncDocument.account_id == account.id))
         if document is None:
@@ -438,11 +447,16 @@ class AccountsService:
         return SyncDocumentPayload(
             document=json.loads(document.document_json or "{}"),
             updated_at=_iso(document.updated_at) or _iso(document.created_at) or _iso(_now()) or "",
+            revision=self._sync_revision(document),
         )
 
-    def put_sync_document(self, db: Session, account: Account, document: dict[str, Any]) -> SyncDocumentPayload:
+    def put_sync_document(self, db: Session, account: Account, document: dict[str, Any],
+                          expected_revision: str | None = None) -> SyncDocumentPayload:
         row = db.scalar(select(SyncDocument).where(SyncDocument.account_id == account.id))
         now = _now()
+        if expected_revision is not None:
+            if row is None or self._sync_revision(row) != expected_revision:
+                raise HTTPException(status_code=409, detail="Synapse profile changed; refresh and retry.")
         document = merge_documents({}, document)
         if row is None:
             row = SyncDocument(
@@ -457,7 +471,9 @@ class AccountsService:
             row.document_json = json.dumps(document)
             row.updated_at = now
         self._log_event(db, account_id=account.id, event_kind="sync.updated", provider=None)
-        return SyncDocumentPayload(document=document, updated_at=_iso(now) or "")
+        db.flush()
+        return SyncDocumentPayload(document=document, updated_at=_iso(now) or "",
+                                   revision=self._sync_revision(row))
 
     def start_oauth(
         self,
@@ -902,7 +918,7 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
         account: Account = Depends(current_account),
         db: Session = Depends(get_db),
     ) -> SyncDocumentPayload:
-        return service.put_sync_document(db, account, payload.document)
+        return service.put_sync_document(db, account, payload.document, payload.expected_revision)
 
     @app.get("/v1/devices/access")
     def device_access_list(account: Account = Depends(current_account), db: Session = Depends(get_db)) -> dict:
