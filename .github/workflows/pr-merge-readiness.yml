@@ -1,0 +1,44 @@
+name: PR Merge Readiness
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  merge-readiness:
+    name: Merge readiness gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject drafts, bulk snapshots, and removed release workflows
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) core.setFailed('Expected pull_request event');
+            else {
+              const errors = [];
+              if (pr.draft) errors.push('Draft PR: mark ready only after review and testing');
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100
+              });
+              if (files.length > 200) {
+                errors.push(`Oversized PR (${files.length} files); split/reconcile rather than merging a bulk snapshot`);
+              }
+              const removedWorkflows = files.filter(f =>
+                f.status === 'removed' && f.filename.startsWith('.github/workflows/')
+              );
+              if (removedWorkflows.length) {
+                errors.push('Removed CI/release workflows require separate explicit review: ' +
+                  removedWorkflows.map(f => f.filename).join(', '));
+              }
+              if (errors.length) core.setFailed(errors.join('\n'));
+              else core.info(`PR #${pr.number}: ${files.length} files; basic structural merge gate passed. Review and other required tests still necessary.`);
+            }
