@@ -16,7 +16,7 @@ const path = require('node:path');
       const windows = app.windows();
       const titles = await Promise.all(windows.map(w => w.title().catch(() => '')));
       console.log('Electron windows:', JSON.stringify(titles));
-      const index = titles.findIndex(t => t && !/Starting Synapse/i.test(t));
+      const index = titles.findIndex(t => t && !/Synapse startup|Starting Synapse/i.test(t));
       if (index >= 0) { page = windows[index]; break; }
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
@@ -30,5 +30,5 @@ const path = require('node:path');
     console.log(JSON.stringify({ title, marker, welcomeVisible: /get started|first.launch|your journey/i.test(body), body: body.slice(0, 350), screenshot }));
     if (marker.disposition !== 'new') throw new Error('Fresh install not classified new');
     if (!/get started|first.launch|your journey/i.test(body)) throw new Error('Welcome not rendered');
-  } finally { await app.close(); }
+  } finally { app.process().kill(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });
