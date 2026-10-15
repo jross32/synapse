@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "campaign": "Client Hunter Local Pilot",
+  "updated_utc": "2026-10-14",
+  "sender": "example@example.invalid",
+  "sender_address_verified": false,
+  "outbound_approval": false,
+  "payment_provider_verified": false,
+  "leads": [
+    {
+      "domain": "example1.invalid",
+      "id": "gq-cleaning",
+      "public_source": "https://example1.invalid",
+      "verified_defect": false,
+      "public_contact": "contact1@example.invalid",
+      "company": "Example Prospect 1",
+      "status": "DRAFTED",
+      "hypothesis": "Example demonstration only"
+    },
+    {
+      "domain": "example2.invalid",
+      "id": "diamante",
+      "public_source": "https://example2.invalid",
+      "verified_defect": false,
+      "public_contact": "contact2@example.invalid",
+      "company": "Example Prospect 2",
+      "status": "DRAFTED",
+      "hypothesis": "Example demonstration only"
+    },
+    {
+      "domain": "example3.invalid",
+      "id": "pelican",
+      "public_source": "https://example3.invalid",
+      "content_issue_review_needed": true,
+      "verified_defect": false,
+      "public_contact": "contact3@example.invalid",
+      "company": "Example Prospect 3",
+      "status": "DRAFTED",
+      "hypothesis": "Example demonstration only"
+    }
+  ]
+}

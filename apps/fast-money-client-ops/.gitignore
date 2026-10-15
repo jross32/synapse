@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+workspace-state.json
+.env
+.env.*
+files/client-hunter-latest-run.json
