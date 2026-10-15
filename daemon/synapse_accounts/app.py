@@ -16,6 +16,7 @@ from typing import Any, Literal
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -814,6 +815,15 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
     active_settings = settings or load_settings()
     service = AccountsService(active_settings)
     app = FastAPI(title="Synapse Accounts", version="0.1.36-dev", docs_url=None, redoc_url=None)
+    # Only the official download site may use cross-origin account registration.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["https://download.whatapc.com"],
+        allow_credentials=False,
+        allow_methods=["POST"],
+        allow_headers=["Content-Type"],
+    )
+
     auth_limiter = AuthRateLimiter()
 
     @app.middleware("http")
