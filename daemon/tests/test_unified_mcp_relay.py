@@ -59,7 +59,8 @@ def _select(client, owner, device):
     assert result.status_code == 200, result.text
 
 def _rpc(client, path, device, token_header, mode="full"):
-    payload = {"jsonrpc": "2.0", "id": 7, "method": "tools/list"}
+    payload = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+               "params": {"name": "synapse_get_context", "arguments": {}}}
     with ThreadPoolExecutor(max_workers=2) as executor:
         pending = executor.submit(client.post, path + f"?device={device}" + ("&mode=read" if mode == "read" else ""), json=payload)
         claimed = client.get(f"/v1/relay/devices/{device}/jobs/next", headers=token_header)

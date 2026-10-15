@@ -17,7 +17,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -1011,6 +1011,24 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
                     value = execute_account_tool(db, account.id, name, params.get("arguments") or {},
                                                  read_only=mode == "read")
                     return JSONResponse(rpc_tool_success(payload.get("id"), value))
+            # MCP initialization is gateway-owned: connecting ChatGPT must not
+            # depend on which of the account's computers happens to be online.
+            if isinstance(payload, dict) and payload.get("method") == "initialize":
+                return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                    "result": {"protocolVersion": "2025-03-26",
+                               "capabilities": {"tools": {"listChanged": False}},
+                               "serverInfo": {"name": "Synapse Account Gateway", "version": "1.0"}}})
+            # Tool discovery stays stable as devices connect/disconnect. Individual
+            # device tools can be invoked through synapse_account_call_device.
+            if isinstance(payload, dict) and payload.get("method") == "tools/list":
+                visible = [tool for tool in ACCOUNT_MCP_TOOLS
+                           if mode != "read" or tool.get("annotations", {}).get("readOnlyHint")]
+                return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                                     "result": {"tools": visible}})
+            # MCP notifications do not expect a response and must not enqueue
+            # a job on an offline device.
+            if isinstance(payload, dict) and payload.get("method") == "notifications/initialized":
+                return Response(status_code=202)
             # An explicit device call does not mutate the default selection,
             # and cannot reach a device outside the authenticated account.
             explicit_device_call = False

@@ -59,28 +59,20 @@ def test_bad_account_tool_arguments_fail_closed(tmp_path, monkeypatch):
         assert _call(client, path, "synapse_account_select_device", {"device_id": "x", "unexpected": True}).status_code == 422
 
 
-def test_account_tool_listing_augmented_without_removing_device_tools(tmp_path, monkeypatch):
+def test_gateway_tool_listing_is_stable_with_enrolled_device(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
         owner = _owner(client, "owner")
         _hosts(client, owner, "desktop")
         path = _connector(client, owner)
-        token = _enroll(client, owner, "desktop")
+        _enroll(client, owner, "desktop")
         from test_unified_mcp_relay import _select
         _select(client, owner, "desktop")
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            future = pool.submit(client.post, path, json={
-                "jsonrpc": "2.0", "id": 15, "method": "tools/list"})
-            job = client.get("/v1/relay/devices/desktop/jobs/next", headers=token).json()
-            assert job["job_id"]
-            reply = {"jsonrpc": "2.0", "id": 15, "result": {"tools": [
-                {"name": "synapse_get_context", "inputSchema": {"type": "object"}}]}}
-            finish = client.post("/v1/relay/devices/desktop/jobs/result", headers=token, json={
-                "job_id": job["job_id"], "response": reply})
-            assert finish.status_code == 200
-            result = future.result(timeout=10)
+        result = client.post(path, json={"jsonrpc": "2.0", "id": 15, "method": "tools/list"})
         assert result.status_code == 200
         names = {x["name"] for x in result.json()["result"]["tools"]}
-        assert {"synapse_get_context", "synapse_account_list_devices", "synapse_account_select_device"} <= names
+        assert {"synapse_account_list_devices", "synapse_account_select_device",
+                "synapse_account_call_device"} <= names
+        assert client.get("/v1/relay/connector", headers=owner).json()["selected_device_id"] == "desktop"
 
 
 def test_explicit_remote_call_targets_device_without_changing_default(tmp_path, monkeypatch):
@@ -190,3 +182,34 @@ def test_one_connector_independently_dispatches_to_two_devices(tmp_path, monkeyp
                 assert result.status_code == 200, result.text
                 assert result.json()["result"]["content"][0]["text"] == device
         assert client.get("/v1/relay/connector", headers=owner).json()["selected_device_id"] == "laptop"
+
+
+def test_gateway_handshake_and_discovery_independent_of_stale_selected_host(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        owner = _owner(client, "owner")
+        _hosts(client, owner, "offline-laptop", "online-desktop")
+        path = _connector(client, owner)
+        _enroll(client, owner, "offline-laptop")
+        from test_unified_mcp_relay import _select
+        _select(client, owner, "offline-laptop")
+        initial = client.post(path, json={"jsonrpc": "2.0", "id": 1,
+            "method": "initialize", "params": {"protocolVersion": "2025-03-26",
+            "capabilities": {}, "clientInfo": {"name": "ChatGPT", "version": "1"}}})
+        assert initial.status_code == 200
+        assert initial.json()["result"]["serverInfo"]["name"] == "Synapse Account Gateway"
+        assert initial.json()["result"]["capabilities"]["tools"] == {"listChanged": False}
+        available = client.post(path, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        assert available.status_code == 200
+        names = {tool["name"] for tool in available.json()["result"]["tools"]}
+        assert {"synapse_account_list_devices", "synapse_account_call_device", "synapse_account_select_device"} <= names
+        notified = client.post(path, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+        assert notified.status_code == 202
+        assert client.get("/v1/relay/connector", headers=owner).json()["selected_device_id"] == "offline-laptop"
+
+
+def test_gateway_handshake_rejects_unknown_account_credential(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        _owner(client, "owner")
+        response = client.post("/mcp/not-a-valid-secret", json={
+            "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+        assert response.status_code == 401
