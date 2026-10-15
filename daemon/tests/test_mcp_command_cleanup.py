@@ -52,3 +52,11 @@ def test_timeout_cannot_be_stranded_by_reparented_inherited_pipe(tmp_path) -> No
                 child.wait(timeout=3)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
                 pass
+
+
+def test_run_captured_command_without_timeout_waits_for_completion(tmp_path) -> None:
+    """Explicit unlimited mode should not terminate a finite long-running command."""
+    argv = [sys.executable, "-c", "import time; time.sleep(0.2); print('unlimited-ok')"]
+    result = _run_captured_command(argv, cwd=str(tmp_path), timeout=None)
+    assert result["ok"] is True
+    assert "unlimited-ok" in result["stdout"]
