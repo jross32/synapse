@@ -25,3 +25,8 @@ If push fails or review identifies unsafe files, report the task as **verified l
 ## Visibility
 
 Run `scripts/audit-github-source.ps1` to identify unsynced local source. `-Strict` exits nonzero when modified tracked files, untracked source files, or unpushed commits exist. The audit does not stage, commit, push, or delete anything.
+
+## Remote verification command
+
+From a clean, verified feature worktree, run `scripts/verify-github-push.ps1 -Push`. It pushes only the current branch to the approved Synapse GitHub origin and checks the remote SHA. Without `-Push`, it checks whether GitHub already contains the exact local commit. This is an opt-in command, not a background worker hook; worker-wide automatic invocation remains to be integrated.
+
