@@ -109,23 +109,32 @@ def choose_device(db: Session, account_id: str, preferred: str | None) -> str:
     known = _hosts(db, account_id)
     if not known:
         raise HTTPException(status_code=503, detail="No devices are linked to this account.")
-    if preferred:
-        if preferred not in known:
-            raise HTTPException(status_code=404, detail="Unknown device for this Synapse account.")
+    # A selected device is a preference, not a permanent single-device lock.
+    # Only live, enrolled members may receive ordinary MCP requests. If the
+    # selected device is offline, fall back to another recently seen device.
+    # Explicit device calls remain strict and never silently redirect.
+    cutoff = datetime.now(UTC) - timedelta(seconds=120)
+    if preferred and preferred in known:
         enrolled = db.scalar(select(RelayDevice).where(
             RelayDevice.account_id == account_id,
             RelayDevice.device_id == preferred,
             RelayDevice.revoked_at.is_(None)))
-        if enrolled is None:
-            raise HTTPException(status_code=503, detail="Selected Synapse computer is not connected yet.")
-        return preferred
-    # Prefer the most recent device heartbeat, otherwise stable alphabetical order.
+        if enrolled is not None and enrolled.last_seen_at is not None:
+            seen = enrolled.last_seen_at
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=UTC)
+            if seen >= cutoff:
+                return preferred
+    # Prefer the most recent live device heartbeat, otherwise fail closed.
     devices = list(db.scalars(select(RelayDevice).where(
         RelayDevice.account_id == account_id, RelayDevice.revoked_at.is_(None))))
-    active = [device for device in devices if device.device_id in known]
+    active = [device for device in devices if device.device_id in known and device.last_seen_at is not None
+              and (device.last_seen_at.replace(tzinfo=UTC) if device.last_seen_at.tzinfo is None
+                   else device.last_seen_at) >= cutoff]
     if not active:
-        raise HTTPException(status_code=503, detail="No MCP devices enrolled yet.")
-    return sorted(active, key=lambda device: (device.last_seen_at or datetime.min, device.device_id), reverse=True)[0].device_id
+        raise HTTPException(status_code=503, detail="No online enrolled Synapse devices are available.")
+    return max(active, key=lambda device: (device.last_seen_at.replace(tzinfo=UTC) if device.last_seen_at.tzinfo is None
+                                         else device.last_seen_at, device.device_id)).device_id
 
 
 def create_job(db: Session, account_id: str, device_id: str, payload: Any, *, mode: str) -> str:

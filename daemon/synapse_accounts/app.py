@@ -16,9 +16,13 @@ from typing import Any, Literal
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+<<<<<<< HEAD
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
+=======
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, JSONResponse
+>>>>>>> 396a710 (fix(mcp): cloud handshake and failover to online account device)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -1015,6 +1019,15 @@ def create_app(settings: AccountsSettings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="Invalid JSON-RPC request.") from exc
         with session_scope(service.session_factory) as db:
             account = require_connector_account(db, connector_token)
+            # MCP handshake is cloud-owned: no desktop has to be online merely
+            # for ChatGPT to initialize its stable account connector.
+            if isinstance(payload, dict) and payload.get("method") == "initialize":
+                return JSONResponse({"jsonrpc": "2.0", "id": payload.get("id"),
+                                     "result": {"protocolVersion": "2025-03-26",
+                                                "capabilities": {"tools": {"listChanged": False}},
+                                                "serverInfo": {"name": "synapse-account-gateway", "version": "1.0"}}})
+            if isinstance(payload, dict) and payload.get("method") == "notifications/initialized":
+                return Response(status_code=202)
             connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
             # Cloud account tools are handled before choosing a host, so device
             # discovery still works if all computers are offline. Never expose
