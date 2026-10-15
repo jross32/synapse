@@ -39,8 +39,20 @@ def _connector_token(account_id: str, nonce: str) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
+def read_connector(db: Session, account: Account, public_base_url: str) -> dict[str, str]:
+    """Retrieve an existing account connector without creating or modifying it."""
+    connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
+    if connector is None:
+        raise HTTPException(status_code=404, detail="Account MCP connector has not been created.")
+    token = _connector_token(account.id, connector.nonce)
+    return {"url": f"{public_base_url.rstrip('/')}/mcp/{token}", "rotated": False,
+            "selected_device_id": connector.selected_device_id,
+            "note": "This shared MCP URL stays the same across your computers. Rotate to revoke old connector access."}
+
 def issue_connector(db: Session, account: Account, public_base_url: str, *, rotate: bool = False) -> dict[str, str]:
     connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
+    if connector is not None and not rotate:
+        return read_connector(db, account, public_base_url)
     if connector is None:
         connector = RelayConnector(account_id=account.id, nonce=secrets.token_hex(24), token_hash="")
         db.add(connector)
