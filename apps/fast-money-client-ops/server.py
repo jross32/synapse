@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from stripe_payments import checkout_session, verified_webhook, StripeConfigurationError
+from offer_catalog import OFFERS
 
 from local_auth import (
     CSRF_HEADER_NAME,
@@ -755,6 +756,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "app": CONFIG.get("app_name"), "port": PORT})
             return
 
+        if path == "/api/sales/offers":
+            session = self._require_session("operator")
+            if session is None:
+                return
+            self._json({"ok": True, "offers": [offer.public_summary() for offer in OFFERS.values()]},
+                       cache_control="no-store")
+            return
+
         if path == "/api/client-hunter/latest-run":
             session = self._require_session("operator")
             if session is None:
@@ -1168,10 +1177,3 @@ if __name__ == "__main__":
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"Fast Money reference app running on http://127.0.0.1:{PORT}")
     server.serve_forever()
-
-
-
-
-
-
-

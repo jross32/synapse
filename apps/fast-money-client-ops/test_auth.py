@@ -99,6 +99,20 @@ class HandlerAuthorizationTests(unittest.TestCase):
         session_cookie = headers["set-cookie"].split(";", 1)[0]
         return session_cookie, headers["set-cookie"], payload
 
+    def test_sales_offers_are_operator_only_and_draft(self):
+        status, _, _ = self.request("GET", "/api/sales/offers")
+        self.assertEqual(status, 401)
+        customer_cookie, _, _ = self.login("customer")
+        status, _, _ = self.request("GET", "/api/sales/offers", cookie=customer_cookie)
+        self.assertEqual(status, 403)
+        operator_cookie, _, _ = self.login("operator")
+        status, headers, payload = self.request("GET", "/api/sales/offers", cookie=operator_cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["cache-control"], "no-store")
+        self.assertEqual(payload["offers"][0]["setup_usd"], "1500.00")
+        self.assertEqual(payload["offers"][0]["deposit_usd"], "750.00")
+        self.assertTrue(payload["offers"][0]["draft_only"])
+
     def test_signed_stripe_webhook_updates_invoice_over_http(self):
         import hashlib, hmac, os, time
         from unittest.mock import patch
@@ -377,5 +391,3 @@ class HandlerAuthorizationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
