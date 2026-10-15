@@ -16,6 +16,7 @@ import urllib.request
 
 from .local_agent import PermissionMode, run_agent
 from .worker_git_checkpoint import checkpoint_after_verified_run
+from .worker_git_workspace import prepare_worker_worktree
 
 DEFAULT_MODEL = "qwen2.5:1.5b"
 
@@ -48,6 +49,12 @@ def main() -> int:
     mode = {"observe": PermissionMode.PLAN, "workspace": PermissionMode.ACCEPT_EDITS,
             "full": PermissionMode.AUTO}[args.authority]
     try:
+        if os.environ.get("SYNAPSE_GIT_WORKTREE_PATH"):
+            if os.environ.get("SYNAPSE_GIT_CHECKPOINT") != "1":
+                raise ValueError("Isolated worktree requires Git checkpoints to be enabled")
+            branch = os.environ.get("SYNAPSE_GIT_PUSH_BRANCH", "")
+            destination = Path(os.environ["SYNAPSE_GIT_WORKTREE_PATH"])
+            workspace = Path(prepare_worker_worktree(workspace, destination, branch)["workspace"])
         run = asyncio.run(run_agent(
             model=args.model, task=prompt, workspace=workspace,
             mode=mode, allow_web=False, max_steps=16,
