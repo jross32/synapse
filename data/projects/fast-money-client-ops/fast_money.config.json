@@ -1,0 +1,25 @@
+{
+  "app_name": "Fast Money Client Ops",
+  "pricing_model": "hybrid",
+  "include_customer_portal": true,
+  "include_employee_console": true,
+  "include_catalog_editor": false,
+  "expected_port": 8740,
+  "billing": {
+    "provider": "stripe-placeholder",
+    "secret_key_env": "STRIPE_SECRET_KEY",
+    "publishable_key_env": "STRIPE_PUBLISHABLE_KEY",
+    "webhook_secret_env": "STRIPE_WEBHOOK_SECRET",
+    "notes": "Wire live billing after local validation; keep secrets out of source control."
+  },
+  "auth": {
+    "provider": "local-placeholder",
+    "session_cookie_name": "fast_money_session",
+    "notes": "Replace this placeholder with the hosted auth provider you choose."
+  },
+  "ai_features": [
+    "Lead enrichment notes",
+    "Quote draft acceleration",
+    "Renewal risk nudges"
+  ]
+}

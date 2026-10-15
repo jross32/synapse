@@ -1,0 +1,59 @@
+{
+  "leads": [
+    {
+      "id": "lead-1001",
+      "company": "Northline HVAC",
+      "contact": "Erin Stone",
+      "stage": "quote-draft",
+      "value_usd": 4800
+    },
+    {
+      "id": "lead-1002",
+      "company": "Bright Dental Group",
+      "contact": "Mina Patel",
+      "stage": "approval-pending",
+      "value_usd": 9200
+    }
+  ],
+  "quotes": [
+    {
+      "id": "quote-2001",
+      "lead_id": "lead-1001",
+      "package": "Maintenance Retainer",
+      "status": "sent",
+      "amount_usd": 4800
+    }
+  ],
+  "jobs": [
+    {
+      "id": "job-3001",
+      "client": "Bright Dental Group",
+      "status": "scheduled",
+      "owner": "Jordan",
+      "next_step": "Kickoff call Monday 10:00"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "inv-4001",
+      "client": "Northline HVAC",
+      "status": "draft",
+      "amount_usd": 1200,
+      "renewal_window_days": 45
+    }
+  ],
+  "catalog": [
+    {
+      "id": "svc-5001",
+      "name": "Lead-to-Launch Sprint",
+      "price_from_usd": 2500,
+      "category": "Implementation"
+    },
+    {
+      "id": "svc-5002",
+      "name": "Monthly Revenue Ops Retainer",
+      "price_from_usd": 1200,
+      "category": "Recurring"
+    }
+  ]
+}
