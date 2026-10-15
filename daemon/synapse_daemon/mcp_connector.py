@@ -1283,7 +1283,7 @@ def _prune_old_command_jobs() -> None:
         _command_jobs.pop(job_id, None)
 
 
-def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float) -> None:
+def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeout: float, data_dir: Path) -> None:
     import subprocess
 
     try:
@@ -1319,6 +1319,13 @@ def _run_command_job_thread(job_id: str, shell_argv: list[str], cwd: str, timeou
     job["finished_at"] = to_iso(finished_at)
     job["_finished_at_dt"] = finished_at
     job["result"] = result
+    # Persist completion so a connector retry or daemon restart can retrieve it.
+    from .command_job_store import save_job
+    try:
+        save_job(data_dir, job_id, {"status": "done", "cwd": cwd, **result})
+    except OSError:
+        # The in-memory result remains available; do not lose command completion.
+        pass
 
 
 def build_mcp_router(
@@ -1951,7 +1958,7 @@ def build_mcp_router(
             _prune_old_command_jobs()
             threading.Thread(
                 target=_run_command_job_thread,
-                args=(job_id, shell_argv, cwd, timeout),
+                args=(job_id, shell_argv, cwd, timeout, storage.data_dir),
                 daemon=True,
             ).start()
             return {
@@ -1968,6 +1975,10 @@ def build_mcp_router(
                 raise ValueError("job_id is required")
             job = _command_jobs.get(job_id)
             if job is None:
+                from .command_job_store import read_job
+                recovered = read_job(storage.data_dir, job_id)
+                if recovered is not None:
+                    return {"job_id": job_id, **recovered}
                 raise ValueError(
                     f"Unknown job_id: {job_id!r} (it may have expired -- results are kept for "
                     f"{_COMMAND_JOB_MAX_AGE_SECONDS}s after completion -- or the daemon restarted "
