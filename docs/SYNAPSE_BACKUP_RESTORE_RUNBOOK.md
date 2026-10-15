@@ -1,4 +1,4 @@
-﻿# Synapse Ecosystem Backup & Isolated Restore Runbook
+# Synapse Ecosystem Backup & Isolated Restore Runbook
 
 Last reviewed: 2026-10-15. **Backup is not yet complete**. This file is a recovery plan, not a claim that off-device backups exist.
 
@@ -43,3 +43,37 @@ A **real production recovery test** is still required: restore encrypted copies 
 - A GitHub push is not a database backup.
 - A test against synthetic files does not prove real Synapse service recovery.
 - No service restarts, deletion, cloud key rotation, migration, or production database restore should occur during inventory.
+
+
+## Measured ecosystem inventory, 2026-10-15
+
+Local-only read-only reports:
+D:\Synapse-backup-inventory-practical-20261015.json
+D:\Synapse-registered-extra-inventory-20261015.json
+
+163 Git repository/worktree roots scanned under the Windows user profile:
+32.75 GiB after skipping conventional generated dependency/build folders.
+Synapse registered 99 projects. The 37 registered paths outside these
+repository roots were separately checked; all exist, adding about 0.428 GiB.
+Some path overlap and worktree deduplication remains to resolve.
+
+Windows Synapse profile measurements:
+APPDATA Synapse = 252,438,039 bytes
+LOCALAPPDATA Synapse = 10,189 bytes
+LOCALAPPDATA Programs Synapse = 432,350,713 bytes (reinstallable app)
+
+Scoped local recovery-size upper bound: approximately 33.8 GiB uncompressed,
+before deduplication/compression and without unregistered standalone folders
+or cloud database contents. Do not interpret as full-machine size.
+
+Production Railway Synapse Accounts volume accounts-persistent-data at
+/data is allocated 500 MB. Used bytes and independent backup/restore proof
+are not yet available. Clinic OS staging production lists no services/volumes.
+The FAT32 USB D: had only 10.31 GiB free, so it cannot hold the full set.
+
+Database evidence: read-only SQLite quick_check on live synapse.sqlite OK.
+A real live SQLite Connection.backup() into memory reproduced the
+233,234,432-byte database with quick_check OK and 306 schema objects.
+No persistent encrypted archive was created, no source database changed.
+Synthetic isolated restore tests are passing, but real full-service and
+Railway cloud recovery are NOT yet proven.
