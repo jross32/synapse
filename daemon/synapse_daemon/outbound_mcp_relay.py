@@ -73,9 +73,11 @@ class OutboundMcpRelay:
                 os.unlink(temporary)
 
     def _enroll_once(self, account_id: str, device_id: str) -> str:
-        # The account's host inventory must contain this device before cloud
-        # registration; this call synchronizes its durable ID first.
+        # Enrollment requires a host in the account-owned cloud inventory.
+        # list_hosts() only updates the local DB; explicitly publish this
+        # computer through revision-checked sync before requesting credentials.
         self.manager.list_hosts()
+        self.manager._sync_to_remote(best_effort=False)
         access = self.manager._ensure_access_token()
         result = self.manager._accounts.enroll_relay_device(access_token=access, device_id=device_id)
         credential = result.get("device_token")
