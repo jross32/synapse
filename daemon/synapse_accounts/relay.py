@@ -51,6 +51,8 @@ def read_connector(db: Session, account: Account, public_base_url: str) -> dict[
 
 def issue_connector(db: Session, account: Account, public_base_url: str, *, rotate: bool = False) -> dict[str, str]:
     connector = db.scalar(select(RelayConnector).where(RelayConnector.account_id == account.id))
+    if connector is not None and not rotate:
+        return read_connector(db, account, public_base_url)
     if connector is None:
         connector = RelayConnector(account_id=account.id, nonce=secrets.token_hex(24), token_hash="")
         db.add(connector)

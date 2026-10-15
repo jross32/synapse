@@ -97,6 +97,10 @@ def test_connector_get_does_not_create_or_mutate(tmp_path, monkeypatch):
         assert read.json()["url"] == first
         assert read.json()["rotated"] is False
         assert snapshot() == before_read
+        repeated_create = client.post("/v1/relay/connector", headers=owner)
+        assert repeated_create.status_code == 200
+        assert repeated_create.json()["url"] == first
+        assert snapshot() == before_read
 
 def test_stable_link_two_machines_default_full_and_switch_off(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as client:
