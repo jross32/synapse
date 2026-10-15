@@ -31,10 +31,11 @@ def test_worker_handoff_requires_published_code(tmp_path, monkeypatch, after, re
     async def fake_run_agent(**kwargs):
         return SimpleNamespace(completed=True, answer="Finished", stop_reason="done", steps=[])
 
-    with patch.object(local_worker, "snapshot_code_workspace", side_effect=lambda _: next(snapshots)), \
+    with patch.object(local_worker.urllib.request, "urlopen") as health, patch.object(local_worker, "snapshot_code_workspace", side_effect=lambda _: next(snapshots)), \
          patch.object(local_worker, "run_agent", side_effect=fake_run_agent), \
          patch.object(local_worker, "handoff", side_effect=delivered.append), \
          patch("synapse_daemon.github_publish_gate.check_github_publish", return_value=PublishEvidence(remote_ready, "verified" if remote_ready else "not_pushed", SHA_B, SHA_B if remote_ready else SHA_A, "feature")):
+        health.return_value.__enter__.return_value.status = 200
         result = local_worker.main()
     assert result == expected_exit
     assert delivered[0]["status"] == expected_status

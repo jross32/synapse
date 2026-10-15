@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import json
 import os
+import urllib.request
 from pathlib import Path
 import urllib.error
 import urllib.request
@@ -48,6 +49,9 @@ def main() -> int:
     mode = {"observe": PermissionMode.PLAN, "workspace": PermissionMode.ACCEPT_EDITS,
             "full": PermissionMode.AUTO}[args.authority]
     try:
+        with urllib.request.urlopen("http://127.0.0.1:11434/api/version", timeout=4) as response:
+            if response.status != 200:
+                raise RuntimeError("Ollama health check failed")
         before = snapshot_code_workspace(workspace)
         run = asyncio.run(run_agent(
             model=args.model, task=prompt, workspace=workspace,
