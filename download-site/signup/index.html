@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create your Synapse account</title><meta name="description" content="Create a Synapse account to sign in on your desktop."><link rel="stylesheet" href="/style.css"></head>
+<body><main class="wrap" style="max-width:680px;padding:3rem 1rem 5rem">
+<a href="/start">Back to setup</a><h1>Create your Synapse account</h1>
+<p>Sign up here, then download Synapse and sign in when you launch the desktop application. Your password is sent directly to the Synapse Accounts service over HTTPS; this website does not save it.</p>
+<form id="signup-form" class="glass-card" style="padding:1.5rem;display:grid;gap:1rem">
+<label>Username <input name="username" required minlength="3" maxlength="32" autocomplete="username" pattern="[A-Za-z0-9_]{3,32}" style="width:100%;padding:.75rem"></label>
+<label>Email <input name="email" type="email" required maxlength="320" autocomplete="email" style="width:100%;padding:.75rem"></label>
+<label>Password <input name="password" type="password" required minlength="8" maxlength="256" autocomplete="new-password" style="width:100%;padding:.75rem"></label>
+<label>Confirm password <input name="confirm" type="password" required minlength="8" autocomplete="new-password" style="width:100%;padding:.75rem"></label>
+<button class="btn btn-primary" type="submit" id="submit-signup">Create account</button>
+<p role="status" aria-live="polite" id="signup-status"></p></form>
+<p>Already have an account? Open Synapse on your computer and choose Sign In.</p>
+<p><a href="/download">Download Synapse</a> ? <a href="/support">Help</a></p>
+</main><script src="/signup/signup.js" defer></script></body></html>
