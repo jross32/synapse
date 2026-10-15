@@ -17,6 +17,7 @@ from . import agent_squads as squads
 from . import (
     ai_executions,
     github_publish_gate,
+    provider_access,
     chatgpt_child_agents,
     chatgpt_worker_chats,
     coder_runtimes,
@@ -569,6 +570,32 @@ def build_agent_squads_router(
             timeout_seconds=timeout_seconds,
         )
 
+    @router.get("/ai-provider-access", response_model=None)
+    async def get_ai_provider_access() -> dict[str, Any]:
+        path = storage.data_dir / "provider-access.json"
+        policy = provider_access.read_policy(path)
+        installed = {runtime.value: coder_runtimes.available(runtime)
+                     for runtime in coder_runtimes.DEFAULT_LADDER}
+        installed["chatgpt_web"] = bool(chatgpt_child_agents.readiness(storage.data_dir)["setup_complete"])
+        return {"configured": path.exists(),
+                "allow_additional_spend": policy["allow_additional_spend"],
+                "providers": provider_access.inventory(policy["providers"], installed)}
+
+    @router.put("/ai-provider-access", response_model=None)
+    async def put_ai_provider_access(payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload.get("providers"), dict):
+            raise invalid("providers", "Expected a provider configuration object")
+        if any(name not in provider_access.PROVIDERS for name in payload["providers"]):
+            raise invalid("providers", "Unknown provider")
+        try:
+            providers = {name: provider_access.ProviderAccess.parse(value)
+                         for name, value in payload["providers"].items()}
+        except (TypeError, ValueError) as exc:
+            raise invalid("providers", str(exc)) from exc
+        policy = {"allow_additional_spend": payload.get("allow_additional_spend") is True,
+                  "providers": providers}
+        provider_access.write_policy(storage.data_dir / "provider-access.json", policy)
+        return await get_ai_provider_access()
     @router.get("/agent-role-templates", response_model=None)
     async def list_role_templates() -> dict[str, Any]:
         return {
@@ -933,7 +960,30 @@ def build_agent_squads_router(
                 # Prefer capable CLIs; only use local Ollama when no remote coding
                 # provider is installed and eligible. Do not replace explicit choices.
                 preferred = list(role.preferred_runtimes or [])
-                chosen = coder_runtimes.select_worker_runtime(
+                access_path = storage.data_dir / "provider-access.json"
+                access_policy = provider_access.read_policy(access_path)
+                if access_path.exists():
+                    # When the owner opts into the access registry, enforce
+                    # authentication, supported automation and zero-extra-spend.
+                    installed = {runtime.value: coder_runtimes.available(runtime)
+                                 for runtime in coder_runtimes.DEFAULT_LADDER}
+                    capacity_ok = {runtime.value: (capacity[runtime.value].eligible_for_attempt
+                                   if runtime.value in capacity else True)
+                                   for runtime in coder_runtimes.DEFAULT_LADDER}
+                    ui_ready = bool(chatgpt_child_agents.readiness(storage.data_dir)["setup_complete"])
+                    installed["chatgpt_web"] = ui_ready
+                    capacity_ok["chatgpt_web"] = True
+                    usable = {name: installed.get(name, False) and capacity_ok.get(name, False)
+                              and provider_access.eligible(name, account,
+                                  installed=installed.get(name, False),
+                                  capacity=capacity_ok.get(name, False),
+                                  allow_additional_spend=access_policy["allow_additional_spend"])
+                              for name, account in access_policy["providers"].items()}
+                    chosen = coder_runtimes.select_worker_runtime(
+                        preferred, usable, usable,
+                        chatgpt_ui_ready=usable.get("chatgpt_web", False))
+                else:
+                    chosen = coder_runtimes.select_worker_runtime(
                     preferred,
                     {runtime.value: (capacity[runtime.value].eligible_for_attempt
                                      if runtime.value in capacity else True)
