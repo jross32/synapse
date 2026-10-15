@@ -79,7 +79,7 @@ jobs:
       - name: Enforce source and release gates
         shell: pwsh
         run: |
-          python -m pytest daemon/tests/test_version_consistency.py daemon/tests/test_release_compatibility.py daemon/tests/test_release_artifact_gate.py daemon/tests/test_desktop_update_publisher.py daemon/tests/test_signed_desktop_update.py daemon/tests/test_production_installer_preflight.py -q
+          python -m pytest daemon/tests/test_version_consistency.py daemon/tests/test_release_manifest.py daemon/tests/test_release_artifact_gate.py daemon/tests/test_desktop_update_publisher.py daemon/tests/test_signed_desktop_update.py daemon/tests/test_production_installer_preflight.py -q
           if ($LASTEXITCODE -ne 0) { throw "Release tests failed" }
 
       - name: Build renderer and Electron
@@ -149,3 +149,4 @@ jobs:
             release-candidate-ci/verification.json
           if-no-files-found: error
           retention-days: 7
+
