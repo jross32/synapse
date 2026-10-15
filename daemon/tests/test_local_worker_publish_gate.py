@@ -18,6 +18,7 @@ SHA_B = "b" * 40
     ((SHA_A, " M src.py"), False, "blocked", 2),  # uncommitted source
     ((SHA_B, ""), False, "blocked", 2),  # committed but not pushed
     ((SHA_B, ""), True, "handoff", 0),  # committed and pushed
+    ((SHA_A, " M src.py"), True, "blocked", 2),  # dirty even when remote matches
 ])
 def test_worker_handoff_requires_published_code(tmp_path, monkeypatch, after, remote_ready, expected_status, expected_exit):
     monkeypatch.setenv("SYNAPSE_WORKER_TESTS_PASSED", "1")

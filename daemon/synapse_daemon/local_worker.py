@@ -57,7 +57,7 @@ def main() -> int:
         summary = run.answer or run.stop_reason or "Local worker returned no summary."
         # Code-work handoff is not complete until the exact GitHub SHA is verified.
         after = snapshot_code_workspace(workspace)
-        changed = before is not None and after is not None and before != after
+        changed = before is None or after is None or before != after or bool(after[1])
         evidence = assess_code_work_completion(workspace, code_changed=changed, tests_passed=(os.environ.get("SYNAPSE_WORKER_TESTS_PASSED") == "1"), expected_sha=(after[0] if changed and after and not after[1] else None)) if run.completed else None
         if evidence is not None and evidence.status != "complete":
             summary += "\nCode-work verification or GitHub publication is missing; completion remains blocked."
@@ -68,7 +68,7 @@ def main() -> int:
             "source": "auto",
         }
         handoff(payload)
-        print(json.dumps({"completed": run.completed, "status": payload["status"],
+        print(json.dumps({"completed": payload["status"] == "handoff", "status": payload["status"],
                           "steps": len(run.steps), "reason": run.stop_reason}))
         return 0 if payload["status"] == "handoff" else 2
     except Exception as exc:
