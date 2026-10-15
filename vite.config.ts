@@ -14,6 +14,14 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, 'renderer/lib'),
     },
   },
+  // A stale pre-bundled module (observed with three.js) can return
+  // HTTP 504 "Outdated Optimize Dep" while Electron's document load succeeds.
+  // That leaves React unmounted and trips SYN-BOOT-202. Re-optimize on each
+  // development-server start so a previous run's cache cannot wedge startup.
+  // Production builds are unaffected.
+  optimizeDeps: {
+    force: true,
+  },
   build: {
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
