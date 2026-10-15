@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 
 from .local_agent import PermissionMode, run_agent
+from .github_publish_gate import assess_code_work_completion, snapshot_code_workspace
 
 DEFAULT_MODEL = "qwen2.5:1.5b"
 
@@ -47,22 +48,29 @@ def main() -> int:
     mode = {"observe": PermissionMode.PLAN, "workspace": PermissionMode.ACCEPT_EDITS,
             "full": PermissionMode.AUTO}[args.authority]
     try:
+        before = snapshot_code_workspace(workspace)
         run = asyncio.run(run_agent(
             model=args.model, task=prompt, workspace=workspace,
             mode=mode, allow_web=False, max_steps=16,
             timeout=min(max(args.timeout, 30), 3600),
         ))
         summary = run.answer or run.stop_reason or "Local worker returned no summary."
+        # Code-work handoff is not complete until the exact GitHub SHA is verified.
+        after = snapshot_code_workspace(workspace)
+        changed = before is not None and after is not None and before != after
+        evidence = assess_code_work_completion(workspace, code_changed=changed, tests_passed=(os.environ.get("SYNAPSE_WORKER_TESTS_PASSED") == "1"), expected_sha=(after[0] if changed and after and not after[1] else None)) if run.completed else None
+        if evidence is not None and evidence.status != "complete":
+            summary += "\nCode-work verification or GitHub publication is missing; completion remains blocked."
         payload = {
-            "status": "handoff" if run.completed else "blocked",
+            "status": "handoff" if run.completed and (evidence is None or evidence.status == "complete") else "blocked",
             "summary_md": summary[:15000],
-            "blockers_md": None if run.completed else run.stop_reason[:4000],
+            "blockers_md": None if run.completed and (evidence is None or evidence.status == "complete") else ("GitHub publication evidence required" if run.completed else run.stop_reason[:4000]),
             "source": "auto",
         }
         handoff(payload)
         print(json.dumps({"completed": run.completed, "status": payload["status"],
                           "steps": len(run.steps), "reason": run.stop_reason}))
-        return 0 if run.completed else 2
+        return 0 if payload["status"] == "handoff" else 2
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
         print(json.dumps({"completed": False, "error": reason}))

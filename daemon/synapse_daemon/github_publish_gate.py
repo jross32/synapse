@@ -74,3 +74,14 @@ def assess_code_work_completion(
     return CodeWorkCompletion(
         "complete" if evidence.ready else "verified_not_published", evidence,
     )
+
+
+def snapshot_code_workspace(workspace: Path) -> tuple[str, str] | None:
+    """Snapshot Git HEAD and porcelain status, including untracked source changes."""
+    try:
+        root = Path(_git(workspace, "rev-parse", "--show-toplevel")).resolve()
+        if not root.is_dir():
+            return None
+        return (_git(root, "rev-parse", "HEAD"), _git(root, "status", "--porcelain", "--untracked-files=all"))
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
