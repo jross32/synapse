@@ -82,3 +82,12 @@ into production authentication.
 - `seed-data.json` -- deterministic seed records
 - `local_auth.py` -- process-local opaque sessions and role profiles
 - `workspace-state.json` -- generated local workspace state after the first mutation
+## Release preflight
+
+Run python release_preflight.py from this directory. It prints a JSON report without exposing secrets and exits nonzero until all gates pass. Current demo configuration must fail closed.
+
+Checks include real identity instead of the local role chooser, HTTPS and Secure sessions, Stripe test checkout, live billing, approved outbound messages, and deployment rollback. Configuration booleans are operator attestations, NOT technical proof. Only set them after independent verification. The preflight does not send messages, process payments, or deploy.
+
+Run python -m unittest discover -p test_*.py -q and separately run discovery in the files directory. Browser verification uses the isolated harness documented in docs/REMOTE_EXECUTION_BROWSER_RECOVERY.md at the repository root.
+
+A passing test alone does not authorize public deployment or live payment processing.
