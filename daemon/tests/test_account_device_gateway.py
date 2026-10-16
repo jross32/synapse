@@ -90,3 +90,23 @@ def test_explicit_device_never_redirects_to_preferred_one():
     chosen = choose(cloud, "laptop", preferred_capabilities={"gpu"},
                     preferred_device_ids=["desktop"])
     assert chosen.device_id == "laptop"
+
+
+def test_account_route_diagnostic_never_calls_selection_execution_proof():
+    from synapse_daemon.account_device_gateway import execution_route_diagnostic
+    pending = execution_route_diagnostic(
+        selected_device_id="desktop", local_device_id="laptop",
+        executor_device_id=None, account_connector_host="accounts.example")
+    assert pending["state"] == "execution_unverified"
+    assert pending["execution_allowed"] is False
+    wrong = execution_route_diagnostic(
+        selected_device_id="desktop", local_device_id="laptop",
+        executor_device_id="laptop", account_connector_host="accounts.example")
+    assert wrong["state"] == "executor_mismatch"
+    assert wrong["execution_allowed"] is False
+    confirmed = execution_route_diagnostic(
+        selected_device_id="desktop", local_device_id="laptop",
+        executor_device_id="desktop", account_connector_host="accounts.example")
+    assert confirmed["state"] == "verified"
+    assert confirmed["execution_allowed"] is True
+    assert "account_connector_host" not in confirmed

@@ -45,3 +45,36 @@ def select_account_device(
     if not isinstance(response, dict) or response.get("selected_device_id") != target:
         raise DeviceRouteError("Synapse account relay did not confirm the requested device")
     return AccountDeviceSelection(plan=plan, device_id=target)
+
+
+
+def execution_route_diagnostic(*, selected_device_id: str | None,
+                               local_device_id: str | None,
+                               executor_device_id: str | None,
+                               account_connector_host: str | None) -> dict:
+    """Read-only, secret-free account MCP routing diagnostic.
+
+    Never infer success from account selection alone. The caller supplies the
+    actual executor identity from an authenticated execution receipt; None
+    means execution has not been attested.
+    """
+    selected = str(selected_device_id or "").strip()
+    local = str(local_device_id or "").strip()
+    actual = str(executor_device_id or "").strip()
+    host = str(account_connector_host or "").strip().lower()
+    if not selected:
+        state = "no_selected_device"
+    elif not actual:
+        state = "execution_unverified"
+    elif actual != selected:
+        state = "executor_mismatch"
+    else:
+        state = "verified"
+    return {
+        "state": state,
+        "selected_device_id": selected or None,
+        "local_device_is_selected": bool(selected and local == selected),
+        "executor_matches_selected": bool(selected and actual and actual == selected),
+        "account_connector_configured": bool(host),
+        "execution_allowed": state == "verified",
+    }
