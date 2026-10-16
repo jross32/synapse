@@ -3692,7 +3692,7 @@ def build_mcp_router(
                     f"{server_id} uses {server.transport} transport, which is not proxied.")
 
             timeout = min(int(args.get("timeout_seconds") or 120), _BLOCKING_CALL_TIMEOUT_MAX)
-            speak = _http_mcp if server.transport == "http" else (_persistent_stdio_mcp if server_id == "reflex" else _stdio_mcp)
+            speak = _http_mcp if server.transport == "http" else (_persistent_stdio_mcp if server_id in ("reflex", "playwright") else _stdio_mcp)
             if name == "synapse_list_mcp_tools":
                 reply = speak(server, "tools/list", {}, timeout)
                 return [
