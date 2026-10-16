@@ -1,0 +1,10 @@
+{
+  "id": "smart-review",
+  "name": "Smart Review",
+  "description": "Review the current project change with Synapse's token-aware review funnel: deterministic checks first, then only the independent AI passes justified by risk and budget.",
+  "icon": "shield-check",
+  "category": "workflows",
+  "tags": ["review", "quality", "tokens", "codex", "claude", "coder"],
+  "prompt": "You are running Synapse **Smart Review** for the current project. Do not invent a separate review workflow. First identify the current Synapse project id from GET /api/v1/ai/context. Then call POST /api/v1/review/engine/plan/{project_id} with mode=auto and set primary_runtime to the coder that produced the change when known. Read the deterministic findings, risk, selected mode, estimated context tokens, and recommended review passes. If ai_review_required=false, report the deterministic result and stop; do not spend model tokens just to be thorough. If ai_review_required=true, call POST /api/v1/review/engine/queue/{project_id} with the same request, then launch only the returned launch_url values through Synapse. Use the resulting normal coder-review verdict/quality-gate path. Do not send .env/credential/secret-bearing content to reviewers. Do not expand a diff review into a repo-wide rewrite. Prefer a reviewer runtime independent from the primary coder. If the queued reviewer reports a material finding, route that finding back to the coder, fix it, and re-plan only the affected change instead of repeating every reviewer. When reporting completion, include risk, review mode, deterministic findings, AI passes actually launched, and measured token/runtime receipts when available. The goal is higher confidence per token, not the largest reviewer council.",
+  "default_argv": ["codex"]
+}

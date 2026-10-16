@@ -861,6 +861,11 @@ def build_ai_router(
                     "path": "/api/v1/capture",
                 },
                 {
+                    "purpose": "plan or queue a token-aware Smart Review for a project change; deterministic checks run before any AI pass and queue reuses normal coder review-pass execution",
+                    "method": "POST",
+                    "path": "/api/v1/review/engine/plan/{project_id} | /api/v1/review/engine/queue/{project_id}",
+                },
+                {
                     "purpose": "human review plus the durable proposal backlog: proposals have first-class kind, separate pending/accepted/declined decision and proposed/in_progress/done lifecycle, query filters/sorting, and inspectable auto-detection evidence; read /review/proposals/schema before using it for the first time",
                     "method": "GET | POST | PATCH",
                     "path": "/api/v1/review/inbox | /api/v1/review/proposals/schema | /api/v1/review/proposals?status=&decision=&kind=&project_id=&sort_by=&sort_dir= | /api/v1/review/proposals/{id}/approve | /reject | /lifecycle | /promote | /api/v1/review/proposals/reconcile",
