@@ -52,6 +52,7 @@ from .auth import AuthManager
 from .errors import SynapseError, conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
+from .chatgpt_worker_checkpoints import WorkerCheckpointStore
 from .ws import Event, EventBus
 
 log = logging.getLogger(__name__)
@@ -328,6 +329,7 @@ def build_agent_squads_router(
     # endpoints (including heartbeats) remain free to transact during spawn.
     launch_lock = asyncio.Lock()
     chatgpt_tasks: dict[str, asyncio.Task[None]] = {}
+    worker_checkpoints = WorkerCheckpointStore(storage.data_dir / 'chatgpt-worker-checkpoints.sqlite')
 
     async def _run_chatgpt_child(
         *,
@@ -341,6 +343,7 @@ def build_agent_squads_router(
         prompt: str,
         timeout_seconds: int,
     ) -> None:
+        worker_checkpoints.record(work_item_id, session_id, 'assigned', conversation_url=conversation_url)
         result = None
         tracked_thread_id = ""
         tracked_turn_id = ""
@@ -391,6 +394,7 @@ def build_agent_squads_router(
                 title=worker_chat_title,
             )
         try:
+            worker_checkpoints.record(work_item_id, session_id, 'observing', conversation_url=conversation_url)
             run_task = asyncio.create_task(
                 chatgpt_pool.run_child(
                     session_id,
@@ -441,6 +445,12 @@ def build_agent_squads_router(
         finally:
             chatgpt_tasks.pop(work_item_id, None)
 
+        worker_checkpoints.record(
+            work_item_id, session_id,
+            'needs_recovery' if result.ok else 'failed',
+            conversation_url=result.conversation_url or conversation_url or '',
+            evidence={'reply_observed': bool(result.ok), 'error': result.error or ''},
+        )
         with storage.transaction() as conn:
             current = squads.get_work_item(conn, work_item_id)
             if current.status == squads.AgentWorkItemStatus.RUNNING:
