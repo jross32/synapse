@@ -222,3 +222,19 @@ def test_reseeding_the_workflow_notes_playbook_preserves_a_reported_status(tmp_p
 
     assert reseeded.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
     assert reseeded.status_note == "entries need review"
+
+
+def test_shared_auth_browser_playbook_is_bootstrapped_and_preserves_warning(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        p = playbooks.ensure_bootstrap_shared_auth_browser_playbook(conn)
+        assert p.id == playbooks.SHARED_AUTH_BROWSER_PLAYBOOK_ID
+        joined = " ".join(p.steps).lower()
+        assert "playwright" in joined and "foreman" in joined
+        assert "tab" in joined and "handoff" in joined
+        assert "not authentication evidence" in joined
+        playbooks.record_verification(conn, p.id, status=playbooks.PlaybookStatus.NEEDS_ATTENTION, note="pending live E2E")
+    with storage.transaction() as conn:
+        again = playbooks.ensure_bootstrap_shared_auth_browser_playbook(conn)
+    assert again.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
+    assert again.status_note == "pending live E2E"

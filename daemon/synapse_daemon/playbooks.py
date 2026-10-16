@@ -27,6 +27,7 @@ CHATGPT_CONNECTOR_PLAYBOOK_ID = "chatgpt-connector-setup"
 CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID = "chatgpt-autonomous-app-build"
 CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID = "chatgpt-workflow-design-notes"
 TOKEN_LEAN_DELEGATION_PLAYBOOK_ID = "token-lean-delegation"
+SHARED_AUTH_BROWSER_PLAYBOOK_ID = "chatgpt-shared-authenticated-browser"
 
 
 class PlaybookStatus(str, Enum):
@@ -449,5 +450,28 @@ def ensure_bootstrap_chatgpt_workflow_notes_playbook(conn: sqlite3.Connection) -
             "how-to -- operating steps stay in chatgpt-connector-setup and "
             "chatgpt-autonomous-app-build."
         ),
+        steps=steps,
+    )
+
+
+def ensure_bootstrap_shared_auth_browser_playbook(conn: sqlite3.Connection) -> Playbook:
+    """The authenticated shared Playwright browser is preferred over a separate login profile.
+
+    This playbook documents the verified route and its deployment boundary. A
+    staged bridge is not proof the running daemon already uses the bridge.
+    """
+    steps = [
+        "FIRST check the Synapse registered playwright MCP server via synapse_list_mcp_tools(server='playwright') and synapse_call_mcp_tool(browser_tabs list); use a read-only browser_snapshot/evaluate on an existing ChatGPT project tab to verify sign-in AND an available composer. A folder named chatgpt-browser-profile is NOT authentication evidence.",
+        "For automatic chatgpt_web worker dispatch, use the existing Synapse Foreman/squad REST launch and the shared authenticated Playwright MCP adapter (shared_webscraper_browser.py, chatgpt_mcp_bridge.py, chatgpt_mcp_execution.py). Do not launch a second Chrome profile or another scheduler merely because the dedicated profile shows sign-in.",
+        "The shared adapter must get its browser calls through the daemon's registered persistent MCP session; preserve other users' tabs and all browser profiles. Give each worker a newly-created, proven-owned tab, serialize globally-selected-tab actions, never copy cookies or credentials, and refuse ambiguous ownership or stale selectors.",
+        "Respect existing live workers, scopes, leases and dirty main. Use isolated Git worktrees and do not restart active Chrome profiles. The integration/shared-browser-20261016 worktree commit 49ecac0 is a candidate implementation, not production proof; inspect it and independently run regression tests before integration.",
+        "Do not mark a dispatched ChatGPT UI task complete merely because a browser conversation exists. Require exact conversation identity, observed completion, real changed files, passing focused tests, committed diff and durable Synapse handoff; block instead of claiming success if any are missing.",
+        "If the shared registered Playwright browser is unavailable or login cannot be verified, record the exact blocker and keep the task queued/blocked. Do not silently fall back to a different unauthenticated profile or vendor CLI.",
+    ]
+    return upsert_playbook(
+        conn,
+        playbook_id=SHARED_AUTH_BROWSER_PLAYBOOK_ID,
+        title="ChatGPT UI workers: use authenticated shared Playwright browser",
+        summary="Verified shared-browser route for Synapse chatgpt_web workers, safe tab ownership and completion proof; never infer authentication from a dedicated profile directory.",
         steps=steps,
     )
