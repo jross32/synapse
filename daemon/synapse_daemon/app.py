@@ -863,6 +863,11 @@ def build_app(
         await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
     app.router.on_startup.append(active_task_scheduler.start)
+    from .device_presence import DevicePresenceLoop
+    device_presence = DevicePresenceLoop(profile_manager)
+    app.state.device_presence = device_presence
+    app.router.on_startup.append(device_presence.start)
+    app.router.on_shutdown.append(device_presence.stop)
 
     async def _cancel_worker_timeouts() -> None:
         worker_timeout_registry.cancel_all()
