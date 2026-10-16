@@ -27,11 +27,20 @@ def _page(snapshot: str) -> str:
 
 def _response_done(snapshot: str) -> bool:
     page = _page(snapshot)
-    return (
+    streaming = any(re.search(r'button "' + re.escape(label) + r'"(?:\s|\[)', page)
+                    for label in ("Stop", "Stop generating", "Stop response"))
+    # Authenticated Playwright snapshots often omit the synthetic "Response complete"
+    # status. Require an actual assistant response heading plus its copy control;
+    # a user's "Copy message" button alone is not proof of an assistant reply.
+    assistant_reply = (
+        'heading "Latest response"' in page
+        and ('button "Copy message"' in page or 'button "Copy"' in page)
+    )
+    legacy_reply = (
         "Response complete" in page
         and ('button "Copy"' in page or 'button "Regenerate response"' in page)
-        and not any(f'button "{label}"' in page for label in ("Stop", "Stop generating", "Stop response"))
     )
+    return not streaming and (assistant_reply or legacy_reply)
 
 async def execute_mcp_chat(browser: SharedWebscraperBrowser, worker_id: str, prompt: str,
                            start_url: str, timeout: float = 600.0,

@@ -89,3 +89,16 @@ def test_real_authenticated_mcp_snapshot_does_not_confirm_streaming_reply():
             'heading "Latest response"', 'status: Response complete\n      - button "Copy" [ref=e1150]\n      - heading "Latest response"'
         )
     )
+
+
+def test_real_mcp_completed_reply_without_synthetic_status():
+    finished = AUTHENTICATED_MCP_SNAPSHOT.replace(
+        '      - button "Stop" [ref=e1221] [cursor=pointer]\n',
+        '      - button "Copy message" [ref=e1221] [cursor=pointer]\n',
+    )
+    assert _response_done(finished)
+    assert not _response_done(AUTHENTICATED_MCP_SNAPSHOT)
+
+def test_user_copy_message_alone_never_confirms_reply():
+    user_only = '''### Page\n- Page URL: https://chatgpt.com/c/123\n### Snapshot\n- heading \"You said:\"\n- button \"Copy message\" [ref=e12]\n'''
+    assert not _response_done(user_only)
