@@ -768,6 +768,8 @@ class ChatGPTBrowserPool:
         timeout: float = browser_runtime.DEFAULT_TIMEOUT_SECONDS,
         conversation_url: str | None = None,
         desired_title: str = "",
+        observe_only: bool = False,
+        on_conversation: Any = None,
     ) -> ChatGPTChildResult:
         if self._mcp_call_tool is not None:
             from .shared_webscraper_browser import SharedWebscraperBrowser
@@ -784,7 +786,8 @@ class ChatGPTBrowserPool:
                 output = await execute_mcp_chat(
                     self._mcp_browser, worker_id,
                     "Use the connected Synapse app for authorized project actions.\n\n" + prompt,
-                    start_url, timeout=timeout)
+                    start_url, timeout=timeout,
+                    observe_only=observe_only, on_conversation=on_conversation)
                 result.ok = output["ok"]
                 result.reply = output.get("reply", "")
                 result.error = output.get("error", "")

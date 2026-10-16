@@ -557,7 +557,7 @@ def build_app(
         dependencies=[token_guard],
     )
     app.include_router(
-        build_agent_squads_router(
+        squad_router := build_agent_squads_router(
             storage,
             pty_manager,
             bus,
@@ -865,6 +865,7 @@ def build_app(
 
         await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
+    app.router.on_startup.append(squad_router.recover_interrupted_chatgpt_workers)
     app.router.on_startup.append(active_task_scheduler.start)
     from .device_presence import DevicePresenceLoop
     device_presence = DevicePresenceLoop(profile_manager)

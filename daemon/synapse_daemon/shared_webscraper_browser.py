@@ -16,6 +16,7 @@ from typing import Any, Awaitable, Callable
 ToolCall = Callable[[str, dict[str, Any]], Awaitable[Any]]
 _LOCK = asyncio.Lock()
 _TAB_INDEX = re.compile(r"^\s*-?\s*(\d+):\s*(.*)$", re.MULTILINE)
+_PAGE_URL = re.compile(r"^- Page URL:\s*(\S+)", re.MULTILINE)
 
 
 class SharedBrowserError(RuntimeError):
@@ -50,6 +51,7 @@ class OwnedTab:
                         "browser_click", "browser_press_key"}:
             raise SharedBrowserError("browser tool not allowed for worker")
         async with _LOCK:
+            await self.transport._assert_ownership(self.index, self.worker_id)
             await self.transport._call("browser_tabs", {"action": "select", "index": self.index})
             return _text(await self.transport._call(name, arguments))
 
@@ -59,8 +61,10 @@ class OwnedTab:
         async with _LOCK:
             if self.transport._owned.get(self.index) != self.worker_id:
                 raise SharedBrowserError("tab ownership lost; refusing close")
+            await self.transport._assert_ownership(self.index, self.worker_id)
             await self.transport._call("browser_tabs", {"action": "close", "index": self.index})
             self.transport._owned.pop(self.index, None)
+            self.transport._owned_urls.pop(self.index, None)
             self.closed = True
 
 
@@ -72,6 +76,18 @@ class SharedWebscraperBrowser:
     def __init__(self, call_tool: ToolCall):
         self._call = call_tool
         self._owned: dict[int, str] = {}
+        self._owned_urls: dict[int, str] = {}
+
+    async def _assert_ownership(self, index: int, worker_id: str) -> None:
+        if self._owned.get(index) != worker_id:
+            raise SharedBrowserError("tab ownership lost")
+        listing = _text(await self._call("browser_tabs", {"action": "list"}))
+        lines = dict((int(m.group(1)), m.group(2)) for m in _TAB_INDEX.finditer(listing))
+        expected = self._owned_urls.get(index)
+        # The tab can legitimately navigate from the project home to its conversation.
+        if index not in lines or (expected and expected not in lines[index] and
+                not (expected.endswith("/project") and "chatgpt.com/" in lines[index])):
+            raise SharedBrowserError("tab index shifted or replaced; refusing to act")
 
     async def new_tab(self, worker_id: str, url: str) -> OwnedTab:
         if not worker_id or not (url == "https://chatgpt.com/" or
@@ -87,5 +103,6 @@ class SharedWebscraperBrowser:
                 raise SharedBrowserError("could not prove unique new tab ownership; no tab closed")
             index = created.pop()
             self._owned[index] = worker_id
+            self._owned_urls[index] = url
             return OwnedTab(self, index, worker_id)
 

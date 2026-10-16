@@ -30,7 +30,7 @@ def normalize_scope(scope: str) -> str:
 
 
 def overlaps(a: str, b: str) -> bool:
-    return a == b or a.startswith(b + "/") or b.startswith(a + "/")
+    return a == "*" or b == "*" or a == b or a.startswith(b + "/") or b.startswith(a + "/")
 
 
 @dataclass(frozen=True)

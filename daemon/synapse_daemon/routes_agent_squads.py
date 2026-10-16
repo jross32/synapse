@@ -334,6 +334,49 @@ def build_agent_squads_router(
     worker_checkpoints = WorkerCheckpointStore(storage.data_dir / 'chatgpt-worker-checkpoints.sqlite')
     scope_leases = DurableScopeLeases(storage.data_dir / 'chatgpt-worker-scope-leases.sqlite')
 
+    async def _recover_interrupted_chatgpt_workers() -> None:
+        from .chatgpt_mcp_execution import _DURABLE_URL
+        # A restarted daemon must not blindly resend messages. Only attach to
+        # an exact persisted conversation URL and resume observing that turn.
+        with storage.transaction() as conn:
+            chatgpt_worker_chats.reconcile_interrupted_workers(conn)
+        for work_item_id in worker_checkpoints.pending_recovery():
+            if work_item_id in chatgpt_tasks:
+                continue
+            checkpoint = worker_checkpoints.get(work_item_id)
+            if not checkpoint or not _DURABLE_URL.fullmatch(checkpoint["conversation_url"] or ""):
+                continue
+            with storage.transaction() as conn:
+                item = squads.get_work_item(conn, work_item_id)
+                if item.status != squads.AgentWorkItemStatus.RUNNING or item.preferred_runtime != "chatgpt_web":
+                    continue
+                chat = chatgpt_worker_chats.find_for_work_item(conn, work_item_id)
+                if chat is None:
+                    continue
+                session_id = item.pty_session_id or checkpoint["worker"]
+                current_session = coordination.get_session_by_coder_thread_id(conn, session_id)
+                if current_session is None:
+                    continue
+                coordination_id = current_session.id
+                execution = ai_executions.get_execution_by_pty(conn, session_id)
+                if execution is None:
+                    continue
+            task = asyncio.create_task(_run_chatgpt_child(
+                    work_item_id=work_item_id,
+                    session_id=session_id,
+                    coordination_session_id=coordination_id,
+                    execution_id=execution.id,
+                    worker_chat_id=chat.id,
+                    worker_chat_title=chat.title,
+                    conversation_url=checkpoint["conversation_url"],
+                    prompt="",
+                    timeout_seconds=600,
+                    observe_only=True,
+                ))
+            chatgpt_tasks[work_item_id] = task
+
+    router.recover_interrupted_chatgpt_workers = _recover_interrupted_chatgpt_workers
+
     async def _run_chatgpt_child(
         *,
         work_item_id: str,
@@ -345,8 +388,11 @@ def build_agent_squads_router(
         conversation_url: str,
         prompt: str,
         timeout_seconds: int,
+        observe_only: bool = False,
+        declared_scopes: list[str] | None = None,
     ) -> None:
-        worker_checkpoints.record(work_item_id, session_id, 'assigned', conversation_url=conversation_url)
+        if not observe_only:
+            worker_checkpoints.record(work_item_id, session_id, 'assigned', conversation_url=conversation_url)
         result = None
         tracked_thread_id = ""
         tracked_turn_id = ""
@@ -400,13 +446,18 @@ def build_agent_squads_router(
                 title=worker_chat_title,
             )
         try:
-            # Until per-task file scopes are known, serialize repository edits
-            # conservatively across all processes for the same Synapse project.
+            # Explicit, verified relative scopes may run in parallel. Missing
+            # scopes conservatively take an exclusive project-wide "*" lease.
+            # The wildcard is stored literally, and conflict checks treat it
+            # as overlapping any scope in this repository.
+            scopes = declared_scopes or ["*"]
             try:
-                lease_token = scope_leases.acquire(lease_repo, session_id, ["."], ttl=90)
+                lease_token = scope_leases.acquire(lease_repo, session_id, scopes, ttl=90)
             except ScopeConflict:
                 raise RuntimeError("Repository edit scope is held by another worker")
             worker_checkpoints.record(work_item_id, session_id, 'observing', conversation_url=conversation_url)
+            async def _on_conversation(url: str) -> None:
+                worker_checkpoints.record(work_item_id, session_id, 'sent', conversation_url=url)
             run_task = asyncio.create_task(
                 chatgpt_pool.run_child(
                     session_id,
@@ -414,6 +465,8 @@ def build_agent_squads_router(
                     timeout=timeout_seconds,
                     conversation_url=conversation_url or None,
                     desired_title=worker_chat_title,
+                    observe_only=observe_only,
+                    on_conversation=_on_conversation,
                 )
             )
             while not run_task.done():
@@ -1187,6 +1240,7 @@ def build_agent_squads_router(
                     conversation_url=worker_chat.conversation_url,
                     prompt=child_prompt,
                     timeout_seconds=body.timeout_seconds,
+                    declared_scopes=body.edit_scopes,
                 )
             )
             chatgpt_tasks[work_item.id] = task

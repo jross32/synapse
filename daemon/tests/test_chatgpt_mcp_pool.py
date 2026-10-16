@@ -4,7 +4,7 @@ from synapse_daemon.chatgpt_child_agents import ChatGPTBrowserPool
 def test_mcp_pool_does_not_launch_separate_profile(tmp_path, monkeypatch):
     from synapse_daemon import chatgpt_mcp_execution
     seen = {}
-    async def fake_execute(browser, worker_id, prompt, start_url, timeout):
+    async def fake_execute(browser, worker_id, prompt, start_url, timeout, **kwargs):
         seen.update(worker=worker_id, url=start_url, prompt=prompt)
         return {"ok": True, "reply": "Response complete", "conversation_url": "https://chatgpt.com/c/abc"}
     monkeypatch.setattr(chatgpt_mcp_execution, "execute_mcp_chat", fake_execute)
