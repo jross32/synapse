@@ -104,3 +104,40 @@ def test_both_never_fans_out_to_a_third_device():
     assert result.device_ids == ('desktop', 'laptop')
     with pytest.raises(DeviceRouteError):
         route('both', fleet, allow_multiple=True, approved_device_ids=['laptop', 'desktop', 'workstation'])
+
+
+def test_auto_prefers_capability_matching_for_game_work():
+    fleet = [
+        device("laptop", priority=20, capabilities=frozenset({"mcp", "filesystem"})),
+        device("desktop", priority=1, capabilities=frozenset({"mcp", "filesystem", "gpu", "blender"})),
+    ]
+    result = route("auto", fleet, preferred_capabilities={"gpu", "blender"})
+    assert result.device_ids == ("desktop",)
+
+
+def test_auto_prefers_project_affinity_after_capability_match():
+    fleet = [device("laptop", priority=10), device("desktop", priority=0)]
+    result = route("auto", fleet, preferred_device_ids=["desktop"])
+    assert result.device_ids == ("desktop",)
+
+
+def test_auto_preferences_never_override_explicit_or_offline_device():
+    fleet = [device("laptop"), device("desktop", relay_connected=False)]
+    assert route("auto", fleet, preferred_device_ids=["desktop"]).device_ids == ("laptop",)
+    with pytest.raises(DeviceRouteError):
+        route("desktop", fleet, preferred_device_ids=["laptop"])
+
+
+def test_auto_preferences_never_override_required_capabilities():
+    fleet = [device("laptop"), device("desktop", capabilities=frozenset({"mcp", "gpu"}))]
+    assert route("auto", fleet, required_capabilities={"filesystem"},
+                 preferred_capabilities={"gpu"}).device_ids == ("laptop",)
+
+
+def test_execution_receipt_must_match_selected_device_and_account():
+    from synapse_daemon.device_route_policy import verify_execution_target
+    verify_execution_target("desktop", "desktop", account_id="alice", reported_account_id="alice")
+    with pytest.raises(DeviceRouteError):
+        verify_execution_target("desktop", "laptop", account_id="alice", reported_account_id="alice")
+    with pytest.raises(DeviceRouteError):
+        verify_execution_target("desktop", "desktop", account_id="alice", reported_account_id="other")

@@ -55,6 +55,8 @@ def plan_devices(
     max_age_seconds: int = 90,
     allow_multiple: bool = False,
     approved_device_ids: Iterable[str] | None = None,
+    preferred_capabilities: Iterable[str] = (),
+    preferred_device_ids: Iterable[str] = (),
 ) -> RoutePlan:
     """Resolve explicit ID, 'auto' or 'both' using verified device IDs.
 
@@ -91,7 +93,17 @@ def plan_devices(
     elif selector == "auto":
         if not available:
             raise DeviceRouteError("No eligible online device for this account")
-        best = min(available.values(), key=lambda d: (-d.priority, d.device_id))
+        # Auto selection favors relevant tools and a project?s known machine before
+        # general priority. Preferences never bypass the hard eligibility gates.
+        preferred = frozenset(preferred_capabilities)
+        affinity = tuple(preferred_device_ids)
+        if len(affinity) != len(set(affinity)):
+            raise DeviceRouteError("Duplicate preferred device identity")
+        affinity_rank = {value: index for index, value in enumerate(affinity)}
+        best = min(available.values(), key=lambda d: (
+            -len(preferred.intersection(d.capabilities)),
+            affinity_rank.get(d.device_id, len(affinity)),
+            -d.priority, d.device_id))
         chosen = (best.device_id,)
     else:
         if selector not in available:
@@ -102,3 +114,17 @@ def plan_devices(
         if not set(chosen).issubset(approved):
             raise DeviceRouteError("Operation not approved for every selected device")
     return RoutePlan(account_id, selector, chosen, required, operation)
+
+
+
+def verify_execution_target(expected_device_id: str, reported_device_id: str,
+                            *, account_id: str, reported_account_id: str) -> None:
+    """Fail closed if a routed execution acknowledgement comes from another device.
+
+    Caller must obtain the reported identity from an authenticated device-bound
+    relay receipt, not from a hostname or arbitrary client-provided string.
+    """
+    if not expected_device_id or not reported_device_id or not account_id:
+        raise DeviceRouteError("Missing execution identity")
+    if reported_account_id != account_id or reported_device_id != expected_device_id:
+        raise DeviceRouteError("Execution target mismatch; refusing wrong-machine operation")
