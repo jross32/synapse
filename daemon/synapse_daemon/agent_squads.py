@@ -221,6 +221,7 @@ class AgentWorkItemLaunchRequest(BaseModel):
     # A caller may name an explicit reuse seed, or opt into a fresh isolated chat.
     reuse_chat_from_work_item_id: str | None = None
     fresh_chat: bool = False
+    edit_scopes: list[str] = Field(default_factory=list)
     source: AuditSource = AuditSource.DESKTOP
 
 

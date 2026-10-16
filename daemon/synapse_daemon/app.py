@@ -447,7 +447,10 @@ def build_app(
     app.state.worker_timeout_registry = worker_timeout_registry
     worker_presence_registry = WorkerPresenceRegistry()
     app.state.worker_presence_registry = worker_presence_registry
-    chatgpt_child_pool = ChatGPTBrowserPool(storage.data_dir)
+    from .chatgpt_mcp_bridge import build_playwright_call
+    chatgpt_child_pool = ChatGPTBrowserPool(
+        storage.data_dir, mcp_call_tool=build_playwright_call(storage)
+    )
     app.state.chatgpt_child_pool = chatgpt_child_pool
     app.include_router(build_master_todo_router(storage.data_dir), prefix=API_PREFIX, dependencies=[token_guard])
     active_task_scheduler = ActiveTaskScheduler(storage, ForemanDispatcher())
@@ -554,7 +557,7 @@ def build_app(
         dependencies=[token_guard],
     )
     app.include_router(
-        build_agent_squads_router(
+        squad_router := build_agent_squads_router(
             storage,
             pty_manager,
             bus,
@@ -862,6 +865,7 @@ def build_app(
 
         await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
+    app.router.on_startup.append(squad_router.recover_interrupted_chatgpt_workers)
     app.router.on_startup.append(active_task_scheduler.start)
     from .device_presence import DevicePresenceLoop
     device_presence = DevicePresenceLoop(profile_manager)

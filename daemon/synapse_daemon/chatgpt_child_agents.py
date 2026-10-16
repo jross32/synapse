@@ -702,10 +702,13 @@ class ChatGPTBrowserPool:
         *,
         headless: bool = False,
         browser_channel: str | None = DEFAULT_BROWSER_CHANNEL,
+        mcp_call_tool: Any = None,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.headless = headless
         self.browser_channel = browser_channel
+        self._mcp_call_tool = mcp_call_tool
+        self._mcp_browser = None
         self._playwright: Any = None
         self._context: Any = None
         self._start_lock = asyncio.Lock()
@@ -765,7 +768,35 @@ class ChatGPTBrowserPool:
         timeout: float = browser_runtime.DEFAULT_TIMEOUT_SECONDS,
         conversation_url: str | None = None,
         desired_title: str = "",
+        observe_only: bool = False,
+        on_conversation: Any = None,
     ) -> ChatGPTChildResult:
+        if self._mcp_call_tool is not None:
+            from .shared_webscraper_browser import SharedWebscraperBrowser
+            from .chatgpt_mcp_execution import execute_mcp_chat
+            started_at = time.monotonic()
+            result = ChatGPTChildResult(worker_id=worker_id)
+            if self._mcp_browser is None:
+                self._mcp_browser = SharedWebscraperBrowser(self._mcp_call_tool)
+            try:
+                start_url = conversation_url or read_worker_project_url(self.data_dir)
+                if not start_url:
+                    result.error = "Worker project URL is not configured"
+                    return result
+                output = await execute_mcp_chat(
+                    self._mcp_browser, worker_id,
+                    "Use the connected Synapse app for authorized project actions.\n\n" + prompt,
+                    start_url, timeout=timeout,
+                    observe_only=observe_only, on_conversation=on_conversation)
+                result.ok = output["ok"]
+                result.reply = output.get("reply", "")
+                result.error = output.get("error", "")
+                result.conversation_url = output.get("conversation_url", "")
+            except Exception as exc:
+                result.error = f"{type(exc).__name__}: {exc}"
+            finally:
+                result.wall_clock_seconds = time.monotonic() - started_at
+            return result
         started_at = time.monotonic()
         result = ChatGPTChildResult(worker_id=worker_id)
         start_error = await self._ensure_started()
