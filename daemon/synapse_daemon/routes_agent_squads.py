@@ -53,6 +53,8 @@ from .errors import SynapseError, conflict, invalid
 from .pty_sessions import PtySessionManager
 from .storage import Storage
 from .chatgpt_worker_checkpoints import WorkerCheckpointStore
+from .durable_scope_leases import DurableScopeLeases
+from .worker_scope_coordination import ScopeConflict
 from .ws import Event, EventBus
 
 log = logging.getLogger(__name__)
@@ -330,6 +332,7 @@ def build_agent_squads_router(
     launch_lock = asyncio.Lock()
     chatgpt_tasks: dict[str, asyncio.Task[None]] = {}
     worker_checkpoints = WorkerCheckpointStore(storage.data_dir / 'chatgpt-worker-checkpoints.sqlite')
+    scope_leases = DurableScopeLeases(storage.data_dir / 'chatgpt-worker-scope-leases.sqlite')
 
     async def _run_chatgpt_child(
         *,
@@ -348,9 +351,12 @@ def build_agent_squads_router(
         tracked_thread_id = ""
         tracked_turn_id = ""
         tracked_task_title = ""
+        lease_token = None
+        lease_repo = None
         with storage.transaction() as conn:
             work_item = squads.get_work_item(conn, work_item_id)
             squad = squads.get_squad(conn, work_item.squad_id)
+            lease_repo = squad.project_id
             request_group = thread_presence.ensure_external_group(
                 conn,
                 squad.project_id,
@@ -394,6 +400,12 @@ def build_agent_squads_router(
                 title=worker_chat_title,
             )
         try:
+            # Until per-task file scopes are known, serialize repository edits
+            # conservatively across all processes for the same Synapse project.
+            try:
+                lease_token = scope_leases.acquire(lease_repo, session_id, ["."], ttl=90)
+            except ScopeConflict:
+                raise RuntimeError("Repository edit scope is held by another worker")
             worker_checkpoints.record(work_item_id, session_id, 'observing', conversation_url=conversation_url)
             run_task = asyncio.create_task(
                 chatgpt_pool.run_child(
@@ -405,6 +417,9 @@ def build_agent_squads_router(
                 )
             )
             while not run_task.done():
+                if lease_token and not scope_leases.renew(lease_token, session_id, ttl=90):
+                    run_task.cancel()
+                    raise RuntimeError("Repository scope lease expired or was lost")
                 with storage.transaction() as conn:
                     current_session = coordination.get_session(conn, coordination_session_id)
                     if current_session.status != coordination.AgentSessionStatus.GONE:
@@ -443,6 +458,8 @@ def build_agent_squads_router(
                 worker_id=session_id, error=f"{type(exc).__name__}: {exc}"
             )
         finally:
+            if lease_token:
+                scope_leases.release(lease_token, session_id)
             chatgpt_tasks.pop(work_item_id, None)
 
         worker_checkpoints.record(
