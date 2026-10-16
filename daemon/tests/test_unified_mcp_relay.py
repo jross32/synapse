@@ -58,7 +58,19 @@ def _select(client, owner, device):
     result = client.put("/v1/relay/connector/selection", headers=owner, json={"device_id": device})
     assert result.status_code == 200, result.text
 
+def _heartbeat(client, device):
+    """Ordinary MCP calls only route to computers that checked in recently."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import update
+    from synapse_accounts.db import RelayDevice, session_scope
+    with session_scope(client.app.state.accounts_service.session_factory) as db:
+        db.execute(update(RelayDevice).where(RelayDevice.device_id == device)
+                   .values(last_seen_at=datetime.now(UTC)))
+
+
 def _rpc(client, path, device, token_header, mode="full"):
+    _heartbeat(client, device)
     payload = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
                "params": {"name": "synapse_get_context", "arguments": {}}}
     with ThreadPoolExecutor(max_workers=2) as executor:

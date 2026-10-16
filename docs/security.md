@@ -224,3 +224,11 @@ its normal automation credential. Public writes require an expiring, revocable c
 bound to allowed projects, authority, actions, duration, concurrency, and spend. MCP write
 tools must call the same scoped service rather than invoking storage/domain functions through
 a parallel global write switch. Full authority is explicit and never inherited by schedules.
+
+## Account MCP link ownership (v0.2.221)
+
+Each Synapse account has its own MCP link. The cloud gateway resolves the link to one account and only routes to
+computers enrolled under that account; a computer that two people have signed into claims jobs only for the account
+whose credential it is currently polling with. The desktop daemon stamps the link it hands to the profile UI with the
+owning `account_id` and refuses to return one across an account switch, and the UI never renders a link stamped for a
+different account. Covered by `daemon/tests/test_mcp_link_account_isolation.py`.
