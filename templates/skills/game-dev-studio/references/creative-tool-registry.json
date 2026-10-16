@@ -1,0 +1,290 @@
+{
+  "schema_version": 1,
+  "description": "Game Dev Studio capability catalog; discovery is not an installed or functional integration claim",
+  "tools": [
+    {
+      "id": "godot",
+      "category": "engine",
+      "domains": [
+        "2d",
+        "3d"
+      ],
+      "commands": [
+        "godot",
+        "godot4"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "unity",
+      "category": "engine",
+      "domains": [
+        "2d",
+        "3d"
+      ],
+      "commands": [
+        "Unity"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "unreal",
+      "category": "engine",
+      "domains": [
+        "3d"
+      ],
+      "commands": [
+        "UnrealEditor"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "roblox-studio",
+      "category": "engine",
+      "domains": [
+        "3d"
+      ],
+      "commands": [
+        "RobloxStudioBeta"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "gamemaker",
+      "category": "engine",
+      "domains": [
+        "2d"
+      ],
+      "commands": [
+        "GameMaker"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "defold",
+      "category": "engine",
+      "domains": [
+        "2d"
+      ],
+      "commands": [
+        "Defold"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "construct3",
+      "category": "engine",
+      "domains": [
+        "2d"
+      ],
+      "commands": [],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "o3de",
+      "category": "engine",
+      "domains": [
+        "3d"
+      ],
+      "commands": [
+        "o3de"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "blender",
+      "category": "modeling-animation",
+      "domains": [
+        "3d",
+        "texture"
+      ],
+      "commands": [
+        "blender"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "blockbench",
+      "category": "modeling-animation",
+      "domains": [
+        "3d",
+        "pixel"
+      ],
+      "commands": [
+        "Blockbench"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "maya",
+      "category": "modeling-animation",
+      "domains": [
+        "3d"
+      ],
+      "commands": [
+        "maya"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "houdini",
+      "category": "procedural-worlds",
+      "domains": [
+        "3d"
+      ],
+      "commands": [
+        "houdini"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "aseprite",
+      "category": "art-textures",
+      "domains": [
+        "2d",
+        "pixel"
+      ],
+      "commands": [
+        "aseprite"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "krita",
+      "category": "art-textures",
+      "domains": [
+        "2d",
+        "texture"
+      ],
+      "commands": [
+        "krita"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "gimp",
+      "category": "art-textures",
+      "domains": [
+        "2d",
+        "texture"
+      ],
+      "commands": [
+        "gimp"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "inkscape",
+      "category": "art-textures",
+      "domains": [
+        "2d",
+        "vector"
+      ],
+      "commands": [
+        "inkscape"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "photoshop",
+      "category": "art-textures",
+      "domains": [
+        "2d",
+        "texture"
+      ],
+      "commands": [
+        "Photoshop"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "audacity",
+      "category": "audio",
+      "domains": [
+        "audio"
+      ],
+      "commands": [
+        "audacity"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "reaper",
+      "category": "audio",
+      "domains": [
+        "audio"
+      ],
+      "commands": [
+        "reaper"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "fmod-studio",
+      "category": "audio",
+      "domains": [
+        "audio"
+      ],
+      "commands": [
+        "FMOD Studio"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "wwise",
+      "category": "audio",
+      "domains": [
+        "audio"
+      ],
+      "commands": [
+        "Wwise"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "tiled",
+      "category": "level-design",
+      "domains": [
+        "2d"
+      ],
+      "commands": [
+        "tiled"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    },
+    {
+      "id": "ldtk",
+      "category": "level-design",
+      "domains": [
+        "2d"
+      ],
+      "commands": [
+        "LDtk"
+      ],
+      "integration": "discovery",
+      "license_review_required": true
+    }
+  ]
+}
