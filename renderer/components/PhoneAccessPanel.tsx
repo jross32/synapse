@@ -31,6 +31,7 @@ import {
   type RemoteAccessStatus,
 } from '@shared/remote-access-client';
 import { getMcpConnectorInfo, type McpConnectorInfo } from '@shared/mcp-client';
+import { getAccountMcpConnector, type AccountMcpConnector } from '@shared/profile-client';
 import { canRestart, openExternal, restartApp } from '@shared/electron-bridge';
 import { runToolAction } from '@shared/tools-client';
 import {
@@ -56,6 +57,7 @@ export function PhoneAccessPanel(): JSX.Element {
   const { recentEvents } = useDaemon();
   const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
   const [mcpInfo, setMcpInfo] = useState<McpConnectorInfo | null>(null);
+  const [accountMcp, setAccountMcp] = useState<AccountMcpConnector | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,12 +73,14 @@ export function PhoneAccessPanel(): JSX.Element {
   async function refresh(): Promise<void> {
     setError(null);
     try {
-      const [next, mcp] = await Promise.all([
+      const [next, mcp, account] = await Promise.all([
         getRemoteAccessStatus(),
         getMcpConnectorInfo().catch(() => null),
+        getAccountMcpConnector().catch(() => null),
       ]);
       setStatus(next);
       setMcpInfo(mcp);
+      setAccountMcp(account);
     } catch (err) {
       setError((err as Error).message || 'Could not load phone access.');
     } finally {
@@ -781,6 +785,42 @@ export function PhoneAccessPanel(): JSX.Element {
             </SectionCard>
 
             <SectionCard
+              title='Connect your AI'
+              subtitle='One secure Synapse link for all your computers.'
+              icon={Sparkles}
+            >
+              <div className='space-y-3'>
+                {accountMcp?.url ? (
+                  <div className='flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-secondary/20 p-3'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='flex items-center gap-2 text-sm font-medium'><CheckCircle2 className='h-4 w-4 text-emerald-400' /> Account MCP link ready</p>
+                      <p className='mt-1 text-xs text-muted-foreground'>Works across signed-in computers. The device you select receives the work.</p>
+                      <p className='mt-1 truncate font-mono text-xs text-muted-foreground'>{new URL(accountMcp.url).host}</p>
+                    </div>
+                    <Button type='button' onClick={() => void copy(accountMcp.url!)}>
+                      <Copy className='h-4 w-4' />
+                      {justCopied === accountMcp.url ? 'Copied' : 'Copy MCP link'}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className='rounded-xl border border-border/70 bg-secondary/20 p-3 text-sm text-muted-foreground'>
+                    {accountMcp?.error || 'Sign in to Synapse to get your stable account MCP link.'}
+                  </p>
+                )}
+                {accountMcp?.selected_device_id && (
+                  <p className='text-xs text-muted-foreground'>
+                    Selected computer: {accountMcp.selected_device_id === accountMcp.this_device_id ? 'This computer' : 'Another signed-in computer'}.
+                    Device selection is not proof of remote command execution.
+                  </p>
+                )}
+                <p className='text-xs text-muted-foreground'>Paste the copied URL into your AI client's custom MCP connection. Keep the link private.</p>
+              </div>
+            </SectionCard>
+
+            <details className='rounded-xl border border-border/60 p-3'>
+              <summary className='cursor-pointer text-sm font-medium text-muted-foreground'>Advanced: legacy local tunnel and permissions</summary>
+              <div className='mt-3'>
+            <SectionCard
               title='Connect to Claude / ChatGPT (MCP connector)'
               subtitle='One link. The toggle below decides what it can do right now - flip it and the same URL switches between read-only and full access, no new link to re-paste.'
               icon={Sparkles}
@@ -931,6 +971,9 @@ export function PhoneAccessPanel(): JSX.Element {
                 </div>
               )}
             </SectionCard>
+
+              </div>
+            </details>
 
             <SectionCard
               title='Diagnostics'
