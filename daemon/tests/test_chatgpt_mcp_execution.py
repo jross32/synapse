@@ -53,3 +53,39 @@ def test_recovery_does_not_resend():
     ))
     assert result["ok"] and result["sent"] is False
     assert calls == ["browser_snapshot", "browser_snapshot", "browser_snapshot", "close"]
+
+
+# Captured from the registered authenticated Playwright MCP browser on 2026-10-16.
+# Real snapshots are YAML fenced and use an unqualified Stop button while streaming.
+AUTHENTICATED_MCP_SNAPSHOT = """### Open tabs
+- 0: [ChatGPT - Synapse2GPT Workers](https://chatgpt.com/g/g-p-demo/project)
+- 1: (current) [Authenticated MCP Parser Fix](https://chatgpt.com/g/g-p-demo/c/6ad23884-0e98-83e9-8fa3-cf92bd6431db)
+### Page
+- Page URL: https://chatgpt.com/g/g-p-demo/c/6ad23884-0e98-83e9-8fa3-cf92bd6431db
+- Page Title: Authenticated MCP Parser Fix
+### Snapshot
+```yaml
+- generic [ref=e1]:
+  - main [ref=e1080]:
+    - region "Conversation" [ref=e1113]:
+      - heading "You said:" [level=4] [ref=e1126]
+      - button "Copy message" [ref=e1140] [cursor=pointer]
+      - heading "Latest response" [level=4] [ref=e1160]
+      - textbox "Ask ChatGPT" [active] [ref=e1193]:
+      - button "Stop" [ref=e1221] [cursor=pointer]
+```
+"""
+
+def test_real_authenticated_mcp_snapshot_does_not_confirm_streaming_reply():
+    assert conversation_url(AUTHENTICATED_MCP_SNAPSHOT).endswith(
+        "/c/6ad23884-0e98-83e9-8fa3-cf92bd6431db"
+    )
+    assert _COMPOSER.search(AUTHENTICATED_MCP_SNAPSHOT).group(1) == "e1193"
+    assert not _response_done(AUTHENTICATED_MCP_SNAPSHOT)
+    # A misleading completion marker or user-message Copy control must not
+    # override the real browser's active Stop button.
+    assert not _response_done(
+        AUTHENTICATED_MCP_SNAPSHOT.replace(
+            'heading "Latest response"', 'status: Response complete\n      - button "Copy" [ref=e1150]\n      - heading "Latest response"'
+        )
+    )

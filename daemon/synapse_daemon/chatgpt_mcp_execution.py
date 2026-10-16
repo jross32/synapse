@@ -30,7 +30,7 @@ def _response_done(snapshot: str) -> bool:
     return (
         "Response complete" in page
         and ('button "Copy"' in page or 'button "Regenerate response"' in page)
-        and not ('button "Stop generating"' in page or 'button "Stop response"' in page)
+        and not any(f'button "{label}"' in page for label in ("Stop", "Stop generating", "Stop response"))
     )
 
 async def execute_mcp_chat(browser: SharedWebscraperBrowser, worker_id: str, prompt: str,
