@@ -25,6 +25,8 @@ def select_account_device(
     selector: str, devices: Iterable[DeviceTarget], operation: str,
     required_capabilities: Iterable[str] = (),
     approved_device_ids: Iterable[str] | None = None,
+    preferred_capabilities: Iterable[str] = (),
+    preferred_device_ids: Iterable[str] = (),
     now: datetime | None = None,
 ) -> AccountDeviceSelection:
     """Authorize an exact account-owned, reachable host and confirm selection."""
@@ -33,7 +35,8 @@ def select_account_device(
     plan = plan_devices(
         account_id=account_id, selector=selector, devices=devices,
         operation=operation, required_capabilities=required_capabilities,
-        approved_device_ids=approved_device_ids, now=now,
+        approved_device_ids=approved_device_ids,
+        preferred_capabilities=preferred_capabilities, preferred_device_ids=preferred_device_ids, now=now,
     )
     if len(plan.device_ids) != 1:
         raise DeviceRouteError("The current account MCP relay supports only one selected device")

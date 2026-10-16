@@ -69,3 +69,24 @@ def test_cloud_api_does_not_claim_multi_target_support():
     with pytest.raises(DeviceRouteError):
         choose(FakeCloud(), selector="both",
                approved_device_ids={"desktop", "laptop"})
+
+
+def test_auto_selects_project_affinity_and_creative_capabilities():
+    cloud = FakeCloud()
+    chosen = choose(
+        cloud, "auto",
+        [host("laptop", capabilities=frozenset({"mcp", "filesystem"})),
+         host("desktop", capabilities=frozenset({"mcp", "filesystem", "gpu", "blender"}))],
+        required_capabilities={"mcp"},
+        preferred_capabilities={"gpu", "blender"},
+        preferred_device_ids=["desktop"],
+    )
+    assert chosen.device_id == "desktop"
+    assert cloud.calls[-1][1] == "desktop"
+
+
+def test_explicit_device_never_redirects_to_preferred_one():
+    cloud = FakeCloud()
+    chosen = choose(cloud, "laptop", preferred_capabilities={"gpu"},
+                    preferred_device_ids=["desktop"])
+    assert chosen.device_id == "laptop"
