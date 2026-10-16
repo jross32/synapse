@@ -10,6 +10,17 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.2.221] -- 2026-10-16
+
+### Fixed
+- **Profile MCP link is easy to find and always the signed-in account's own.** The "Your MCP link" card now sits at the top of the profile next to the account card, says which account owns the link, and only reaches computers signed into that account. Anyone else who signs into Synapse (even on the same computer) gets their own link.
+- The local daemon stamps `GET /api/v1/profile/mcp-link` and `/rotate` responses with `account_id` and `username`, and refuses (409) to hand out a link if the signed-in account changes mid-request. The profile reloads when a different account signs in and never renders a link stamped for another account.
+- A failed link load now shows the real error with a **Retry** button instead of a dead-end "unavailable" line.
+
+### Notes
+- New `daemon/tests/test_mcp_link_account_isolation.py`: two accounts sharing one computer id get different links, cannot list/select/call each other's computers, and a shared computer only claims jobs for the account that sent them (mutation-checked: removing the account filter in `claim_job` fails the test).
+- `test_unified_mcp_relay.py` now heartbeats devices before routing, matching the online-only routing rule introduced with failover.
+
 ## [0.2.220] -- 2026-10-14
 
 - Isolated Windows updater candidate integration: signed update manifests and immutable bundled public trust.

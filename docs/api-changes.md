@@ -15,6 +15,12 @@ Every entry below must include: the date, the new version added, what changed, a
 
 ## v1 — initial surface
 
+### Shipped in v0.2.221 (owner-stamped profile MCP link)
+
+| Date | Endpoint or event | Kind | Notes |
+|---|---|---|---|
+| 2026-10-16 | `GET /api/v1/profile/mcp-link`, `POST /api/v1/profile/mcp-link/rotate` | Additive | Responses now include `account_id` and `username` of the account that owns the link. Returns 409 `conflict` if the signed-in account changes while the link is being fetched. Older clients can ignore the new fields. |
+
 ### Shipped in v0.1.205 (reserved MCP control lane)
 
 | Date | Endpoint or event | Kind | Notes |

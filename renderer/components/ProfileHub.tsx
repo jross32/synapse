@@ -35,6 +35,7 @@ import {
   getProfileHosts,
   getDeviceAccessPolicies,
   getAccountMcpLink,
+  mcpLinkBelongsTo,
   rotateAccountMcpLink,
   selectAccountMcpDevice,
   type AccountMcpLink,
@@ -94,6 +95,7 @@ export function ProfileHub({
   const [hosts, setHosts] = useState<HostPresence[]>([]);
   const [devicePolicies, setDevicePolicies] = useState<DeviceAccessPolicy[]>([]);
   const [mcpLink, setMcpLink] = useState<AccountMcpLink | null>(null);
+  const [mcpLinkError, setMcpLinkError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [loadingHub, setLoadingHub] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,8 +122,23 @@ export function ProfileHub({
   useEffect(() => {
     if (!open) return;
     void loadHubData();
+    // Reload when a different account signs in so nothing from the previous
+    // profile (its MCP link, hosts, device policies) stays on screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, profile?.user_id]);
+
+  const ownMcpLink = mcpLinkBelongsTo(mcpLink, profile?.user_id) ? mcpLink : null;
+
+  async function loadMcpLink(): Promise<void> {
+    setMcpLinkError(null);
+    try {
+      const link = await getAccountMcpLink();
+      setMcpLink(link);
+    } catch (cause) {
+      setMcpLink(null);
+      setMcpLinkError((cause as Error).message || 'Could not load your MCP link.');
+    }
+  }
 
   const favorites = useMemo(
     () => (catalogState?.items ?? []).filter((item) => item.favorite).slice(0, 8),
@@ -168,8 +185,11 @@ export function ProfileHub({
         setHosts([]);
         setDevicePolicies([]);
         setMcpLink(null);
+        setMcpLinkError(null);
         return;
       }
+      // Never keep showing a link fetched for a previously signed-in account.
+      setMcpLink(previous => (mcpLinkBelongsTo(previous, summary.user_id) ? previous : null));
 
       const [catalogRes, servicesRes, hostsRes] = await Promise.allSettled([
         getCatalogState(),
@@ -183,8 +203,7 @@ export function ProfileHub({
       if (servicesRes.status === 'fulfilled') setServices(servicesRes.value);
       else issues.push((servicesRes.reason as Error).message);
 
-      try { setMcpLink(await getAccountMcpLink()); }
-      catch (cause) { issues.push((cause as Error).message); }
+      await loadMcpLink();
       if (hostsRes.status === 'fulfilled') {
         setHosts(hostsRes.value);
         try { setDevicePolicies(await getDeviceAccessPolicies()); }
@@ -530,6 +549,69 @@ export function ProfileHub({
           <div className='space-y-4'>
             <Card className='space-y-4 p-5'>
               <div>
+                <div className='flex items-center gap-2'><Link2 className='h-5 w-5 text-primary' /><h3 className='text-lg font-semibold'>Your MCP link</h3></div>
+                <p className='mt-1 text-sm text-muted-foreground'>
+                  Paste this into ChatGPT or Claude as a custom connector. It belongs to{' '}
+                  <span className='font-semibold text-foreground'>{profile?.username ?? 'this account'}</span>{' '}
+                  and only reaches computers signed into this account. Anyone else who signs into Synapse gets their own link.
+                </p>
+              </div>
+              {ownMcpLink ? (
+                <>
+                  <div className='flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/25 p-3'>
+                    <span className='min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground' data-testid='profile-mcp-link'>{new URL(ownMcpLink.url).origin}/mcp/[hidden]</span>
+                    <Button type='button' variant='outline' size='sm' onClick={() => void runAction('copy-mcp', async () => {
+                      await navigator.clipboard.writeText(ownMcpLink.url);
+                      setNotice('Your MCP link is copied. Treat it like a password: it controls the computer selected below.');
+                    })}>Copy MCP link</Button>
+                  </div>
+                  <label className='block text-sm'>Computer that answers ChatGPT / Claude
+                    <select className='mt-1 w-full rounded-lg border border-border bg-background p-2 text-sm'
+                      value={ownMcpLink.selected_device_id ?? ''}
+                      disabled={busyKey === 'select-mcp'}
+                      onChange={event => {
+                        const deviceId = event.target.value;
+                        void runAction('select-mcp', async () => {
+                          await selectAccountMcpDevice(deviceId);
+                          setMcpLink(previous => previous ? { ...previous, selected_device_id: deviceId } : null);
+                          const chosen = hosts.find(host => host.id === deviceId);
+                          setNotice(`${chosen?.name ?? 'That computer'} now answers your MCP link.`);
+                        });
+                      }}>
+                      <option value='' disabled>Automatic: most recently online</option>
+                      {hosts.map(host => (
+                        <option key={host.id} value={host.id}>
+                          {host.name}{host.current_host ? ' (this computer)' : ` (seen ${formatLocal(host.last_seen_at, 'relative')})`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className='flex items-center justify-between gap-3 text-xs text-muted-foreground'>
+                    <span>The same link works in every ChatGPT and Claude chat.</span>
+                    <Button variant='outline' size='sm' onClick={() => {
+                      if (!window.confirm('Rotate your MCP link? ChatGPT and Claude connectors using the old link will stop working.')) return;
+                      void runAction('rotate-mcp', async () => {
+                        setMcpLink(await rotateAccountMcpLink());
+                        setNotice('MCP link rotated. Paste the new link into your ChatGPT and Claude connectors.');
+                      });
+                    }}>Rotate link</Button>
+                  </div>
+                </>
+              ) : (
+                <div className='flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-secondary/25 p-3 text-sm'>
+                  <span className='min-w-0 flex-1 text-muted-foreground'>
+                    {loadingHub ? 'Loading your MCP link…' : `Your MCP link could not be loaded${mcpLinkError ? `: ${mcpLinkError}` : '.'}`}
+                  </span>
+                  <Button type='button' variant='outline' size='sm' disabled={loadingHub || busyKey === 'reload-mcp'}
+                    onClick={() => void runAction('reload-mcp', loadMcpLink)}>
+                    <RefreshCw className='mr-1 h-4 w-4' />Retry
+                  </Button>
+                </div>
+              )}
+            </Card>
+
+            <Card className='space-y-4 p-5'>
+              <div>
                 <h3 className='text-lg font-semibold'>Favorites</h3>
                 <p className='mt-1 text-sm text-muted-foreground'>
                   Favorites sync across hosts while install state stays honest per machine.
@@ -574,45 +656,6 @@ export function ProfileHub({
               )}
             </Card>
 
-            <Card className='space-y-4 p-5'>
-              <div>
-                <div className='flex items-center gap-2'><Link2 className='h-5 w-5 text-primary' /><h3 className='text-lg font-semibold'>Unified ChatGPT / Claude MCP</h3></div>
-                <p className='mt-1 text-sm text-muted-foreground'>One account-wide connector link. Your chosen computer handles requests; remote write permission is controlled by the device toggle below.</p>
-              </div>
-              {mcpLink ? (
-                <>
-                  <div className='flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/25 p-3'>
-                    <span className='min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground'>{new URL(mcpLink.url).origin}/mcp/[hidden]</span>
-                    <Button type='button' variant='outline' size='sm' onClick={() => void runAction('copy-mcp', async () => {
-                      await navigator.clipboard.writeText(mcpLink.url);
-                      setNotice('Connector link copied. Treat it like a password: it grants MCP access to your selected computer.');
-                    })}>Copy MCP link</Button>
-                  </div>
-                  <label className='block text-sm'>Active Synapse computer
-                    <select className='mt-1 w-full rounded-lg border border-border bg-background p-2 text-sm'
-                      value={mcpLink.selected_device_id ?? ''}
-                      disabled={busyKey === 'select-mcp'}
-                      onChange={event => void runAction('select-mcp', async () => {
-                        await selectAccountMcpDevice(event.target.value);
-                        setMcpLink(previous => previous ? { ...previous, selected_device_id: event.target.value } : null);
-                      })}>
-                      <option value='' disabled>Automatic: most recently online</option>
-                      {hosts.map(host => <option key={host.id} value={host.id}>{host.name}{host.current_host ? ' (this computer)' : ''}</option>)}
-                    </select>
-                  </label>
-                  <div className='flex items-center justify-between gap-3 text-xs text-muted-foreground'>
-                    <span>All ChatGPT and Claude clients use this same URL.</span>
-                    <Button variant='outline' size='sm' onClick={() => {
-                      if (!window.confirm('Rotate this MCP link? Existing ChatGPT and Claude connector links will stop working.')) return;
-                      void runAction('rotate-mcp', async () => {
-                        setMcpLink(await rotateAccountMcpLink());
-                        setNotice('MCP connector link rotated. Copy the new URL to any existing AI connectors.');
-                      });
-                    }}>Rotate link</Button>
-                  </div>
-                </>
-              ) : <p className='text-sm text-muted-foreground'>Account MCP connection unavailable. Refresh when your account service is reachable.</p>}
-            </Card>
             <Card className='space-y-4 p-5'>
               <div>
                 <h3 className='text-lg font-semibold'>Hosts & installs</h3>

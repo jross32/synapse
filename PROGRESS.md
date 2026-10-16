@@ -6,7 +6,15 @@
 
 ## Current version
 
-`0.1.205`
+`0.2.221`
+
+> **Profile shows your own MCP link (2026-10-16):** v0.2.221 moves the "Your MCP link" card to the top
+> of the profile, labels the owning account, stamps daemon link responses with `account_id`/`username`,
+> refuses links across an account switch, and adds a Retry path. Isolation is covered end to end:
+> two accounts on one computer get different links and can only reach their own computers/jobs.
+> Verified live against a local accounts service + daemon + renderer (1280 and 375 screenshots in
+> `docs/screenshots/profile-mcp-link-*.png`). Next: ship an installer from this line so DESKTOP
+> installs pick it up (the Oct 14 0.2.220 preview build lacks the card and the relay agent).
 
 > **MCP control traffic stays reachable under connector saturation (2026-08-28):** v0.1.205
 > keeps the total MCP dispatch budget at 16 threads but reserves 4 for cheap local control/read

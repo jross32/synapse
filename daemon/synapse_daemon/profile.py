@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 from pydantic import BaseModel, Field, field_validator
 
-from .errors import invalid
+from .errors import conflict, invalid
 from .runtime_resolution import resolve_command
 from .secrets import decrypt, encrypt
 from .storage import Storage
@@ -611,10 +611,29 @@ class ProfileManager:
             raise invalid("profile", "Invalid device identifier.")
         return self._accounts.select_mcp_device(access_token=self._ensure_access_token(), device_id=device_id)
     def get_account_mcp_link(self) -> dict[str, Any]:
-        return self._accounts.create_mcp_connector(access_token=self._ensure_access_token())
+        return self._owned_mcp_link(self._accounts.create_mcp_connector)
 
     def rotate_account_mcp_link(self) -> dict[str, Any]:
-        return self._accounts.rotate_mcp_connector(access_token=self._ensure_access_token())
+        return self._owned_mcp_link(self._accounts.rotate_mcp_connector)
+
+    def _owned_mcp_link(self, fetch: Any) -> dict[str, Any]:
+        """Return the signed-in account's own connector link, stamped with its owner.
+
+        The cloud issues one link per account. Stamping the owner lets the UI
+        refuse to show a link that belongs to a different profile (for example
+        after a sign-out / sign-in race on a shared computer).
+        """
+        before = self._state_row()
+        owner_id = before["user_id"]
+        if not owner_id:
+            raise invalid("profile", "Sign into your Synapse account first.")
+        link = dict(fetch(access_token=self._ensure_access_token()))
+        after = self._state_row()
+        if after["user_id"] != owner_id:
+            raise conflict("profile", "The signed-in Synapse account changed; reload your profile.")
+        link["account_id"] = owner_id
+        link["username"] = after["username"]
+        return link
     def list_device_access(self) -> dict[str, Any]:
         self._refresh_from_remote(best_effort=True)
         return self._accounts.list_device_access(access_token=self._ensure_access_token())

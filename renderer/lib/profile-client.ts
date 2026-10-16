@@ -157,6 +157,15 @@ export interface AccountMcpLink {
   rotated: boolean;
   selected_device_id: string | null;
   note: string;
+  /** Account that owns this link (stamped by the local daemon). */
+  account_id?: string | null;
+  username?: string | null;
+}
+
+/** A link is only shown when it belongs to the profile that is signed in now. */
+export function mcpLinkBelongsTo(link: AccountMcpLink | null, userId: string | null | undefined): boolean {
+  if (!link || !userId) return false;
+  return !link.account_id || link.account_id === userId;
 }
 
 export async function getAccountMcpLink(): Promise<AccountMcpLink> {
