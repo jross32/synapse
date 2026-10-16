@@ -367,6 +367,10 @@ class ProfileManager:
         session = self._accounts.sign_in(login=login, password=password)
         self._store_session_payload(session)
         self._refresh_from_remote(best_effort=True)
+        # A newly signed-in machine must publish its own stable host ID.
+        # Pulling the remote profile alone leaves it invisible to other devices.
+        self.ensure_current_host()
+        self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
     def start_oauth(self, *, provider: str, redirect_to: str, mode: str = "signin") -> str:
@@ -383,6 +387,10 @@ class ProfileManager:
         session = self._accounts.exchange_oauth(handoff=handoff)
         self._store_session_payload(session)
         self._refresh_from_remote(best_effort=True)
+        # A newly signed-in machine must publish its own stable host ID.
+        # Pulling the remote profile alone leaves it invisible to other devices.
+        self.ensure_current_host()
+        self._sync_to_remote(best_effort=True)
         return self.summary(refresh_remote=False)
 
     def unlink_provider(self, *, provider: str) -> ProfileSummary:
@@ -596,6 +604,12 @@ class ProfileManager:
 
     def list_hosts(self) -> list[HostPresence]:
         self.ensure_current_host()
+        # Publish this machine's stable ID and merge other account hosts.
+        # Throttle to avoid a cloud write on every UI refresh.
+        now = time.monotonic()
+        if self._state_row()["user_id"] and now - getattr(self, "_last_host_presence_sync", -1e9) >= 90:
+            self._last_host_presence_sync = now
+            self._sync_to_remote(best_effort=True)
         rows = self._storage.conn.execute(
             """
             SELECT id, name, platform, current_host, last_seen_at, created_at, updated_at
