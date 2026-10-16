@@ -617,6 +617,10 @@ class ProfileManager:
             ORDER BY current_host DESC, last_seen_at DESC
             """
         ).fetchall()
+        distinct = {}
+        for item in rows:
+            key = (item["name"].casefold(), item["platform"].casefold())
+            distinct.setdefault(key, item)
         return [
             HostPresence(
                 id=row["id"],
@@ -627,7 +631,7 @@ class ProfileManager:
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
             )
-            for row in rows
+            for row in distinct.values()
         ]
 
     def list_service_connections(
