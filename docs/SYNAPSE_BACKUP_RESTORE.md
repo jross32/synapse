@@ -35,3 +35,8 @@ Tier C, usually rebuildable after confirming no owner-only data: node_modules, .
 ## Release and backup gates
 Do not call all of Synapse backed up, restored, or safe for an unattended migration until real local state, source changes, Railway persistent data, credentials, external dependencies and cross-device account/MCP continuity have independent restore evidence.
 
+## SQLite-specific recovery tool
+Use scripts/synapse_sqlite_backup_verify.py with three distinct paths: --source (existing live SQLite DB), --archive (new encrypted-target staging file), and --restored (new isolated verification path). Uses SQLite's online backup interface, PRAGMA integrity_check, and SHA-256 on the restored file. It never overwrites an existing archive or source, but the new backup file **can contain secrets** and must be encrypted before cloud transfer. Tests in daemon/tests/test_synapse_sqlite_backup_verify.py exercise WAL mode and overwrite refusal. Passing fixture tests does not certify the production Railway accounts volume.
+
+## Measurement status
+The read-only registered-project recovery estimate reported 29.64 GiB of local project and selected Synapse state roots with generated build/dependency folders excluded. A separate fast scan of 170 local repositories reported 32.91 GiB before selected application state. These scopes overlap; never add their totals. Neither includes actual Railway /data usage or third-party cloud exports. The slower exhaustive scan timed out without producing a report.
