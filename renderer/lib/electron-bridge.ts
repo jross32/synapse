@@ -1,3 +1,4 @@
+export interface DesktopUpdateInfo { status: 'disabled' | 'current' | 'available' | 'error'; currentVersion: string; version?: string; notes?: string; error?: string }
 // Thin wrapper over the Electron preload bridge (window.synapse).
 //
 // Everything here degrades gracefully when running in a plain browser
@@ -15,6 +16,8 @@ interface SynapseBridge {
   getAutostart?: () => Promise<boolean>;
   setAutostart?: (enabled: boolean) => Promise<boolean>;
   restart?: () => Promise<boolean>;
+  checkUpdate?: () => Promise<DesktopUpdateInfo>;
+  installUpdate?: () => Promise<{ok:boolean;error?:string}>;
   exit?: () => Promise<boolean>;
 }
 
@@ -130,3 +133,6 @@ export async function openExternal(
     error: 'Opening local paths is only available in the desktop app.',
   };
 }
+
+export async function checkDesktopUpdate(): Promise<DesktopUpdateInfo | null> { return bridge()?.checkUpdate?.() ?? null; }
+export async function installDesktopUpdate(): Promise<{ok:boolean;error?:string}> { return bridge()?.installUpdate?.() ?? {ok:false,error:'Desktop update installer unavailable.'}; }

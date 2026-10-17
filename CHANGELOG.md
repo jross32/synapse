@@ -10,6 +10,12 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.2.220] -- 2026-10-14
+
+- Isolated Windows updater candidate integration: signed update manifests and immutable bundled public trust.
+- This is an unsigned test candidate until Windows Authenticode signing and independent install, rollback, account/device identity preservation checks pass; it is not a stable release.
+
+
 ## [0.2.218] -- 2026-10-13
 
 - Align the documented source release number across the Electron package, Python daemon, README, and Python package manifest.

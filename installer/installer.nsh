@@ -79,6 +79,7 @@ FunctionEnd
 
 !macro customInstall
   CreateDirectory "$APPDATA\Synapse"
+  IfFileExists "$APPDATA\Synapse\bootstrap-ai-bundles.json" preserve_existing_bundles
   FileOpen $0 "$APPDATA\Synapse\bootstrap-ai-bundles.json" w
   FileWrite $0 "{$\r$\n  $\"bundle_ids$\": ["
   StrCpy $R9 1
@@ -122,6 +123,8 @@ FunctionEnd
   FileWrite $0 "]$\r$\n}$\r$\n"
   FileClose $0
 
+preserve_existing_bundles:
+  IfFileExists "$APPDATA\Synapse\bootstrap-optional-tools.json" preserve_existing_optional_tools
   FileOpen $1 "$APPDATA\Synapse\bootstrap-optional-tools.json" w
   ${If} $BundleImageStudioState == 1
     FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [$\"synapse-image-studio$\"],$\r$\n  $\"uninstall_tool_ids$\": []$\r$\n}$\r$\n"
@@ -129,4 +132,5 @@ FunctionEnd
     FileWrite $1 "{$\r$\n  $\"install_tool_ids$\": [],$\r$\n  $\"uninstall_tool_ids$\": [$\"synapse-image-studio$\"]$\r$\n}$\r$\n"
   ${EndIf}
   FileClose $1
+preserve_existing_optional_tools:
 !macroend
