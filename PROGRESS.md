@@ -6,7 +6,7 @@
 
 ## Current version
 
-`0.2.221`
+`0.2.222`
 
 > **Profile shows your own MCP link (2026-10-16):** v0.2.221 moves the "Your MCP link" card to the top
 > of the profile, labels the owning account, stamps daemon link responses with `account_id`/`username`,

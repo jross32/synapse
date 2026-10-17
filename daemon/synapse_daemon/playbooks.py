@@ -27,6 +27,7 @@ CHATGPT_CONNECTOR_PLAYBOOK_ID = "chatgpt-connector-setup"
 CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID = "chatgpt-autonomous-app-build"
 CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID = "chatgpt-workflow-design-notes"
 TOKEN_LEAN_DELEGATION_PLAYBOOK_ID = "token-lean-delegation"
+CHATGPT_UI_FLEET_PLAYBOOK_ID = "chatgpt-ui-fleet"
 
 
 class PlaybookStatus(str, Enum):
@@ -438,6 +439,15 @@ def ensure_bootstrap_chatgpt_workflow_notes_playbook(conn: sqlite3.Connection) -
         "Several manually-opened tabs, each its own chat, can already act as parallel workers; "
         "the only thing missing for that to be orchestrated rather than manual is the same "
         "browser-runtime piece above, generalized to N tabs.",
+        "2026-10-17: A Claude supervisor manually orchestrated 10 simultaneous ChatGPT UI "
+        "workers through Synapse's shared Playwright browser, proving N-tab orchestration "
+        "in practice. The browser can restart and lose tabs, so tab ownership and recovery "
+        "remain requirements for a native daemon fleet. Measured 28 orchestrator calls "
+        "for spawning (~26k output, ~9.9M cached-context reads, ~380k cache writes); "
+        "one idle 15-minute check-in cost 3 calls (~1.0M cached reads, ~8.6k writes, "
+        "~1.1k output). Cost is dominated by rereading a ~350k-token context per call: "
+        "fresh short-context check-ins are estimated 10-15x cheaper, while a native "
+        "deterministic nudge loop needs zero AI tokens.",
     ]
     return upsert_playbook(
         conn,
@@ -449,5 +459,52 @@ def ensure_bootstrap_chatgpt_workflow_notes_playbook(conn: sqlite3.Connection) -
             "how-to -- operating steps stay in chatgpt-connector-setup and "
             "chatgpt-autonomous-app-build."
         ),
+        steps=steps,
+    )
+
+
+
+def ensure_bootstrap_chatgpt_ui_fleet_playbook(conn: sqlite3.Connection) -> Playbook:
+    """Seed the reproducible, manually proven ChatGPT UI multi-tab fleet procedure."""
+    steps = [
+        "Prerequisites: use an authenticated ChatGPT browser registered as a Playwright MCP "
+        "server in Synapse; confirm the Synapse connector is attached and operational. "
+        "Use scripts/chatgpt-fleet with a local config, never embedded tokens or URLs.",
+        "Before spawning: the supervisor creates all git worktrees sequentially, assigns "
+        "one isolated branch and explicit file ownership list per lane, checks the base "
+        "commit and avoids concurrent git worktree-add races on the repository lock.",
+        "Design N independent lanes with bounded responsibilities and a dedicated integrator "
+        "lane. The integrator merges completed lane commits with --no-ff one at a time, "
+        "tests after each merge, and does not touch the live checkout or protected branches.",
+        "Worker preamble: name the machine and permitted checkout, insist on Synapse "
+        "connector-only execution, prohibit other workers' files and secrets, require "
+        "actual tests and commits, and end every response with HANDOFF containing lane, "
+        "branch, commit, files, test_result, next (or DONE).",
+        "Spawn: for each lane open a new tab in the configured ChatGPT project, attach "
+        "'Connect To Synapse' using Add files and more, fill the ProseMirror composer, "
+        "click send, and discover the durable /c/ URL from the tab list after navigation.",
+        "Observe only supervisor-owned conversation IDs. Read each tab's generating state "
+        "from the stop button and the last HANDOFF; never nudge a generating or DONE worker. "
+        "If a tab disappears after browser restart, report missing and recover deliberately.",
+        "Cheap nudge loop: periodically inspect owned tabs with one Playwright pass; send "
+        "a lane-specific continue prompt only to idle non-DONE chats after reattaching "
+        "the Synapse connector. Report one line per lane; avoid model calls for polling.",
+        "Safety: never touch other browser tabs, another lane's branch, live daemon, "
+        "credentials, Windows scheduled tasks or protected branches. Never assume a "
+        "dispatch return URL has reached /c/; do not print the MCP token.",
+        "Cost evidence 2026-10-17: 10 spawns used 28 Claude calls, ~26k output tokens, "
+        "~9.9M cached reads and ~380k cache writes; one 15-minute idle check-in used "
+        "3 calls, ~1.0M cached reads, ~8.6k writes and ~1.1k output. Cost is call "
+        "count times large conversation context; a fresh small-context check-in is "
+        "estimated 10-15x cheaper; native deterministic polling costs zero AI tokens.",
+        "Pitfalls: long synchronous account-relay calls may 502 (use async and poll); "
+        "QA can rewrite tracked screenshots (restore only those owned artifacts); "
+        "browser restarts drop tabs; Playwright selectors can drift; treat HANDOFF as "
+        "evidence to verify, not proof of tests or commits without independent checks.",
+    ]
+    return upsert_playbook(
+        conn, playbook_id=CHATGPT_UI_FLEET_PLAYBOOK_ID,
+        title="ChatGPT UI fleet: multi-tab worker orchestration",
+        summary="Proven manual N-tab orchestration with safe lanes, HANDOFFs, and cheap polling.",
         steps=steps,
     )

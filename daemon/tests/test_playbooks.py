@@ -222,3 +222,25 @@ def test_reseeding_the_workflow_notes_playbook_preserves_a_reported_status(tmp_p
 
     assert reseeded.status == playbooks.PlaybookStatus.NEEDS_ATTENTION
     assert reseeded.status_note == "entries need review"
+
+
+
+def test_bootstrap_chatgpt_ui_fleet_seeded_healthy_and_complete(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        fleet = playbooks.ensure_bootstrap_chatgpt_ui_fleet_playbook(conn)
+    assert fleet.id == "chatgpt-ui-fleet"
+    assert fleet.status == playbooks.PlaybookStatus.HEALTHY
+    assert len(fleet.steps) >= 9
+    text = " ".join(fleet.steps).lower()
+    for required in ("playwright", "handoff", "integrator", "nudge", "cost", "token", "worktree"):
+        assert required in text
+    assert playbooks.get_playbook(storage.conn, fleet.id).steps == fleet.steps
+    assert next(x for x in playbooks.list_playbooks(storage.conn) if x.id == fleet.id).step_count == len(fleet.steps)
+
+
+def test_workflow_notes_include_dated_fleet_evidence(tmp_path):
+    storage = _storage(tmp_path)
+    with storage.transaction() as conn:
+        notes = playbooks.ensure_bootstrap_chatgpt_workflow_notes_playbook(conn)
+    assert any("2026-10-17" in step and "10 simultaneous" in step for step in notes.steps)
