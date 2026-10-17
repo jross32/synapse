@@ -10,6 +10,16 @@ Repo conventions for AI coding sessions (Claude, Copilot, Codex, etc.). Read [`P
 
 ---
 
+## Native ChatGPT UI worker fleets (ADR-0038)
+
+Use synapse_fleet_start over MCP (or POST /api/v1/fleet/start over REST) to
+start git-isolated ChatGPT UI workers. Call synapse_get_playbook with
+chatgpt-ui-fleet before dispatch. Monitor with synapse_fleet_status,
+reconcile idle lanes with synapse_fleet_nudge, and disable with
+synapse_fleet_stop. The opt-in daemon timer checks lanes every configured
+interval; fleet chats are archived, never deleted. The operation must not
+touch the running daemon checkout or unrelated browser tabs. Review ADR-0038.
+
 ## Golden rule
 
 **Never leave the repo broken.** If you can't finish a milestone in one session, finish a *commit* that compiles, typechecks, and passes tests. Then update `PROGRESS.md` to record what's left.

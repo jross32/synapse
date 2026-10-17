@@ -395,6 +395,10 @@ _TOOL_ANNOTATIONS: dict[str, dict[str, bool]] = {
     "synapse_list_active_tasks": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_list_playbooks": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_get_playbook": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_fleet_status": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_fleet_start": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_fleet_nudge": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_fleet_stop": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True},
     # -- additive writes: create a new record, never delete or overwrite an existing one --
     "synapse_add_project_idea": {"readOnlyHint": False, "destructiveHint": False,
                                  "idempotentHint": False},
@@ -875,6 +879,13 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
             "inputSchema": empty,
         },
         {
+            "name": "synapse_fleet_status",
+            "description": "Show compact lane status, branch HEAD, last status and owned chat for Synapse-native ChatGPT UI worker fleets.",
+            "inputSchema": {"type": "object", "properties": {
+                "fleet_id": {"type": "string", "description": "Optional fleet identifier."}
+            }, "additionalProperties": False},
+        },
+        {
             "name": "synapse_get_playbook",
             "description": "Read one playbook's full steps, status, and status note.",
             "inputSchema": {
@@ -896,6 +907,37 @@ def _tool_specs(allow_writes: bool = False) -> list[dict[str, Any]]:
 
         specs.extend(
             [
+                {
+                    "name": "synapse_fleet_start",
+                    "description": "Start native, zero-supervisor-token ChatGPT UI workers: sequential git worktrees, fresh project chats, required Synapse connector and @Synapse2 app mention, GPT-6 effort High. Pass workers or named lanes, project_url, repo and base_ref. Reuse via REST /api/v1/fleet/start.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_url": {"type": "string"}, "repo": {"type": "string"},
+                            "base_ref": {"type": "string"}, "workers": {"type": "integer", "minimum": 1, "maximum": 12},
+                            "lanes": {"type": "array", "items": {"type": "object"}},
+                            "interval_minutes": {"type": "integer", "default": 15},
+                            "plugins": {"type": "array", "items": {"type": "string"}},
+                            "parent": {"type": "string"}, "backend": {"type": "string"}
+                        },
+                        "required": ["project_url", "repo", "base_ref"],
+                        "additionalProperties": False
+                    },
+                },
+                {
+                    "name": "synapse_fleet_nudge",
+                    "description": "Reconcile fleet lane SHA/status, archive finished owned chats, redispatch idle or >120-minute-stale lanes in fresh chats.",
+                    "inputSchema": {"type": "object", "properties": {
+                        "fleet_id": {"type": "string"}
+                    }, "additionalProperties": False},
+                },
+                {
+                    "name": "synapse_fleet_stop",
+                    "description": "Disable future native fleet dispatch including subfleets without killing processes, deleting worktrees or chats.",
+                    "inputSchema": {"type": "object", "properties": {
+                        "fleet_id": {"type": "string"}
+                    }, "required": ["fleet_id"], "additionalProperties": False},
+                },
                 {
                     "name": "synapse_thread_bootstrap",
                     "description": (
@@ -2482,6 +2524,27 @@ def build_mcp_router(
             if not writes_allowed():
                 raise ValueError(
                     "Writes are disabled. Set SYNAPSE_MCP_ALLOW_WRITES=1 to enable.")
+
+        if name.startswith("synapse_fleet_"):
+            from .fleet_controller import get_controller
+            controller = get_controller(storage)
+            fleet_id = str(args.get("fleet_id") or "").strip() or None
+            if name == "synapse_fleet_status":
+                return controller.status(fleet_id)
+            _require_writes()
+            if name == "synapse_fleet_start":
+                return controller.start(**{
+                    key: val for key, val in args.items()
+                    if key in ("project_url", "repo", "base_ref", "workers", "lanes",
+                               "interval_minutes", "plugins", "parent", "backend")
+                })
+            if name == "synapse_fleet_nudge":
+                return {"errors": controller.nudge(fleet_id),
+                        "fleets": controller.status(fleet_id)}
+            if name == "synapse_fleet_stop":
+                if not fleet_id:
+                    raise ValueError("fleet_id is required")
+                return controller.stop(fleet_id)
 
         if name == "synapse_list_projects":
             return [p.model_dump(mode="json") for p in projects_module.list_projects(storage.conn)]

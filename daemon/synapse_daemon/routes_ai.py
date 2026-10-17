@@ -678,6 +678,26 @@ def build_ai_router(
             },
             "endpoints_for_ai": [
                 {
+                    "purpose": "start a native ChatGPT UI worker fleet with isolated git lanes",
+                    "method": "POST",
+                    "path": "/api/v1/fleet/start",
+                },
+                {
+                    "purpose": "read cheap per-lane fleet status",
+                    "method": "GET",
+                    "path": "/api/v1/fleet/status",
+                },
+                {
+                    "purpose": "reconcile and nudge idle fleet lanes",
+                    "method": "POST",
+                    "path": "/api/v1/fleet/nudge",
+                },
+                {
+                    "purpose": "stop future dispatch for one fleet and its subfleets",
+                    "method": "POST",
+                    "path": "/api/v1/fleet/stop",
+                },
+                {
                     "purpose": "read evidence-backed AI runtime readiness and measured usage",
                     "method": "GET",
                     "path": "/api/v1/ai/runtimes",

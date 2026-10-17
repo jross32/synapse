@@ -40,6 +40,8 @@ from .profile import ProfileManager
 from .pty_sessions import PtySessionManager
 from .routes_about import build_about_router
 from .routes_active_tasks import build_active_tasks_router
+from .routes_fleet import build_fleet_router
+from .fleet_controller import get_controller
 from .routes_master_todo import build_master_todo_router
 from .routes_activity import build_activity_router
 from .routes_agent_squads import (
@@ -450,6 +452,7 @@ def build_app(
     chatgpt_child_pool = ChatGPTBrowserPool(storage.data_dir)
     app.state.chatgpt_child_pool = chatgpt_child_pool
     app.include_router(build_master_todo_router(storage.data_dir), prefix=API_PREFIX, dependencies=[token_guard])
+    app.include_router(build_fleet_router(storage), prefix=API_PREFIX, dependencies=[token_guard])
     active_task_scheduler = ActiveTaskScheduler(storage, ForemanDispatcher())
     app.state.active_task_scheduler = active_task_scheduler
     app.include_router(
@@ -864,6 +867,32 @@ def build_app(
         await subscribe_activity_projector(storage, bus)
     app.router.on_startup.append(_subscribe_agent_events)
     app.router.on_startup.append(active_task_scheduler.start)
+
+    async def _start_fleet_timer() -> None:
+        import asyncio
+
+        async def _tick() -> None:
+            while True:
+                await asyncio.sleep(60)
+                try:
+                    await asyncio.to_thread(get_controller(storage).tick)
+                except Exception:
+                    log.exception("Fleet timer tick failed; daemon remains available")
+
+        app.state.fleet_timer = asyncio.create_task(_tick())
+
+    async def _stop_fleet_timer() -> None:
+        import asyncio
+        timer = getattr(app.state, "fleet_timer", None)
+        if timer is not None:
+            timer.cancel()
+            try:
+                await timer
+            except asyncio.CancelledError:
+                pass
+
+    app.router.on_startup.append(_start_fleet_timer)
+    app.router.on_shutdown.append(_stop_fleet_timer)
 
     async def _cancel_worker_timeouts() -> None:
         worker_timeout_registry.cancel_all()
