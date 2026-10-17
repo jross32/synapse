@@ -10,6 +10,18 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.2.222] -- 2026-10-17
+
+### Added
+- Seeded ChatGPT UI fleet playbook and portable manual Playwright toolkit.
+
+### Changed
+- Fleet playbook now documents the workflow verified live on 2026-10-17: a fresh chat per round with state in git and per-lane status files, GPT-6 at High power, Synapse plus @Synapse2 attached, self-healing Playwright browser, chat archiving, no-admin tool installs, and a zero-model-call nudge loop. The toolkit's tab follow-up scripts are marked superseded.
+
+### Fixed
+- Fleet follow-up refuses missing owned tabs.
+
+
 ## [0.2.221] -- 2026-10-16
 
 ### Fixed

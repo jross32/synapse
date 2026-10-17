@@ -1,0 +1,1 @@
+Continue integration. Verify lane commits, merge one at a time with --no-ff, test after each merge, and report HANDOFF.

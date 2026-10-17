@@ -1,0 +1,7 @@
+{
+  "synapseUrl": "http://127.0.0.1:7878",
+  "tokenFile": "PATH_TO_LOCAL_AUTH_TOKEN_FILE",
+  "projectUrl": "https://chatgpt.com/g/YOUR_PROJECT/project",
+  "chatBaseUrl": "https://chatgpt.com/g/YOUR_PROJECT",
+  "chatsFile": "PATH_TO_OWNED_CHATS_FILE"
+}

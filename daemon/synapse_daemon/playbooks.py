@@ -27,6 +27,7 @@ CHATGPT_CONNECTOR_PLAYBOOK_ID = "chatgpt-connector-setup"
 CHATGPT_AUTONOMOUS_BUILD_PLAYBOOK_ID = "chatgpt-autonomous-app-build"
 CHATGPT_WORKFLOW_NOTES_PLAYBOOK_ID = "chatgpt-workflow-design-notes"
 TOKEN_LEAN_DELEGATION_PLAYBOOK_ID = "token-lean-delegation"
+CHATGPT_UI_FLEET_PLAYBOOK_ID = "chatgpt-ui-fleet"
 
 
 class PlaybookStatus(str, Enum):
@@ -438,6 +439,15 @@ def ensure_bootstrap_chatgpt_workflow_notes_playbook(conn: sqlite3.Connection) -
         "Several manually-opened tabs, each its own chat, can already act as parallel workers; "
         "the only thing missing for that to be orchestrated rather than manual is the same "
         "browser-runtime piece above, generalized to N tabs.",
+        "2026-10-17: A Claude supervisor manually orchestrated 10 simultaneous ChatGPT UI "
+        "workers through Synapse's shared Playwright browser, proving N-tab orchestration "
+        "in practice. The browser can restart and lose tabs, so tab ownership and recovery "
+        "remain requirements for a native daemon fleet. Measured 28 orchestrator calls "
+        "for spawning (~26k output, ~9.9M cached-context reads, ~380k cache writes); "
+        "one idle 15-minute check-in cost 3 calls (~1.0M cached reads, ~8.6k writes, "
+        "~1.1k output). Cost is dominated by rereading a ~350k-token context per call: "
+        "fresh short-context check-ins are estimated 10-15x cheaper, while a native "
+        "deterministic nudge loop needs zero AI tokens.",
     ]
     return upsert_playbook(
         conn,
@@ -449,5 +459,67 @@ def ensure_bootstrap_chatgpt_workflow_notes_playbook(conn: sqlite3.Connection) -
             "how-to -- operating steps stay in chatgpt-connector-setup and "
             "chatgpt-autonomous-app-build."
         ),
+        steps=steps,
+    )
+
+
+
+def ensure_bootstrap_chatgpt_ui_fleet_playbook(conn: sqlite3.Connection) -> Playbook:
+    """Seed the reproducible, manually proven ChatGPT UI multi-tab fleet procedure."""
+    steps = [
+        "Prerequisites: an authenticated ChatGPT session in Synapse's shared Playwright "
+        "browser (persistent profile); the Synapse connector app ('Connect To Synapse' in the "
+        "composer's 'Add files and more' menu) plus the second app mention '@Synapse2'; every "
+        "device the lanes will use online in the account relay.",
+        "Plan lanes as data (lane, prompt, model power, optional after=<lane prefix> dependency). "
+        "Create every git worktree up front, one at a time (parallel worktree-add races on the "
+        "repository lock): one branch and an explicit file-ownership list per lane, plus one "
+        "integrator lane that merges finished lane branches --no-ff and tests after each merge.",
+        "Worker preamble: name the machine/device ids and the worktree, require Synapse-tools-only "
+        "execution (async + poll for anything over ~60s), forbid secrets, other lanes' files, live "
+        "checkouts/daemons and pushes, require real tests before each commit, and end every reply "
+        "with HANDOFF (lane, branch, commit, files, test_result, next or DONE). Status-file "
+        "contract: the first tool call writes 'working <UTC>', the last writes 'idle <sha> <next|DONE>'.",
+        "Dispatch = a fresh chat per round: open the project page in a new tab, set the model "
+        "picker to the strongest model at maximum power (2026-10-17: GPT-6, power slider to "
+        "'High' with the End key; never click the 'Locked' upsell item), attach Connect To "
+        "Synapse, fill the prompt, press Control+Home, type '@Synapse2' and Enter to insert the "
+        "app mention, verify both are attached, send, wait ~20 s and close the tab - the run "
+        "continues server-side.",
+        "Do not follow up inside old chats: since 2026-10-17 opening an existing chat URL shows a "
+        "minimized 'floating chat' without its messages. Each round is a new chat that resumes "
+        "from git history plus the lane's notes/audit file, so state never lives in a chat.",
+        "Cheap nudge loop (every ~15 min, zero model calls): read each lane's status file; "
+        "'working' for under 120 min = busy, DONE = skip, anything else = dispatch a fresh round. "
+        "Dispatch the integrator only when some worker branch head moved. Print one line per lane "
+        "(attached, synapse2, power, chat id) so a supervising AI's check-in costs almost no tokens.",
+        "Browser resilience: if Playwright reports 'Browser is already in use', its MCP restarted "
+        "and orphaned the persistent Chrome. Close only the Chrome whose command line uses the "
+        "ms-playwright-mcp profile and retry (the ChatGPT sign-in persists in the profile). Root "
+        "fix in progress: launch the browser once and reattach the MCP over CDP.",
+        "Chat hygiene: once a lane's round is confirmed done (status idle and that sha is on the "
+        "lane branch), archive that chat - never delete - so the project keeps about one live "
+        "chat per lane.",
+        "New devices: install missing tools without admin where possible (portable MinGit when "
+        "winget Git needs elevation; set a neutral git identity); keep lane folders on the device "
+        "with disk space and status files on the supervisor machine.",
+        "Safety: never touch browser tabs you did not open, other lanes' branches, live checkouts "
+        "or daemons, credentials or scheduled tasks; never print tokens; merges to protected "
+        "branches and deploys only with the owner's explicit approval; treat every HANDOFF as a "
+        "claim to verify independently.",
+        "Cost evidence 2026-10-17: 10 spawns used 28 Claude calls, ~26k output tokens, ~9.9M "
+        "cached reads and ~380k cache writes; one 15-minute idle check-in used 3 calls, ~1.0M "
+        "cached reads, ~8.6k writes and ~1.1k output. Cost is call count times conversation "
+        "context; a fresh small-context check-in is estimated 10-15x cheaper and the native "
+        "deterministic nudge loop costs zero AI tokens.",
+        "Pitfalls: long synchronous account-relay calls may 502 (use async and poll); QA scripts "
+        "can rewrite tracked screenshots; the dispatch return URL may not have reached /c/ yet "
+        "(take chat ids from the tab list or dispatch log); the single shared browser is a single "
+        "point of failure, so keep the loop restartable and idempotent.",
+    ]
+    return upsert_playbook(
+        conn, playbook_id=CHATGPT_UI_FLEET_PLAYBOOK_ID,
+        title="ChatGPT UI fleet: multi-tab worker orchestration",
+        summary="Verified 2026-10-17 workflow: fresh chat per round, state in git + status files, GPT-6 High, Synapse + Synapse2, self-healing browser, zero-token nudge loop.",
         steps=steps,
     )
