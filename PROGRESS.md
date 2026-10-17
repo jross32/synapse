@@ -6,7 +6,21 @@
 
 ## Current version
 
-`0.2.221`
+`0.2.223`
+
+> **Native ChatGPT UI fleet foundation (2026-10-17; ADR-0038):** v0.2.223
+> introduces fleet start/status/nudge/stop via MCP and REST, a daemon-local
+> opt-in timer, sequential per-lane git worktrees, persisted SHA-verified
+> status, capped subfleets, fresh-chat dispatch, explicit Synapse connector
+> and Synapse2 mention verification, GPT-6 High-effort selection, owned-tab
+> checks and reversible archive-only cleanup. Browser-mocked fleet and
+> API-discovery tests pass. **Not live-accepted yet:** CDP recovery,
+> automatic prerequisite installation, coder-runtime fallback,
+> branch-change-triggered integrator, and isolated two-worker UI acceptance
+> with committed artifacts, archive receipts and all-daemon tests.
+> Do not mark fleet DONE until docs/fleet-acceptance-2026-10-17.md
+> contains actual chat IDs, command output and commit SHAs.
+
 
 > **Profile shows your own MCP link (2026-10-16):** v0.2.221 moves the "Your MCP link" card to the top
 > of the profile, labels the owning account, stamps daemon link responses with `account_id`/`username`,

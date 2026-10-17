@@ -114,3 +114,6 @@ benchmarks/delegation/delegated/
 # save_blueprint() writes to blueprints_dir()/<id>/blueprint.json; a bare root-level copy is
 # always a stray from an ad-hoc script run with the wrong cwd/root, never source.
 /blueprint.json
+
+/scripts/chatgpt-fleet/config.json
+/scripts/chatgpt-fleet/last-*.js

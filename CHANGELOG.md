@@ -10,6 +10,24 @@ Every commit must append an entry under the in-progress version header.
 
 ## [Unreleased]
 
+## [0.2.223] -- 2026-10-17
+
+### Added
+- Native ChatGPT UI fleet foundation: isolated git lanes, durable status, SHA checks, bounded subfleets, fresh UI dispatch, MCP/REST status, timer, archive-only cleanup and mocked tests.
+
+### Fixed
+- Avoid duplicate redispatch before a new status arrives; reject unverified browser receipts.
+
+
+## [0.2.222] -- 2026-10-17
+
+### Added
+- Seeded ChatGPT UI fleet playbook and portable manual Playwright toolkit.
+
+### Fixed
+- Fleet follow-up refuses missing owned tabs.
+
+
 ## [0.2.221] -- 2026-10-16
 
 ### Fixed
