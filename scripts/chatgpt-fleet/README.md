@@ -9,3 +9,5 @@ Copy config.example.json to config.json (gitignored), set your own project URL, 
 5. For a manual pass run `./nudge.ps1`. This is not a daemon scheduler.
 
 Selectors and browser session behavior are version-dependent. Stop on missing connector, generating worker, or browser restart. Do not use the dispatch result URL as durable identity until confirmed in tab list.
+
+> Superseded (2026-10-17): `followup.ps1` and the tab-based `nudge.ps1` relied on reopening existing chats, which ChatGPT now shows as a minimized floating chat. The current procedure is the `chatgpt-ui-fleet` playbook: a fresh chat per round, state in git plus per-lane status files. The native `synapse_fleet_*` tools replace these scripts.
